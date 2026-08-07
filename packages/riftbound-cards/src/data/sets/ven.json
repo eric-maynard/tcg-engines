@@ -3026,7 +3026,30 @@
       "isChampion": false,
       "rulesText": "When I move, you may [Burn 1] to give me +1 [Might] this turn. (To Burn 1, put the top card of your Main Deck into your trash.)",
       "abilities": [
-        null
+        {
+          "_rule": "446.1 / 383.3.b — 'When I move, you may [Burn 1] to give me +1 Might this turn': the burn is a cost paid on opting in, the +1 lasts until end of turn.",
+          "type": "triggered",
+          "optional": true,
+          "trigger": {
+            "event": "move",
+            "on": "self"
+          },
+          "condition": {
+            "_rule": "383.3.b / 440.1 — [Burn 1] is a cost within instructions: with an empty Main Deck it cannot be paid, so the opt-in is not offered",
+            "type": "pay-cost",
+            "cost": {
+              "burn": 1
+            }
+          },
+          "effect": {
+            "type": "modify-might",
+            "amount": 1,
+            "duration": "turn",
+            "target": {
+              "type": "self"
+            }
+          }
+        }
       ],
       "parseSuccess": true,
       "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/f85fb8b46a29360f9850826df11202ff8221fec8-744x1039.png?accountingTag=RB",
@@ -3217,8 +3240,35 @@
       "tags": [],
       "isChampion": false,
       "rulesText": "When an opponent plays a gear, you may banish me to banish it.",
-      "abilities": [],
-      "parseSuccess": false,
+      "abilities": [
+        {
+          "_rule": "383.3.b / 427.1 — 'you may banish me to banish it': banishing this unit is the cost, the played gear is the trigger source.",
+          "type": "triggered",
+          "optional": true,
+          "trigger": {
+            "event": "play-gear",
+            "on": "opponent"
+          },
+          "effect": {
+            "type": "sequence",
+            "effects": [
+              {
+                "type": "banish",
+                "target": {
+                  "type": "self"
+                }
+              },
+              {
+                "type": "banish",
+                "target": {
+                  "type": "trigger-source"
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "parseSuccess": true,
       "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/57ecb26880ea084ea16b785c9a563ff298ee6a42-744x1039.png?accountingTag=RB",
       "illustrator": null,
       "errata": null
@@ -3541,7 +3591,24 @@
           "_rule": "827.1.c — 'When I become [Empowered]' triggered ability (ven-114-166 Kharox)",
           "effect": {
             "description": "choose an opponent. They Burn 3. Then you may choose a unit in their trash and play it, ignoring its cost.",
-            "effects": [],
+            "effects": [
+              {
+                "_rule": "440.1 — [Burn 3]: the chosen opponent puts the top 3 cards of their Main Deck into their trash",
+                "amount": 3,
+                "player": "opponent",
+                "type": "mill"
+              },
+              {
+                "_rule": "356.1.b — 'then you may' play a unit from THEIR trash, ignoring its cost",
+                "from": "trash",
+                "ignoreCost": true,
+                "target": {
+                  "controller": "enemy",
+                  "type": "unit"
+                },
+                "type": "play"
+              }
+            ],
             "type": "sequence"
           },
           "optional": false,

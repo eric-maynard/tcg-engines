@@ -600,6 +600,20 @@ function canPayOptInCost(
       return false;
     }
   }
+  // rule 440.1 / 383.3.b (rule-id: ven-095-166) — "[Burn N] to …" is a cost
+  // within instructions: it needs N cards in the payer's own Main Deck. An
+  // empty Main Deck cannot pay it (Burn Out is never a way to fund a cost), so
+  // the opt-in is not offered at all.
+  const burnCost = (cost.burn as number) ?? 0;
+  if (burnCost > 0) {
+    const deck =
+      typeof context.zones?.getCardsInZone === "function"
+        ? context.zones.getCardsInZone("mainDeck" as never, playerId as never)
+        : [];
+    if (deck.length < burnCost) {
+      return false;
+    }
+  }
   if (cost.exhaust === true && context.counters.getFlag?.(sourceCardId as CoreCardId, "exhausted")) {
     return false;
   }
@@ -1599,6 +1613,16 @@ export const pendingChoiceMoves: Partial<
             if (cost.exhaust === true) {
               context.counters.setFlag(choice.sourceCardId as CoreCardId, "exhausted", true);
             }
+            // rule 440.1 (rule-id: ven-095-166): "[Burn N] to …" — the burn is
+            // the cost, so it is paid here, before the instruction's own
+            // effect runs. No choice is involved (the top N cards are fixed).
+            const burnCount = typeof cost.burn === "number" ? cost.burn : 0;
+            if (burnCount > 0) {
+              executeEffect(
+                { amount: burnCount, player: "self", type: "mill" } as ExecutableEffect,
+                buildEffectContext(draft, choice.playerId, choice.sourceCardId, context),
+              );
+            }
             // rule 422.1.a (ogn-252-298): "you may discard N to …" — the
             // paying player chooses the cards, so route the cost through the
             // discard effect and hang the trigger's own effect off its `then`.
@@ -2394,6 +2418,9 @@ export const pendingChoiceMoves: Partial<
       const pickedCardId = picks[picks.length - 1] as string;
       /** rule 337.1.b (ogn-242-298) — a "banish it and play it" pick, finalized below. */
       let pendingPlayFinalize: string | undefined;
+      // Set when the pick's `then` follow-up rides the play's chain item instead
+      // of running inline (rule-id: ven-089-166-look-then-empower).
+      let followUpOnChain = false;
       /**
        * rule 355.1.a / 356.1.b.3 (ogn-226-298 × ogn-010-298) — a unit an effect
        * played from the trash "ignoring its cost" still gets its own optional
@@ -2702,6 +2729,15 @@ export const pendingChoiceMoves: Partial<
               cardId: pickedCardId as CoreCardId,
               targetZoneId: "base" as CoreZoneId,
             });
+            // rule 108.2 (rule-id: ven-114-166 Kharox) — a card played out of
+            // an OPPONENT's trash keeps its owner but is controlled by the
+            // player who played it.
+            if (playedOwner !== choice.prompter) {
+              context.cards.setCardController?.(
+                pickedCardId as CoreCardId,
+                choice.prompter as CorePlayerId,
+              );
+            }
             context.counters.setFlag(pickedCardId as CoreCardId, "exhausted", true);
             const playCtx = {
               cards: context.cards,
@@ -2752,21 +2788,43 @@ export const pendingChoiceMoves: Partial<
             // instruction happens before the location prompt.
             pendingPlayFinalize = pickedCardId as string;
           } else {
+            const placeEffect = {
+              // rule 355.2.b (sfd-170-221) — "you may play it here" adds the
+              // instructing card's battlefield to the valid locations.
+              ...(choice.playHere !== undefined ? { extraDestinations: [choice.playHere] } : {}),
+              target: pickedCardId as string,
+              to: "choose",
+              type: "move",
+            };
+            // rule-id: ven-089-166-look-then-empower — "…play it. Then you may
+            // do this: Empower it": the follow-up is about the card once it is
+            // ON the board, so it becomes its own optional chain item resolving
+            // after the play (and after the play's own triggers).
+            const followUp = choice.then as { type?: string; effect?: unknown } | undefined;
+            if (followUp?.type === "optional" && followUp.effect !== undefined) {
+              followUpOnChain = true;
+              draft.interaction = addToChain(
+                draft.interaction ?? createInteractionState(),
+                {
+                  cardId: choice.sourceCardId ?? (pickedCardId as string),
+                  controller: choice.prompter,
+                  effect: {
+                    ...((followUp as { effect: object }).effect as object),
+                    target: pickedCardId as string,
+                  },
+                  optional: true,
+                  triggered: true,
+                  type: "ability",
+                },
+                Object.keys(draft.players),
+              );
+            }
             draft.interaction = addToChain(
-              draft.interaction ?? createInteractionState(),
+              draft.interaction,
               {
                 cardId: pickedCardId as string,
                 controller: choice.prompter,
-                effect: {
-                  // rule 355.2.b (sfd-170-221) — "you may play it here" adds the
-                  // instructing card's battlefield to the valid locations.
-                  ...(choice.playHere !== undefined
-                    ? { extraDestinations: [choice.playHere] }
-                    : {}),
-                  target: pickedCardId as string,
-                  to: "choose",
-                  type: "move",
-                },
+                effect: placeEffect,
                 triggered: true,
                 type: "ability",
               },
@@ -2863,7 +2921,9 @@ export const pendingChoiceMoves: Partial<
           ...(choice.thenBoundTargets ? { boundTargets: [...choice.thenBoundTargets] } : {}),
           triggerSourceId: pickedCardId as string,
         };
-        executeEffect(choice.then as ExecutableEffect, effectCtx);
+        if (!followUpOnChain) {
+          executeEffect(choice.then as ExecutableEffect, effectCtx);
+        }
       }
       if (accelerateAfterPick) {
         maybeOfferAccelerate(
