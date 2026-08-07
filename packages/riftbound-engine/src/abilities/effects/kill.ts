@@ -171,6 +171,65 @@ function handleEachOtherChoosesKill(
   killUnits(chosen, { ...ctx, playerId: caster }, h);
 }
 
+/**
+ * rule 422.1.a (unl-174-219) — "each opponent must kill one of THEIR units":
+ * the instruction belongs to each opponent of the source's controller, so each
+ * of them chooses among the units THEY control. The descriptor is written
+ * relative to the source ("enemy" units) and is re-read as "friendly" from
+ * each chooser's seat.
+ */
+function isEachOpponentsOwn(effect: ExecutableEffect): boolean {
+  const tgt = effect.target as { controller?: string } | string | undefined;
+  return (
+    effect.player === "each" &&
+    typeof tgt === "object" &&
+    tgt !== null &&
+    tgt.controller === "enemy"
+  );
+}
+
+function handleEachOpponentKill(
+  effect: ExecutableEffect,
+  ctx: EffectContext,
+  h: EffectHelpers,
+): void {
+  const source = controllerOf(ctx.sourceCardId, ctx) || ctx.playerId;
+  const ownUnits = { ...(effect.target as object), controller: "friendly" };
+  const pending = effect as { eachRemaining?: readonly string[]; eachChooser?: string };
+  let queue: string[];
+  if (pending.eachRemaining === undefined) {
+    queue = Object.keys(ctx.draft.players).filter((p) => p !== source);
+  } else {
+    const chooser = pending.eachChooser ?? ctx.playerId;
+    killUnits((ctx.boundTargets ?? []).slice(0, 1), { ...ctx, playerId: chooser }, h);
+    queue = [...pending.eachRemaining];
+  }
+  while (queue.length > 0) {
+    const pid = queue.shift() as string;
+    const options = candidatesFor({ ...effect, target: ownUnits } as ExecutableEffect, ctx, pid);
+    if (options.length === 0) {
+      continue;
+    }
+    if (options.length === 1) {
+      killUnits(options, { ...ctx, playerId: pid }, h);
+      continue;
+    }
+    if (ctx.draft.pendingChoice) {
+      return;
+    }
+    ctx.draft.pendingChoice = {
+      effect: { ...effect, eachChooser: pid, eachRemaining: queue },
+      options: options as never,
+      // rule 422.1.a — the OPPONENT is asked, not the source's controller.
+      playerId: pid as never,
+      remaining: 1,
+      sourceCardId: ctx.sourceCardId as never,
+      type: "choose-target",
+    };
+    return;
+  }
+}
+
 export function handle_kill(effect: ExecutableEffect, ctx: EffectContext, h: EffectHelpers): void {
   if ((effect as { chooser?: string }).chooser === "each-other-player") {
     handleEachOtherChoosesKill(effect, ctx, h);
@@ -178,6 +237,10 @@ export function handle_kill(effect: ExecutableEffect, ctx: EffectContext, h: Eff
   }
   if (isEachPlayersOwn(effect)) {
     handleEachPlayerKill(effect, ctx, h);
+    return;
+  }
+  if (isEachOpponentsOwn(effect)) {
+    handleEachOpponentKill(effect, ctx, h);
     return;
   }
   killUnits(getTargetIds(effect, ctx), ctx, h);

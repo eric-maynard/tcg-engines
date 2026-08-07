@@ -33,8 +33,20 @@ export function casterChosenTarget(effect: unknown): TargetDescriptor | undefine
   if (typeof effect !== "object" || effect === null) {
     return undefined;
   }
-  const e = effect as { type?: string; target?: unknown; split?: boolean; from?: unknown };
+  const e = effect as {
+    type?: string;
+    target?: unknown;
+    split?: boolean;
+    from?: unknown;
+    player?: unknown;
+  };
   if (e.type === "play" || (e.type === "damage" && e.split === true)) {
+    return undefined;
+  }
+  // rule 422.1.a (unl-174-219) — "each opponent must kill one of THEIR units"
+  // is a per-player instruction: each chooser is asked about their own cards by
+  // the effect handler, so there is no single caster-chosen Game Object here.
+  if (e.player === "each" || e.player === "each-other") {
     return undefined;
   }
   const target = e.target;

@@ -557,7 +557,11 @@ export function executeResolvedItem(
     ) &&
     // rule 355.14 (ogn-041-298): split damage picks its targets together with
     // the distribution in the damage handler, not as a single-target prompt.
-    !(effect.type === "damage" && (effect as { split?: boolean }).split === true)
+    !(effect.type === "damage" && (effect as { split?: boolean }).split === true) &&
+    // rule 422.1.a (unl-174-219) — "each opponent must kill one of THEIR
+    // units" is a per-player instruction: every chooser is asked by the kill
+    // handler about their OWN units, never the source's controller here.
+    !(effect.type === "kill" && (effect as { player?: unknown }).player === "each")
   ) {
     let options = resolveTarget(
       { ...target, quantity: "all" },
