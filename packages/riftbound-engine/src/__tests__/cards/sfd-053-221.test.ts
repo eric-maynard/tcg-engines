@@ -105,7 +105,7 @@ describe("Janna, Savior (sfd-053-221)", () => {
     expect(game.locationOf("a1")).toBe("bf1");
   });
 
-  test.failing("BUG: When you play me — the play effect goes on the chain; heals your units HERE only, then offers only the enemy units HERE", async () => {
+  test("When you play me — the play effect goes on the chain; heals your units HERE only, then offers only the enemy units HERE", async () => {
     // Expected: a triggered item from janna; after both pass, hurt 2→0 damage (homehurt in base keeps
     // its 1), then a pick among a1/a2 (not far). Actual: the ability is parsed inside a `spell`
     // wrapper, so no trigger is ever created.
@@ -120,7 +120,7 @@ describe("Janna, Savior (sfd-053-221)", () => {
     expect(d?.kind === "pick" ? d.options.map((o) => o.card).sort() : []).toEqual(["a1", "a2"]);
   });
 
-  test.failing("BUG: moving one attacker to ITS base — the other still fights: A2 (2) dies to 7, Hurt + Janna keep bf1", async () => {
+  test("moving one attacker to ITS base — the other still fights: A2 (2) dies to 7, Hurt + Janna keep bf1", async () => {
     const game = await defence(2).build();
     await flashIn(game);
     await game.settle();
@@ -136,7 +136,7 @@ describe("Janna, Savior (sfd-053-221)", () => {
     expect(game.gameState.battlefields.bf1?.controller).toBe(P1);
   });
 
-  test.failing("BUG: 'up to one' — declining moves nobody; both 2-Might attackers fight and die, defenders hold", async () => {
+  test("'up to one' — declining moves nobody; both 2-Might attackers fight and die, defenders hold", async () => {
     const game = await defence(2).build();
     await flashIn(game);
     await game.settle();

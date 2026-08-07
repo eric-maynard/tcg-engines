@@ -2,7 +2,7 @@
  * Spell-ability parsing (incl. Repeat handling).
  */
 
-import type { Ability, SpellAbility, StaticAbility } from "@tcg/riftbound-types";
+import type { Ability, SpellAbility, StaticAbility, TriggeredAbility } from "@tcg/riftbound-types";
 import type { Effect } from "@tcg/riftbound-types/abilities/effect-types";
 import type { AnyTarget } from "@tcg/riftbound-types/targeting";
 import { parseCost } from "../parsers/cost-parser";
@@ -123,7 +123,7 @@ export function parseSpellAbilities(text: string): Ability[] | undefined {
   return [spell, ...parseSpellCostRiders(text)];
 }
 
-export function parseSpellAbility(text: string): SpellAbility | undefined {
+export function parseSpellAbility(text: string): SpellAbility | TriggeredAbility | undefined {
   const match = SPELL_PATTERN.exec(text);
   if (!match) {
     return undefined;
@@ -236,18 +236,14 @@ export function parseSpellAbility(text: string): SpellAbility | undefined {
       };
     }
 
-    // Some spells wrap a triggered ability in their body (e.g., Janna, Savior:
-    // "[Reaction] When you play me, heal your units here, then move..."). In
-    // That case the spell simply carries the triggered ability; parse and
-    // Lift it into the spell's effect slot.
+    // rule 813 / 806.1 (e.g. Janna, Savior sfd-053-221): on a permanent,
+    // [Action]/[Reaction] is only a play-timing keyword — the body is an
+    // ordinary triggered ability, NOT a spell effect. Return the triggered
+    // ability itself so the engine's trigger machinery sees it; the card's
+    // play timing comes from `def.timing`, not from this ability.
     const triggeredInner = parseTriggeredAbility(effectText);
     if (triggeredInner) {
-      return {
-        effect: triggeredInner as unknown as Effect,
-        timing: timingStr,
-        type: "spell",
-        ...flags,
-      };
+      return triggeredInner;
     }
 
     // For spell abilities with unparsed effects, use raw text effect

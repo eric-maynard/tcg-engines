@@ -9,6 +9,8 @@ import { canSpendXp } from "./spend-xp";
 import {
   collectIndependentTargetSlots,
   collectSequenceTargetSlots,
+  findAmountReferenceTarget,
+  findSplitDamageEffect,
   isRestatementOf,
   type SpellEffectTargetShape,
 } from "../../game-definition/moves/play/targeting";
@@ -76,6 +78,28 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
         slots !== undefined && slots.length > 0 && slots.every((s) => isAllAtOneBattlefield(s));
       if (slots && !sharedBattlefield && slots.length >= 2 && ctx.boundTargets.length <= slots.length) {
         seqSlots = { bound: ctx.boundTargets, slots: slots as Record<string, unknown>[] };
+      }
+      // rule-id: sfd-107-221 (rule 355.8 / 355.14.a) — a sequence that names a
+      // Might-REFERENCE unit as well as its own target ("Choose an equipped
+      // friendly unit. It deals damage equal to its Might to an enemy unit")
+      // locks them as [reference, …slots]: the reference belongs to the amount
+      // expression, so keep it out of the steps and hand each targeted step
+      // only its own slot id.
+      if (
+        !seqSlots &&
+        !sharedBattlefield &&
+        slots !== undefined &&
+        slots.length >= 1 &&
+        ctx.boundTargets.length === slots.length + 1 &&
+        findSplitDamageEffect(seq as unknown as SpellEffectTargetShape) === undefined &&
+        findAmountReferenceTarget(seq as unknown as SpellEffectTargetShape) !== undefined &&
+        slots.every((s) => (s as { quantity?: unknown }).quantity === undefined)
+      ) {
+        pending = [ctx.boundTargets[0] as string];
+        seqSlots = {
+          bound: ctx.boundTargets.slice(1),
+          slots: slots as Record<string, unknown>[],
+        };
       }
     }
     const resolverCtx = {
@@ -262,6 +286,39 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
         (sub as { condition?: { type?: string } }).condition?.type === "paid-additional-cost"
       ) {
         subCtx = { ...subCtx, ifYouDoPerformed: prevPerformed } as EffectContext;
+      }
+      // rule 355.13 (sfd-053-221 Janna, Savior) — "…, then move UP TO ONE enemy
+      // unit here to its base": an "up to N" step inside a sequence is the
+      // controller's own choice (zero is legal), so it must prompt instead of
+      // silently auto-picking. The rest of the sequence rides on the prompt's
+      // `then` so it still runs after the pick (or the decline).
+      const upToN = (subTarget as { quantity?: { upTo?: number } } | undefined)?.quantity?.upTo;
+      if (
+        typeof subTarget === "object" &&
+        typeof upToN === "number" &&
+        subCtx.boundTargets === undefined &&
+        ctx.draft.pendingChoice === undefined
+      ) {
+        const options = resolveTarget(
+          { ...(subTarget as TargetDescriptor), quantity: "all" },
+          { ...resolverCtx, choosing: true } as Parameters<typeof resolveTarget>[1],
+        );
+        if (options.length > 0) {
+          const rest = seq.effects.slice(i + 1);
+          ctx.draft.pendingChoice = {
+            anyNumber: true,
+            effect: sub,
+            maxPicks: upToN,
+            options,
+            picked: [],
+            playerId: ctx.playerId,
+            remaining: Math.min(upToN, options.length),
+            sourceCardId: ctx.sourceCardId,
+            type: "choose-target",
+            ...(rest.length > 0 ? { then: { effects: rest, type: "sequence" } } : {}),
+          } as typeof ctx.draft.pendingChoice;
+          return;
+        }
       }
       prevPerformed =
         typeof subTarget === "object" &&
