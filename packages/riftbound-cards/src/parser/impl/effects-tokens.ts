@@ -48,11 +48,14 @@ export function parseCreateTokenEffect(text: string): CreateTokenEffect | undefi
     return effect as CreateTokenEffect;
   }
 
-  // Pattern for unit tokens with might: "Play [a|N] [ready] N :rb_might: NAME unit token(s) [with [KEYWORD]] [location]."
+  // Pattern for unit tokens with might: "Play [a|N] [ready] N :rb_might: NAME unit token(s) [with [KEYWORD]] [from REGION] [location]."
   // Might value may also be expressed as ":rb_energy_N:" (the [N] bracket form
   // Gets normalized that way upstream).
+  // "from <Region>" (ven-100-166 "…from Bilgewater") is flavour naming the
+  // token's origin region, not a zone — rule 184.2 still uses the normal
+  // unit-play destinations, so the clause is matched and discarded.
   const unitMatch = text.match(
-    /^Play (a|an|one|two|three|four|five|six|\d+)\s+(?:(ready)\s+)?(?::rb_energy_(\d+):\s*)?(\d+)?\s*:rb_might:\s+(\w+(?:\s+\w+)?)\s+(unit)\s+tokens?(?:\s+with\s+\[(\w+(?:-\w+)?)\])?\s*(here|to (?:your|their) base|into (?:your|their) base|at (?:your|their) base|exhausted)?\.?$/i,
+    /^Play (a|an|one|two|three|four|five|six|\d+)\s+(?:(ready)\s+)?(?::rb_energy_(\d+):\s*)?(\d+)?\s*:rb_might:\s+(\w+(?:\s+\w+)?)\s+(unit)\s+tokens?(?:\s+with\s+\[(\w+(?:-\w+)?)\])?(?:\s+from\s+(?!your\b|their\b|the\b)\w+)?\s*(here|to (?:your|their) base|into (?:your|their) base|at (?:your|their) base|exhausted)?\.?$/i,
   );
   if (unitMatch) {
     const quantityStr = unitMatch[1];
