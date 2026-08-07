@@ -185,6 +185,9 @@ export function toTriggerableAbilities(cardId: string): TriggerableAbility[] {
           // the acting source; dropping it here would fire the trigger on
           // every activated ability, legend and unit ones included.
           sourceType: (a.trigger as { sourceType?: string }).sourceType,
+          // rule-id: sfd-120-221 (rule 469.1) — keep the "after an attack"
+          // qualifier; dropping it fires the trigger on a walk-in conquer.
+          afterAttack: (a.trigger as { afterAttack?: boolean }).afterAttack,
         },
         type: "triggered",
       });

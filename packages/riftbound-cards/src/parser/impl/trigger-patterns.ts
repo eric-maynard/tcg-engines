@@ -31,6 +31,11 @@ export const TRIGGER_PATTERNS: {
    * activated ability of a gear"); matched against the event's `sourceType`.
    */
   sourceType?: string;
+  /**
+   * rule-id: sfd-120-221 (rule 469.1) — the conquer must have followed an
+   * attack; matched against the event's `afterAttack` flag.
+   */
+  afterAttack?: boolean;
 }[] = [
   // rule-id: ogn-067-298 — "to a battlefield" is captured (group 1) so the
   // parser can gate the trigger on a while-at-battlefield condition.
@@ -39,7 +44,10 @@ export const TRIGGER_PATTERNS: {
   { event: "attack", on: "self", pattern: /^When I attack,\s*/i },
   { event: "defend", on: "self", pattern: /^When I defend,\s*/i },
   { event: "conquer", on: "self", pattern: /^When I conquer an open battlefield,\s*/i },
-  { event: "conquer", on: "self", pattern: /^When I conquer after an attack,\s*/i },
+  // rule-id: sfd-120-221 (rule 469.1) — "after an attack" excludes walking onto
+  // an open battlefield, so the qualifier rides on the trigger and is matched
+  // against the conquer event's `afterAttack` flag.
+  { afterAttack: true, event: "conquer", on: "self", pattern: /^When I conquer after an attack,\s*/i },
   { event: "conquer", on: "self", pattern: /^When I conquer,\s*/i },
   { event: "hold", on: "self", pattern: /^When I hold,\s*/i },
   { event: "win-combat", on: "self", pattern: /^When I win a combat,\s*/i },

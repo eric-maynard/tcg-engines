@@ -90,6 +90,20 @@ export function parseDamageEffect(text: string): DamageEffect | SequenceEffect |
     } as DamageEffect;
   }
 
+  // rule-id: sfd-120-221 (rule 383.3.a.3) — "deal that much to TARGET" reads
+  // back the amount named by the ability's own gating clause, so the amount is
+  // a variable resolved at resolution time, never a literal. The caller
+  // (trigger parsing) rebinds `that-much` to the condition's own variable.
+  const thatMuchMatch = text.match(/^Deal that much (?:damage )?to (.+?)\.?$/i);
+  if (thatMuchMatch) {
+    const target = parseCardTarget(thatMuchMatch[1]);
+    return {
+      amount: { variable: "that-much" },
+      target: target as AnyTarget,
+      type: "damage",
+    } as unknown as DamageEffect;
+  }
+
   // Handle "Deal N to TARGET" pattern
   const match = text.match(/^Deal (\d+) to (.+?)\.?$/i);
   if (match) {

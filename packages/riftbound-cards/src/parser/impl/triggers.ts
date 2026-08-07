@@ -149,6 +149,13 @@ export function parseTriggeredAbilityInner(text: string): TriggeredAbility | und
       if (leading) {
         condition = leading.condition as { type: string };
         ({ effectText } = leading);
+        // rule 383.3.a.3 (rule-id: sfd-120-221) — "…, you may X": the opt-in
+        // sits behind the gating clause, so re-check it once the clause is off.
+        const mayAfterCondition = effectText.match(/^(?:you|they|that player)\s+may\s+/i);
+        if (mayAfterCondition) {
+          optional = true;
+          effectText = effectText.slice(mayAfterCondition[0].length);
+        }
       }
     }
 
@@ -226,6 +233,14 @@ export function parseTriggeredAbilityInner(text: string): TriggeredAbility | und
       continue;
     }
 
+    // rule-id: sfd-120-221 (rule 383.3.a.3) — "you may deal that much": the
+    // placeholder amount is the quantity the gating clause measured, so bind it
+    // to that condition's variable.
+    const thatMuchAmount = (effect as { amount?: { variable?: string } }).amount;
+    if (thatMuchAmount?.variable === "that-much" && condition?.type === "excess-damage-assigned") {
+      thatMuchAmount.variable = "excess-damage";
+    }
+
     const trigger: {
       event: string;
       on?: string | { controller: string; type: string; excludeSelf?: boolean } | TriggerPatternSubject;
@@ -233,7 +248,13 @@ export function parseTriggeredAbilityInner(text: string): TriggeredAbility | und
       location?: string;
       restrictions?: readonly { type: string; count?: number }[];
       sourceType?: string;
+      afterAttack?: boolean;
     } = { event: tp.event };
+    // rule-id: sfd-120-221 (rule 469.1) — "conquer AFTER AN ATTACK" never fires
+    // for a unit that walked onto an open battlefield.
+    if (tp.afterAttack) {
+      trigger.afterAttack = true;
+    }
     // rule-id: sfd-075-221 — "of a gear" qualifies the acting source, not the
     // subject, so it rides alongside `on` rather than in `restrictions`.
     if (tp.sourceType) {

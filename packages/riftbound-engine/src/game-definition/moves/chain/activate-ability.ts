@@ -23,7 +23,7 @@ import { fireTriggers } from "../../../abilities/trigger-runner";
 import { evaluateWhileLevel } from "../../../abilities/xp-conditions";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../../types";
-import { getPotentialRuneEnergy } from "../play/cost";
+import { getDeflectSurcharge, getPotentialRuneEnergy } from "../play/cost";
 import type { SpellEffectTargetShape } from "../play/targeting";
 import { findSequenceLeadTarget, spellEffectHasLegalTargets } from "../play/targeting";
 import { buildEffectContext, canAffordPower } from "./effect-context";
@@ -130,6 +130,39 @@ function eligibleRecycleCards(
  * descriptor, or undefined when the effect has no such play-time choice
  * (self / player / battlefield / "all" / multi-pick targets stay as-is).
  */
+/**
+ * rule 809.1.c (rule-id: sfd-120-221) — [Deflect X] taxes an opponent's
+ * targeted ACTIVATED ability exactly as it taxes a spell: choosing a Deflect
+ * object costs X more Power of any Domain on top of the ability's own cost.
+ * The host already sits on the board, so the whole pool (less the ability's own
+ * Power pips) is the budget. Returns 0 for a chooser who controls the target.
+ */
+function deflectSurchargeForActivation(
+  state: RiftboundGameState,
+  playerId: string,
+  targets: readonly string[] | undefined,
+  cards: unknown,
+): number {
+  if (!targets || targets.length === 0) {
+    return 0;
+  }
+  return getDeflectSurcharge(state as never, playerId, targets as string[], cards as never);
+}
+
+/** Power left over for a Deflect surcharge after the ability's own Power pips. */
+function deflectBudget(
+  state: RiftboundGameState,
+  playerId: string,
+  cost: Record<string, unknown> | undefined,
+): number {
+  const pool = state.runePools[playerId];
+  const total = Object.values(pool?.power ?? {}).reduce(
+    (a: number, b) => a + ((b as number | undefined) ?? 0),
+    0,
+  );
+  return total - ((cost?.power as string[] | undefined)?.length ?? 0);
+}
+
 function activationChosenTarget(effect: unknown): TargetDescriptor | undefined {
   let t = (effect as { target?: unknown } | undefined)?.target;
   // rule 355.7/355.8: a sequence ability ("Kill a friendly unit. Look at the
@@ -776,6 +809,14 @@ export const activateAbility: Defs["activateAbility"] = {
       if (boundTargets.length !== 1 || !options.includes(boundTargets[0] as string)) {
         return false;
       }
+      // rule 809.1.c (rule-id: sfd-120-221) — an opponent's Deflect object may
+      // only be chosen when the extra Power is available on top of the cost.
+      if (
+        deflectSurchargeForActivation(state, playerId, boundTargets, context.cards) >
+        deflectBudget(state, playerId, ability.cost as Record<string, unknown> | undefined)
+      ) {
+        return false;
+      }
     }
 
     return true;
@@ -1105,6 +1146,18 @@ export const activateAbility: Defs["activateAbility"] = {
               zones: context.zones,
             },
           );
+          // rule 809.1.c (rule-id: sfd-120-221) — a Deflect object the chooser
+          // cannot pay the surcharge for is not a legal choice.
+          const budget = deflectBudget(
+            state,
+            playerId,
+            ability.cost as Record<string, unknown> | undefined,
+          );
+          targetOptions = targetOptions.filter(
+            (id) =>
+              deflectSurchargeForActivation(state, playerId, [id as string], context.cards) <=
+              budget,
+          );
           if (targetOptions.length === 0) {
             continue;
           }
@@ -1182,6 +1235,25 @@ export const activateAbility: Defs["activateAbility"] = {
       ability.cost as Record<string, unknown> | undefined,
       context.params as Record<string, unknown>,
     );
+
+    // rule 809.1.c / 809.1.c.1 (rule-id: sfd-120-221) — the Deflect surcharge
+    // for choosing an opponent's Deflect object is a mandatory additional cost,
+    // payable with Power of any Domain, and is owed even by a free ability.
+    const deflectOwed = deflectSurchargeForActivation(
+      draft,
+      playerId,
+      context.params.targets as string[] | undefined,
+      context.cards,
+    );
+    if (deflectOwed > 0) {
+      deductAbilityCost(
+        draft,
+        playerId,
+        { power: Array.from({ length: deflectOwed }, () => "rainbow") },
+        context.zones,
+        context.counters,
+      );
+    }
 
     // Pay cost
     if (ability.cost) {

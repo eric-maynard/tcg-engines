@@ -94,6 +94,11 @@ export interface TriggerableAbility {
      * controller of the card printing it.
      */
     readonly controllerFromEvent?: boolean;
+    /**
+     * rule-id: sfd-120-221 (rule 469.1) — "When I conquer AFTER AN ATTACK":
+     * a conquer that came from walking onto an open battlefield never matches.
+     */
+    readonly afterAttack?: boolean;
   };
   readonly effect: unknown;
   readonly optional?: boolean;
@@ -325,6 +330,12 @@ function triggerMatchesEvent(
     if (eventSourceType !== trigger.sourceType) {
       return false;
     }
+  }
+
+  // rule-id: sfd-120-221 (rule 469.1) — "conquer after an attack": only a
+  // conquer produced by combat carries `afterAttack`.
+  if (trigger.afterAttack === true && (event as { afterAttack?: boolean }).afterAttack !== true) {
+    return false;
   }
 
   // Check "on" subject

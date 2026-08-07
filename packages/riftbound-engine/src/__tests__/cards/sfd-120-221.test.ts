@@ -79,7 +79,7 @@ describe("Sivir, Ambitious (sfd-120-221)", () => {
     expect(game.state("sivir").keywords).toContain("Assault");
   });
 
-  test.failing("BUG: [Deflect 2] also taxes an opponent's targeted ACTIVATED ability (809.1.c) — Orb of Regret can't pick her without 2 power, and pays it when it does", async () => {
+  test("[Deflect 2] also taxes an opponent's targeted ACTIVATED ability (809.1.c) — Orb of Regret can't pick her without 2 power, and pays it when it does", async () => {
     // Expected: with 0 power P2's Orb cannot choose Sivir; with 2 rainbow it can and the 2 is spent.
     // Actual: the ability targets her freely and no power is deducted.
     const broke = await scenario().active(P2).unit(P1, "base", CARD, "sivir").unit(P1, "base", { might: 3 }, "plain").gear(P2, ORB, "orb").build();
@@ -136,7 +136,7 @@ describe("Sivir, Ambitious (sfd-120-221)", () => {
     expect(game.zoneOf("midhome")).toBe("base");
   });
 
-  test.failing("BUG: below the threshold — 7 into a 3-Might defender is only 4 excess: conquer point, but NO prompt and no damage", async () => {
+  test("below the threshold — 7 into a 3-Might defender is only 4 excess: conquer point, but NO prompt and no damage", async () => {
     // Expected: straight back to P1's main phase after the conquer. Actual: the condition is not
     // evaluated (hand-authored as a unit count), so the opt-in is offered on every conquer.
     const game = await raid(3).build();
@@ -148,7 +148,7 @@ describe("Sivir, Ambitious (sfd-120-221)", () => {
     expect(game.decision()).toMatchObject({ context: "main", kind: "action", seat: P1 });
   });
 
-  test.failing("BUG: 'after an attack' — walking onto an EMPTY enemy battlefield conquers (1 point) but there was no attack and 0 excess: no prompt", async () => {
+  test("'after an attack' — walking onto an EMPTY enemy battlefield conquers (1 point) but there was no attack and 0 excess: no prompt", async () => {
     const game = await raid().build();
     await game.p1.move("sivir", "bf1");
     await game.settle();
@@ -195,7 +195,7 @@ describe("Sivir, Ambitious (sfd-120-221)", () => {
     expect(defends.state("midhome").damage).toBe(0);
   });
 
-  test.failing("BUG: ability payload shape — Deflect 2 + optional self-conquer trigger gated on 'after an attack' and '≥5 excess damage', dealing a variable amount to an enemy unit", async () => {
+  test("ability payload shape — Deflect 2 + optional self-conquer trigger gated on 'after an attack' and '≥5 excess damage', dealing a variable amount to an enemy unit", async () => {
     // Actual: hand-authored condition is `count` of units with keyword "excess-damage" (a unit count, not
     // a damage amount) and the trigger carries no "after an attack" qualifier.
     const pool = await loadDefaultCardPool();
