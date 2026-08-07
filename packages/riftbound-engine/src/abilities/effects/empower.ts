@@ -7,6 +7,13 @@ export function handle_empower(effect: ExecutableEffect, ctx: EffectContext, _h:
   const targets = getTargetIds(effect, ctx);
   const empowerTargets = targets.length === 0 ? [ctx.sourceCardId] : targets;
   for (const targetId of empowerTargets) {
+    // rule 124.1 / 441.2 — Empowered is a board state on a permanent. A unit
+    // that left the board before this resolved is a new object in its new
+    // zone, so the status must not be written onto the card there.
+    const zone = ctx.zones.getCardZone?.(targetId as CoreCardId) as string | undefined;
+    if (zone !== undefined && zone !== "base" && !zone.startsWith("battlefield-")) {
+      continue;
+    }
     const wasEmpowered =
       (ctx.cards.getCardMeta(targetId as CoreCardId) as { empowered?: boolean } | undefined)
         ?.empowered ?? false;

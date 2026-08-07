@@ -506,6 +506,70 @@ export function abilityXPayment(
 }
 
 /**
+ * rule 827.1.c.1 / 441.1.b — "Use only if not Empowered". The parser emits
+ * this either as a bare `not-empowered` restriction or as the generic
+ * `use-only-if` wrapper around `not(while-empowered)` (ven set JSON); both
+ * mean the same gate.
+ */
+export function blockedWhileEmpowered(
+  restrictions: readonly { type: string; condition?: unknown }[] | undefined,
+): boolean {
+  return (
+    restrictions?.some((r) => {
+      if (r.type === "not-empowered") {
+        return true;
+      }
+      if (r.type !== "use-only-if") {
+        return false;
+      }
+      const c = r.condition as { type?: string; condition?: { type?: string } } | undefined;
+      return c?.type === "not" && c.condition?.type === "while-empowered";
+    }) ?? false
+  );
+}
+
+/**
+ * rule 827.1.c.3 (rule-id: ven-001-166) — "This ability costs [N] less if
+ * COND" is part of the ability's cost, so both the affordability checks and
+ * the payment must use the reduced cost when COND holds.
+ */
+export function effectiveAbilityCost(
+  ability: { cost?: unknown; costModifier?: unknown },
+  playerId: string,
+  zones: { getCardsInZone: (zone: CoreZoneId, player: CorePlayerId) => readonly CoreCardId[] },
+): Record<string, unknown> | undefined {
+  const cost = ability.cost as Record<string, unknown> | undefined;
+  const mod = ability.costModifier as
+    | { condition?: { type?: string; amount?: number }; reduction?: number }
+    | undefined;
+  const reduction = mod?.reduction ?? 0;
+  if (!cost || reduction <= 0) {
+    return cost;
+  }
+  const cond = mod?.condition;
+  if (cond?.type === "per-rune-controlled") {
+    // rule 827.1.c.3 (rule-id: ven-032-166) — "costs [1] less for each rune you
+    // control": every rune card in my pool counts, ready or exhausted, and the
+    // cost never goes below zero.
+    const runes = zones.getCardsInZone("runePool" as CoreZoneId, playerId as CorePlayerId).length;
+    const baseEnergy = (cost.energy as number) ?? 0;
+    return { ...cost, energy: Math.max(0, baseEnergy - reduction * runes) };
+  }
+  let applies = false;
+  if (cond?.type === "runes-at-most" || cond?.type === "runes-at-least") {
+    // rule 430.1: your rune pool, ready or exhausted.
+    const runes = zones.getCardsInZone("runePool" as CoreZoneId, playerId as CorePlayerId).length;
+    const amount = cond.amount ?? 0;
+    applies = cond.type === "runes-at-most" ? runes <= amount : runes >= amount;
+  }
+  if (!applies) {
+    return cost;
+  }
+  const energy = (cost.energy as number) ?? 0;
+  return { ...cost, energy: Math.max(0, energy - reduction) };
+}
+
+/**
  * Deduct an activated ability's cost from the player's rune pool.
  */
 export function deductAbilityCost(
@@ -677,7 +741,7 @@ export const activateAbility: Defs["activateAbility"] = {
     }
     // Rule 827.1.c.1: [Empower] carries an implicit "Play only if not
     // Empowered" — reject activation when the host is already Empowered.
-    if (abilityRestrictions?.some((r) => r.type === "not-empowered")) {
+    if (blockedWhileEmpowered(abilityRestrictions)) {
       const hostMeta = context.cards.getCardMeta(cardId as CoreCardId) as
         | { empowered?: boolean }
         | undefined;
@@ -730,8 +794,13 @@ export const activateAbility: Defs["activateAbility"] = {
     }
 
     // Check if player can afford the cost
-    if (ability.cost) {
-      const cost = ability.cost as Record<string, unknown>;
+    const effectiveCost = effectiveAbilityCost(
+      ability as { cost?: unknown; costModifier?: unknown },
+      playerId as string,
+      context.zones,
+    );
+    if (effectiveCost) {
+      const cost = effectiveCost;
       const pool = state.runePools[playerId];
       if (!pool) {
         return false;
@@ -1095,7 +1164,7 @@ export const activateAbility: Defs["activateAbility"] = {
           continue;
         }
         // Rule 827.1.c.1: [Empower] — skip when the host is already Empowered.
-        if (abilityRestrictions?.some((r) => r.type === "not-empowered")) {
+        if (blockedWhileEmpowered(abilityRestrictions)) {
           const hostMeta = context.cards.getCardMeta(entry.hostCardId as CoreCardId) as
             | { empowered?: boolean }
             | undefined;
@@ -1130,8 +1199,13 @@ export const activateAbility: Defs["activateAbility"] = {
         }
 
         // Check cost affordability
-        if (ability.cost) {
-          const cost = ability.cost as Record<string, unknown>;
+        const effectiveCost = effectiveAbilityCost(
+          ability as { cost?: unknown; costModifier?: unknown },
+          playerId as string,
+          context.zones,
+        );
+        if (effectiveCost) {
+          const cost = effectiveCost;
           const pool = state.runePools[playerId];
           if (!pool) {
             continue;
@@ -1450,8 +1524,13 @@ export const activateAbility: Defs["activateAbility"] = {
     }
 
     // Pay cost
-    if (ability.cost) {
-      const cost = ability.cost as Record<string, unknown>;
+    const costToPay = effectiveAbilityCost(
+      ability as { cost?: unknown; costModifier?: unknown },
+      playerId as string,
+      context.zones,
+    );
+    if (costToPay) {
+      const cost = costToPay;
       deductAbilityCost(draft, playerId, cost, context.zones, context.counters);
 
       // rule 135.2.e.5.a: the chosen X leaves the pool as part of paying the
