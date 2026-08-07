@@ -72,9 +72,15 @@ export function stageCombatOnArrival(ctx: EffectContext, targetZoneId: string): 
   if (attackers.length === 0 || defenders.length === 0) {
     return;
   }
-  const alreadyStaged = defenders.every(
-    (id) => (ctx.cards.getCardMeta?.(id as CoreCardId) as { combatRole?: string } | undefined)?.combatRole === "defender",
+  // rule 464.2.c.3.a — a unit already carrying the Defender designation keeps
+  // it; only newly-present units gain it (and fire "when I defend") here.
+  const wasDefender = new Map<string, boolean>(
+    defenders.map((id) => [
+      id,
+      (ctx.cards.getCardMeta?.(id as CoreCardId) as { combatRole?: string } | undefined)?.combatRole === "defender",
+    ]),
   );
+  const alreadyStaged = defenders.every((id) => wasDefender.get(id) === true);
   const defendingPlayer = ownerOf(defenders[0] as string) as string;
   bf.showdownComplete = false;
   for (const id of attackers) {
@@ -117,11 +123,26 @@ export function stageCombatOnArrival(ctx: EffectContext, targetZoneId: string): 
   for (const id of attackers) {
     ctx.fireTriggers?.({ battlefieldId: bfId, cardId: id, owner: attackingPlayer, type: "attack" });
   }
+  // rule 383.4.f.2.a (sfd-126-221) — a player who already holds the Defender
+  // designation in this combat does not "defend" a second time when another of
+  // their units joins, so those later events carry a non-zero `batchIndex` and
+  // only unit-scoped ("when I defend") triggers see them.
+  const priorDefendingPlayers = new Set(
+    defenders.filter((id) => wasDefender.get(id) === true).map((id) => ownerOf(id) as string),
+  );
+  const defendCount = new Map<string, number>();
   for (const id of defenders) {
+    if (wasDefender.get(id) === true) {
+      continue;
+    }
+    const owner = ownerOf(id) as string;
+    const seen = defendCount.get(owner) ?? 0;
+    defendCount.set(owner, seen + 1);
     ctx.fireTriggers?.({
+      batchIndex: seen + (priorDefendingPlayers.has(owner) ? 1 : 0),
       battlefieldId: bfId,
       cardId: id,
-      owner: ownerOf(id) as string,
+      owner,
       type: "defend",
     });
   }
@@ -600,10 +621,20 @@ export function handle_move(effect: ExecutableEffect, ctx: EffectContext, h: Eff
     // unrestricted battlefield list.
     const enteringPlay =
       currentZone !== "base" && !(currentZone ?? "").startsWith("battlefield-");
+    // rule 355.2.b (sfd-170-221) — an effect may grant permission to play a
+    // unit to a location that is not normally valid ("play it here"); those
+    // zones join the list even when the player does not control them.
+    const granted = (effect as unknown as { extraDestinations?: readonly string[] })
+      .extraDestinations;
     const options = [
       "base",
       ...Object.entries(ctx.draft.battlefields)
-        .filter(([, bf]) => !enteringPlay || bf.controller === ctx.playerId)
+        .filter(
+          ([bfId, bf]) =>
+            !enteringPlay ||
+            bf.controller === ctx.playerId ||
+            granted?.includes(`battlefield-${bfId}`) === true,
+        )
         .map(([bfId]) => `battlefield-${bfId}`),
     ].filter((z) => z !== currentZone);
     if (options.length === 0) {
