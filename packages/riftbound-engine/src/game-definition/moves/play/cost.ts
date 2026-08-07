@@ -1359,6 +1359,12 @@ export interface CostExtras {
    * me for [mind]") replaces the card's printed cost entirely for this play.
    */
   altCost?: { energy?: number; power?: readonly string[] };
+  /**
+   * rule-id: sfd-141-221 — pre-target gate: targets are not chosen yet, so a
+   * "spells that choose me cost less" aura is assumed to apply. The move's
+   * `condition` re-checks with the real targets.
+   */
+  assumeChooseDiscount?: boolean;
 }
 
 const NO_BOARD_REDUCTION: StaticCostReduction = { minimum: 0, power: {}, reduction: 0 };
@@ -1374,9 +1380,64 @@ function getBoardCostReduction(
     return NO_BOARD_REDUCTION;
   }
   return computeStaticCostReduction({ draft: state, ...extras.board }, playerId, cardId, {
+    assumeChosen: extras.assumeChooseDiscount === true,
+    chosenTargetIds: [
+      ...(extras.targets ?? []),
+      ...(extras.chosenTargetId ? [extras.chosenTargetId] : []),
+    ],
+    preferAlternative: prefersPowerWaiver(state, playerId, cardId),
     viaFlow: extras.viaFlow === true,
   });
 }
+
+/**
+ * rule 356.4.b (rule-id: sfd-141-221) — an "[N] or [rainbow] less" discount is
+ * ONE discount the caster elects. The Power half is only ever the better pick
+ * when the pool cannot cover the card's printed pips, so elect it exactly then.
+ */
+function prefersPowerWaiver(
+  state: RiftboundGameState,
+  playerId: string,
+  cardId: string,
+): boolean {
+  const printed = getGlobalCardRegistry().getPowerCost(cardId) ?? [];
+  if (printed.length === 0) {
+    return false;
+  }
+  const pool = state.runePools[playerId];
+  const have: Record<string, number> = {};
+  for (const [d, v] of Object.entries(pool?.power ?? {})) {
+    if (typeof v === "number" && v > 0) {
+      have[d] = v;
+    }
+  }
+  const need: Record<string, number> = {};
+  for (const d of printed) {
+    need[d] = (need[d] ?? 0) + 1;
+  }
+  let namedShort = 0;
+  let spare = 0;
+  for (const [d, n] of Object.entries(need)) {
+    if (d === "rainbow") {
+      continue;
+    }
+    namedShort += Math.max(0, n - (have[d] ?? 0));
+  }
+  for (const [d, n] of Object.entries(have)) {
+    if (d !== "rainbow") {
+      spare += Math.max(0, n - (need[d] ?? 0));
+    }
+  }
+  // Pooled [rainbow] Power covers any named shortfall first (rule 135.2.e.5.a).
+  let wild = have.rainbow ?? 0;
+  const usedWild = Math.min(wild, namedShort);
+  wild -= usedWild;
+  if (namedShort - usedWild > 0) {
+    return true;
+  }
+  return (need.rainbow ?? 0) > wild + spare;
+}
+
 
 const NO_COST_INCREASE: { energy: number; power: Partial<Record<string, number>> } = {
   energy: 0,

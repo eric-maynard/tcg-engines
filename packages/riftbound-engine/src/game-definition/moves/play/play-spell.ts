@@ -15,6 +15,7 @@ import {
   resolveTarget,
 } from "../../../abilities/target-resolver";
 import { playIsForbidden } from "../../../abilities/play-restrictions";
+import { recalculateStaticEffects } from "../../../abilities/static-abilities";
 import { fireTriggers } from "../../../abilities/trigger-runner";
 import {
   addToChain,
@@ -39,6 +40,7 @@ import {
   deductCost,
   getEffectiveSpellRepeatCost,
   getFlowCostForPlay,
+  hasPlayFromTrashGrant,
   xCostIsPower,
 } from "./cost";
 import type { SpellEffectTargetShape } from "./targeting";
@@ -245,7 +247,12 @@ export const playSpell: Defs["playSpell"] = {
       if (!getFlowCostForPlay(context.params.cardId, createMetaAccessor(context.cards))) {
         return false;
       }
-    } else if (zone !== "hand") {
+    } else if (
+      zone !== "hand" &&
+      // rule 419.1 (rule-id: ven-022-166) — "You may play cards from your
+      // trash" makes the trash a legal play-from zone for spells too.
+      !(zone === "trash" && hasPlayFromTrashGrant(state, context.zones, context.params.playerId as string))
+    ) {
       return false;
     }
 
@@ -782,10 +789,18 @@ export const playSpell: Defs["playSpell"] = {
     const board = { cards: context.cards, zones: context.zones };
     const metaForAfford = createMetaAccessor(context.cards);
 
-    const handCards = context.zones.getCardsInZone(
+    const rawHandCards = context.zones.getCardsInZone(
       "hand" as CoreZoneId,
       context.playerId as CorePlayerId,
     );
+    // rule 419.1 (rule-id: ven-022-166) — with "You may play cards from your
+    // trash" on board, trash spells are offered alongside the hand.
+    const handCards = hasPlayFromTrashGrant(state, context.zones, context.playerId as string)
+      ? [
+          ...rawHandCards,
+          ...context.zones.getCardsInZone("trash" as CoreZoneId, context.playerId as CorePlayerId),
+        ]
+      : rawHandCards;
 
     const results: {
       playerId: string;
@@ -1895,6 +1910,17 @@ export const playSpell: Defs["playSpell"] = {
       // rule 357.1.a: tap ready runes for any Energy shortfall at Pay time.
       { counters: context.counters, zones: context.zones },
     );
+
+    // rule 357 (rule-id: unl-004-219) — costs are paid as the spell is played,
+    // so statics gated on what was spent this turn ("If you've spent [4] or more
+    // to play a spell this turn") are live while the spell still sits on the
+    // chain. Re-run the continuous pass now rather than waiting for the next
+    // state-based check.
+    recalculateStaticEffects({
+      cards: context.cards,
+      draft,
+      zones: context.zones,
+    } as unknown as Parameters<typeof recalculateStaticEffects>[0]);
 
     // rule-id: sfd-078-221 — the grant applies to the NEXT spell only: consume
     // it here (after the cost was computed with it) so a later spell this turn

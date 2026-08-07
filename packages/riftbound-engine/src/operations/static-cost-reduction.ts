@@ -72,6 +72,25 @@ export interface CostReductionContext {
 export interface CostPlayContext {
   /** The play uses a [Flow] cost from the trash (rule 829.1.b). */
   readonly viaFlow?: boolean;
+  /**
+   * rule-id: sfd-141-221 (rule 355.8 / 366.2) — the targets the play is
+   * CHOOSING. An aura scoped `appliesTo.chooses === "self"` ("your spells
+   * that choose me cost … less") only discounts a play that names its own
+   * permanent among these.
+   */
+  readonly chosenTargetIds?: readonly string[];
+  /**
+   * Pre-target enumeration gate: targets aren't picked yet, so assume a
+   * `chooses` aura could apply (the per-target `condition` re-checks with
+   * the real targets before the play is legal).
+   */
+  readonly assumeChosen?: boolean;
+  /**
+   * rule 356.4.b (rule-id: sfd-141-221) — an "or"-shaped discount ("[1] or
+   * [rainbow] less") is ONE discount the caster elects. True selects the
+   * effect's `alternative` (the Power half); false keeps the printed `by`.
+   */
+  readonly preferAlternative?: boolean;
 }
 
 /** One matching board discount, kept separate so its own floor binds only it. */
@@ -212,8 +231,21 @@ export function computeStaticCostReduction(
         // Target-match filter: only count auras whose `target` matches the
         // Played card. `self` / no-target shapes do not match an external
         // Played card.
-        const {target} = (effect as { target?: unknown });
-        if (!matchesPlayedCard(target, playedCardType, playedKeywords, playedTags, playContext)) {
+        // rule-id: sfd-141-221 — `appliesTo` carries the aura's scope when the
+        // effect's `target` names the aura's own anchor ("self") instead.
+        const target =
+          (effect as { appliesTo?: unknown }).appliesTo ??
+          (effect as { target?: unknown }).target;
+        if (
+          !matchesPlayedCard(
+            target,
+            playedCardType,
+            playedKeywords,
+            playedTags,
+            playContext,
+            permId as string,
+          )
+        ) {
           continue;
         }
 
@@ -247,10 +279,15 @@ export function computeStaticCostReduction(
         // Parser uses `by` / `reduction` / `amount` depending on phrasing;
         // rule-id: ven-055-166 — token strings (`":rb_energy_1::rb_rune_rainbow:"`)
         // decode into an energy part and waived power pips.
+        // rule 356.4.b (rule-id: sfd-141-221) — "[1] or [rainbow] less" is a
+        // single elected discount; take the alternative half when chosen.
+        const alternative = (effect as { alternative?: unknown }).alternative;
         const rawAmt =
-          (effect as { by?: unknown }).by ??
-          (effect as { reduction?: unknown }).reduction ??
-          (effect as { amount?: unknown }).amount;
+          playContext?.preferAlternative === true && alternative !== undefined
+            ? alternative
+            : (effect as { by?: unknown }).by ??
+              (effect as { reduction?: unknown }).reduction ??
+              (effect as { amount?: unknown }).amount;
         const amt = decodeCostAmount(rawAmt);
         const powerPips = Object.values(amt.power).reduce((a: number, b) => a + (b ?? 0), 0);
         if (amt.energy <= 0 && powerPips <= 0) {
@@ -760,6 +797,7 @@ function matchesPlayedCard(
   playedKeywords: readonly string[],
   playedTags: readonly string[] = [],
   playContext?: CostPlayContext,
+  auraCardId?: string,
 ): boolean {
   if (target === undefined || target === null) {
     return false;
@@ -783,6 +821,17 @@ function matchesPlayedCard(
   // Enemy-targeted reductions don't apply to your own plays.
   if (t.controller === "enemy") {
     return false;
+  }
+  // rule 355.8 (rule-id: sfd-141-221) — "spells that choose me": the play must
+  // name the aura's own permanent among its chosen targets.
+  const chooses = (t as { chooses?: string }).chooses;
+  if (chooses !== undefined) {
+    if (playContext?.assumeChosen !== true) {
+      const wanted = chooses === "self" ? auraCardId : chooses;
+      if (!wanted || !(playContext?.chosenTargetIds ?? []).includes(wanted)) {
+        return false;
+      }
+    }
   }
   // rule 356.4.c — a target naming a COST KIND ([Repeat], optional additional)
   // discounts that cost, never the played card's own cost.
