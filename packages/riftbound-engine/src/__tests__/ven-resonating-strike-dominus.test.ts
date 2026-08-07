@@ -90,7 +90,11 @@ describe("ven-034-166 Resonating Strike", () => {
     expect(getCardMeta(engine, unit)?.mightModifier).toBe(2);
   });
 
-  test("with no controlled battlefield the move fizzles but the unit is still buffed", async () => {
+  // rule 355.8 / 355.4.a — "Choose a battlefield you control and a unit you
+  // control at a different location": with no controlled battlefield there is
+  // no legal choice, so the spell is never offered as a Play (it must not reach
+  // the chain and resolve as a bare +2 Might).
+  test("with no controlled battlefield the spell has no legal choice and is not playable", async () => {
     const { engine, internal, spell, unit, getCardMeta } = await setup("ven-034-166", "ogn-010-298");
     const moves = engine.enumerateMoves(P1 as CorePlayerId, { validOnly: true });
     const play = moves.find(
@@ -99,11 +103,9 @@ describe("ven-034-166 Resonating Strike", () => {
         (m.params as { cardId?: string }).cardId === spell &&
         (m.params as { targets?: string[] }).targets?.[0] === unit,
     );
-    expect(play).toBeDefined();
-    engine.executeMove("playSpell", { params: play!.params as never, playerId: P1 as CorePlayerId });
-    drainChain(engine);
+    expect(play).toBeUndefined();
     expect(internal.cards[unit]!.zone).toBe("base");
-    expect(getCardMeta(engine, unit)?.mightModifier).toBe(2);
+    expect(getCardMeta(engine, unit)?.mightModifier ?? 0).toBe(0);
   });
 });
 

@@ -32,6 +32,7 @@ import { beginRevealSlotLock, isSinglePickSlot } from "./reveal-target-lock";
 import {
   collectSequenceTargetSlots,
   findSequenceLeadTarget,
+  hiddenChoiceIsPulledIn,
   spellEffectHasLegalTargets,
 } from "./targeting";
 import type { SpellEffectTargetShape } from "./targeting";
@@ -597,7 +598,10 @@ function hiddenSpellHasLegalTargets(
     draft: state,
     // rule 811.1.d — restrict EVERY descriptor (even a locationless
     // "a unit") to the facedown battlefield, as resolution does.
-    hiddenZone: bfZone,
+    // rule 811.1.d.2.a (ven-034-166) — unless the spell PULLS its chosen object
+    // into that battlefield: then the battlefield is the destination and the
+    // object is chosen freely.
+    ...(hiddenChoiceIsPulledIn(effect) ? {} : { hiddenZone: bfZone }),
     playerId,
     sourceCardId: cardId,
     sourceZone: bfZone,
@@ -675,7 +679,13 @@ function lockRevealedSpellTarget(
       sourceZone: bfZone,
       zones: ctx.zones,
     } as Parameters<typeof resolveTarget>[1]) as string[]
-  ).filter((id) => ctx.zones.getCardZone(id as CoreCardId) === bfZone);
+  ).filter(
+    (id) =>
+      // rule 811.1.d.2.a (ven-034-166) — a spell that PULLS its chosen object
+      // into the facedown battlefield chooses that object freely.
+      hiddenChoiceIsPulledIn(item.effect as SpellEffectTargetShape) ||
+      ctx.zones.getCardZone(id as CoreCardId) === bfZone,
+  );
   if (options.length < 2) {
     return;
   }

@@ -35,6 +35,7 @@ import { getCardEffectiveMight, getDeflectSurcharge, xCostIsPower } from "../pla
 import {
   findAmountReferenceTarget,
   findSequenceLeadTarget,
+  hiddenChoiceIsPulledIn,
   isLegalMultiTargetSet,
   type SpellEffectTargetShape,
 } from "../play/targeting";
@@ -404,11 +405,18 @@ export function executeResolvedItem(
   const triggerSourceId = typeof trigEvt?.cardId === "string" ? trigEvt.cardId : undefined;
   // rule-id: ogn-097-298 — Rule 723.1.d (811.1.d.2): a card played from Hidden
   // may only choose targets at the battlefield it was facedown at.
-  const hiddenZone =
+  const playedFromHiddenAt =
     typeof trigEvt?.fromHiddenAt === "string" ? `battlefield-${trigEvt.fromHiddenAt}` : undefined;
+  // rule 811.1.d.2.a (ven-034-166, the Smoke and Mirrors ruling) — a spell that
+  // PULLS its chosen object INTO the facedown battlefield names that battlefield
+  // as the DESTINATION, not as the pool the object is chosen from, so 811.1.d.2's
+  // "targets must be there" restriction does not apply to its choice at all.
+  const hiddenZone = hiddenChoiceIsPulledIn(effect as SpellEffectTargetShape)
+    ? undefined
+    : playedFromHiddenAt;
   // rule 811.1 (unl-042-219) — played from Hidden, not from hand: collapse any
   // "if you played this from your hand" gate to its `else` branch now.
-  if (hiddenZone !== undefined) {
+  if (playedFromHiddenAt !== undefined) {
     effect = resolvePlayedFromHandGates(effect, false);
   }
 

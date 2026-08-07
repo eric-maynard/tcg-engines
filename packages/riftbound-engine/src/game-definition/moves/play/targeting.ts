@@ -695,6 +695,31 @@ export function targetDescriptorIsSatisfiable(
 }
 
 /**
+ * rule 811.1.d.2.a (rule-id: ven-034-166, the Smoke and Mirrors ruling) — a card
+ * played from Hidden normally chooses only objects AT the facedown battlefield
+ * (811.1.d.2). When the spell's own text PULLS its chosen object INTO a
+ * battlefield, that battlefield is the destination, not the source: the moved
+ * object is chosen freely (and by this card's text can never already be there).
+ * True when a `move` step names a battlefield-shaped destination.
+ */
+export function hiddenChoiceIsPulledIn(effect: SpellEffectTargetShape | undefined): boolean {
+  if (!effect) return false;
+  if (effect.type === "move") {
+    const to = (effect as { to?: unknown; optional?: boolean }).to;
+    return (
+      (effect as { optional?: boolean }).optional !== true &&
+      to !== null &&
+      typeof to === "object" &&
+      typeof (to as { battlefield?: unknown }).battlefield === "string"
+    );
+  }
+  if (effect.type === "sequence" && Array.isArray(effect.effects)) {
+    return effect.effects.some((sub) => hiddenChoiceIsPulledIn(sub));
+  }
+  return false;
+}
+
+/**
  * rule 355.4 / 355.4.a (unl-101-219 Call to Battle) — when a spell's move
  * effect makes its controller CHOOSE the destination, the destination must be
  * a location other than the unit's current one. A unit for which no such
@@ -710,6 +735,40 @@ export function chosenMoveDestinations(
   cardId: string,
   ctx: Parameters<typeof resolveTarget>[1],
 ): string[] | undefined {
+  // rule-id: ven-034-166 (rule 355.4.a) — "Choose a battlefield you control and
+  // a unit you control at a different location. Move that unit there and give
+  // it +2": the move is one STEP of a sequence that shares the caster's single
+  // unit choice, so the destination restriction has to be read through the
+  // sequence, not only off a bare `move` effect.
+  if (effect?.type === "sequence" && Array.isArray(effect.effects)) {
+    const lead = effect.target;
+    for (const sub of effect.effects) {
+      // rule 355.13 — a "you may move" step can always be declined, so it never
+      // narrows which units may be chosen.
+      if ((sub as { optional?: boolean } | undefined)?.optional === true) {
+        continue;
+      }
+      // rule-id: unl-107-219 — a sequence whose move step names a DIFFERENT
+      // slot ("choose a friendly unit … move weaker ENEMY units to base") says
+      // nothing about where the caster-chosen unit may stand, so only a step
+      // restating the sequence's own target restricts that choice.
+      const subTgt = sub?.target;
+      if (
+        !lead ||
+        typeof lead === "string" ||
+        !subTgt ||
+        typeof subTgt === "string" ||
+        !isRestatementOf(lead, subTgt)
+      ) {
+        continue;
+      }
+      const dests = chosenMoveDestinations(sub, cardId, ctx);
+      if (dests !== undefined) {
+        return dests;
+      }
+    }
+    return undefined;
+  }
   const move = effect as
     | { type?: string; to?: string | { battlefield?: string } }
     | undefined;
