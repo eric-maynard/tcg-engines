@@ -171,7 +171,7 @@ export function parseReturnToHandEffect(text: string): ReturnToHandEffect | unde
   //                      [with X [Might] or less] from your trash to your hand."
   // Also handles tag-filter list: "return a Bird, Cat, Dog, or Poro from your trash to your hand."
   const fromTrashMatch = text.match(
-    /^Return (?:(a|an|up to (?:one|two|three|four|five|\d+))\s+)?((?:[A-Z][A-Za-z-]*(?:,\s+or\s+|,\s*|\s+or\s+))+[A-Z][A-Za-z-]*|unit or gear|gear or unit|unit|units|gear|spell|spells|card|cards)(?:\s+with\s+\[?hidden\]?)?(?:\s+with\s+(\d+)\s*:rb_might:\s*or\s*less)?\s+from\s+(?:your|its owner's|their|owner's)\s+trash\s+to\s+(?:your|their|its owner's)\s+hand\.?$/i,
+    /^Return (?:(a|an|up to (?:one|two|three|four|five|\d+))\s+)?((?:[A-Z][A-Za-z-]*(?:,\s+or\s+|,\s*|\s+or\s+))+[A-Z][A-Za-z-]*|unit or gear|gear or unit|unit|units|gear|spell|spells|card|cards)(?:\s+with\s+\[?hidden\]?)?(?:\s+with\s+(\d+)\s*:rb_might:\s*or\s*less)?\s+from\s+(?:(?:your|its owner's|their|owner's)\s+)?(trashes|trash)\s+to\s+(?:your|their owners'|their|its owner's|owner's)\s+hands?\.?$/i,
   );
   if (fromTrashMatch) {
     const quantityStr = fromTrashMatch[1]?.toLowerCase();
@@ -179,6 +179,12 @@ export function parseReturnToHandEffect(text: string): ReturnToHandEffect | unde
     const mightLte = fromTrashMatch[3] ? Number.parseInt(fromTrashMatch[3], 10) : undefined;
 
     const target: Record<string, unknown> = { location: "trash" };
+    // rule 355.9.a (rule-id: ven-103-166) — "from trashES … to their ownerS'
+    // hands": the pool is EVERY player's trash, and each card goes back to its
+    // own owner. A singular "your trash" stays scoped to the resolving player.
+    if (fromTrashMatch[4].toLowerCase() === "trashes") {
+      target.controller = "any";
+    }
 
     // Parse type: check for tag-list (commas / "or") first
     const typeLower = typeRaw.toLowerCase();
