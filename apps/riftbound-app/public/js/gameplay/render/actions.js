@@ -467,6 +467,12 @@ function renderActions() {
 }
 
 function toggleMoveGroup(moveId) {
+  // Opening a sidebar action group is a new intent: drop any armed targeting mode
+  // first so the target banner and a move submenu can never be live at once.
+  // (The document click-cancel handler in interactions.js skips #actionsList.)
+  if (typeof isChoosingTarget === "function" && isChoosingTarget()) {
+    cancelInteraction(); // re-renders the action list, so re-look-up below
+  }
   const el = document.getElementById(`move-group-${moveId}`);
   if (el) el.classList.toggle("hidden");
 }

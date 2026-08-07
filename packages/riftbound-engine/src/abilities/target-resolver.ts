@@ -757,6 +757,20 @@ function matchesFilter(cardId: string, filter: TargetFilter, ctx: TargetResolver
     return true;
   }
 
+  // rule 359.3.f.2 (unl-105-219 Imposing Challenger, unl-057-219 Alpha
+  // Wildclaw) — "with less Might than me": compared against the SOURCE's Might
+  // as it reads when the instruction executes; equal Might is not less.
+  if ((filter as { mightLessThanSelf?: boolean }).mightLessThanSelf === true) {
+    const srcId = ctx.sourceCardId;
+    if (srcId === undefined) {
+      return true;
+    }
+    const srcMight = effectiveMight(
+      registry.get(srcId),
+      ctx.cards.getCardMeta?.(srcId as CoreCardId) as Partial<RiftboundCardMeta> | undefined,
+    );
+    return effectiveMight(def, meta) < srcMight;
+  }
   if ("might" in filter) {
     return matchesComparison(effectiveMight(def, meta), filter.might);
   }
