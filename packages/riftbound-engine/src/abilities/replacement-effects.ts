@@ -89,6 +89,12 @@ export interface MatchedReplacement {
   readonly abilityIndex: number;
   /** Optional gating condition from the ability; callers evaluate per event. */
   readonly condition?: unknown;
+  /**
+   * rule 371.2 — who is asked / pays for an optional ("may pay … instead")
+   * replacement: `"affected-controller"` (Altar of Blood: "ITS controller may
+   * pay") or, by default, the replacement's own controller.
+   */
+  readonly payer?: string;
 }
 
 /**
@@ -129,6 +135,20 @@ function collectBoardCards(ctx: ReplacementContext): BoardCardEntry[] {
       boardCards.push({ id: cardId as string, owner, zone });
     }
   }
+  // rule 103.2 / 365.1 — a Battlefield card's passive text is active on the
+  // board; "a unit HERE" reads as the units in that battlefield's zone, and its
+  // abilities are controlled by whoever controls the battlefield (471.2.a).
+  for (const cardId of ctx.zones.getCardsInZone("battlefieldRow" as CoreZoneId)) {
+    const id = cardId as string;
+    if (ctx.draft.battlefields[id] === undefined || boardCards.some((c) => c.id === id)) {
+      continue;
+    }
+    boardCards.push({
+      id,
+      owner: ctx.draft.battlefields[id]?.controller ?? ctx.cards.getCardOwner(cardId) ?? "",
+      zone: `battlefield-${id}`,
+    });
+  }
   return boardCards;
 }
 
@@ -165,7 +185,8 @@ function replacementApplies(
   eventCard: BoardCardEntry | undefined,
   ctx: ReplacementContext,
 ): boolean {
-  const { target, condition, method, sourceController } = ability as {
+  const { target, condition, method, sourceController, duringCombat } = ability as {
+    duringCombat?: boolean;
     sourceController?: string;
     target?: {
       attachedToSource?: boolean;
@@ -209,6 +230,17 @@ function replacementApplies(
   // events affecting its own source (ven-181-166 Gangplank, Naval).
   if (target?.self === true && event.cardId !== card.id) {
     return false;
+  }
+  // "would die DURING COMBAT" (unl-206-219 Altar of Blood): the affected unit
+  // is an Attacker or Defender of a combat in progress (rule 466).
+  if (duringCombat === true) {
+    const role =
+      event.cardId === undefined
+        ? undefined
+        : (ctx.cards.getCardMeta(event.cardId as CoreCardId) as { combatRole?: unknown } | undefined)?.combatRole;
+    if (role !== "attacker" && role !== "defender") {
+      return false;
+    }
   }
   // rule 369.2 — "if the EQUIPPED unit would die" (sfd-051-221 Guardian Angel):
   // the replacement only sees the death of the unit its source is attached to.
@@ -323,14 +355,16 @@ export function findAllReplacements(
         continue;
       }
 
-      const { replacement, condition } = ability as unknown as {
+      const { replacement, condition, payer } = ability as unknown as {
         replacement: unknown;
         condition?: unknown;
+        payer?: string;
       };
       matches.push({
         abilityIndex: i,
         condition,
         duration,
+        ...(payer !== undefined ? { payer } : {}),
         replacement,
         sourceCardId: card.id,
         sourceOwner: card.owner,

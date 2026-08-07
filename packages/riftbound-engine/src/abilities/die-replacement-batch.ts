@@ -83,6 +83,8 @@ export interface DieReplacementCandidate {
   readonly kind: "board" | "bound";
   readonly match?: MatchedReplacement;
   readonly entry?: BoundEntry;
+  /** rule 371.2 — "may pay [C] … instead": asked (and paid) by `payer` before it applies. */
+  readonly optional?: { readonly cost: { energy?: number; power?: readonly string[] }; readonly payer: string };
 }
 
 export interface DieBatchOptions {
@@ -217,12 +219,19 @@ export function collectDieCandidates(ctx: Ctx, cardId: string): DieReplacementCa
     if (RUNNING.has(m.sourceCardId)) {
       continue;
     }
+    const controller = controllerOf(ctx, m.sourceCardId) || m.sourceOwner;
+    const cond = m.condition as { type?: string; cost?: { energy?: number; power?: readonly string[] } } | undefined;
+    const optional =
+      cond?.type === "pay-cost" && cond.cost
+        ? { cost: cond.cost, payer: m.payer === "affected-controller" ? controllerOf(ctx, cardId) : controller }
+        : undefined;
     out.push({
-      controller: controllerOf(ctx, m.sourceCardId) || m.sourceOwner,
+      controller,
       id: `board:${m.sourceCardId}#${m.abilityIndex}`,
       key: m.sourceCardId,
       kind: "board",
       match: m,
+      ...(optional ? { optional } : {}),
       singleUse: m.duration === "next" || effectRemovesSelf(m.replacement),
       sourceCardId: m.sourceCardId,
     });
@@ -412,21 +421,37 @@ function freshState(ids: readonly string[], opts: DieBatchOptions): BatchState {
   };
 }
 
-/** rule 371.2 — deaths carrying an optional ("you may pay …") shield are asked about first. */
-function optionalFirst(draft: RiftboundGameState, ids: readonly string[]): string[] {
+/**
+ * Processing order of a fresh batch: rule 373.1 — events whose controller
+ * comes first in turn order first (their replacements execute first); within
+ * one controller, deaths carrying an optional ("you may pay …") shield are
+ * asked about before the rest (371.2); otherwise board order.
+ */
+function initialOrder(ctx: Ctx, ids: readonly string[]): string[] {
+  const draft = ctx.draft;
+  const turnOrder = Object.keys(draft.players ?? {});
+  const start = Math.max(0, turnOrder.indexOf(draft.turn?.activePlayer ?? ""));
+  const rank = (pid: string): number => {
+    const i = turnOrder.indexOf(pid);
+    return i < 0 ? Number.MAX_SAFE_INTEGER : (i - start + turnOrder.length) % turnOrder.length;
+  };
   const hasOptional = (id: string): boolean =>
     activeEntries(draft).some(
       (e) => e?.replaces === "die" && e.targetCardIds?.includes(id) === true && e.condition?.type === "pay-cost",
     );
-  return [...ids.filter(hasOptional), ...ids.filter((id) => !hasOptional(id))];
+  return ids
+    .map((id, i) => ({ i, id, opt: hasOptional(id) ? 0 : 1, r: rank(controllerOf(ctx, id)) }))
+    .sort((a, b) => a.r - b.r || a.opt - b.opt || a.i - b.i)
+    .map((e) => e.id);
 }
 
-function loadState(draft: RiftboundGameState, ids: readonly string[], opts: DieBatchOptions): BatchState {
+function loadState(ctx: Ctx, ids: readonly string[], opts: DieBatchOptions): BatchState {
+  const draft = ctx.draft;
   const prev = draft.dieBatch;
   const known = prev ? [...prev.queue, ...prev.replaced, ...prev.dying] : [];
   const resumable = prev !== undefined && ids.some((id) => known.includes(id));
   if (!resumable) {
-    draft.dieBatch = freshState(optionalFirst(draft, ids), opts);
+    draft.dieBatch = freshState(initialOrder(ctx, ids), opts);
     return draft.dieBatch as BatchState;
   }
   const state = prev as BatchState;
@@ -453,7 +478,7 @@ export function runDieBatch(ctx: Ctx, ids: readonly string[], opts: DieBatchOpti
   const nested = DEPTH > 0;
   DEPTH += 1;
   try {
-    const state = nested ? freshState(ids, opts) : loadState(draft, ids, opts);
+    const state = nested ? freshState(ids, opts) : loadState(ctx, ids, opts);
     const result = processBatch(ctx, state, { ...opts, canPrompt: opts.canPrompt && !nested });
     if (!nested) {
       draft.dieBatch = result.suspended ? state : undefined;
@@ -524,6 +549,49 @@ function processBatch(ctx: Ctx, state: BatchState, opts: DieBatchOptions): DieBa
       }
       if (!isLive(ctx, cardId, c)) {
         continue;
+      }
+      // rule 371.2 — an optional board replacement ("its controller may pay …
+      // instead"): unpayable ⇒ skipped; otherwise its payer is asked once per
+      // event (asked before and still dying ⇒ it was declined, 371.2.b — not
+      // applied, nothing consumed). Accepting pays and applies it through the
+      // opt-in reducer, which heals the unit out of this batch.
+      if (c.optional) {
+        const askedFor = (state.asked ??= {});
+        const asked = (askedFor[cardId] ??= []);
+        if (asked.includes(c.id) || !canPayCost(draft, c.optional.payer, c.optional.cost)) {
+          continue;
+        }
+        const repl = c.match?.replacement as ExecutableEffect | "prevent" | undefined;
+        if (!repl || repl === "prevent" || typeof repl !== "object") {
+          continue;
+        }
+        if (!canPrompt()) {
+          // No way to ask: an optional effect is simply not applied.
+          continue;
+        }
+        asked.push(c.id);
+        draft.pendingChoice = {
+          playerId: c.optional.payer,
+          resolved: {
+            cardId: c.sourceCardId,
+            controller: c.optional.payer,
+            effect: repl,
+            id: `die-replacement-${cardId}`,
+            optInCost: c.optional.cost,
+            targets: [cardId],
+            triggerEvent: { cardId, type: "die" },
+            triggered: true,
+            type: "ability",
+          },
+          sourceCardId: c.sourceCardId,
+          suspendedDeathCardId: cardId,
+          ...(opts.kill
+            ? { suspendedKill: { by: opts.kill.cause.by ?? c.optional.payer, source: opts.kill.cause.source ?? c.sourceCardId } }
+            : {}),
+          type: "opt-in",
+        } as typeof draft.pendingChoice;
+        suspended = true;
+        break;
       }
       // rule 373 / 373.2 — a replacement that spends itself but matches other
       // deaths of this batch too: its controller decides which it saves first.

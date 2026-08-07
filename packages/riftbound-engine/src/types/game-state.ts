@@ -1425,6 +1425,8 @@ export interface RiftboundGameState {
     replaced: string[];
     /** Processed ids whose death stands (killed together at the end, 373.1.a). */
     dying: string[];
+    /** rule 371.2 — dying id → optional replacement ids already offered (still dying ⇒ declined). */
+    asked?: Record<string, string[]>;
     /** A Kill instruction / cost / Temporary batch to finish on resume (SBA batches re-detect themselves). */
     kill?: { to: string; cause: unknown; playerId: string; sourceCardId: string };
   };

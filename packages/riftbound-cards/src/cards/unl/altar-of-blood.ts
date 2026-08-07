@@ -18,7 +18,12 @@ const abilities: Ability[] = [
       cost: { power: ["rainbow", "rainbow", "rainbow"] },
       type: "pay-cost",
     },
+    // "during combat": the dying unit must be an Attacker/Defender (rule 466).
+    duringCombat: true,
     duration: "permanent",
+    // rule 371.2 — "its controller may pay": the affected unit's controller
+    // decides and pays, not the battlefield's controller.
+    payer: "affected-controller",
     replacement: {
       effects: [
         {
@@ -40,7 +45,7 @@ const abilities: Ability[] = [
     replaces: "die",
     target: { location: "here", type: "unit" },
     type: "replacement",
-  },
+  } as unknown as Ability,
 ];
 
 export const altarOfBlood: BattlefieldCard = {
