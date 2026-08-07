@@ -28,7 +28,13 @@ import type {
   MatchedTrigger,
   TriggerableAbility,
 } from "./trigger-matcher";
-import { abilityFunctionsFromTrash, findMatchingTriggers, turnEventCountKeys } from "./trigger-matcher";
+import {
+  abilityFunctionsFromTrash,
+  findMatchingTriggers,
+  isOncePerTurnTrigger,
+  triggerFireKey,
+  turnEventCountKeys,
+} from "./trigger-matcher";
 
 /**
  * rule-id: ogn-100-298 (Gemcraft Seer) — effect keywords granted by another
@@ -1505,6 +1511,21 @@ export function fireTriggers(rawEvent: GameEvent, ctx: TriggerRunnerContext): nu
   const turnPlayer = ctx.draft.turn?.activePlayer ?? "";
   const turnOrder = Object.keys(ctx.draft.players ?? {});
   const matches = orderTriggers(expanded, turnPlayer, turnOrder);
+
+  // rule 383.3.e — a "once each turn" ability that triggered now must not
+  // trigger again this turn: record the fire before any of it resolves, so a
+  // second event in the same batch already sees the tally.
+  {
+    const counts = ctx.draft as { turnEventCounts?: Record<string, number> };
+    for (const match of matches) {
+      if (!isOncePerTurnTrigger(match.ability)) {
+        continue;
+      }
+      counts.turnEventCounts ??= {};
+      const key = triggerFireKey(match.ability.trigger, { id: match.cardId });
+      counts.turnEventCounts[key] = (counts.turnEventCounts[key] ?? 0) + 1;
+    }
+  }
 
   // Rule 583.3: a Triggered Ability behaves like an Activated Ability and is
   // placed on the Chain — always, whether or not a chain already exists.

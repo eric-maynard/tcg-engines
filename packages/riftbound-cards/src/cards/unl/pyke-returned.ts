@@ -24,6 +24,8 @@ const abilities: Ability[] = [
     condition: { type: "while-at-battlefield" },
     effect: {
       location: "base",
+      // rule 184.1: "…exhausted" overrides the gear default of entering ready.
+      ready: false,
       token: {
         name: "Gold",
         type: "gear",

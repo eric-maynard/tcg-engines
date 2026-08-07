@@ -90,6 +90,33 @@ function turnEventCountKeyFor(
 }
 
 /**
+ * rule 383.3.e — the `turnEventCounts` key under which a "once each turn"
+ * triggered ability records that it already triggered this turn. Scoped to the
+ * card printing it and the event it listens for, so two different once-a-turn
+ * abilities on the same card stay independent.
+ */
+export function triggerFireKey(
+  trigger: { readonly event: string },
+  card: { readonly id: string },
+): string {
+  return `trigger-fired|c:${card.id}|e:${trigger.event}`;
+}
+
+/**
+ * True when this ability carries a "once each turn" restriction, i.e. firing it
+ * must be tallied under `triggerFireKey`.
+ */
+export function isOncePerTurnTrigger(ability: {
+  readonly trigger?: { readonly restrictions?: readonly TriggerRestriction[] };
+}): boolean {
+  return (
+    ability.trigger?.restrictions?.some(
+      (r) => r.type === "once-each-turn" || r.type === "once-per-turn",
+    ) === true
+  );
+}
+
+/**
  * A simplified ability representation for trigger matching.
  * Avoids importing full riftbound-types to keep the boundary clean.
  */
@@ -248,8 +275,12 @@ function restrictionSatisfied(
       return (event.previousController ?? null) === null;
     }
     case "once-each-turn":
-      // TODO(once-each-turn): per-card fire tracking not yet implemented.
-      return false;
+    case "once-per-turn":
+      // rule 383.3.e — a "once each turn" trigger simply does not trigger
+      // again that turn. `fireTriggers` tallies each ability that actually
+      // triggered under `triggerFireKey`, cleared with the rest of
+      // `turnEventCounts` at the turn boundary.
+      return (state?.turnEventCounts?.[triggerFireKey(trigger, card)] ?? 0) === 0;
     case "during-showdown": {
       // rule 553: a showdown lasts from the moment it opens until every
       // Relevant Player passes in succession, so "during a showdown" is
