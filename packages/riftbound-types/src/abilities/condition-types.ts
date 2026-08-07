@@ -202,6 +202,17 @@ export interface SpentPowerCondition {
 }
 
 /**
+ * rule 135.2 (rule-id: unl-005-219) — "When you play a spell, if you spent [N]
+ * or more": the ENERGY actually paid to play THAT spell (additional costs such
+ * as a paid [Repeat] included, rule 820.1.d). Power spent elsewhere this turn,
+ * and Energy spent on other cards, never count.
+ */
+export interface SpellEnergySpentCondition {
+  readonly type: "spell-energy-spent";
+  readonly amount: number;
+}
+
+/**
  * The card that produced the `play-card` / `play-self` event has a PRINTED
  * Power cost of at least `amount` pips (rule 206.1 — Power cost is the printed
  * cost, so additional costs and Accelerate pips never count toward it).
@@ -492,6 +503,7 @@ export type Condition =
   | PaidAdditionalCostCondition
   | DidPerformCondition
   | SpentPowerCondition
+  | SpellEnergySpentCondition
   | PlayedPowerCostCondition
 
   // Score conditions

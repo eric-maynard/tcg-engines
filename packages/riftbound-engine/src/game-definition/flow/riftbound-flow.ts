@@ -310,6 +310,16 @@ function runExpirationStep(context: FlowStepContext): void {
             } as unknown as Partial<RiftboundCardMeta>);
           }
 
+          // rule-id: sfd-194-221 — "the next time … this turn, prevent it" is a
+          // delayed replacement with a turn duration (rule 437.7): an UNUSED
+          // one-shot shield expires now (rule 517.2.b) instead of eating a
+          // later turn's damage.
+          if ((meta as { preventNextDamageInstance?: boolean }).preventNextDamageInstance === true) {
+            context.cards.updateCardMeta(cardId, {
+              preventNextDamageInstance: false,
+            } as unknown as Partial<RiftboundCardMeta>);
+          }
+
           // Reset turn-scoped Might modifier (rule 517.2.b)
           if (meta.mightModifier && meta.mightModifier !== 0) {
             context.cards.updateCardMeta(cardId, { mightModifier: 0 });
@@ -535,6 +545,10 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
           // is per turn for every player.
           (context.state as { spellEnergySpentThisTurn?: Record<string, number> })
             .spellEnergySpentThisTurn = {};
+          // rule 135.2 (rule-id: unl-005-219) — per-spell payments are only ever
+          // read by the trigger of the spell being played; clear them each turn.
+          (context.state as { spellEnergySpentByCard?: Record<string, number> })
+            .spellEnergySpentByCard = {};
           // rule 364.3.a (rule-id: sfd-143-221) — "spent … this turn" power tallies
           // reset for every player at the start of each turn.
           (context.state as { powerSpentThisTurn?: Record<string, number> })
