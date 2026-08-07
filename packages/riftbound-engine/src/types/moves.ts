@@ -259,7 +259,16 @@ export interface RiftboundMoves {
   revealHidden: { playerId: PlayerId; cardId: CardId; paidAdditionalCost?: boolean };
 
   /** Play Chosen Champion from Champion Zone */
-  playFromChampionZone: { playerId: PlayerId; location: LocationId };
+  /**
+   * rule 356.2 with 355.10.a.1 (rule-id: unl-052-219) — a Champion-Zone play is
+   * still "playing me", so the card's optional additional cost is offered here
+   * too; `paidAdditionalCost` is `true` when the player elects to pay it.
+   */
+  playFromChampionZone: {
+    playerId: PlayerId;
+    location: LocationId;
+    paidAdditionalCost?: boolean;
+  };
 
   // ============================================
   // Movement Moves

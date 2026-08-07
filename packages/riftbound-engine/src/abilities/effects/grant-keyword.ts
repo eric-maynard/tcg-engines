@@ -40,7 +40,12 @@ export function handle_grantKeyword(effect: ExecutableEffect, ctx: EffectContext
     return;
   }
   const targets = getTargetIds(effect, ctx);
-  const kwTargets = targets.length === 0 ? [ctx.sourceCardId] : targets;
+  // rule 355.9.b (rule-id: unl-071-219) — "give your OTHER units here …" names a
+  // recipient set; an empty set grants nothing. Only an ability with no recipient
+  // descriptor at all ("I have …") means the source itself, so the self fallback
+  // must not fire once a descriptor was written and simply matched nobody.
+  const kwTargets =
+    targets.length === 0 ? (effect.target === undefined ? [ctx.sourceCardId] : []) : targets;
   // rule 816.1.b: Temporary only acts at the controller's next Beginning Phase, so
   // an unqualified "give it [Temporary]" must outlive the turn it was granted.
   const duration = (effect.duration ?? (kw === "Temporary" ? "permanent" : "turn")) as
