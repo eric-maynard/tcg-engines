@@ -70,7 +70,7 @@ describe("Lonely Poro (sfd-036-221)", () => {
     expect(game.p1.hand()).toHaveLength(hand0 + 1);
   });
 
-  test.failing("BUG: 'If I died alone' — with another friendly unit at the same battlefield the Deathknell must draw nothing (740.2.a, 428.1.a.1.b)", async () => {
+  test("'If I died alone' — with another friendly unit at the same battlefield the Deathknell must draw nothing (740.2.a, 428.1.a.1.b)", async () => {
     // Expected: Buddy shares bf1 with the Poro when it dies, so it did not die alone → no draw.
     // Actual: the alone condition is not evaluated against the death location (the Poro is already
     // in the trash / the condition is ignored), so P1 draws 1 anyway.

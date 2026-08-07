@@ -366,6 +366,46 @@ export function evaluateTriggerCondition(
     }
     return friendly === 1 && enemy === 1;
   }
+  if (c.type === "while-alone" && ctx) {
+    // rule 740.2.a — a unit is alone when NO OTHER FRIENDLY unit shares its
+    // location (enemies don't matter). rule 428.1.a.1.b: a dying unit is
+    // judged at the location it occupied as it died, not from the trash.
+    let hereZone: string | undefined;
+    if (
+      event.type === "die" &&
+      (event as { cardId?: string }).cardId === sourceCardId &&
+      typeof (event as { diedAt?: string }).diedAt === "string"
+    ) {
+      hereZone = (event as { diedAt: string }).diedAt;
+    }
+    if (hereZone === undefined && sourceCardId) {
+      hereZone = ctx.zones.getCardZone?.(sourceCardId as CoreCardId) as string | undefined;
+    }
+    if (hereZone === undefined) {
+      return true;
+    }
+    const ids =
+      hereZone === "base"
+        ? ctx.zones.getCardsInZone("base" as CoreZoneId, controllerId as CorePlayerId)
+        : ctx.zones.getCardsInZone(hereZone as CoreZoneId);
+    const registry = getGlobalCardRegistry();
+    for (const id of ids) {
+      if ((id as string) === sourceCardId) {
+        continue;
+      }
+      const def = registry.get(id as string) as { cardType?: string } | undefined;
+      if (def?.cardType !== undefined && def.cardType !== "unit") {
+        continue;
+      }
+      const owner =
+        ctx.cards.getCardController?.(id as CoreCardId) ??
+        (ctx.cards.getCardOwner(id as CoreCardId) as string | undefined);
+      if (owner === controllerId) {
+        return false;
+      }
+    }
+    return true;
+  }
   if (c.type === "exists-here" && ctx) {
     // rule-id: ven-138-166 (Shen, Leader of the Kinkou Order) — "if there is
     // exactly one other unit you control here" counts matching units at the
@@ -734,6 +774,50 @@ function extraTriggerCount(
 }
 
 /**
+ * rule 383.3.d / rule-id: unl-029-219 (Red Brambleback) — "Your conquer
+ * effects for conquering here trigger an additional time" is an EVENT-scoped
+ * doubler: it applies to every conquer effect of its controller (rule
+ * 383.4.c.2.a units present at the conquer AND 383.4.c.2.b the battlefield's
+ * own "when you conquer here"), but only when the event happened at the
+ * doubler's own battlefield.
+ */
+function extraEventTriggerCount(
+  match: MatchedTrigger,
+  boardCards: readonly CardWithAbilities[],
+): number {
+  const evt = match.event as { type?: string; battlefieldId?: string };
+  const registry = getGlobalCardRegistry();
+  let extra = 0;
+  for (const card of boardCards) {
+    if (card.owner !== match.cardOwner || card.zone === "trash") {
+      continue;
+    }
+    for (const a of (registry.getAbilities(card.id) ?? []) as readonly {
+      type?: string;
+      effect?: { type?: string; event?: string; location?: string };
+    }[]) {
+      const e = a.effect;
+      if (a.type !== "static" || e?.type !== "trigger-double" || e.event === undefined) {
+        continue;
+      }
+      if (e.event !== evt.type) {
+        continue;
+      }
+      // "…for conquering HERE": the doubler must sit at the battlefield the
+      // event names; from base or another battlefield nothing doubles.
+      if (
+        e.location === "here" &&
+        (evt.battlefieldId === undefined || card.zone !== `battlefield-${evt.battlefieldId}`)
+      ) {
+        continue;
+      }
+      extra += 1;
+    }
+  }
+  return extra;
+}
+
+/**
  * rule 808.2 — each instance of a keyword triggers separately, so a doubled
  * Deathknell becomes two independent items rather than one doubled effect.
  */
@@ -744,6 +828,10 @@ function expandKeywordDoubling(
   const out: MatchedTrigger[] = [];
   for (const match of matches) {
     out.push(match);
+    const eventExtra = extraEventTriggerCount(match, boardCards);
+    for (let i = 0; i < eventExtra; i += 1) {
+      out.push(match);
+    }
     const keyword = keywordOfMatchedTrigger(match.cardId, match.ability);
     if (!keyword) {
       continue;

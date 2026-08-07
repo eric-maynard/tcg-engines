@@ -84,7 +84,7 @@ describe("Red Brambleback × Kai'Sa × Zaun Warrens — 'conquering here' doubli
     }
   });
 
-  test.failing("BUG: Case YES — Kai'Sa's 'When I conquer, draw 1' triggers an additional time here (2 chain items)", async () => {
+  test("Case YES — Kai'Sa's 'When I conquer, draw 1' triggers an additional time here (2 chain items)", async () => {
     // Expected: Brambleback's static makes each of P1's conquer effects for conquering its battlefield
     // trigger twice → two separate Kai'Sa items. Actual: the "additional time" static is not
     // implemented; Kai'Sa triggers once.
@@ -93,7 +93,7 @@ describe("Red Brambleback × Kai'Sa × Zaun Warrens — 'conquering here' doubli
     expect(chainCount(game, "kaisa")).toBe(2);
   });
 
-  test.failing("BUG: Case YES — Brambleback's own 'When I conquer, Buff a friendly unit' also triggers twice (2 chain items)", async () => {
+  test("Case YES — Brambleback's own 'When I conquer, Buff a friendly unit' also triggers twice (2 chain items)", async () => {
     // Expected: 2 Brambleback items (its own conquer effect is one of "your conquer effects here").
     // Actual: 1.
     const game = await yesBoard().build();
@@ -101,7 +101,7 @@ describe("Red Brambleback × Kai'Sa × Zaun Warrens — 'conquering here' doubli
     expect(chainCount(game, "bramble")).toBe(2);
   });
 
-  test.failing("BUG: Case YES — Zaun Warrens' 'When you conquer here' is a conquer effect of the conquering player (383.4.c.2.b) and triggers twice", async () => {
+  test("Case YES — Zaun Warrens' 'When you conquer here' is a conquer effect of the conquering player (383.4.c.2.b) and triggers twice", async () => {
     // Expected: 2 Zaun Warrens items. Actual: 1.
     const game = await yesBoard().build();
     await conquerWith(game, ["bramble", "kaisa"], "warrens");
@@ -118,7 +118,7 @@ describe("Red Brambleback × Kai'Sa × Zaun Warrens — 'conquering here' doubli
     expect(game.p2.points()).toBe(0);
   });
 
-  test.failing("BUG: Case YES fully resolved — Kai'Sa draws 2, Warrens discards+draws twice, both Buff items land (Kai'Sa and Brambleback each buffed)", async () => {
+  test("Case YES fully resolved — Kai'Sa draws 2, Warrens discards+draws twice, both Buff items land (Kai'Sa and Brambleback each buffed)", async () => {
     // Expected end state: hand 3 → +2 (Kai'Sa ×2) +0 (Warrens: −1+1, twice) = 5; trash holds h1,h2;
     // deck −4; two Buff resolutions targeting kaisa then bramble → both buffed.
     // Actual: every effect fires once → hand 4, one discard, one Buff.
