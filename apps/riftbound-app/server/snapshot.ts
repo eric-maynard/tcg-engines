@@ -363,8 +363,16 @@ export function buildGameSnapshot(session: GameSession, viewingPlayer?: string) 
       // are only registered in the engine's global registry, not the static set
       // registry — fall back so the snapshot carries name/type/might instead of
       // the raw instance id and cardType 'unknown'.
+      // rule unl-081-219 / rule 477.1.b.1: a token that "becomes a copy" is
+      // registered per INSTANCE id with the copied traits, while the shared
+      // `token-def-<slug>` id keeps the literal (0-Might "Reflection") stats.
+      // Prefer the by-instance entry so copies render as the copied card.
+      const instanceDef = (cardId as string).startsWith("token-")
+        ? (getGlobalCardRegistry().get(cardId as string) as Card | undefined)
+        : undefined;
       const def = cardInstance
-        ? (registry.get(cardInstance.definitionId) ??
+        ? (instanceDef ??
+            registry.get(cardInstance.definitionId) ??
             (getGlobalCardRegistry().get(cardInstance.definitionId) as Card | undefined))
         : undefined;
 
