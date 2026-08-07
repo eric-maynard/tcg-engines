@@ -9,35 +9,28 @@ import { createCardId } from "@tcg/riftbound-types/cards";
  *  pay 2 XP to choose a card from their hand. If you do, they discard that
  *  card and draw 1."
  *
- * Modeled as a `play-self` triggered ability that opens a `reveal-hand`
- * pending choice on the opponent with `onPicked: "discard"`. The follow-up
- * draw-1 is gated behind paying 2 XP via a conditional sequence. The
- * engine's `pay-cost` condition takes care of charging the XP only when
- * the active player opts to pay.
+ * rule 356.1 — the REVEAL is unconditional: only the pick costs 2 XP. So the
+ * trigger itself is not optional (no opt-in prompt gating the reveal); the
+ * reveal-and-pick prompt carries `pickCost`, which the engine charges when a
+ * card is actually picked. A prompter without 2 XP may only decline.
  *
- * FIXME: the XP cost should gate the *ability* to pick a card at all; the
- * closest legal shape is to gate the entire reveal-hand+draw sequence
- * behind the XP cost. Players who don't want to pay simply skip the
- * optional trigger.
+ * rule 355.13 — "You may … choose a card from their hand": the pick is
+ * optional, so the prompt is declinable after seeing the revealed hand, and
+ * declining skips the discard AND the follow-up draw.
  */
 const abilities: Ability[] = [
   {
     effect: {
-      condition: { cost: { xp: 2 }, type: "pay-cost" },
-      then: {
-        effects: [
-          {
-            onPicked: "discard",
-            target: { type: "player", which: "opponent" },
-            type: "reveal-hand",
-          },
-          { amount: 1, type: "draw" },
-        ],
-        type: "sequence",
-      },
-      type: "conditional",
+      onPicked: "discard",
+      optional: true,
+      pickCost: { xp: 2 },
+      target: { type: "player", which: "opponent" },
+      // rule 359.3.e — "If you do, they discard that card AND draw 1": the
+      // draw is part of the paid-for pick, so it rides on the prompt and never
+      // runs when the pick is declined. `player: "opponent"` — THEY draw.
+      then: { amount: 1, player: "opponent", type: "draw" },
+      type: "reveal-hand",
     },
-    optional: true,
     trigger: { event: "play-self" },
     type: "triggered",
   },

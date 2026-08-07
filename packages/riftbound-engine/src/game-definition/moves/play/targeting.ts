@@ -489,6 +489,22 @@ export function spellEffectHasLegalTargets(
     const items = ctx.draft.interaction?.chain?.items ?? [];
     return items.some((item) => item.type === "spell" && !item.countered);
   }
+  // rule-id: ven-152-166 (rule 355.8) — "Choose a spell … You may pay
+  // [rainbow]. If you do, gain control of it. Otherwise, counter it": whichever
+  // branch it takes, the spell must exist on the chain, so an "if you pay"
+  // conditional whose branches choose a chain object inherits their gate.
+  if (effect.type === "conditional") {
+    const branches = [
+      (effect as { then?: SpellEffectTargetShape }).then,
+      (effect as { else?: SpellEffectTargetShape }).else,
+    ].filter(
+      (b): b is SpellEffectTargetShape =>
+        b !== undefined && (b.type === "counter" || b.type === "gain-control-of-spell"),
+    );
+    if (branches.length > 0) {
+      return branches.every((b) => spellEffectHasLegalTargets(b, ctx, affordable));
+    }
+  }
   // rule-id: ogn-198-298 (rule 355.10.a) — an off-board play ("play a unit
   // from your trash") is gated on that zone, not on the board.
   const offBoardZone = offBoardPlayZone(effect);

@@ -558,6 +558,17 @@ export interface RevealAndPickChoice {
   readonly remaining?: number;
   /** Picks already taken for this prompt (batchIndex for "one or more" triggers). */
   readonly taken?: number;
+  /**
+   * rule 356.1 / rule-id: unl-135-219 — "They reveal their hand. You may pay
+   * 2 XP to choose a card from their hand": the REVEAL is free and
+   * unconditional, only the pick costs. Charged when the prompter picks;
+   * declining costs nothing, and a prompter who cannot pay may only decline.
+   */
+  readonly pickCost?: {
+    readonly energy?: number;
+    readonly power?: readonly string[];
+    readonly xp?: number;
+  };
 }
 
 /**
@@ -777,6 +788,18 @@ export interface OptInChoice {
    */
   readonly counterRansom?: {
     readonly effect: unknown;
+    readonly sourcePlayerId: PlayerId;
+    readonly boundTargets?: readonly string[];
+  };
+  /**
+   * rule 356.1 / rule-id: ven-152-166 (Rebuttal) — "You may pay [rainbow]. If
+   * you do, …. Otherwise, …": a cost offered WITHIN a resolving effect. Accept
+   * charges `resolved.optInCost` and runs `then`; decline (or an unpayable
+   * cost, which never prompts) runs `else`.
+   */
+  readonly payChoice?: {
+    readonly then?: unknown;
+    readonly else?: unknown;
     readonly sourcePlayerId: PlayerId;
     readonly boundTargets?: readonly string[];
   };

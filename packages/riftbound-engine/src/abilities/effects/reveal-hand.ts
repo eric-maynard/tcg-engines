@@ -91,6 +91,17 @@ export function handle_revealHand(effect: ExecutableEffect, ctx: EffectContext, 
     ...(revealEff.playStun === true ? { playStun: true } : {}),
     // rule 355.13 — "You may choose a unit from it".
     ...(revealEff.optional === true ? { optional: true } : {}),
+    // rule 356.1 (unl-135-219) — "They reveal their hand. You may pay 2 XP to
+    // choose a card from their hand": the reveal itself is never gated on the
+    // payment; only the pick is.
+    ...((effect as unknown as { pickCost?: unknown }).pickCost !== undefined
+      ? { pickCost: (effect as unknown as { pickCost?: unknown }).pickCost }
+      : {}),
+    // rule 359.3.e (unl-135-219) — "…they discard that card AND draw 1": the
+    // follow-up rides on the prompt and runs only after a card was picked.
+    ...((effect as unknown as { then?: unknown }).then !== undefined
+      ? { then: (effect as unknown as { then?: unknown }).then }
+      : {}),
     prompter: ctx.playerId,
     revealed,
     revealer,

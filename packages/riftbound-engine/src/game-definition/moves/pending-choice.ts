@@ -353,6 +353,12 @@ function canPayOptInCost(
   if (cost.exhaust === true && context.counters.getFlag?.(sourceCardId as CoreCardId, "exhausted")) {
     return false;
   }
+  // rule 512.2 / rule-id: unl-135-219 — an XP cost is only payable out of the
+  // paying player's own XP pool.
+  const xpCost = (cost.xp as number) ?? 0;
+  if (xpCost > 0 && (state.players[playerId]?.xp ?? 0) < xpCost) {
+    return false;
+  }
   return true;
 }
 
@@ -711,6 +717,20 @@ export const pendingChoiceMoves: Partial<
       if (choice.optional && context.params.accept === false) {
         return true;
       }
+      // rule 356.1 (unl-135-219) — "You may pay 2 XP to choose a card from
+      // their hand": a prompter who cannot pay may only decline.
+      if (
+        choice.pickCost &&
+        !canPayOptInCost(
+          state,
+          choice.prompter,
+          choice.sourceCardId ?? "",
+          choice.pickCost as Record<string, unknown>,
+          context,
+        )
+      ) {
+        return false;
+      }
       // rule 422.1.a (ogn-030-298): a multi-pick prompt may be answered with
       // up to `remaining` distinct valid picks at once.
       const multi = context.params.pickedCardIds as string[] | undefined;
@@ -1024,6 +1044,40 @@ export const pendingChoiceMoves: Partial<
             executeEffect(ransom.effect as ExecutableEffect, {
               ...buildEffectContext(draft, ransom.sourcePlayerId, choice.sourceCardId, context),
               ...(ransom.boundTargets ? { boundTargets: ransom.boundTargets } : {}),
+            });
+          }
+          if (!draft.pendingChoice) {
+            postChoiceCleanup(draft, context);
+          }
+          return;
+        }
+        // rule 356.1 (ven-152-166 Rebuttal) — "You may pay [rainbow]. If you
+        // do, …. Otherwise, …": accepting charges the cost and runs `then`;
+        // declining runs `else`.
+        const payChoice = (
+          choice as {
+            payChoice?: {
+              boundTargets?: readonly string[];
+              else?: unknown;
+              sourcePlayerId: string;
+              then?: unknown;
+            };
+          }
+        ).payChoice;
+        if (payChoice) {
+          const payCost = optInCostOf(choice);
+          const paid =
+            context.params.accept === true &&
+            (!payCost ||
+              canPayOptInCost(draft, choice.playerId, choice.sourceCardId, payCost, context));
+          if (paid && payCost) {
+            deductAbilityCost(draft, choice.playerId, payCost, context.zones, context.counters);
+          }
+          const branch = paid ? payChoice.then : payChoice.else;
+          if (branch) {
+            executeEffect(branch as ExecutableEffect, {
+              ...buildEffectContext(draft, payChoice.sourcePlayerId, choice.sourceCardId, context),
+              ...(payChoice.boundTargets ? { boundTargets: payChoice.boundTargets } : {}),
             });
           }
           if (!draft.pendingChoice) {
@@ -1658,6 +1712,17 @@ export const pendingChoiceMoves: Partial<
         Array.isArray(multi) && multi.length > 0 ? [...multi] : [context.params.pickedCardId as string];
       if (!picks.every((id) => isValidPendingPick(choice, id))) {
         return;
+      }
+      // rule 356.1 (unl-135-219) — charge the pick's cost before applying it;
+      // if it became unpayable the pick simply does not happen.
+      if (choice.pickCost) {
+        const pickCost = choice.pickCost as Record<string, unknown>;
+        if (
+          !canPayOptInCost(draft, choice.prompter, choice.sourceCardId ?? "", pickCost, context)
+        ) {
+          return;
+        }
+        deductAbilityCost(draft, choice.prompter, pickCost, context.zones, context.counters);
       }
       const pickedCardId = picks[picks.length - 1] as string;
       /** rule 337.1.b (ogn-242-298) — a "banish it and play it" pick, finalized below. */
