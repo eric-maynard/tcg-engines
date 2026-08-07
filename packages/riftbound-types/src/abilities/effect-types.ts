@@ -413,6 +413,18 @@ export interface MoveEffect {
    * imposes no play-legality gate and does nothing without a legal unit.
    */
   readonly optional?: boolean;
+  /**
+   * rule 387 (ogn-258-298, unl-101-219) — a follow-up anchored at the
+   * destination: it runs only once the move's landing zone is known, with the
+   * moved unit bound and that zone threaded as "same".
+   */
+  readonly then?: Effect;
+  /**
+   * rule-id: unl-101-219 (rule 355.10) — "choose an opponent. They move a unit
+   * they control to the same battlefield": the OPPONENT, not the caster, picks
+   * which of their units answers.
+   */
+  readonly chosenBy?: "opponent";
 }
 
 /**

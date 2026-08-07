@@ -15,6 +15,15 @@ const abilities: Ability[] = [
   {
     effect: {
       target: { controller: "friendly", type: "unit" },
+      // rule 387 / 355.10 — "Then, choose an opponent. They move a unit they
+      // control to the same battlefield": the follow-up is anchored at the
+      // first move's destination and is answered by the opponent.
+      then: {
+        chosenBy: "opponent",
+        target: { controller: "enemy", type: "unit" },
+        to: "target-battlefield",
+        type: "move",
+      },
       to: { battlefield: "controlled" },
       type: "move",
     },

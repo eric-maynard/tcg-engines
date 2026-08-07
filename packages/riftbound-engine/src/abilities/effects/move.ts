@@ -306,6 +306,66 @@ export function handle_move(effect: ExecutableEffect, ctx: EffectContext, h: Eff
     handleSwapLocations(effect, ctx);
     return;
   }
+  // rule-id: unl-101-219 (Call to Battle) — rule 355.10 / 359.3.e.6: "Then,
+  // choose an opponent. They move a unit they control to the same battlefield."
+  // The destination is fixed by the first move's landing zone (threaded as
+  // `sameZone`, pinned onto the effect across the prompt) and the OPPONENT —
+  // never the caster — picks which of their units answers; with no legal unit
+  // the instruction is simply skipped.
+  if ((effect as unknown as { chosenBy?: string }).chosenBy === "opponent") {
+    const pinnedDest = (effect as unknown as { _destZone?: string })._destZone;
+    const destZone = pinnedDest ?? ctx.sameZone;
+    if (destZone === undefined) {
+      return;
+    }
+    if (pinnedDest !== undefined) {
+      // Re-entry after the opponent answered: their pick is the only mover, and
+      // `ctx.playerId` is now that opponent (the prompt's owner).
+      const chosen = ctx.boundTargets?.[0];
+      if (chosen === undefined || ctx.zones.getCardZone(chosen as CoreCardId) === destZone) {
+        return;
+      }
+      const landed = moveCardWithEvent(ctx, chosen, destZone);
+      markContestedOnArrival(ctx.draft, landed, arrivingController(ctx, chosen));
+      stageCombatOnArrival(ctx, landed);
+      return;
+    }
+    const pool = resolveTarget({ ...(effect.target as TargetDescriptor), quantity: "all" }, {
+      cards: ctx.cards,
+      draft: ctx.draft,
+      playerId: ctx.playerId,
+      sourceCardId: ctx.sourceCardId,
+      sourceZone: ctx.sourceZone,
+      zones: ctx.zones,
+    }).filter((id) => ctx.zones.getCardZone(id as CoreCardId) !== destZone);
+    if (pool.length === 0) {
+      return;
+    }
+    // "Choose an opponent" — with a single opponent the choice is forced; with
+    // more, take the first opponent in seat order who can actually comply.
+    const opponents = Object.keys(ctx.draft.players).filter((p) => p !== ctx.playerId);
+    const chooser = opponents.find((p) => pool.some((id) => arrivingController(ctx, id) === p));
+    if (chooser === undefined) {
+      return;
+    }
+    const theirs = pool.filter((id) => arrivingController(ctx, id) === chooser);
+    if (theirs.length === 1) {
+      const mover = theirs[0] as string;
+      const landed = moveCardWithEvent(ctx, mover, destZone);
+      markContestedOnArrival(ctx.draft, landed, arrivingController(ctx, mover));
+      stageCombatOnArrival(ctx, landed);
+      return;
+    }
+    ctx.draft.pendingChoice = {
+      effect: { ...(effect as object), _destZone: destZone },
+      options: theirs,
+      playerId: chooser,
+      remaining: 1,
+      sourceCardId: ctx.sourceCardId,
+      type: "choose-target",
+    } as RiftboundGameState["pendingChoice"];
+    return;
+  }
   // rule-id: unl-107-219 (Stare Down) — Rule 355.8 / 355.2: "Choose a
   // friendly unit and a battlefield. Move all enemy units at that
   // battlefield with less Might than the chosen unit to their base." The
