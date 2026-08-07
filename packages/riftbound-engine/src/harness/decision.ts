@@ -506,7 +506,11 @@ export function deriveFromPendingChoice(ctx: DecisionContext, pc: PendingChoice)
         id: decisionId(ctx.seq, seat, "pick"),
         kind: "pick",
         max: capacity,
-        min: 1,
+        // rule 355.13 (sfd-043-221) — once the chooser has named at least one
+        // target of an "any number of" set, every further pick is optional:
+        // the prompt is a CONTINUATION the chooser may simply decline.
+        // ("up to N" / fixed-size picks keep min 1 — they are not finished yet.)
+        min: pc.anyNumber === true && pc.maxPicks === undefined && alreadyPicked > 0 ? 0 : 1,
         options: pc.options.map((id) => ({ card: id, key: id, label: ctx.label(id) })),
         prompt: pc.boundTargets ? "Choose a target to drop" : `Choose a target for ${source.cardId ? ctx.label(source.cardId) : "the effect"}`,
         semantics: pc.boundTargets ? "drop-target" : "target",

@@ -71,11 +71,22 @@ export const passivePolicy: Policy = (d) => {
   if (d.kind === "pick" && d.options.length === 0 && d.allowDecline) {
     return { kind: "decline" };
   }
+  // rule 355.13 (sfd-043-221) — a CONTINUATION of an "any number of" target
+  // pick (the chooser already named a set) is declined, never silently
+  // extended: settling must not add targets the answer did not name.
+  if (d.kind === "pick" && d.min === 0 && d.allowDecline && d.semantics === "target") {
+    return { kind: "decline" };
+  }
   return undefined;
 };
 
 /** Like passive, but resolves every prompt with the first option / yes / minimum. */
 export const firstOptionPolicy: Policy = (d, g) => {
+  // "first option" keeps draining an "any number" continuation rather than
+  // declining it (the passive policy stops there — rule 355.13).
+  if (d.kind === "pick" && d.min === 0 && d.allowDecline && d.semantics === "target" && d.options.length > 0) {
+    return { keys: [d.options[0]?.key as string], kind: "pick" };
+  }
   const passive = passivePolicy(d, g);
   if (passive !== undefined) {
     return passive;

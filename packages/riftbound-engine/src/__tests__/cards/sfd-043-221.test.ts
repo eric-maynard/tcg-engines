@@ -255,7 +255,7 @@ describe("Emperor's Divide (sfd-043-221)", () => {
     expect(game.p1.power()).toBe(0);
   });
 
-  test.failing("BUG: from facedown the caster still CHOOSES 'any number' — picking only Here must leave Here2 holding bf1", async () => {
+  test("from facedown the caster still CHOOSES 'any number' — picking only Here must leave Here2 holding bf1", async () => {
     // Expected: a target choice (at play time or a pick on resolution) restricted to here|here2; choosing just
     // "here" moves only it. Actual: no choice is offered and every friendly unit at bf1 is moved home.
     const game = await hiddenAtBf1().build();
