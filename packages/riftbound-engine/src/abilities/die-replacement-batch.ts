@@ -34,6 +34,7 @@ import type {
   ZoneId as CoreZoneId,
 } from "@tcg/core";
 import { canAffordPower } from "../game-definition/moves/chain/effect-context";
+import { getGlobalCardRegistry } from "../operations/card-lookup";
 import { clearDamage } from "../operations/damage-store";
 import {
   type LeaveBoardContext,
@@ -83,6 +84,8 @@ export interface DieReplacementCandidate {
   readonly kind: "board" | "bound";
   readonly match?: MatchedReplacement;
   readonly entry?: BoundEntry;
+  /** rule 428.1 — a blanket "…goes to your trash → banish it instead" shield (ven-022-166). */
+  readonly banishInstead?: boolean;
   /** rule 371.2 — "may pay [C] … instead": asked (and paid) by `payer` before it applies. */
   readonly optional?: { readonly cost: { energy?: number; power?: readonly string[] }; readonly payer: string };
 }
@@ -189,6 +192,47 @@ function replacementCtx(ctx: Ctx) {
   };
 }
 
+/**
+ * rule 428.1 / 571 (rule-id: ven-022-166 Endless Riches) — a kill is "board →
+ * trash", so a blanket "If a card would go to YOUR trash …, banish it instead"
+ * permanent also replaces a death. Scoped to its own controller's trash: only
+ * cards owned by the source's controller are covered.
+ */
+function collectTrashToBanishCandidates(ctx: Ctx, cardId: string): DieReplacementCandidate[] {
+  const owner = ownerOf(ctx, cardId);
+  if (owner === "") {
+    return [];
+  }
+  const registry = getGlobalCardRegistry();
+  const zoneIds = ["base", ...Object.keys(ctx.draft.battlefields ?? {}).map((bf) => `battlefield-${bf}`)];
+  const out: DieReplacementCandidate[] = [];
+  for (const zoneId of zoneIds) {
+    for (const sourceCardId of ctx.zones.getCardsInZone(zoneId as CoreZoneId, owner as CorePlayerId)) {
+      const src = sourceCardId as string;
+      if (src === cardId || RUNNING.has(src) || controllerOf(ctx, src) !== owner) {
+        continue;
+      }
+      const abilities = registry.getAbilities(src) ?? [];
+      for (let i = 0; i < abilities.length; i++) {
+        const ability = abilities[i] as { type?: string; effect?: { type?: string } } | undefined;
+        if (ability?.type !== "replacement" || ability.effect?.type !== "trash-to-banish") {
+          continue;
+        }
+        out.push({
+          banishInstead: true,
+          controller: owner,
+          id: `board:${src}#${i}`,
+          key: src,
+          kind: "board",
+          singleUse: false,
+          sourceCardId: src,
+        });
+      }
+    }
+  }
+  return out;
+}
+
 /** Every non-optional die replacement that could apply to `cardId` right now (bound first, then board scan order). */
 export function collectDieCandidates(ctx: Ctx, cardId: string): DieReplacementCandidate[] {
   const out: DieReplacementCandidate[] = [];
@@ -236,6 +280,7 @@ export function collectDieCandidates(ctx: Ctx, cardId: string): DieReplacementCa
       sourceCardId: m.sourceCardId,
     });
   }
+  out.push(...collectTrashToBanishCandidates(ctx, cardId));
   // Keys name the source card; keep them unique within one prompt.
   const seen = new Map<string, number>();
   return out.map((c) => {
@@ -287,6 +332,12 @@ function applyCandidate(ctx: Ctx, cardId: string, c: DieReplacementCandidate): b
         boundTargets: [cardId],
       });
     }
+    return true;
+  }
+  if (c.banishInstead) {
+    // rule 427.2.a — banishment is not a kill: no `die` event, no Deathknell.
+    clearDamage(ctx, cardId);
+    leaveBoard(ctx, cardId, "banishment", { kind: "replaced" });
     return true;
   }
   const match = c.match as MatchedReplacement;
