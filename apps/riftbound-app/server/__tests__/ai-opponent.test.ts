@@ -7,6 +7,7 @@
 
 import { describe, expect, test } from "bun:test";
 import { P1, P2, getActingSeat, scenario } from "@tcg/riftbound/harness";
+import { INFO_TOOL_NAMES } from "@tcg/riftbound-mcp/info-tools";
 import {
   type CallModel,
   type ModelRequest,
@@ -163,7 +164,7 @@ describe("act loop", () => {
       .hand(P2, "ogn-004-298", "cleave")
       .build();
     const rec = recorder((req) => chooseByLabel(req, /^Cast Cleave/, /^Pass priority/));
-    const ai = new ClaudeOpponent("sonnet", "sk-ant-api03-testkeytestkey", { ...FAST, callModel: rec.callModel });
+    const ai = new ClaudeOpponent("sonnet", "sk-ant-api03-testkeytestkey", { ...FAST, callModel: rec.callModel, lookupTools: [] });
     const session = sessionOf(game.engine, ai);
     await ai.act(session);
     const st = session.engine.getState();
@@ -206,7 +207,7 @@ describe("act loop", () => {
       }
       return chooseByLabel(req, /^Cast Test Bolt → Victim/, /^Pass priority/, /^End turn/);
     });
-    const ai = new ClaudeOpponent("opus", "sk-ant-api03-testkeytestkey", { ...FAST, callModel: rec.callModel });
+    const ai = new ClaudeOpponent("opus", "sk-ant-api03-testkeytestkey", { ...FAST, callModel: rec.callModel, lookupTools: [] });
     const session = sessionOf(game.engine, ai);
     await drive(session, ai);
     expect(game.zoneOf("victim")).toBe("trash");
@@ -383,6 +384,76 @@ describe("lookup tools", () => {
     expect(reqs[3]?.tools.map((t) => t.name)).toEqual(["choose"]);
     expect(reqs[3]?.tool_choice).toEqual({ name: "choose", type: "tool" });
     expect(game.zoneOf("poro")).toBe("base");
+  });
+});
+
+describe("mcp info tools as default lookups", () => {
+  test("opponent_summary (real handler, AI seat as viewer) then choose → both handled; a 4th info call is refused by forcing `choose`", async () => {
+    const game = await scenario()
+      .active(P2)
+      .resources(P2, { energy: 2 })
+      .legend(P1, "ogn-247-298", "humanlegend")
+      .hand(P1, { cardType: "spell", energyCost: 1, name: "Zz Human Secret" }, "zzsecret")
+      .unit(P1, "base", { might: 3, name: "Human Guard" }, "guard")
+      .hand(P2, { cardType: "unit", energyCost: 2, might: 2, name: "Loyal Poro" }, "poro")
+      .build();
+    const reqs: ModelRequest[] = [];
+    let phase: "summary" | "spam" = "summary";
+    let n = 0;
+    const callModel: CallModel = async (req) => {
+      reqs.push(structuredClone({ ...req, meta: { seat: req.meta.seat } }));
+      n++;
+      const offered = req.tools.map((t) => t.name);
+      if (phase === "summary" && n === 1) {
+        return { id: "tu_sum", input: {}, name: "opponent_summary" };
+      }
+      if (phase === "spam" && offered.includes("rule_search")) {
+        return { id: `tu${n}`, input: { query: "deflect" }, name: "rule_search" };
+      }
+      return chooseByLabel(req, /^Play Loyal Poro/, /^End turn/);
+    };
+    // no lookupTools option → the packaged MCP info tools are the defaults
+    const ai = new ClaudeOpponent("haiku", "sk-ant-api03-testkeytestkey", { ...FAST, callModel });
+    const session = sessionOf(game.engine, ai);
+    await ai.act(session);
+
+    expect(reqs[0]?.tools.map((t) => t.name)).toEqual(["choose", ...INFO_TOOL_NAMES]);
+    expect(reqs[0]?.tool_choice).toEqual({ type: "any" });
+    expect(reqs[0]?.system).toContain("opponent_summary");
+    expect(reqs).toHaveLength(2);
+    const tr = (reqs[1]?.messages[2]?.content as { type: string; tool_use_id: string; content: string; is_error?: boolean }[])[0];
+    expect(tr).toMatchObject({ tool_use_id: "tu_sum", type: "tool_result" });
+    expect(tr?.is_error).toBeUndefined();
+    // the human (player-1) summarised from the AI seat's redacted view: public board yes, hand contents no
+    expect(tr?.content).toContain("player-1 — legend: Daughter of the Void");
+    expect(tr?.content).toContain("Human Guard [guard] 3M");
+    expect(tr?.content).toContain("hand 1 (hidden)");
+    expect(tr?.content).not.toContain("Zz Human Secret");
+    expect(tr?.content).not.toContain("zzsecret");
+    expect(game.zoneOf("poro")).toBe("base");
+
+    // cap: three rule_search results are served, the 4th request offers only `choose` and forces it
+    phase = "spam";
+    n = 0;
+    reqs.length = 0;
+    const game2 = await scenario()
+      .active(P2)
+      .resources(P2, { energy: 2 })
+      .hand(P2, { cardType: "unit", energyCost: 2, might: 2, name: "Loyal Poro" }, "poro")
+      .build();
+    const ai2 = new ClaudeOpponent("haiku", "sk-ant-api03-testkeytestkey", { ...FAST, callModel });
+    await ai2.act(sessionOf(game2.engine, ai2));
+    expect(reqs).toHaveLength(4);
+    const served = reqs
+      .flatMap((r) => r.messages)
+      .flatMap((m) => (Array.isArray(m.content) ? m.content : []))
+      .filter((b) => b.type === "tool_result") as { content: string }[];
+    expect(new Set(served.map((b) => b.content)).size).toBe(1); // same query each time
+    expect(served[0]?.content).toContain("809 · Deflect");
+    expect(reqs[3]?.messages.filter((m) => m.role === "user")).toHaveLength(4); // prompt + 3 tool_result turns
+    expect(reqs[3]?.tools.map((t) => t.name)).toEqual(["choose"]);
+    expect(reqs[3]?.tool_choice).toEqual({ name: "choose", type: "tool" });
+    expect(game2.zoneOf("poro")).toBe("base");
   });
 });
 

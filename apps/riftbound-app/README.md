@@ -34,6 +34,10 @@ facedown cards appear only as counts — plus a numbered list of its legal actio
 applied through the same `applySessionMove` path your own moves use, then pushed to your browser one action at a time
 (~0.6 s apart) with a match-log line such as `🤖 Sonnet: Play Yasuo to Base — 'develop before contesting'`.
 A "Claude is thinking…" pill shows next to the opponent's name while it decides.
+Beside the decision tool the model is offered the read-only MCP info tools (`@tcg/riftbound-mcp/info-tools`:
+`search_cards`, `card`, `rule`/`rule_search`, `opponent_summary`, `zone`, `battlefields`, `chain_status`, …) bound to
+its own seat's redacted view; it may call up to 3 per decision (each answered with a `tool_result` and re-asked), after
+which `choose`/`answer` is forced.
 
 **Fallbacks and limits.** Invalid output is re-asked twice with a note, then that single step falls back to the
 Goldfish policy (pass / resolve prompt / end turn), logged with `(fallback)`. API errors retry with backoff

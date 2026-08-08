@@ -38,6 +38,7 @@ import {
   observe,
   resolvePendingAnswer,
 } from "@tcg/riftbound/harness";
+import { bindInfoTools } from "@tcg/riftbound-mcp/info-tools";
 import { renderSeatView } from "@tcg/riftbound-mcp/render";
 import { makeLogEntry } from "../src/narrator";
 import { registry } from "./cards";
@@ -666,7 +667,8 @@ HOW TO PLAY WELL
 - Develop: spend your energy on units/gear most turns; don't end the turn with lots of unspent energy and playable cards.
 - Contest: move ready units with enough Might onto battlefields you can win or hold; avoid suicidal attacks into bigger defenders unless it scores the winning point.
 - Only choose "End turn" when nothing else useful is legal. Never reason about the identities of cards you cannot see (opponent hand, facedown cards, decks) — treat them as unknown.
-- Output contract: call the decision tool (choose / answer) with your choice and a rationale of at most 140 characters. If lookup tools are offered you may call up to 3 of them first (rules / card / zone lookups), then you MUST decide. No other text.`;
+- Lookups: when offered, you may call search_cards / card / rule / rule_search / opponent_summary / zone / battlefields / chain_status sparingly (at most 3 per decision, only when the answer would change your play) — they show public information only.
+- Output contract: call the decision tool (choose / answer) with your choice and a rationale of at most 140 characters. After any lookups you MUST decide. No other text.`;
 
 export interface PromptBundle {
   system: string;
@@ -825,7 +827,23 @@ export interface LookupTool extends ModelTool {
 
 export const MAX_LOOKUPS_PER_DECISION = 3;
 
-let defaultLookupTools: LookupTool[] = [];
+/**
+ * The MCP info tools (`packages/riftbound-mcp/src/info-tools.ts`) bound to the
+ * AI seat: game lookups read `observe(engine, seat)` — the same redacted view
+ * the prompt is rendered from — so they can never reveal more than the seat sees.
+ */
+export function mcpInfoLookupTools(names?: readonly string[]): LookupTool[] {
+  return bindInfoTools<{ session: GameSession; engine: GameSession["engine"]; seat: string }>(
+    ({ engine, seat, session }) => ({
+      seats: session.players,
+      view: (viewer) => observe(engine, viewer, session.seq, null),
+      viewer: seat,
+    }),
+    { names },
+  );
+}
+
+let defaultLookupTools: LookupTool[] = mcpInfoLookupTools();
 
 /** Install lookup tools for every ClaudeOpponent created afterwards (mcp info-tools wiring point). */
 export function setDefaultLookupTools(tools: readonly LookupTool[]): void {
