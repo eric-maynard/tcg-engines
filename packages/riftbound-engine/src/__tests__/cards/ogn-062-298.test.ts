@@ -100,6 +100,17 @@ describe("Reinforce (ogn-062-298)", () => {
     expect(game.zoneOf("fae")).not.toBe("base");
   });
 
+  test("the banished pick is played at once — no chain item, no priority round (rules 337.1.b, 337.2)", async () => {
+    // "banish a unit from among them, then play it" is ONE instruction: the play finalizes with
+    // the resolving ability. It must not become an 'ability' chain item both players have to pass on.
+    const game = await board(7).build();
+    await game.p1.cast("rf");
+    await game.settle();
+    await game.p1.pick("fae");
+    expect(game.chain()).toEqual([]);
+    expect(game.zoneOf("fae")).toBe("base");
+  });
+
   test("timing: no [Action] tag — not castable on the opponent's turn", async () => {
     const game = await board(5).active(P2).build();
     expect(game.p1.can("cast", "rf")).toBe(false);
