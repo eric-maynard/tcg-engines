@@ -120,7 +120,11 @@ export const ENUMERABLE_MOVES: Record<string, MoveCoverage> = {
     via: 'act "pass" / {kind:"action", key:<passKey>}',
   },
   equipCard: {
-    params: obj({ equipmentId: cardId, playerId: str, unitId: cardId }, ["playerId", "equipmentId", "unitId"]),
+    params: obj({ equipmentId: cardId, playerId: str, unitId: cardId }, [
+      "playerId",
+      "equipmentId",
+      "unitId",
+    ]),
     verb: "equipCard",
     via: 'act {kind:"action", key:"equipCard:<equipment>", args:{unitId}}',
   },
@@ -300,6 +304,7 @@ export const INTERNAL_MOVES: Record<string, string> = {
   shuffleDecks: "pregame setup",
   spendResources: "directed (cost payment)",
   spendXp: "effect-directed",
+  startNextGame: "match flow (Bo3): app-directed after a finished game",
   stunUnit: "effect-directed",
   transferControl: "sandbox meta / effect-directed",
   transitionToPlay: "pregame setup",

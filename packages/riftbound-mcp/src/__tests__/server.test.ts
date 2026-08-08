@@ -6,6 +6,7 @@
 import { describe, expect, test } from "bun:test";
 import { P1, P2, ScenarioBuilder } from "@tcg/riftbound/harness";
 import { createServer } from "../index";
+import { INFO_TOOL_NAMES } from "../info-tools";
 import type { JsonObject, ToolResult } from "../mcp-lite";
 
 const CLEAVE = "ogn-004-298";
@@ -34,6 +35,7 @@ export const EXPECTED_TOOLS = [
   "concede",
   "settle",
   "advance_turn",
+  ...INFO_TOOL_NAMES,
 ];
 
 function harness() {

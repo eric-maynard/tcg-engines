@@ -348,6 +348,9 @@ builder (so the model sees only what `view(seat)` shows — opponent hand as a c
 seat's `deriveActionDecision` options as a numbered menu (or `deriveFromPendingChoice` as an `answer` prompt),
 validates the tool-use reply against the freshly re-derived list, and applies it with the TurnDriver's
 `applyMove` via the app's `applySessionMove` — the same path a human WebSocket move takes.
+Read-only lookups (`packages/riftbound-mcp/src/info-tools.ts`: tree-structured `rules_toc`/`rule`/`rule_children`/`rule_search`,
+`search_cards`/`card`/`list_*`, and per-seat `zone`/`opponent_summary`/`battlefields`/`chain_status` built solely from
+`view(seat)`) are one `infoToolSpecs` array registered by the MCP server and offered to the AI seat as extra Messages-API tools.
 
 ---
 

@@ -74,6 +74,55 @@ or `GAME_NOT_FOUND`. State is untouched on error.
 | `card_state` | `{ gameId, card, seat? }` | full `CardState` (redacted for `seat` if hidden) |
 | `history` | `{ gameId, sinceSeq?, limit? }` | transcript steps + readable lines |
 
+### Info tools (read-only lookups; `src/info-tools.ts`)
+
+Compact string answers (≤ ~1.5k chars; long lists end with `…(+N more; refine your query)`). The same
+specs (`infoToolSpecs`: `{ name, description, input_schema, handler(ctx, args) }`) are exported for the
+web app's Claude opponent (`@tcg/riftbound-mcp/info-tools` → `bindInfoTools` / `infoToolsForModel`),
+so an MCP client and the in-app AI see identical lookups.
+
+| tool | input | notes |
+|---|---|---|
+| `rules_toc` | `{}` | Core Rules top-level sections `S1…S12` with rule ranges — the root of the rules tree |
+| `rule` | `{ id }` | one rule (`"323.12"`, `"809.1.c"`) or section (`"S9"`): text + ancestor chain (section › heading › parents) + immediate children (id + first line) |
+| `rule_children` | `{ id, offset? }` | children of a rule / heading / section, paged |
+| `rule_search` | `{ query, limit? }` | term-match search → ids + one-line snippets, best first |
+| `search_cards` | `{ text?, name?, domain?\|domains?, type?, energy?:{min,max}\|n, power?, might?, keyword?, set?, champion?\|tag?, timing?, includeTokens?, limit?, sort? }` | rows `id · name · type · cost (2+[chaos]) · might · domains · keywords · text`; `type` ∈ unit spell gear equipment legend champion battlefield rune token |
+| `card` | `{ id? \| name? }` | full definition text; name lookup is case-insensitive with fuzzy fallback (exact → prefix → contains) and lists other matches |
+| `list_keywords` / `list_sets` / `list_domains` | `{}` | valid filter values (keywords link their glossary rule, e.g. `Deflect — rule 809`) |
+| `zone` | `{ gameId, seat, zone, player? }` | one zone as `seat` sees it: `hand` (yours listed; opponent's = count), `deck` (count only), `trash`, `banishment`, `base`, `legend`, `champion`, `runes`, `pool`, `points`, `board`, `battlefield:<id>`, `facedown:<id>` (identity only if you control it); `player` = `me` (default) \| `opponent` \| id |
+| `opponent_summary` | `{ gameId, seat, player? }` | legend/champion (+ whether it left the champion zone), points, pool, runes by domain, hand & deck counts, trash/banishment names, units by location |
+| `battlefields` | `{ gameId, seat }` | each battlefield: text, controller, contested, showdown marker, units per side (might/damage/exhausted/keywords), facedown count |
+| `chain_status` | `{ gameId, seat }` | turn state, chain items top-first (controller, targets, mode), priority / passes, active showdown (focus, attacker/defender), pending choice, whose decision |
+
+Game-scoped info tools derive everything from the seat's redacted `Observation` (`backend.view(seat)`), so
+opponent hand contents, deck order and foreign facedown identities cannot appear (guarded by
+`src/__tests__/info-tools.test.ts › PRIVACY`).
+
+```text
+→ tools/call search_cards {"domain":"chaos","type":"spell","energy":{"min":2,"max":3}}
+← 26 cards match type=spell domain=chaos energy={"min":2,"max":3} — id · name · type · cost · might · domains · keywords · text:
+  unl-131-219 · Abandon · spell · 2 · chaos · [Reaction] (Play any time, even before spells and abilities resolve.)…
+  unl-139-219 · Bone Skewer · spell · 2+[chaos] · chaos · Hidden · [Hidden] (Hide now for [rainbow] to react with later …
+  …(+16 more; refine your query or raise limit)
+
+→ tools/call rule {"id":"340"}
+← 340 — Chains & Showdowns  [path: S4 Chains & Showdowns]
+  Step 4: Resolve
+  children (4):
+    340.1 · The newest Finalized Chain Item resolves. Execute its game effects in their entiret…
+    340.2 · If the Chain is empty, play proceeds in an Open State. (+1)
+    …
+
+→ tools/call opponent_summary {"gameId":"g1-…","seat":"p1"}
+← player-2 — legend: Daughter of the Void (fury/mind) | champion: Kai'Sa, Survivor [p2champ] in champion zone (not yet played) | 3/8 points
+  pool: energy 2, power fury:1 | runes 2/3 ready (fury 2/2, mind 0/1) | rune deck 4
+  hand 1 (hidden) | main deck 5 | trash (2): Cleave×2 | banishment (1): Banished Bob
+  board:
+    base: Public Base Unit [p2base] 1M
+    bf1 [bf1] (controls): Public Defender [p2def] 3M exhausted | facedown card (hidden by player-2)
+```
+
 `undo` is intentionally omitted: the harness backend keeps its own seq/transcript/invariant snapshots and
 does not wrap `RuleEngine.undo()`.
 

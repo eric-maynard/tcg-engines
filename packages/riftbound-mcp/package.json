@@ -21,6 +21,10 @@
     "./render": {
       "types": "./src/render.ts",
       "default": "./src/render.ts"
+    },
+    "./info-tools": {
+      "types": "./src/info-tools.ts",
+      "default": "./src/info-tools.ts"
     }
   },
   "scripts": {

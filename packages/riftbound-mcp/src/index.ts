@@ -10,6 +10,7 @@ import { McpServer } from "./mcp-lite";
 import { Mutex } from "./mutex";
 import { defineResources } from "./resources";
 import { defineTools } from "./tools";
+import { defineInfoTools } from "./tools-info";
 
 export const SERVER_NAME = "riftbound-mcp";
 export const SERVER_VERSION = "0.1.0";
@@ -21,6 +22,7 @@ export const INSTRUCTIONS = [
   "3) Act with the named verbs (tap_rune → play_card / move_units / activate_ability → pass_priority → end_turn) or the generic act {answer}. Every response carries seq, the next decision and a `next` hint; prompts (pick / yes-no / integer) are answered with act.",
   "4) settle drains priority passes and automatic procedures; advance_turn ends the turn and comes back to your next main phase.",
   "Costs are paid from your rune pool: tap runes for energy, recycle runes for power. Card ids are instance ids (e.g. player-1-main-3-ogn-004-298); card_text explains any card.",
+  "Lookups (no game needed): rules_toc → rule_children → rule / rule_search for the Core Rules tree; search_cards / card / list_keywords / list_sets / list_domains for the card pool. In a game (gameId + your seat): zone / opponent_summary / battlefields / chain_status show public information only (opponent hand and decks are counts).",
 ].join(" ");
 
 export interface CreatedServer {
@@ -38,6 +40,9 @@ export function createServer(opts: { manager?: GameManager } = {}): CreatedServe
     version: SERVER_VERSION,
   });
   for (const t of defineTools({ manager, mutex })) {
+    server.tool(t);
+  }
+  for (const t of defineInfoTools({ manager, mutex })) {
     server.tool(t);
   }
   for (const r of defineResources()) {
@@ -58,5 +63,16 @@ export type {
 } from "./mcp-lite";
 export { ENUMERABLE_MOVES, INTERNAL_MOVES, movesSchemaDocument } from "./move-schemas";
 export { defineTools } from "./tools";
+export type { ToolContext } from "./tools";
+export { defineInfoTools } from "./tools-info";
+export {
+  bindInfoTools,
+  infoToolSpecs,
+  infoToolsForModel,
+  INFO_TOOL_NAMES,
+  InfoError,
+  runInfoTool,
+} from "./info-tools";
+export type { InfoContext, InfoScope, InfoToolSpec } from "./info-tools";
 export { defineResources } from "./resources";
 export { Mutex } from "./mutex";
