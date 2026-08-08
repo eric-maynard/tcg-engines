@@ -90,6 +90,17 @@ async function resolveDeathknellToBf1(game: Game): Promise<void> {
   expect(pickedWhere).toBe(true);
 }
 
+/** Resolve what is left of the chain without touching the showdown the No Result staged. */
+async function drainChain(game: Game): Promise<void> {
+  for (let i = 0; i < 6; i++) {
+    const d = game.decision();
+    if (!d || d.kind !== "action" || d.context !== "chain" || !d.passKey) {
+      break;
+    }
+    await game.seat(d.seat).pass();
+  }
+}
+
 describe("Ruling 8bb44b90da8bab68 — Glasc dies as the lone defender; Deathknell replays a unit into the same battlefield", () => {
   test("combat cleanup before the Deathknell resolves: Glasc is in the trash with its trigger pending (P2), the surviving attacker is healed to full and NOT recalled (466.1.a.1/2)", async () => {
     const game = await board().build();
@@ -114,11 +125,14 @@ describe("Ruling 8bb44b90da8bab68 — Glasc dies as the lone defender; Deathknel
   // yes, "toobig" no — and P2 may play it to bf1 (still theirs) for free.
   // Actual: the parsed effect targets a unit on the board (it grabs the attacking Brute) and never
   // looks at P2's trash; bf1 has already flipped to P1.
-  test.failing("BUG: ruling 8bb44b90da8bab68 — Deathknell: P2 plays 'Revived Help' (cost 2) from trash to bf1 ignoring its cost; the 5-cost unit is not offered", async () => {
+  test("ruling 8bb44b90da8bab68 — Deathknell: P2 plays 'Revived Help' (cost 2) from trash to bf1 ignoring its cost; the 5-cost unit is not offered", async () => {
     const game = await board().build();
     await fightUntilDeathknellPending(game);
     await resolveDeathknellToBf1(game);
-    await game.settle();
+    // 466.3.d.1 stages a FRESH combat at bf1 — drain only the chain, never
+    // settle() (settle fights the new combat through and kills the 2-Might
+    // unit that just arrived).
+    await drainChain(game);
     expect(game.locationOf("revived")).toBe("bf1");
     expect(game.state("revived").owner).toBe(P2);
     expect(game.p2.energy()).toBe(0); // ignoring its cost
