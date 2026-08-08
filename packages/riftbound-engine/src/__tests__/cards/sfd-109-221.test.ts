@@ -64,3 +64,42 @@ describe("Akshan, Mischievous (sfd-109-221) — played by Dazzling Aurora", () =
     expect(game.state("theirAurora").controller).toBe(P2);
   });
 });
+
+const SHIELD = "sfd-033-221"; // Doran's Shield — Equipment, +1 Might
+const COMBAT_CHEF = "sfd-092-221"; // vanilla [Weaponmaster] unit
+
+/** P1 plays Akshan paying [body][body] and steals P2's unattached Doran's Shield. */
+async function stealShield() {
+  const game = await scenario()
+    .resources(P1, { energy: 10, power: { body: 2 } })
+    .gear(P2, SHIELD, "shield")
+    .hand(P1, CARD, "akshan")
+    .hand(P1, COMBAT_CHEF, "chef")
+    .build();
+  await game.p1.play("akshan", { payOptional: true, to: "base" });
+  const r = await game.settle();
+  if (r.reason === "unanswered" && game.decision()?.seat === P1) {
+    await game.p1.pick("shield");
+    await game.settle();
+  }
+  expect(game.state("shield").controller).toBe(P1);
+  return game;
+}
+
+describe("Akshan, Mischievous (sfd-109-221) — 'If it's an Equipment, attach it to me'", () => {
+  test("the stolen Equipment attaches to Akshan and its Might bonus applies (rule 434)", async () => {
+    const game = await stealShield();
+    expect(game.state("shield")).toMatchObject({ attachedTo: "akshan", controller: P1, owner: P2 });
+    expect(game.state("akshan").attachments).toEqual(["shield"]);
+    expect(game.state("akshan").might).toBe(5); // 4 printed + 1 from Doran's Shield
+    expect(game.violations()).toEqual([]);
+  });
+
+  test("a Weaponmaster played later offers the Equipment P1 controls but does not own (rule 821.1.b)", async () => {
+    const game = await stealShield();
+    await game.p1.play("chef", { to: "base" });
+    const d = game.decision();
+    expect(d?.kind).toBe("pick");
+    expect((d as { options: { key: string }[] }).options.map((o) => o.key)).toContain("shield");
+  });
+});

@@ -1181,6 +1181,7 @@ export function enterUnitFromEffect(cardId: string, zoneId: string, ctx: EffectC
     ctx.zones as unknown as Parameters<typeof offerWeaponmasterEquip>[1],
     owner,
     cardId,
+    ctx.cards as unknown as Parameters<typeof offerWeaponmasterEquip>[4],
   );
   if (ctx.draft.cardsPlayedThisTurn) {
     ctx.draft.cardsPlayedThisTurn[owner] = (ctx.draft.cardsPlayedThisTurn[owner] ?? 0) + 1;

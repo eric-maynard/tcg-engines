@@ -25,6 +25,20 @@ export function attachEquipment(ctx: EffectContext, equipmentId: string, unitId:
   if (!update) {
     return;
   }
+  // rule 434.1: only an Equipment can be attached. Cards whose text says
+  // "if it's an Equipment, attach it" hand us whatever object an earlier step
+  // produced, so the check belongs here rather than in each caller. A gear with
+  // the printed [Equip] ability IS Equipment (rule 208.3 / 476.1 — VEN gears are
+  // typed "gear" in set JSON); unknown ids (test stubs) stay permitted.
+  const def = getGlobalCardRegistry().get(equipmentId);
+  if (
+    def &&
+    def.cardType !== "equipment" &&
+    !(def.cardType === "gear" && getGlobalCardRegistry().hasKeyword(equipmentId, "Equip"))
+  ) {
+    return;
+  }
+
   const previous = attachedUnitOf(ctx, equipmentId);
   if (previous) {
     detachEquipment(ctx, equipmentId);

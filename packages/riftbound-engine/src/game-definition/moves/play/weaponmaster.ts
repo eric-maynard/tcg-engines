@@ -17,6 +17,11 @@ interface WeaponmasterZones {
   getCardsInZone(zoneId: CoreZoneId, playerId?: CorePlayerId): readonly unknown[];
 }
 
+interface WeaponmasterCards {
+  getCardOwner?(cardId: CoreCardId): string | undefined;
+  getCardController?(cardId: CoreCardId): string | undefined;
+}
+
 /**
  * Put the Weaponmaster equip prompt on `draft.pendingChoice` when the unit that
  * was just played has the keyword and its controller owns at least one piece of
@@ -28,6 +33,7 @@ export function offerWeaponmasterEquip(
   zones: WeaponmasterZones,
   playerId: string,
   cardId: string,
+  cards?: WeaponmasterCards,
 ): void {
   if (draft.pendingChoice) {
     return;
@@ -41,8 +47,23 @@ export function offerWeaponmasterEquip(
     boardZones.push(getBattlefieldZoneId(bfId));
   }
   const equipOptions: string[] = [];
+  // rule 821.1.b/c — "an Equipment you CONTROL". `getCardsInZone(zone, player)`
+  // filters by OWNER, so a control-changed Equipment (e.g. taken by
+  // sfd-109-221 Akshan) would be missed and one we own but lost control of
+  // would be wrongly offered. Filter by controller whenever we can read it.
+  const canReadController = typeof cards?.getCardController === "function";
   for (const zoneId of boardZones) {
-    for (const id of zones.getCardsInZone(zoneId as CoreZoneId, playerId as CorePlayerId)) {
+    for (const id of zones.getCardsInZone(
+      zoneId as CoreZoneId,
+      canReadController ? undefined : (playerId as CorePlayerId),
+    )) {
+      if (canReadController) {
+        const controller =
+          cards?.getCardController?.(id as CoreCardId) ?? cards?.getCardOwner?.(id as CoreCardId);
+        if (controller !== playerId) {
+          continue;
+        }
+      }
       // rule 208.3 / 476.1 (ven-027-166 Hand Hammer) — a gear with the printed
       // [Equip] ability IS Equipment. VEN cards come from set JSON typed simply
       // as "gear", so accept them the same way `equipCard` does instead of
