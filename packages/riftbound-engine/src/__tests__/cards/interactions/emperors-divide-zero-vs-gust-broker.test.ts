@@ -105,7 +105,7 @@ describe("Emperor's Divide from facedown × Gust × Black Market Broker", () => 
     expect(game.zoneOf("ed")).toBe("chain");
   });
 
-  test.failing("BUG: (a) the 'any number' targets (U1+U2, both at bf1 per 811.1.d.2) are chosen at FINALIZATION and visible on the chain item before anyone responds (355.5, 355.13)", async () => {
+  test("(a) the 'any number' targets (U1+U2, both at bf1 per 811.1.d.2) are chosen at FINALIZATION and visible on the chain item before anyone responds (355.5, 355.13)", async () => {
     // Expected: the hidden play asks for / accepts its targets as it is played and the chain item
     // records [u1, u2]. Actual: the reveal takes no targets; the engine only asks at resolution.
     const game = await attacked();
@@ -219,7 +219,7 @@ describe("Emperor's Divide from facedown × Gust × Black Market Broker", () => 
     expect(game.p1.can("activate", mine[0]!)).toBe(false); // exhausted: no [A] this turn
   });
 
-  test.failing("BUG: (b) the count is a PLAY-TIME choice locked by 355.15 — after both players pass, Divide must resolve without asking P1 anything (no resolution-time target pick to revise after seeing P2's response)", async () => {
+  test("(b) the count is a PLAY-TIME choice locked by 355.15 — after both players pass, Divide must resolve without asking P1 anything (no resolution-time target pick to revise after seeing P2's response)", async () => {
     // Expected: zero was declared at finalization; passing priority twice resolves Divide outright.
     // Actual: the engine defers the whole "which / how many" choice to a RES-time pick.
     const game = await attacked();

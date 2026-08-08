@@ -682,6 +682,8 @@ export interface VerbOptions {
 export type PlayOptions = VerbOptions & Pick<PlayArgs, "to" | "accelerate" | "payOptional" | "sacrifice" | "discard" | "targets" | "mode" | "modes" | "x" | "repeat" | "costs" | "params">;
 export type CastOptions = VerbOptions & Pick<PlayArgs, "targets" | "mode" | "modes" | "x" | "repeat" | "flow" | "payOptional" | "sacrifice" | "discard" | "costs" | "params">;
 export type ActivateOptions = VerbOptions & Pick<PlayArgs, "sacrifice" | "discard" | "source" | "targets" | "costs" | "params">;
+/** rule 355.5 / 811.1.d.2 — a play from Hidden makes its object choices as it is played. */
+export type RevealOptions = VerbOptions & Pick<PlayArgs, "targets" | "payOptional" | "costs" | "params">;
 
 export class SeatHandle {
   readonly game: Game;
@@ -1046,8 +1048,17 @@ export class SeatHandle {
     return this.verb("hideCard", card, { to: battlefield }, `hide(${card} @ ${battlefield})`, opts);
   }
 
-  async reveal(card: CardRef, opts: VerbOptions = {}): Promise<Extract<ActResult, { ok: true }>> {
-    return this.verb("revealHidden", card, {}, `reveal(${card})`, opts);
+  /**
+   * Play a facedown card (rule 811.1.c.3). The objects it names are chosen HERE
+   * (rule 355.5 / 811.1.d.2): `{targets}` locks a set, `{answers}` answers the
+   * ask, and a bare `reveal(card)` names none — for an "any number of …"
+   * descriptor that is the legal empty choice (rule 355.13), not a deferral.
+   */
+  async reveal(card: CardRef, opts: RevealOptions = {}): Promise<Extract<ActResult, { ok: true }>> {
+    const asksTargets = this.option("revealHidden", card)?.fields.some((f) => f.name === "targets") === true;
+    const args: PlayArgs =
+      asksTargets && opts.targets === undefined && !opts.answers?.length ? { ...opts, targets: [] } : { ...opts };
+    return this.verb("revealHidden", card, args, `reveal(${card})`, opts);
   }
 
   async playChampion(to: LocationRef | string = "base", opts: VerbOptions = {}): Promise<Extract<ActResult, { ok: true }>> {

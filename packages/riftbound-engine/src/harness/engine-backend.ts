@@ -369,10 +369,18 @@ export class EngineBackend implements GameBackend {
     }
     const ctx = this.ctx();
     if (p.question.kind === "pick") {
-      if (answer.kind !== "pick" || answer.keys.length !== 1) {
+      if (answer.kind !== "pick" || answer.keys.length === 0) {
         return fail({ code: "WRONG_ANSWER_KIND", message: `Follow-up needs a single pick for ${p.question.field}` });
       }
-      const key = answer.keys[0] as string;
+      // A field whose choices are SETS of cards ("targets") is answered by
+      // naming the members, in any order — one key per member, not one key.
+      const asSet = [...answer.keys].map(String).sort().join("|");
+      const key =
+        answer.keys.length === 1
+          ? (answer.keys[0] as string)
+          : (p.question.choices.find(
+              (c) => Array.isArray(c.value) && [...(c.value as unknown[])].map(String).sort().join("|") === asSet,
+            )?.key ?? answer.keys.join("+"));
       const choice = p.question.choices.find((c) => c.key === key);
       if (!choice) {
         return fail({

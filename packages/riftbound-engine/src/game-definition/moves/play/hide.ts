@@ -27,11 +27,13 @@ import { getBattlefieldZoneId, getFacedownZoneId } from "../../../zones/zone-con
 import {
   hasStaticEffect,
   consumeEntersReadyReplacement,
+  getCardEffectiveMight,
   getGrantedAcceleratePlayCost,
 } from "./cost";
 import { beginRevealPairLock, beginRevealSlotLock, isSinglePickSlot } from "./reveal-target-lock";
 import {
   collectSequenceTargetSlots,
+  enumerateSubsetsUpTo,
   findSequenceLeadTarget,
   hiddenChoiceIsPulledIn,
   spellEffectHasLegalTargets,
@@ -528,6 +530,134 @@ function pairEffectSlots(effect: unknown): readonly unknown[] | undefined {
   return [target1, target2];
 }
 
+/** Card/zone accessors every hidden-play helper needs. */
+type HiddenTargetContext = {
+  cards: {
+    getCardController?: (id: CoreCardId) => string | undefined;
+    getCardMeta?: (id: CoreCardId) => unknown;
+    getCardOwner: (id: CoreCardId) => string | undefined;
+  };
+  zones: {
+    getCardZone: (id: CoreCardId) => string | undefined;
+    getCardsInZone: (zoneId: CoreZoneId, playerId?: CorePlayerId) => readonly CoreCardId[];
+  };
+};
+
+/**
+ * rule 355.13 / 355.15 with 811.1.d.2 — the "any number of …" / "up to N …"
+ * choice a card played from Hidden makes as it is PLAYED, plus the candidates
+ * available at its facedown battlefield.
+ *
+ * `pool` is every candidate there (the 811.1.d playability gate reads it);
+ * `choosable` drops candidates barred by an aggregate cap such as Fox-Fire's
+ * `totalMight` (ogn-256-298), and `maxSize` is how many may be named at once.
+ * Undefined for every other shape — single-object descriptors keep the
+ * `lockRevealedSpellTarget` prompt path.
+ */
+function hiddenMultiPickChoice(
+  state: RiftboundGameState,
+  cardId: string,
+  playerId: string,
+  battlefieldId: string | undefined,
+  context: HiddenTargetContext,
+): { pool: string[]; choosable: string[]; maxSize: number; totalMightCap?: number } | undefined {
+  if (battlefieldId === undefined) {
+    return undefined;
+  }
+  const registry = getGlobalCardRegistry();
+  if (registry.get(cardId)?.cardType !== "spell") {
+    return undefined;
+  }
+  const effect = (registry.getAbilities(cardId) ?? []).find((a) => a.type === "spell")?.effect as
+    | SpellEffectTargetShape
+    | undefined;
+  // rule 811.1.d.2.a (ven-034-166) — a spell that PULLS its object into the
+  // facedown battlefield chooses that object freely, so it is not this shape.
+  if (!effect || hiddenChoiceIsPulledIn(effect)) {
+    return undefined;
+  }
+  const raw =
+    ((effect as { target?: unknown }).target as Record<string, unknown> | undefined) ??
+    (findSequenceLeadTarget(effect) as Record<string, unknown> | undefined);
+  if (typeof raw !== "object" || raw === null || typeof raw.type !== "string") {
+    return undefined;
+  }
+  if (raw.type === "self" || raw.type === "player" || raw.type === "battlefield" || raw.type === "trigger-source") {
+    return undefined;
+  }
+  const qty = raw.quantity;
+  const upTo =
+    typeof qty === "object" &&
+    qty !== null &&
+    (qty as { upTo?: number }).upTo !== undefined &&
+    (qty as { atLeast?: number }).atLeast === undefined
+      ? ((qty as { upTo: number }).upTo as number)
+      : undefined;
+  if (qty !== "any" && upTo === undefined) {
+    return undefined;
+  }
+  const bfZone = getBattlefieldZoneId(battlefieldId);
+  // rule 811.1.d.2 — candidates come only from the facedown battlefield.
+  const pool = (
+    resolveTarget({ ...(raw as object), quantity: "all" } as never, {
+      cards: context.cards,
+      choosing: true,
+      draft: state,
+      playerId,
+      sourceCardId: cardId,
+      sourceZone: bfZone,
+      zones: context.zones,
+    } as Parameters<typeof resolveTarget>[1]) as string[]
+  ).filter((id) => context.zones.getCardZone(id as CoreCardId) === bfZone);
+  const totalMightCap = (raw as { totalMight?: { lte?: number } }).totalMight?.lte;
+  const mightOf = (id: string): number =>
+    getCardEffectiveMight(id, (c) => context.cards.getCardMeta?.(c) as never);
+  const choosable =
+    totalMightCap === undefined ? pool : pool.filter((id) => mightOf(id) <= totalMightCap);
+  return {
+    choosable,
+    maxSize: upTo ?? choosable.length,
+    pool,
+    ...(totalMightCap === undefined ? {} : { totalMightCap }),
+  };
+}
+
+/**
+ * rule 355.15 / 811.1.d.2 — are these the Game Objects a play from Hidden may
+ * lock in? Distinct, all candidates at the facedown battlefield, within the
+ * descriptor's count and aggregate caps. The empty list is always an answer
+ * (rule 355.13); a card with no multi-pick descriptor accepts no list at all.
+ */
+function suppliedHiddenTargetsAreLegal(
+  state: RiftboundGameState,
+  cardId: string,
+  playerId: string,
+  battlefieldId: string | undefined,
+  supplied: readonly string[],
+  context: HiddenTargetContext,
+): boolean {
+  const multi = hiddenMultiPickChoice(state, cardId, playerId, battlefieldId, context);
+  if (!multi) {
+    return false;
+  }
+  if (new Set(supplied).size !== supplied.length || supplied.length > multi.maxSize) {
+    return false;
+  }
+  if (!supplied.every((id) => multi.choosable.includes(id))) {
+    return false;
+  }
+  if (multi.totalMightCap !== undefined) {
+    const total = supplied.reduce(
+      (sum, id) => sum + getCardEffectiveMight(id, (c) => context.cards.getCardMeta?.(c) as never),
+      0,
+    );
+    if (total > multi.totalMightCap) {
+      return false;
+    }
+  }
+  return true;
+}
+
 /**
  * rule 811.1.d / 811.1.d.2 — a card played from Hidden must choose its targets
  * from options at the battlefield it was facedown at. rule 355.8: if no legal
@@ -594,43 +724,11 @@ function hiddenSpellHasLegalTargets(
   // least one candidate there (sfd-043-221 Emperor's Divide with no friendly unit
   // left at its battlefield is unplayable from face down, though the same card
   // from hand may still choose zero).
-  // `casterChosenTarget` deliberately skips the multi-pick shapes, so read the
-  // descriptor straight off the effect (or its sequence lead).
-  const rawTarget =
-    ((effect as { target?: unknown }).target as { quantity?: unknown; type?: unknown } | undefined) ??
-    (findSequenceLeadTarget(effect) as { quantity?: unknown; type?: unknown } | undefined);
-  const zeroableTarget =
-    typeof rawTarget === "object" &&
-    rawTarget !== null &&
-    typeof rawTarget.type === "string" &&
-    rawTarget.type !== "self" &&
-    rawTarget.type !== "player" &&
-    rawTarget.type !== "battlefield" &&
-    rawTarget.type !== "trigger-source"
-      ? rawTarget
-      : undefined;
-  const zeroableQty = zeroableTarget?.quantity;
-  const permitsZero =
-    zeroableQty === "any" ||
-    (typeof zeroableQty === "object" &&
-      zeroableQty !== null &&
-      (zeroableQty as { upTo?: number }).upTo !== undefined &&
-      (zeroableQty as { atLeast?: number }).atLeast === undefined);
-  if (permitsZero && zeroableTarget !== undefined && !hiddenChoiceIsPulledIn(effect)) {
-    const pool = (
-      resolveTarget({ ...(zeroableTarget as object), quantity: "all" } as never, {
-        cards: context.cards,
-        choosing: true,
-        draft: state,
-        playerId,
-        sourceCardId: cardId,
-        sourceZone: bfZone,
-        zones: context.zones,
-      } as Parameters<typeof resolveTarget>[1]) as string[]
-    ).filter((id) => context.zones.getCardZone(id as CoreCardId) === bfZone);
-    if (pool.length === 0) {
-      return false;
-    }
+  // `casterChosenTarget` deliberately skips the multi-pick shapes, so the
+  // descriptor is read straight off the effect by `hiddenMultiPickChoice`.
+  const multi = hiddenMultiPickChoice(state, cardId, playerId, battlefieldId, context);
+  if (multi && multi.pool.length === 0) {
+    return false;
   }
   return spellEffectHasLegalTargets(effect, {
     battlefieldZone: bfZone,
@@ -865,6 +963,22 @@ export const revealHidden: Defs["revealHidden"] = {
     ) {
       return false;
     }
+    // rule 355.5 / 355.15 with 811.1.d.2 — objects named as the card is played
+    // must be legal choices at its facedown battlefield (never trust the
+    // client's list).
+    if (
+      context.params.targets !== undefined &&
+      !suppliedHiddenTargetsAreLegal(
+        state,
+        context.params.cardId as string,
+        context.params.playerId as string,
+        meta.hiddenAt,
+        context.params.targets as readonly string[],
+        context,
+      )
+    ) {
+      return false;
+    }
     // rule-id: sfd-029-221 (rule 805.1.a) — the optional Accelerate cost is only
     // payable when a static licenses it and the pool covers it.
     if (
@@ -899,7 +1013,12 @@ export const revealHidden: Defs["revealHidden"] = {
       return [];
     }
     const playerId = context.playerId as string;
-    const results: { playerId: string; cardId: string; paidAdditionalCost?: boolean }[] = [];
+    const results: {
+      playerId: string;
+      cardId: string;
+      targets?: string[];
+      paidAdditionalCost?: boolean;
+    }[] = [];
     for (const bfId of Object.keys(state.battlefields)) {
       const facedown = context.zones.getCardsInZone(getFacedownZoneId(bfId) as CoreZoneId);
       for (const hid of facedown) {
@@ -923,6 +1042,27 @@ export const revealHidden: Defs["revealHidden"] = {
             revealSurcharge(state, playerId, hid as string, context),
           )
         ) {
+          continue;
+        }
+        // rule 355.5 / 355.13 / 355.15 (rule-id: sfd-043-221) — an "any number
+        // of …" / "up to N …" descriptor is chosen as the card is PLAYED, so
+        // offer one variant per legal set (the empty set included) instead of
+        // deferring the whole choice to a resolution-time pick. Candidates are
+        // restricted to the facedown battlefield (811.1.d.2).
+        const multi = hiddenMultiPickChoice(state, hid as string, playerId, meta.hiddenAt, context);
+        if (multi) {
+          for (const subset of enumerateSubsetsUpTo(multi.choosable, multi.maxSize)) {
+            if (
+              multi.totalMightCap !== undefined &&
+              subset.reduce(
+                (sum, id) => sum + getCardEffectiveMight(id, (c) => context.cards.getCardMeta?.(c) as never),
+                0,
+              ) > multi.totalMightCap
+            ) {
+              continue;
+            }
+            results.push({ cardId: hid as string, playerId, targets: subset });
+          }
           continue;
         }
         results.push({ cardId: hid as string, playerId });
@@ -990,6 +1130,10 @@ export const revealHidden: Defs["revealHidden"] = {
       const spellEffect = spellAbility?.effect;
       const interaction = draft.interaction ?? createInteractionState();
       const turnOrder = Object.keys(draft.players);
+      // rule 355.5 / 355.15 — objects named as the card was played ride onto the
+      // chain item now and are never re-chosen at resolution; the empty list
+      // (rule 355.13) is just as final as a full one.
+      const chosenTargets = context.params.targets as readonly string[] | undefined;
       draft.interaction = addToChain(
         interaction,
         {
@@ -997,6 +1141,7 @@ export const revealHidden: Defs["revealHidden"] = {
           controller: playerId,
           effect: spellEffect,
           resolveTo: "trash",
+          ...(chosenTargets === undefined ? {} : { targets: [...chosenTargets] }),
           // rule-id: ogn-097-298 — Rule 723.1.d (811.1.d.2): targets for a card
           // played from Hidden are restricted to its facedown battlefield.
           ...(battlefieldId ? { triggerEvent: { fromHiddenAt: battlefieldId } } : {}),
@@ -1028,6 +1173,16 @@ export const revealHidden: Defs["revealHidden"] = {
           { cardId, cardType: "spell", playerId, type: "play-from-hidden" },
           { cards, counters, draft, zones },
         );
+      }
+      if (chosenTargets !== undefined) {
+        // rule 359.2 — "when you choose me" fires as the play names its objects.
+        for (const targetId of chosenTargets) {
+          fireTriggers(
+            { cardId: targetId, chooserId: playerId, sourceType: "spell", type: "choose" },
+            { cards, counters, draft, zones },
+          );
+        }
+        return;
       }
       // rule 355.5 / 811.1.b — targets are chosen as the card is played.
       lockRevealedSpellTarget(draft, playerId, cardId, battlefieldId, { cards, zones });

@@ -291,7 +291,20 @@ export interface RiftboundMoves {
   hideCard: { playerId: PlayerId; cardId: CardId; battlefieldId: CardId };
 
   /** Reveal and play hidden card */
-  revealHidden: { playerId: PlayerId; cardId: CardId; paidAdditionalCost?: boolean; costs?: PlayCosts };
+  revealHidden: {
+    playerId: PlayerId;
+    cardId: CardId;
+    /**
+     * rule 355.5 / 355.15 with 811.1.d.2 — the Game Objects chosen as the card
+     * is played from Hidden (candidates restricted to its facedown
+     * battlefield). An "any number of …" / "up to N …" descriptor is a
+     * play-time choice locked on the chain item, so the empty list is a real
+     * answer (rule 355.13) and not "ask me later".
+     */
+    targets?: CardId[];
+    paidAdditionalCost?: boolean;
+    costs?: PlayCosts;
+  };
 
   /** Play Chosen Champion from Champion Zone */
   /**

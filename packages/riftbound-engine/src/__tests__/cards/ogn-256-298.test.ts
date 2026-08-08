@@ -104,7 +104,9 @@ describe("Fox-Fire (ogn-256-298)", () => {
     expect(game.p1.energy()).toBe(0);
     const sets = game.p1.option("reveal", "ff")?.fields.find((f) => f.arg === "targets")?.options ?? [];
     expect(sets.some((s) => s.includes("far"))).toBe(false); // bf2 is off-limits from facedown at bf1
-    await game.p1.reveal("ff");
+    // rule 355.5 / 355.13 — "any number of …" is chosen as the card is played;
+    // a bare reveal() would name none.
+    await game.p1.reveal("ff", { targets: ["near"] });
     expect(game.chain()).toEqual([expect.objectContaining({ cardId: "ff", controller: P1, triggered: false })]);
     await game.settle();
     if (game.decision()?.kind === "pick") {
