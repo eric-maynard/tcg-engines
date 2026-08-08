@@ -50,6 +50,9 @@ describe("Mystic Reversal (ogn-080-298)", () => {
     expect(game.p1.resources()).toEqual({ energy: 0, power: { calm: 0 } });
     expect(game.chain().map((c) => c.cardId)).toEqual(["cleave", "mr"]);
     await game.settle();
+    // rule 359.3.d — the spell leaves the chain only once its effect has finished,
+    // so answer the prompt(s) its resolution is still waiting on.
+    await game.settle({ policy: "first" });
     expect(game.zoneOf("mr")).toBe("trash");
   });
 
@@ -79,8 +82,11 @@ describe("Mystic Reversal (ogn-080-298)", () => {
     // player-1. Actual: gain-control-of-spell is a no-op; Cleave stays with player-2.
     const game = await cleaveThenReverse();
     await resolveTop(game);
-    expect(game.zoneOf("mr")).toBe("trash");
     expect(game.chain()).toEqual([expect.objectContaining({ cardId: "cleave", controller: P1 })]);
+    // rule 359.3.d — the spell leaves the chain only once its effect has finished,
+    // so answer the prompt(s) its resolution is still waiting on.
+    await game.settle({ policy: "first" });
+    expect(game.zoneOf("mr")).toBe("trash");
   });
 
   test("“You may make new choices for it” — P1 may retarget the stolen Cleave onto their own unit", async () => {

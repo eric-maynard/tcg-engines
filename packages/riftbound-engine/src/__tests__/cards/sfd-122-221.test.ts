@@ -57,6 +57,16 @@ describe("Called Shot (sfd-122-221)", () => {
     expect(game.zoneOf("cs")).toBe("trash");
   });
 
+  test("rule 359.3.d: while the look prompt is outstanding the spell is still mid-resolution — it stays in the chain zone and only reaches the trash once the pick is answered", async () => {
+    const game = await board(1).build();
+    await game.p1.cast("cs");
+    await game.settle();
+    expect(game.decision()?.kind).toBe("pick");
+    expect(game.zoneOf("cs")).toBe("chain"); // not trashed mid-resolution
+    await game.p1.pick("d1");
+    expect(game.zoneOf("cs")).toBe("trash");
+  });
+
   test("cost negative: 5 energy but no chaos power cannot cast it; a different domain's power cannot either", async () => {
     const noPower = await scenario().resources(P1, { energy: 5 }).hand(P1, CARD, "cs").build();
     expect(noPower.p1.can("cast", "cs")).toBe(false);

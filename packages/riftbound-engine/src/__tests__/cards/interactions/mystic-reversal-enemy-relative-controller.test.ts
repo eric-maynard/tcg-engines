@@ -99,6 +99,9 @@ async function newChoices(game: Game, to?: string): Promise<boolean> {
 describe("Mystic Reversal steals Deadly Flourish / Void Seeker — 'enemy' is relative to the new controller", () => {
   test("setup: Mystic Reversal resolves first (LIFO) and P2 now controls the Deadly Flourish chain item; both players paid in full", async () => {
     const game = await stolen("df");
+    // rule 359.3.d — Mystic Reversal reaches the trash only once its own
+    // "you may make new choices" prompt has been answered.
+    await newChoices(game);
     expect(game.zoneOf("mr")).toBe("trash");
     expect(game.p2.trash()).toContain("mr");
     expect(game.chain()).toEqual([expect.objectContaining({ cardId: "df", controller: P2 })]);

@@ -6,6 +6,7 @@
 
 import type { GameMoveDefinitions } from "@tcg/core";
 import { withTriggerFinalization } from "../../abilities/trigger-finalization";
+import { withDeferredSpellSettle } from "./chain/resolve";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../types";
 
 // Import all move categories
@@ -33,7 +34,8 @@ export const riftboundMoves: GameMoveDefinitions<
   RiftboundMoves,
   RiftboundCardMeta,
   unknown
-> = withTriggerFinalization({
+> = withDeferredSpellSettle(
+  withTriggerFinalization({
   // Setup moves
   ...setupMoves,
 
@@ -76,7 +78,8 @@ export const riftboundMoves: GameMoveDefinitions<
 
   // W12 deck-peek moves
   ...deckActionMoves,
-} as GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>);
+  } as GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>),
+);
 
 export { cardActionMoves } from "./card-actions";
 export { cardPlayMoves } from "./cards";

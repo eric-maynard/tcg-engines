@@ -280,6 +280,9 @@ describe("Kennen, Storm of Shuriken (ven-113-166)", () => {
     await game.p1.cast("design", { flow: true });
     expect(game.p1.resources().energy).toBe(0);
     await game.settle();
+    // rule 359.3.d — the spell leaves the chain only once its effect has finished,
+    // so answer the prompt(s) its resolution is still waiting on.
+    await game.settle({ policy: "first" });
     expect(game.zoneOf("design")).toBe("banishment");
     expect(game.p1.base().some((id) => id.startsWith("token-mech-"))).toBe(true);
   });

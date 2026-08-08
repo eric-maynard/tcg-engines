@@ -53,6 +53,9 @@ describe("Pouty Poro × Falling Star — Deflect is paid per choice", () => {
     expect(game.p1.resources()).toEqual({ energy: 0, power: { fury: 0, calm: 1 } });
     await game.settle();
     expect(game.zoneOf("theirPoro")).toBe("trash"); // 3 damage ≥ 2 Might
+    // rule 359.3.d — the spell is placed in the trash only after its effect has
+    // finished, so answer the second instruction's prompt first.
+    await game.settle({ policy: "first" });
     expect(game.zoneOf("fs")).toBe("trash");
   });
 

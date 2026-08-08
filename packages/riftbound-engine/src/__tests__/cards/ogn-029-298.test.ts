@@ -31,6 +31,9 @@ describe("Falling Star (ogn-029-298)", () => {
     expect(game.p1.resources()).toEqual({ energy: 0, power: { fury: 0 } });
     expect(game.zoneOf("fs")).toBe("chain");
     await game.settle();
+    // rule 359.3.d — the spell leaves the chain only once its effect has finished,
+    // so answer the prompt(s) its resolution is still waiting on.
+    await game.settle({ policy: "first" });
     expect(game.zoneOf("fs")).toBe("trash");
   });
 

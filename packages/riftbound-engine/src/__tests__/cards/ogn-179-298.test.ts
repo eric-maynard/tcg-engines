@@ -33,6 +33,9 @@ describe("Acceptable Losses (ogn-179-298)", () => {
     expect(game.p1.resources()).toEqual({ energy: 0, power: {} });
     expect(game.chain()).toEqual([expect.objectContaining({ cardId: "al", controller: P1, triggered: false })]);
     await game.settle();
+    // rule 359.3.d — the spell leaves the chain only once its effect has finished,
+    // so answer the prompt(s) its resolution is still waiting on.
+    await game.settle({ policy: "first" });
     expect(game.zoneOf("al")).toBe("trash");
     const poor = await scenario().gear(P1, GEAR("Mine A"), "g1a").hand(P1, CARD, "al").build();
     expect(poor.p1.can("cast", "al")).toBe(false);
@@ -83,6 +86,9 @@ describe("Acceptable Losses (ogn-179-298)", () => {
     await game.settle();
     expect(game.zoneOf("g2a")).toBe("trash");
     expect(game.zoneOf("ally")).toBe("base"); // units are not gear
+    // rule 359.3.d — the spell leaves the chain only once its effect has finished,
+    // so answer the prompt(s) its resolution is still waiting on.
+    await game.settle({ policy: "first" });
     expect(game.zoneOf("al")).toBe("trash");
   });
 

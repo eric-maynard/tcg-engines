@@ -82,6 +82,9 @@ describe("Deathgrip (sfd-163-221)", () => {
     await game.settle();
     expect(game.zoneOf("victim")).toBe("trash");
     expect(game.zoneOf("foe")).toBe("base");
+    // rule 359.3.d — the spell leaves the chain only once its effect has finished,
+    // so answer the prompt(s) its resolution is still waiting on.
+    await game.settle({ policy: "first" });
     expect(game.zoneOf("dg")).toBe("trash");
   });
 
@@ -141,6 +144,9 @@ describe("Deathgrip (sfd-163-221)", () => {
     await game.settle();
     expect(game.zoneOf("victim")).toBe("trash");
     expect(game.zoneOf("cull")).toBe("trash");
+    // rule 359.3.d — the spell leaves the chain only once its effect has finished,
+    // so answer the prompt(s) its resolution is still waiting on.
+    await game.settle({ policy: "first" });
     expect(game.zoneOf("dg")).toBe("trash");
     expect(game.p1.hand()).toHaveLength(1); // drew 1
     expect(game.zoneOf("heir")).toBe("battlefield-bf1"); // the fizzled Cull did not retarget anything
@@ -183,6 +189,9 @@ describe("Deathgrip (sfd-163-221)", () => {
     expect(game.state("heir").might).toBe(2); // "If you do" is false → no bonus
     expect(game.state("homebody").might).toBe(1);
     expect(game.p1.hand()).toHaveLength(1); // Draw 1 is not linked to the kill
+    // rule 359.3.d — the spell leaves the chain only once its effect has finished,
+    // so answer the prompt(s) its resolution is still waiting on.
+    await game.settle({ policy: "first" });
     expect(game.zoneOf("dg")).toBe("trash");
   });
 
@@ -194,6 +203,9 @@ describe("Deathgrip (sfd-163-221)", () => {
     await game.p2.cast("snipe", { targets: "victim" });
     await game.settle();
     expect(game.zoneOf("victim")).toBe("trash"); // died to the snipe, not to Deathgrip
+    // rule 359.3.d — the spell leaves the chain only once its effect has finished,
+    // so answer the prompt(s) its resolution is still waiting on.
+    await game.settle({ policy: "first" });
     expect(game.zoneOf("dg")).toBe("trash");
     expect(game.p1.hand()).toHaveLength(1); // still drew
     expect(game.state("heir").might).toBe(2); // and certainly no bonus

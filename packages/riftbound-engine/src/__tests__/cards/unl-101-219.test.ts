@@ -48,6 +48,9 @@ describe("Call to Battle (unl-101-219)", () => {
     expect(game.p1.resources()).toEqual({ energy: 0, power: { body: 1 } });
     expect(game.chain()).toEqual([expect.objectContaining({ cardId: "ctb", controller: P1, triggered: false })]);
     await game.settle();
+    // rule 359.3.d — the spell leaves the chain only once its effect has finished,
+    // so answer the prompt(s) its resolution is still waiting on.
+    await game.settle({ policy: "first" });
     expect(game.zoneOf("ctb")).toBe("trash");
     expect(game.locationOf("guard")).toBe("bf2");
     const short = await board({ energy: 2, power: { body: 3, rainbow: 3 } }).build();

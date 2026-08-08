@@ -1195,6 +1195,18 @@ export function settleResolvedSpellCard(
   if (context.zones.getCardZone(resolved.cardId as CoreCardId) !== ("chain" as CoreZoneId)) {
     return;
   }
+  // rule 359.3.d — execute the effect top to bottom "and then" place the card in
+  // the trash. An outstanding prompt means the effect is still mid-resolution,
+  // so the card stays in the chain zone; `flushDeferredSpellSettle` finishes the
+  // job once the last prompt of that resolution is answered.
+  if (draft?.pendingChoice) {
+    draft.deferredSpellSettle = {
+      cardId: resolved.cardId as string,
+      controller: resolved.controller as string,
+      resolveTo: resolved.resolveTo as string | undefined,
+    };
+    return;
+  }
   let targetZone = (resolved.resolveTo ?? "trash") as string;
   // rule 571 / rule-id: ven-022-166 — the spell leaves the CHAIN, not the Main
   // Deck, so a controller-wide "would go to your trash … banish it instead"
@@ -1210,6 +1222,62 @@ export function settleResolvedSpellCard(
     cardId: resolved.cardId as CoreCardId,
     targetZoneId: targetZone as CoreZoneId,
   });
+}
+
+/**
+ * rule 359.3.d — flush a spell settle that was parked because the spell's own
+ * effect suspended on a prompt. Runs once no prompt is outstanding.
+ */
+export function flushDeferredSpellSettle(
+  draft: RiftboundGameState,
+  context: Parameters<typeof buildEffectContext>[3],
+): void {
+  const parked = draft.deferredSpellSettle;
+  if (!parked || draft.pendingChoice) {
+    return;
+  }
+  draft.deferredSpellSettle = undefined;
+  settleResolvedSpellCard(
+    {
+      cardId: parked.cardId,
+      controller: parked.controller,
+      resolveTo: parked.resolveTo,
+      type: "spell",
+    } as unknown as ChainItem,
+    context,
+    draft,
+  );
+}
+
+/**
+ * rule 359.3.d — wrap every move so a parked spell settle is flushed as soon as
+ * no prompt is outstanding. The prompt that suspended a resolution can be
+ * answered from many paths (`resolvePendingChoice`, scripted picks, opt-ins),
+ * so the flush hangs off the move pipeline rather than any single one of them.
+ */
+export function withDeferredSpellSettle<
+  // biome-ignore lint/suspicious/noExplicitAny: structural pass-through wrapper
+  TMoves extends Record<string, { reducer: (draft: any, context: any) => void } | undefined>,
+>(moves: TMoves): TMoves {
+  const wrapped = {} as Record<string, unknown>;
+  for (const [name, move] of Object.entries(moves)) {
+    if (!move) {
+      wrapped[name] = move;
+      continue;
+    }
+    const originalReducer = move.reducer;
+    wrapped[name] = {
+      ...move,
+      // biome-ignore lint/suspicious/noExplicitAny: structural pass-through wrapper
+      reducer: (draft: any, context: any) => {
+        originalReducer(draft, context);
+        if (draft?.deferredSpellSettle && typeof context?.zones?.getCardZone === "function") {
+          flushDeferredSpellSettle(draft as RiftboundGameState, context);
+        }
+      },
+    };
+  }
+  return wrapped as TMoves;
 }
 
 /**

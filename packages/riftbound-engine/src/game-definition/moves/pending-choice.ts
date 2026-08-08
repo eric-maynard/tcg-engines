@@ -45,7 +45,7 @@ import type {
 import { buildEffectContext, executeResolvedItem } from "./chain-moves";
 import { deductAbilityCost } from "./chain/activate-ability";
 import { canAffordPower } from "./chain/effect-context";
-import { payAnyDomainPower } from "./chain/resolve";
+import { flushDeferredSpellSettle, payAnyDomainPower } from "./chain/resolve";
 import { completeSuspendedPlay } from "./play/play-unit";
 import {
   type CostExtras,
@@ -405,6 +405,12 @@ function postChoiceCleanup(draft: RiftboundGameState, context: unknown): void {
     if (draft.suspendedPlay && !draft.pendingChoice) {
       completeSuspendedPlay(draft, context);
     }
+    // rule 359.3.d — a spell whose effect suspended on a prompt is placed in the
+    // trash only now that its resolution has actually finished.
+    flushDeferredSpellSettle(
+      draft,
+      context as Parameters<typeof flushDeferredSpellSettle>[1],
+    );
     cleanupAndFireDeaths(draft, ctx as PostMoveCleanupContext);
     // rule 323.12 / 344.2 — the Cleanup after the last choice of a resolution
     // begins whatever Showdown that resolution staged (showdown-only
