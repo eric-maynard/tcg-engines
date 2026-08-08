@@ -121,7 +121,7 @@ describe("Risen Altar (ven-163-166)", () => {
     expect(away.p1.can("activate", "fiend")).toBe(false);
   });
 
-  test.failing("BUG: '[1] OR [rainbow] less' is the payer's choice — Shadow Fiend at the Altar with 2 energy and NO fury power may drop the [fury] pip and Empower for plain [2] (356.4)", async () => {
+  test("'[1] OR [rainbow] less' is the payer's choice — Shadow Fiend at the Altar with 2 energy and NO fury power may drop the [fury] pip and Empower for plain [2] (356.4)", async () => {
     // Expected: activatable; pays 2 energy; Empowered. Actual: the engine always shaves the energy
     // first ([1][fury]) and, lacking a fury power, refuses the activation.
     const game = await altar({ energy: 2 }).unit(P1, "altar", SHADOW_FIEND, "fiend").build();
@@ -184,7 +184,7 @@ describe("Risen Altar (ven-163-166)", () => {
     expect(game.state("kin")).toMatchObject({ isEmpowered: true, might: 5 });
   });
 
-  test.failing("BUG: 190.6.d live control — after conquering the OPPONENT's Risen Altar (their card, their control) my Kinkou there must Empower for [1]; the engine keys the discount on the battlefield CARD's owner and denies it", async () => {
+  test("190.6.d live control — after conquering the OPPONENT's Risen Altar (their card, their control) my Kinkou there must Empower for [1]; the engine keys the discount on the battlefield CARD's owner and denies it", async () => {
     // Expected: P1 controls the Altar after the combat → Kinkou activatable on 1 energy, Empowered.
     // Actual: can("activate") stays false because the Altar card belongs to P2.
     const game = await scenario()

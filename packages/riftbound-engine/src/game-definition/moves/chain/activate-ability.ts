@@ -618,6 +618,7 @@ export function empowerCostDiscount(
     getCardOwner: (card: CoreCardId) => CorePlayerId | undefined;
     getCardController?: (card: CoreCardId) => CorePlayerId | undefined;
   },
+  battlefields?: Record<string, { controller?: string | null } | undefined>,
 ): number {
   if ((ability.effect as { type?: string } | undefined)?.type !== "empower") {
     return 0;
@@ -626,8 +627,12 @@ export function empowerCostDiscount(
   const registry = getGlobalCardRegistry();
   let discount = 0;
   for (const bfCardId of zones.getCardsInZone("battlefieldRow" as CoreZoneId)) {
-    const controller =
-      cards.getCardController?.(bfCardId) ?? cards.getCardOwner(bfCardId as CoreCardId);
+    // rule 190.6.d — "your" on a battlefield means whoever CONTROLS it right
+    // now (conquest flips it), not whoever owns/brought the card.
+    const bfEntry = battlefields?.[bfCardId as string];
+    const controller = bfEntry
+      ? bfEntry.controller
+      : (cards.getCardController?.(bfCardId) ?? cards.getCardOwner(bfCardId as CoreCardId));
     if (controller !== playerId) {
       continue;
     }
@@ -648,29 +653,54 @@ export function empowerCostDiscount(
 }
 
 /**
- * "[1] or [rainbow] less" removes ONE resource from the cost: the energy part
- * first, otherwise a single Power pip.
+ * rule 356.4 (rule-id: ven-163-166) — "costs [1] or [rainbow] less" removes ONE
+ * resource per discount and WHICH one is the payer's choice: an energy or a
+ * single Power pip. Enumerated most-energy-shaved first (the default pick), so
+ * a mixed [2][fury] cost offers [1][fury] and plain [2].
+ */
+function resourceDiscountVariants(
+  cost: Record<string, unknown>,
+  discount: number,
+): Record<string, unknown>[] {
+  const energy = (cost.energy as number) ?? 0;
+  const power = (cost.power as string[] | undefined) ?? [];
+  const variants: Record<string, unknown>[] = [];
+  const maxFromEnergy = Math.min(discount, energy);
+  for (let fromEnergy = maxFromEnergy; fromEnergy >= 0; fromEnergy--) {
+    const fromPower = Math.min(discount - fromEnergy, power.length);
+    const next = { ...cost, energy: energy - fromEnergy };
+    if (power.length > 0) {
+      next.power = power.slice(fromPower);
+    }
+    variants.push(next);
+  }
+  return variants;
+}
+
+/**
+ * Apply a "[1] or [rainbow] less" discount. With a pool in hand the payer picks
+ * the branch they can actually pay (356.4); without one the energy-first branch
+ * is the deterministic default.
  */
 function applyResourceDiscount(
   cost: Record<string, unknown> | undefined,
   discount: number,
+  pool?: { energy: number; power: Record<string, number | undefined> },
+  potentialEnergy = 0,
 ): Record<string, unknown> | undefined {
   if (!cost || discount <= 0) {
     return cost;
   }
-  const next = { ...cost };
-  let remaining = discount;
-  const energy = (next.energy as number) ?? 0;
-  const fromEnergy = Math.min(remaining, energy);
-  if (fromEnergy > 0) {
-    next.energy = energy - fromEnergy;
-    remaining -= fromEnergy;
+  const variants = resourceDiscountVariants(cost, discount);
+  if (pool) {
+    const payable =
+      variants.find((v) => costOptionAffordable(v, pool, 0)) ??
+      variants.find((v) => costOptionAffordable(v, pool, potentialEnergy));
+    if (payable) {
+      return payable;
+    }
   }
-  const power = next.power as string[] | undefined;
-  if (remaining > 0 && power && power.length > 0) {
-    next.power = power.slice(remaining);
-  }
-  return next;
+  return variants[0];
 }
 
 /** Can this pool pay one whole alternative cost right now? */
@@ -723,7 +753,7 @@ function selectCostOption(
     return options[0];
   }
   const afford = (o: Record<string, unknown>, extra: number) =>
-    costOptionAffordable(applyResourceDiscount(o, discount) ?? o, pool, extra);
+    costOptionAffordable(applyResourceDiscount(o, discount, pool, extra) ?? o, pool, extra);
   return (
     options.find((o) => afford(o, 0)) ?? options.find((o) => afford(o, potentialEnergy)) ?? options[0]
   );
@@ -749,7 +779,7 @@ export function affordableCostOptionIndices(
   const seen = new Set<string>();
   const indices: number[] = [];
   for (let i = 0; i < options.length; i++) {
-    const applied = applyResourceDiscount(options[i], discount) ?? options[i];
+    const applied = applyResourceDiscount(options[i], discount, pool) ?? options[i];
     if (!costOptionAffordable(applied, pool, 0)) {
       continue;
     }
@@ -781,7 +811,7 @@ export function effectiveAbilityCost(
   const chosenOption = selectCostOption(ability, pool, potentialEnergy, discount, costOptionIndex);
   const baseCost = ability.cost as Record<string, unknown> | undefined;
   const merged = chosenOption ? { ...(baseCost ?? {}), ...chosenOption } : baseCost;
-  const cost = applyResourceDiscount(merged, discount);
+  const cost = applyResourceDiscount(merged, discount, pool, potentialEnergy);
   const mod = ability.costModifier as
     | { condition?: { type?: string; amount?: number }; reduction?: number }
     | undefined;
@@ -1021,6 +1051,14 @@ export const activateAbility: Defs["activateAbility"] = {
         return false;
       }
     }
+    // rule 135.4.b (unl-213-219): text that exists only on the cards it is
+    // granted to — the card printing it never activates it itself.
+    if (
+      abilityRestrictions?.some((r) => r.type === "granted-only") &&
+      (!sourceCardId || sourceCardId === cardId)
+    ) {
+      return false;
+    }
     // rule 377.2.b: "Use only once per turn" — already used this turn.
     if (oncePerTurnExhausted(state, abilityRestrictions, cardId as string, abilityIndex as number)) {
       return false;
@@ -1100,6 +1138,7 @@ export const activateAbility: Defs["activateAbility"] = {
         playerId as string,
         context.zones,
         context.cards,
+        state.battlefields,
       ),
       context.params.costOptionIndex as number | undefined,
     );
@@ -1461,6 +1500,14 @@ export const activateAbility: Defs["activateAbility"] = {
             continue;
           }
         }
+        // rule 135.4.b (unl-213-219): text that exists only on the cards it is
+        // granted to — the card printing it never activates it itself.
+        if (
+          abilityRestrictions?.some((r) => r.type === "granted-only") &&
+          entry.sourceCardId === entry.hostCardId
+        ) {
+          continue;
+        }
         // rule 377.2.b: "Use only once per turn" — skip once used this turn.
         if (
           oncePerTurnExhausted(state, abilityRestrictions, entry.hostCardId as string, entry.abilityIndex)
@@ -1523,6 +1570,7 @@ export const activateAbility: Defs["activateAbility"] = {
             playerId as string,
             context.zones,
             context.cards,
+            state.battlefields,
           ),
         );
         if (effectiveCost) {
@@ -1796,6 +1844,7 @@ export const activateAbility: Defs["activateAbility"] = {
             playerId as string,
             context.zones,
             context.cards,
+            state.battlefields,
           ),
         );
         if (costOptionIndices) {
@@ -1884,6 +1933,7 @@ export const activateAbility: Defs["activateAbility"] = {
         playerId as string,
         context.zones,
         context.cards,
+        draft.battlefields,
       ),
       (context.params as Record<string, unknown>).costOptionIndex as number | undefined,
     );
