@@ -55,14 +55,14 @@ describe("Forbidding Waste (unl-210-219)", () => {
     ]);
   });
 
-  test.failing("BUG: only while DEFENDING — a lone unit merely standing on the Waste (no combat) keeps its full 3 Might; the engine applies −2 at all times", async () => {
+  test("only while DEFENDING — a lone unit merely standing on the Waste (no combat) keeps its full 3 Might; the engine applies −2 at all times", async () => {
     // Expected: might 3 outside combat. Actual: 1 (staticMightBonus −2 with no combat in progress).
     const game = await waste([[3, "d"]], 2).build();
     expect(game.state("d").combatRole).not.toBe("defender");
     expect(game.state("d")).toMatchObject({ might: 3, staticMightBonus: 0 });
   });
 
-  test.failing("BUG: lone 3-Might defender vs a 2-Might attacker — defender fights as 1, dies to the 2, attacker takes 1 and conquers; the engine also shrinks the ATTACKER to 0", async () => {
+  test("lone 3-Might defender vs a 2-Might attacker — defender fights as 1, dies to the 2, attacker takes 1 and conquers; the engine also shrinks the ATTACKER to 0", async () => {
     // Expected: in the showdown d=1 / atk=2 → d dies, atk survives with 1 damage, P1 conquers and scores.
     // Actual: atk is also given −2 (0 Might), deals nothing and is killed by d's 1.
     const game = await waste([[3, "d"]], 2).build();
@@ -76,7 +76,7 @@ describe("Forbidding Waste (unl-210-219)", () => {
     expect(game.p1.points()).toBe(1);
   });
 
-  test.failing("BUG: only the DEFENDER — a lone 3-Might attacker into a lone 3-Might defender stays 3 (defender drops to 1): defender dies, attacker lives with 1 damage", async () => {
+  test("only the DEFENDER — a lone 3-Might attacker into a lone 3-Might defender stays 3 (defender drops to 1): defender dies, attacker lives with 1 damage", async () => {
     // Expected: atk 3 vs d 1 → d dies, atk takes 1, P1 conquers. Actual: both are 1 and trade.
     const game = await waste([[3, "d"]], 3).build();
     await game.p1.move("atk", "fw");
@@ -88,7 +88,7 @@ describe("Forbidding Waste (unl-210-219)", () => {
     expect(game.gameState.battlefields.fw?.controller).toBe(P1);
   });
 
-  test.failing("BUG: only ALONE (740.2.a) — two defenders (3 and 1) suffer no penalty: they fight as 3 and 1 against a 3-Might attacker", async () => {
+  test("only ALONE (740.2.a) — two defenders (3 and 1) suffer no penalty: they fight as 3 and 1 against a 3-Might attacker", async () => {
     // Expected: d=3, e=1, atk=3 during the showdown; 4 combined kills the attacker. Actual: every unit here is at −2.
     const game = await waste(
       [
@@ -107,8 +107,10 @@ describe("Forbidding Waste (unl-210-219)", () => {
   });
 
   test.failing("BUG: continuous 'while' (364.3) — bouncing one of two defenders mid-showdown leaves the other alone: it drops 3 → 1 on the spot and the 2-Might attacker conquers", async () => {
-    // Expected: before Fight or Flight d=3; after e is moved home d=1; combat: d dies, atk (2) survives with 1 damage, P1 conquers.
-    // Actual: d is 1 throughout and atk is 0, so atk dies instead.
+    // The continuous recalculation itself now works (d reads 3 with a friend, 1 once alone, and the
+    // 2-Might attacker conquers). Only the surviving attacker's leftover damage still fails: rule
+    // 466.1.a.1 heals ALL units during the Combat Cleanup, so a survivor can never end a combat
+    // with damage marked. This clause needs a judge ruling before it can be flipped.
     const game = await waste(
       [
         [3, "d"],
@@ -133,7 +135,7 @@ describe("Forbidding Waste (unl-210-219)", () => {
     expect(game.gameState.battlefields.fw?.controller).toBe(P1);
   });
 
-  test.failing("BUG: floor (143.2.b, 142.4.b) — a lone 1-Might defender counts as 0: it deals nothing and dies to a 1-Might attacker, who conquers undamaged", async () => {
+  test("floor (143.2.b, 142.4.b) — a lone 1-Might defender counts as 0: it deals nothing and dies to a 1-Might attacker, who conquers undamaged", async () => {
     // Expected: d dies, atk at fw with 0 damage, P1 controls fw. Actual: atk is also 0, nobody deals damage, atk is sent home.
     const game = await waste([[1, "d"]], 1).build();
     await game.p1.move("atk", "fw");
@@ -146,7 +148,7 @@ describe("Forbidding Waste (unl-210-219)", () => {
     expect(game.gameState.battlefields.fw?.controller).toBe(P1);
   });
 
-  test.failing("BUG: one short — a 1-Might attacker into a lone 3 (→1) trades: both die, nobody scores and P2 no longer controls the emptied Waste", async () => {
+  test("one short — a 1-Might attacker into a lone 3 (→1) trades: both die, nobody scores and P2 no longer controls the emptied Waste", async () => {
     // Expected: both in trash, P1 0 points, fw uncontrolled after cleanup (323.6). Actual: atk (−2 → 0) deals nothing; d survives.
     const game = await waste([[3, "d"]], 1).build();
     await game.p1.move("atk", "fw");
@@ -158,7 +160,7 @@ describe("Forbidding Waste (unl-210-219)", () => {
     expect(game.p2.units("fw")).toEqual([]);
   });
 
-  test.failing("BUG: stacking — Wielder of Water defending alone is 2 (+2 alone, −2 Waste); a 2-Might attacker trades with it", async () => {
+  test("stacking — Wielder of Water defending alone is 2 (+2 alone, −2 Waste); a 2-Might attacker trades with it", async () => {
     // Expected: wow=2 in the showdown (and 2 at rest), atk=2 → both die. Actual: atk is 0 so only atk dies (and wow reads 0 at rest).
     const game = await scenario()
       .battlefield("fw", { controller: P2, def: CARD, inert: false, owner: P2 })
@@ -174,7 +176,7 @@ describe("Forbidding Waste (unl-210-219)", () => {
     expect(game.zoneOf("atk")).toBe("trash");
   });
 
-  test.failing("BUG: stacking — a lone [Shield] Leona (4, +1 defending, −2 Waste) defends as 3 and trades with a 3-Might attacker", async () => {
+  test("stacking — a lone [Shield] Leona (4, +1 defending, −2 Waste) defends as 3 and trades with a 3-Might attacker", async () => {
     // Expected: leona=3 vs atk=3 → both die. Actual: atk is 1, dies alone.
     const game = await scenario()
       .battlefield("fw", { controller: P2, def: CARD, inert: false, owner: P2 })
@@ -189,7 +191,7 @@ describe("Forbidding Waste (unl-210-219)", () => {
     expect(game.zoneOf("atk")).toBe("trash");
   });
 
-  test.failing("BUG: no 'you' (190.6) — it bites the Waste's OWN controller too: P1's lone 3-Might keeper defends as 1 on P2's turn and falls to a 2-Might raider", async () => {
+  test("no 'you' (190.6) — it bites the Waste's OWN controller too: P1's lone 3-Might keeper defends as 1 on P2's turn and falls to a 2-Might raider", async () => {
     // Expected: keeper=1 vs raider=2 → keeper dies, raider conquers for P2. Actual: raider is 0 and dies.
     const game = await scenario()
       .active(P2)

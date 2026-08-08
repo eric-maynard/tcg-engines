@@ -190,6 +190,51 @@ function existsHereFilterMatches(
   }
 }
 
+/** rule 740.2.a — "alone" = no OTHER friendly unit at the same location. */
+function unitIsAloneAtLocation(card: BoardCard, ctx: StaticAbilityContext): boolean {
+  if (!card.zone.startsWith("battlefield-")) {
+    return false;
+  }
+  const cardsAtZone = ctx.zones.getCardsInZone(card.zone as CoreZoneId);
+  return cardsAtZone.filter((id) => ctx.cards.getCardOwner(id) === card.owner).length === 1;
+}
+
+/**
+ * rule 464.2.c.3 / 740.2.a — does THIS unit hold the combat state named by a
+ * `while-unit-state` condition? Such a condition describes the subject of the
+ * effect ("while a unit here is defending alone"), so it is checked per target,
+ * never once against the source card.
+ */
+function unitMatchesUnitState(
+  card: BoardCard,
+  state: string | undefined,
+  ctx: StaticAbilityContext,
+): boolean {
+  const meta = (ctx.cards.getCardMeta(card.id as CoreCardId) ?? {}) as Partial<RiftboundCardMeta>;
+  switch (state) {
+    case "defending-alone":
+      return meta.combatRole === "defender" && unitIsAloneAtLocation(card, ctx);
+    case "attacking-alone":
+      return meta.combatRole === "attacker" && unitIsAloneAtLocation(card, ctx);
+    case "in-combat-alone":
+      return (
+        (meta.combatRole === "attacker" || meta.combatRole === "defender") &&
+        unitIsAloneAtLocation(card, ctx)
+      );
+    case "defending":
+      return meta.combatRole === "defender";
+    case "attacking":
+      return meta.combatRole === "attacker";
+    case "in-combat":
+      return meta.combatRole === "attacker" || meta.combatRole === "defender";
+    case "alone":
+      return unitIsAloneAtLocation(card, ctx);
+    default:
+      // Unknown states behave like the rest of the resolver: no narrowing.
+      return true;
+  }
+}
+
 /**
  * Evaluate whether a static ability's condition is met.
  */
@@ -423,6 +468,21 @@ export function evaluateCondition(
         return false;
       }
       return evaluateCondition({ type: "while-alone" }, source, ctx);
+    }
+
+    // rule 364.3 (unl-210-219) — "While a unit here is <state>": the condition
+    // gates on at least one qualifying unit in scope; which units actually take
+    // the effect is narrowed per target where the effect is applied.
+    case "while-unit-state": {
+      const state = condition.state as string | undefined;
+      const location = condition.location as string | undefined;
+      const sourceZone = staticSourceZone(source, ctx);
+      return getAllBoardCards(ctx).some((c) => {
+        if (location === "here" && c.zone !== sourceZone) {
+          return false;
+        }
+        return unitMatchesUnitState(c, state, ctx);
+      });
     }
 
     case "and": {
@@ -976,6 +1036,38 @@ function applyStaticEffect(
         );
       }
     }
+  } else if (effectType === "grant-ability") {
+    // rule 364 / 135.4.b (unl-213-219) — "Units here have '<cost>: <effect>.'":
+    // a continuous grant of the activated ability printed on the SOURCE card at
+    // `abilityIndex`. The host pays the cost and is `self` for the effect.
+    const abilityIndex = effect.abilityIndex;
+    if (typeof abilityIndex !== "number" || !source) {
+      return;
+    }
+    for (const targetId of targetIds) {
+      const meta = ctx.cards.getCardMeta(targetId as CoreCardId) as
+        | Partial<RiftboundCardMeta>
+        | undefined;
+      const existing = meta?.grantedAbilities ?? [];
+      const alreadyGranted = existing.some(
+        (ga) =>
+          ga.sourceCardId === source.id &&
+          ga.abilityIndex === abilityIndex &&
+          ga.duration === "static",
+      );
+      if (alreadyGranted) {
+        continue;
+      }
+      ctx.cards.updateCardMeta(
+        targetId as CoreCardId,
+        {
+          grantedAbilities: [
+            ...existing,
+            { abilityIndex, duration: "static", sourceCardId: source.id },
+          ],
+        } as unknown as Partial<RiftboundCardMeta>,
+      );
+    }
   }
 }
 
@@ -1033,6 +1125,22 @@ export function recalculateStaticEffects(ctx: StaticAbilityContext): boolean {
         changed = true;
       }
     }
+
+    // rule 364 (unl-213-219) — remove static-duration granted abilities; the
+    // grant is re-applied below only while the card still matches its source's
+    // descriptor (it ends the moment the unit leaves the battlefield).
+    if (meta.grantedAbilities && meta.grantedAbilities.length > 0) {
+      const nonStatic = meta.grantedAbilities.filter((ga) => ga.duration !== "static");
+      if (nonStatic.length !== meta.grantedAbilities.length) {
+        ctx.cards.updateCardMeta(
+          card.id as CoreCardId,
+          {
+            grantedAbilities: nonStatic.length > 0 ? nonStatic : undefined,
+          } as Partial<RiftboundCardMeta>,
+        );
+        changed = true;
+      }
+    }
   }
 
   // Step 2 + 3: Apply static abilities in layered order to handle
@@ -1047,7 +1155,7 @@ export function recalculateStaticEffects(ctx: StaticAbilityContext): boolean {
   // That are commutative (e.g., two +1 Might auras) the order does not
   // Matter, so the observable result is unchanged for those cases.
 
-  const PASS_1_EFFECTS = new Set(["grant-keyword", "grant-keywords"]);
+  const PASS_1_EFFECTS = new Set(["grant-keyword", "grant-keywords", "grant-ability"]);
   const PASS_2_EFFECTS = new Set(["modify-might"]);
 
   const applyPass = (allowedEffects: Set<string>): void => {
@@ -1097,7 +1205,20 @@ export function recalculateStaticEffects(ctx: StaticAbilityContext): boolean {
               ? (resolveStaticTargetsFromDescriptor(passEffect.target, card, grantableCards, ctx) ??
                 defaultTargetIds)
               : defaultTargetIds;
-          applyStaticEffect(passEffect, targetIds, ctx, card);
+          // rule 364.3 (unl-210-219) — a `while-unit-state` condition names the
+          // subject, so only units in that state take the effect (the attacker
+          // standing on the same battlefield is not defending alone).
+          const scopedTargetIds =
+            condition?.type === "while-unit-state"
+              ? targetIds.filter((id) => {
+                  const targetCard = boardCards.find((c) => c.id === id);
+                  return (
+                    targetCard !== undefined &&
+                    unitMatchesUnitState(targetCard, condition.state as string | undefined, ctx)
+                  );
+                })
+              : targetIds;
+          applyStaticEffect(passEffect, scopedTargetIds, ctx, card);
         }
         anyApplied = true;
       }
