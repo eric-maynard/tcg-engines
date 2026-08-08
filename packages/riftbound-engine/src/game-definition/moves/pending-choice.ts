@@ -47,6 +47,7 @@ import { deductAbilityCost } from "./chain/activate-ability";
 import { canAffordPower } from "./chain/effect-context";
 import { flushDeferredSpellSettle, payAnyDomainPower } from "./chain/resolve";
 import { completeSuspendedPlay } from "./play/play-unit";
+import { offerWeaponmasterEquip } from "./play/weaponmaster";
 import {
   type CostExtras,
   canPayResourceCost,
@@ -2791,6 +2792,17 @@ export const pendingChoiceMoves: Partial<
           // to have the unit enter ready. Offered only when they can pay it and
           // no other prompt is already parked.
           maybeOfferAccelerate(draft, choice.cardId as string, choice.playerId, context);
+          // rule 821.1.c / 356.1.b (rule-id: sfd-127-221) — a play finalized by
+          // this destination prompt is still a play, so [Weaponmaster] offers
+          // its discounted Equip here exactly as the playUnit move does.
+          if (getGlobalCardRegistry().get(cardId)?.cardType === "unit") {
+            offerWeaponmasterEquip(
+              draft as unknown as Parameters<typeof offerWeaponmasterEquip>[0],
+              context.zones as unknown as Parameters<typeof offerWeaponmasterEquip>[1],
+              choice.playerId as string,
+              cardId,
+            );
+          }
         }
         // rule 323.6 (rule-id: sfd-165-221) — answering the destination prompt
         // ends the resolution: run the Cleanup so a battlefield left with no

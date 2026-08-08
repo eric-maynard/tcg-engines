@@ -202,7 +202,7 @@ describe("Master Bingwen (sfd-127-221)", () => {
     expect(game.p1.points()).toBe(0);
   });
 
-  test.failing("BUG: Arcane Shift re-PLAYS Bingwen, so Weaponmaster ('When you play me') must trigger again and let him re-equip the detached Ring (821.1.c, 356.1.b)", async () => {
+  test("Arcane Shift re-PLAYS Bingwen, so Weaponmaster ('When you play me') must trigger again and let him re-equip the detached Ring (821.1.c, 356.1.b)", async () => {
     // Expected: banish → Ring detaches and stays on the board (719.5); the owner plays Bingwen again
     // ignoring cost → a fresh Weaponmaster equip prompt → Ring re-attached for free (7 Might).
     // Actual: the replay lands him in base exhausted, deals the 3 and banishes the spell correctly, but
