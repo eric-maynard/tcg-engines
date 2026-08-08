@@ -95,7 +95,7 @@ describe("Star Spring (unl-215-219)", () => {
   // ability; accepting offers ONLY the other unit P1 controls HERE (the Veteran — not Rookie itself, not
   // Homebody in base, not Outpost at bf2); the exhausted Veteran goes to base still exhausted, Rookie stays.
   // Actual: nothing triggers (no `here` on the parsed trigger; matcher denies any-player play triggers on battlefields).
-  test.failing("BUG: first non-token unit played here → 'you may move ANOTHER unit you control here to its base' (the Veteran goes home, Rookie stays)", async () => {
+  test("first non-token unit played here → 'you may move ANOTHER unit you control here to its base' (the Veteran goes home, Rookie stays)", async () => {
     const game = await board().build();
     await game.p1.play("rookie", { to: "bf1" });
     expect(springOffered(game, P1)).toBe(true);
@@ -113,7 +113,7 @@ describe("Star Spring (unl-215-219)", () => {
 
   // BUG — expected: the offer is made for the FIRST unit played here this turn only; Rookie Two played here
   // afterwards asks nothing. Actual: no offer at all (first assertion fails).
-  test.failing("BUG: only the FIRST unit played here each turn asks — the second one the same turn does not", async () => {
+  test("only the FIRST unit played here each turn asks — the second one the same turn does not", async () => {
     const game = await board().build();
     await game.p1.play("rookie", { to: "bf1" });
     expect(springOffered(game, P1)).toBe(true);
@@ -130,7 +130,7 @@ describe("Star Spring (unl-215-219)", () => {
 
   // BUG — expected: "each turn" — after declining this turn, on my NEXT turn a unit played here asks again.
   // Actual: never asks.
-  test.failing("BUG: 'each turn' resets — declined on turn N, offered again for a unit played here on my next turn", async () => {
+  test("'each turn' resets — declined on turn N, offered again for a unit played here on my next turn", async () => {
     const game = await board().build();
     await game.p1.play("rookie", { to: "bf1" });
     expect(springOffered(game, P1)).toBe(true);
@@ -199,7 +199,7 @@ describe("Star Spring (unl-215-219)", () => {
 
   // BUG — expected: the token did not use up "the first time a player plays a NON-token unit here", so the
   // Rookie played here afterwards is still the first non-token unit → offer. Actual: never offered.
-  test.failing("BUG: a token played here first does not consume 'the first time' — the real unit played next still gets the offer", async () => {
+  test("a token played here first does not consume 'the first time' — the real unit played next still gets the offer", async () => {
     const game = await board().legend(P1, HERALD, "herald").build();
     await game.p1.activate("herald");
     await game.settle();
@@ -212,7 +212,7 @@ describe("Star Spring (unl-215-219)", () => {
 
   // BUG — expected (190.6.c): P2 controls the Spring (card owned by P1) and plays a unit there on P2's turn →
   // P2 is "they": P2 is asked, and P2's other unit here goes to P2's base; P1 is never asked. Actual: no offer.
-  test.failing("BUG: symmetry — the player who plays here controls the ability: P2 plays onto a Spring it controls, P2 is asked and P2's Veteran goes home", async () => {
+  test("symmetry — the player who plays here controls the ability: P2 plays onto a Spring it controls, P2 is asked and P2's Veteran goes home", async () => {
     const game = await scenario()
       .active(P2)
       .resources(P2, { energy: 2 })
@@ -252,7 +252,7 @@ describe("Star Spring (unl-215-219)", () => {
   // trigger "plays a non-token unit HERE" → a `here` location on the trigger; effect "another unit THEY CONTROL
   // HERE to its BASE" → target controller = that player, target location here, destination base. Actual:
   // trigger has no location, target has neither controller nor location, and `to` is "choose".
-  test.failing("BUG: registry payload drops 'here' (trigger AND target), 'they control', and 'to its base'", async () => {
+  test("registry payload drops 'here' (trigger AND target), 'they control', and 'to its base'", async () => {
     const a = (await loadDefaultCardPool()).get(CARD)?.abilities?.[0] as {
       trigger: Record<string, unknown>;
       effect: { to?: unknown; target?: Record<string, unknown> };

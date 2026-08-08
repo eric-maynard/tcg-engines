@@ -43,7 +43,7 @@ function board(energy = 4) {
 }
 
 describe("Valley of Idols (unl-218-219)", () => {
-  test.failing("BUG: registry payload — the trigger must be restricted to units played HERE and the buff must land on the PLAYED unit, paid for with [1] by that player", async () => {
+  test("registry payload — the trigger must be restricted to units played HERE and the buff must land on the PLAYED unit, paid for with [1] by that player", async () => {
     // Expected: trigger { event: play-unit, on: any-player, location: here }, optional pay-[1] cost, effect buff
     // targeting the triggering unit. Actual: no `here` restriction at all and `effect.target` is "self"
     // (the battlefield), so the printed text is not what the payload says.
@@ -59,7 +59,7 @@ describe("Valley of Idols (unl-218-219)", () => {
     expect(a?.effect?.target).not.toBe("self");
   });
 
-  test.failing("BUG: P1 plays a 2-cost unit to the Valley with 4 energy → P1 is offered 'pay [1] to buff'; yes → 1 energy left, the Hopeful is buffed to 3", async () => {
+  test("P1 plays a 2-cost unit to the Valley with 4 energy → P1 is offered 'pay [1] to buff'; yes → 1 energy left, the Hopeful is buffed to 3", async () => {
     // Expected: yes/no for P1 sourced from the Valley; accepting deducts 1 more and buffs the new unit.
     // Actual: no prompt ever appears; the unit sits at 2 Might unbuffed with 2 energy floating.
     const game = await board(4).build();
@@ -75,7 +75,7 @@ describe("Valley of Idols (unl-218-219)", () => {
     expect(game.state("valley").isBuffed).toBe(false);
   });
 
-  test.failing("BUG: 'they may' — P1 is asked and declines: energy stays at 2, the Hopeful stays an unbuffed 2", async () => {
+  test("'they may' — P1 is asked and declines: energy stays at 2, the Hopeful stays an unbuffed 2", async () => {
     // Expected: the offer appears and `no` leaves everything as is. Actual: the offer never appears.
     const game = await board(4).build();
     await game.p1.play("hopeful", { to: "valley" });
@@ -121,7 +121,7 @@ describe("Valley of Idols (unl-218-219)", () => {
     expect(game.state("hopeful").isBuffed).toBe(false);
   });
 
-  test.failing("BUG: 'a player … they' (190.6.c) — P2 playing a unit at a P2-held Valley on P2's turn is the one asked and the one paying; P1's pool is untouched", async () => {
+  test("'a player … they' (190.6.c) — P2 playing a unit at a P2-held Valley on P2's turn is the one asked and the one paying; P1's pool is untouched", async () => {
     // Expected: yes/no for P2; yes → P2 4−2−1 = 1, unit buffed; P1 keeps 3. Actual: no prompt, no buff.
     const game = await scenario()
       .active(P2)
@@ -140,7 +140,7 @@ describe("Valley of Idols (unl-218-219)", () => {
     expect(game.state("theirHopeful")).toMatchObject({ controller: P2, isBuffed: true, might: 3 });
   });
 
-  test.failing("BUG: stacks on top of Accelerate — Kai'Sa to the Valley for 4 + [1][fury] (Accelerate) + [1] (Valley) empties a 6-energy pool: ready, buffed, 5 Might", async () => {
+  test("stacks on top of Accelerate — Kai'Sa to the Valley for 4 + [1][fury] (Accelerate) + [1] (Valley) empties a 6-energy pool: ready, buffed, 5 Might", async () => {
     // Expected: 6 → 2 (cost) → 1 (Accelerate) → 0 (Valley); Kai'Sa ready and buffed (4+1). Actual: no
     // Valley offer — she is a ready, unbuffed 4 with 1 energy floating.
     const game = await scenario()
@@ -158,7 +158,7 @@ describe("Valley of Idols (unl-218-219)", () => {
     expect(game.state("kaisa")).toMatchObject({ baseMight: 4, isBuffed: true, isExhausted: false, might: 5 });
   });
 
-  test.failing("BUG: it is a BUFF, not a pump — the +1 survives into later turns (still a buffed 3 on P1's next turn)", async () => {
+  test("it is a BUFF, not a pump — the +1 survives into later turns (still a buffed 3 on P1's next turn)", async () => {
     // Expected: buffed now and two turn-passes later. Actual: never buffed.
     const game = await board(4).build();
     await game.p1.play("hopeful", { to: "valley" });

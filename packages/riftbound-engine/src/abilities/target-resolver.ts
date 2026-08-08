@@ -40,6 +40,13 @@ export interface TargetDescriptor {
   /** Parser sets this for "another"/"other" wording. */
   readonly excludeSelf?: boolean;
   /**
+   * rule 355.9.c (unl-215-219) — "ANOTHER unit" in a triggered ability whose
+   * subject is a card, not this permanent: drop the card the trigger fired on
+   * ("when a player plays a unit here, move ANOTHER unit …" never moves the
+   * unit just played).
+   */
+  readonly excludeTriggerSource?: boolean;
+  /**
    * rule-id: ogn-200-298 — "all OTHER …" relative to a preceding step's chosen
    * target: re-resolve from the board and drop the already-bound ids.
    */
@@ -392,6 +399,12 @@ export function resolveTarget(
   // that permanent; only drop the source when the text says "another"/"other".
   if (target.excludeSelf) {
     filtered = filtered.filter((id) => id !== ctx.sourceCardId);
+  }
+
+  // rule 355.9.c (unl-215-219) — "another unit" measured against the trigger's
+  // subject: the unit that fired the trigger is never a legal choice.
+  if (target.excludeTriggerSource && ctx.triggerSourceId !== undefined) {
+    filtered = filtered.filter((id) => id !== ctx.triggerSourceId);
   }
 
   // rule-id: ven-031-166 — "can't be chosen by enemy spells and abilities":

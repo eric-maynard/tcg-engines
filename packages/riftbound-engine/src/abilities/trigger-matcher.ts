@@ -605,14 +605,17 @@ function triggerMatchesEvent(
       return false;
     }
   } else if (on === "any-unit" || on === "any" || on === "any-player") {
-    // Match any subject — except a battlefield's "When a player plays a unit
-    // HERE" whose location cannot be judged: deny rather than fire for plays
-    // anywhere (rule 383.4.d). rule 359.2.c — when the play names its entry
-    // zone the `here` check above has already confirmed it is THIS
-    // battlefield, so the trigger is allowed to fire (unl-218-219).
+    // Match any subject — except on a battlefield, where "When a player plays a
+    // unit" is always printed "HERE" (rule 383.4.d / 359.2.c, unl-218-219): the
+    // play must have landed at THIS battlefield. A play whose destination the
+    // event does not name cannot be judged, so it never fires.
     if (event.type === "play-card" && card.zone === "battlefieldRow") {
       const to = (event as { to?: string }).to;
-      if (trigger.location !== "here" || typeof to !== "string" || !to.startsWith("battlefield-")) {
+      if (
+        typeof to !== "string" ||
+        !to.startsWith("battlefield-") ||
+        to.slice("battlefield-".length) !== card.id
+      ) {
         return false;
       }
     }
@@ -905,11 +908,26 @@ function subjectPlayerForTrigger(
 }
 
 export function findMatchingTriggers(
-  event: GameEvent,
+  rawEvent: GameEvent,
   boardCards: CardWithAbilities[],
   state?: TriggerMatcherState,
 ): MatchedTrigger[] {
   const matches: MatchedTrigger[] = [];
+
+  // rule 359.2.c — a play-card event that did not name where the permanent
+  // landed: read it off the played card, which is already in its entry zone.
+  // A battlefield's "When a player plays a unit HERE" (unl-218-219) needs it to
+  // tell its own battlefield from the base or any other battlefield.
+  const event: GameEvent =
+    rawEvent.type === "play-card" && typeof rawEvent.to !== "string"
+      ? {
+          ...rawEvent,
+          ...(() => {
+            const zone = boardCards.find((c) => c.id === rawEvent.cardId)?.zone;
+            return typeof zone === "string" ? { to: zone } : {};
+          })(),
+        }
+      : rawEvent;
 
   for (const card of boardCards) {
     // Only cards on the board (or in legendZone) can have triggers fire.
