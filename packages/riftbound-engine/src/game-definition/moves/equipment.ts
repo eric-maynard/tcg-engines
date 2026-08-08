@@ -22,7 +22,7 @@ import { dispatchEvent } from "../../events/dispatcher";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import { getBattlefieldZoneId } from "../../zones/zone-configs";
 import { deductAbilityCost } from "./chain/activate-ability";
-import { canPayEquipCost, printedEquipCost } from "./equip-cost";
+import { canPayEquipCost, equipCostForTarget, printedEquipCost } from "./equip-cost";
 
 /**
  * rule 476.1: only an Equipment can be attached to a unit. Hand-authored defs
@@ -128,10 +128,10 @@ export const equipmentMoves: Partial<
         if (!isAttachable(id, def.cardType)) {
           return false;
         }
-        // rule 476.1: [Equip] is an activated ability with a cost — it can only
-        // be used when its printed cost is payable right now.
-        const cost = printedEquipCost(id);
-        return !cost || canPayEquipCost(state, playerId, cost, 0, context.zones);
+        // rule 476.1: [Equip] is an activated ability with a cost. Payability
+        // is checked per target below (821.1.c.2: the cost can depend on the
+        // chosen unit's Might), so here only the target-independent parts.
+        return true;
       });
       if (equipment.length === 0) {
         return [];
@@ -147,9 +147,18 @@ export const equipmentMoves: Partial<
         return controllerOf(id) === playerId;
       });
 
+      const getMeta = (id: CoreCardId) =>
+        context.cards.getCardMeta(id) as Partial<RiftboundCardMeta> | undefined;
+
       const results: { playerId: string; equipmentId: string; unitId: string }[] = [];
       for (const equipmentId of equipment) {
         for (const unitId of units) {
+          // rule 821.1.c.2 / 356.6: the Equip cost is computed for THIS target —
+          // a Might-based reduction makes affordability differ per unit.
+          const cost = equipCostForTarget(equipmentId, unitId, getMeta);
+          if (cost && !canPayEquipCost(state, playerId, cost, 0, context.zones)) {
+            continue;
+          }
           results.push({ equipmentId, playerId, unitId });
         }
       }
@@ -215,7 +224,11 @@ export const equipmentMoves: Partial<
       // only grants a discounted on-play Equip, not a second-slot permission.
 
       // rule 476.1: the printed [Equip] cost must be payable.
-      const equipCost = printedEquipCost(context.params.equipmentId);
+      const equipCost = equipCostForTarget(
+        context.params.equipmentId,
+        context.params.unitId,
+        (id) => context.cards.getCardMeta(id) as Partial<RiftboundCardMeta> | undefined,
+      );
       if (equipCost && !canPayEquipCost(state, context.params.playerId, equipCost, 0, context.zones)) {
         return false;
       }
@@ -225,8 +238,12 @@ export const equipmentMoves: Partial<
     reducer: (draft, context) => {
       const { equipmentId, unitId, playerId } = context.params;
 
-      // rule 476.1: pay the printed [Equip] cost.
-      const equipCost = printedEquipCost(equipmentId);
+      // rule 476.1 / 821.1.c.2: pay the [Equip] cost, reduced for this target.
+      const equipCost = equipCostForTarget(
+        equipmentId,
+        unitId,
+        (id) => context.cards.getCardMeta(id) as Partial<RiftboundCardMeta> | undefined,
+      );
       if (equipCost) {
         deductAbilityCost(
           draft,

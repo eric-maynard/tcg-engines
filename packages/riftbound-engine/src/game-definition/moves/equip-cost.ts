@@ -5,9 +5,11 @@
  * a unit you control." Both the player-facing attach move and the Weaponmaster
  * on-play attach read the cost from here so the two paths cannot drift.
  */
+import type { CardId as CoreCardId } from "@tcg/core";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
-import type { RiftboundGameState } from "../../types";
+import type { RiftboundCardMeta, RiftboundGameState } from "../../types";
 import { canAffordPower } from "./chain/effect-context";
+import { getInteractiveReduction } from "./play/cost";
 
 export interface EquipCost {
   readonly energy: number;
@@ -53,6 +55,33 @@ export function printedEquipCost(equipmentId: string): EquipCost | undefined {
     power: [...(equipAbility.cost?.power ?? [])],
     ...(typeof recycle === "number" && recycle > 0 ? { recycleFromTrash: recycle } : {}),
   };
+}
+
+/**
+ * rule 821.1.c.2 / 356.6: the Equip cost as it applies to a specific target
+ * unit. Cards such as Hextech Gauntlets (unl-188-219) print "This ability's
+ * Energy cost is reduced by the Might of the unit you choose" — the reduction
+ * therefore depends on the chosen unit and floors at 0 (356.6). Non-energy
+ * portions (the power pip, Recycle) are never reduced.
+ *
+ * Both the player-facing [Equip] activation and Weaponmaster's on-play attach
+ * price off this function so the two paths cannot drift.
+ */
+export function equipCostForTarget(
+  equipmentId: string,
+  unitId: string | undefined,
+  getCardMeta?: (cardId: CoreCardId) => Partial<RiftboundCardMeta> | undefined,
+): EquipCost | undefined {
+  const cost = printedEquipCost(equipmentId);
+  if (!cost) {
+    return undefined;
+  }
+  const reduction = getInteractiveReduction(equipmentId, unitId, getCardMeta);
+  if (reduction <= 0) {
+    return cost;
+  }
+  // rule 356.6: costs floor at 0.
+  return { ...cost, energy: Math.max(0, cost.energy - reduction) };
 }
 
 /**
