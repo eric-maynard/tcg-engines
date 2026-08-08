@@ -2000,6 +2000,41 @@ function offsetDeflectWithWaivedRainbow(
 }
 
 /**
+ * rule 356.4.d / 356.4.f — the pip waivers left over after `reducePowerCost`
+ * applied `waived` to the printed cost `need` (yielding `after`). Named
+ * waivers are spent on their own Domain first, so whatever the printed pips
+ * did not absorb is still available for the additional costs that were added
+ * to the total before the discount.
+ */
+function unusedPowerWaivers(
+  waived: Partial<Record<string, number>>,
+  need: Partial<Record<string, number>>,
+  after: Partial<Record<string, number>>,
+): Partial<Record<string, number>> {
+  const out: Partial<Record<string, number>> = {};
+  let reduced = 0;
+  for (const domain of new Set([...Object.keys(need), ...Object.keys(after)])) {
+    reduced += Math.max(0, (need[domain] ?? 0) - (after[domain] ?? 0));
+  }
+  let namedUsed = 0;
+  for (const [domain, n] of Object.entries(waived)) {
+    if (domain === "rainbow" || !n || n <= 0) {
+      continue;
+    }
+    const used = Math.min(n, need[domain] ?? 0);
+    namedUsed += used;
+    if (n - used > 0) {
+      out[domain] = n - used;
+    }
+  }
+  const wild = Math.max(0, (waived.rainbow ?? 0) - Math.max(0, reduced - namedUsed));
+  if (wild > 0) {
+    out.rainbow = wild;
+  }
+  return out;
+}
+
+/**
  * rule-id: ogn-150-298 (rule 560 / 702.2.b) — "you may spend any number of
  * buffs as an additional cost. Reduce my cost by [D] for each buff you spend."
  * Returns the domain pip waived per buff spent. Kept separate from
@@ -3111,6 +3146,62 @@ export function getPlayEnergyDiscountOverflow(
 }
 
 /**
+ * rule 356.4.d / 356.4.f — the Power-pip half of `getPlayEnergyDiscountOverflow`:
+ * the pip waivers still unspent once the printed pips have been covered.
+ * Callers that charge an optional additional cost outside `deductCost` shave
+ * its pips by these, because a total-cost discount applies to the additional
+ * costs that were added to the total before it.
+ */
+export function getPlayPowerDiscountOverflow(
+  state: RiftboundGameState,
+  playerId: string,
+  cardId: string,
+  extras: CostExtras,
+  getCardMeta?: (cardId: CoreCardId) => Partial<RiftboundCardMeta> | undefined,
+): Partial<Record<string, number>> {
+  const pool = state.runePools[playerId];
+  const baseCost = getBaseCostForPlay(cardId, extras, getCardMeta, pool);
+  const boardReduction = getBoardCostReduction(state, playerId, cardId, extras);
+  const nextPlay = takeNextPlayDiscount(state, playerId, cardId, false);
+  const deflect = offsetDeflectWithWaivedRainbow(
+    waivedPower(
+      boardReduction,
+      extras,
+      mergePower(nextPlay.power ?? {}, getSelfScaledPowerReduction(state, playerId, cardId, extras)),
+    ),
+    getDeflectSurcharge(state, playerId, extras.targets, extras.board?.cards, cardId),
+    baseCost.power,
+    pool?.power ?? {},
+  );
+  const after = reducePowerCost(baseCost.power, deflect.waived, pool?.power ?? {});
+  return unusedPowerWaivers(deflect.waived, baseCost.power, after);
+}
+
+/**
+ * rule 356.4.f.1 — drop from an additional cost's pip list every pip a leftover
+ * waiver covers (its own Domain first, then any-Domain [rainbow] waivers).
+ */
+export function applyPowerWaiversToPips(
+  pips: readonly string[],
+  waived: Partial<Record<string, number>>,
+): string[] {
+  const left: Partial<Record<string, number>> = { ...waived };
+  const out: string[] = [];
+  for (const pip of pips) {
+    if ((left[pip] ?? 0) > 0) {
+      left[pip] = (left[pip] ?? 0) - 1;
+      continue;
+    }
+    if ((left.rainbow ?? 0) > 0) {
+      left.rainbow = (left.rainbow ?? 0) - 1;
+      continue;
+    }
+    out.push(pip);
+  }
+  return out;
+}
+
+/**
  * rule 356 — the RESOURCE half of a play's Total Cost after every base-cost
  * modification, additional cost, increase and discount: Energy, named-Domain
  * pips, any-Domain pips (`any` — [rainbow] pips, Deflect, X paid in Power,
@@ -3208,9 +3299,18 @@ export function computePlayResourceCost(
   );
   const basePower = reducePowerCost(baseCost.power, deflect.waived, pool?.power ?? {});
   const repeatPower = getRepeatPowerSurcharge(cardId, repeatN, repeatTiers);
+  // rule 356.4.d / 356.4.f — optional additional costs (Accelerate's [1][D])
+  // join the total cost BEFORE a total-cost discount is applied, so pip
+  // waivers the printed cost did not consume spill onto them, exactly as
+  // `applyDiscountOverflowToAdditionalCost` does for the Energy half.
+  const spillPower = reducePowerCost(
+    additionalCostPower(extras),
+    unusedPowerWaivers(deflect.waived, baseCost.power, basePower),
+    pool?.power ?? {},
+  );
   // rule 356.3 — an enemy static's [rainbow] surcharge is an added pip, not a
   // printed one, so it is never covered by a hybrid/domain restriction.
-  const extraPower = mergePower(additionalCostPower(extras), boardIncrease.power);
+  const extraPower = mergePower(spillPower, boardIncrease.power);
   const powerDomains = new Set([
     ...Object.keys(basePower),
     ...Object.keys(repeatPower),

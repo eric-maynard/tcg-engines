@@ -315,7 +315,7 @@ function effectReadsX(effect: unknown): boolean {
   );
 }
 
-function collectBoardCards(
+export function collectBoardCards(
   state: RiftboundGameState,
   board: NonNullable<CostExtras["board"]>,
 ): { cardId: string; controller: string | undefined }[] {

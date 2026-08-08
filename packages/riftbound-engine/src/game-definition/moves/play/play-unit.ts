@@ -64,12 +64,17 @@ import {
   recordPowerSpent,
   discountOptionalPlayCost,
   getAlternatePlayCost,
+  getGrantedAcceleratePlayCost,
+  applyPowerWaiversToPips,
   getPlayEnergyDiscountOverflow,
+  getPlayPowerDiscountOverflow,
   hasPlayFromTrashGrant,
 
 } from "./cost";
+import type { OptionalPlayCost } from "./cost";
 import { getSelfTrashPlayCost } from "./self-trash-play";
 import {
+  collectBoardCards,
   legacyParamsFromSelection,
   paidIdsFromLegacyParams,
   recordAdditionalCostsPaid,
@@ -147,6 +152,31 @@ function planAdditionalCostPips(
 }
 
 /**
+ * rule 805.2 / 355.1.a (sfd-029-221 Rek'Sai, Breacher) — Accelerate granted by a
+ * board static to "units played from anywhere other than a player's hand" is an
+ * optional additional cost exactly like a printed one, so every cost path reads
+ * the printed optional cost OR, for a non-hand play, the granted Accelerate.
+ * A printed optional cost always wins (a card never gets two Accelerates).
+ */
+function effectiveOptionalPlayCost(
+  state: RiftboundGameState,
+  playerId: string,
+  cardId: string,
+  board?: CostExtras["board"],
+): OptionalPlayCost | undefined {
+  const printed = getOptionalPlayCost(cardId);
+  if (printed || !board) {
+    return printed;
+  }
+  const zone = board.zones.getCardZone(cardId as CoreCardId) as string | undefined;
+  if (zone === "hand" || zone === undefined) {
+    return printed;
+  }
+  const granted = getGrantedAcceleratePlayCost(cardId, playerId, collectBoardCards(state, board), false);
+  return granted ? { cost: { energy: granted.energy, power: granted.power }, kind: "accelerate" } : undefined;
+}
+
+/**
  * rule-id: unl-178-219 (rule 560) — resolve a unit's payable optional cost
  * (Accelerate / "you may pay" / "you may spend N XP") into the net rune-cost
  * delta and XP to spend. Returns undefined when the card has no such cost or
@@ -161,7 +191,7 @@ function resolvePayableOptionalCost(
 ):
   | { kind: "accelerate" | "pay"; energy: number; power: readonly string[]; xp: number }
   | undefined {
-  const optional = getOptionalPlayCost(cardId);
+  const optional = effectiveOptionalPlayCost(state, playerId, cardId, board);
   if (optional?.kind !== "accelerate" && optional?.kind !== "pay") {
     return undefined;
   }
@@ -249,7 +279,7 @@ function payableOptionalCostVariants(
   if (!base) {
     return [];
   }
-  const optional = getOptionalPlayCost(cardId);
+  const optional = effectiveOptionalPlayCost(state, playerId, cardId, board);
   // The XP path nets its own rider discount — leave it to the default.
   if (!board || base.xp > 0 || (optional?.kind !== "accelerate" && optional?.kind !== "pay")) {
     return [base];
@@ -770,7 +800,10 @@ export const playUnit: Defs["playUnit"] = {
     // right now (gate unmet, or too little XP) is not a legal play; without this
     // the play would slip through charging only the base cost.
     if (context.params.paidAdditionalCost && payableOptions.length === 0) {
-      const kind = getOptionalPlayCost(context.params.cardId as string)?.kind;
+      const kind = effectiveOptionalPlayCost(state, context.params.playerId as string, context.params.cardId as string, {
+        cards: context.cards,
+        zones: context.zones,
+      })?.kind;
       if (kind === "pay" || kind === "accelerate") {
         return false;
       }
@@ -1725,7 +1758,11 @@ export const playUnit: Defs["playUnit"] = {
     // instead of trusting client-supplied additionalCostSpec/sacrificeId — a
     // multiplayer client could otherwise trash an opponent's card or claim an
     // Accelerate benefit the card doesn't have.
-    const optional = paidAdditionalCost ? getOptionalPlayCost(cardId) : undefined;
+    // rule 805.2 (sfd-029-221) — a board static may GRANT Accelerate to this
+    // non-hand play; read it through the same helper the enumerator uses.
+    const optional = paidAdditionalCost
+      ? effectiveOptionalPlayCost(draft, playerId as string, cardId as string, { cards: context.cards, zones })
+      : undefined;
     // rule-id: unl-178-219 (rule 560) — "spend N XP as an additional cost; if
     // you do, I cost [N] less": spend the XP up front and charge the
     // discounted base cost. XP is only spent when the discounted play is
@@ -1830,6 +1867,16 @@ export const playUnit: Defs["playUnit"] = {
         ? getSelfTrashPlayCost(draft, playerId, cardId)
         : undefined) ??
       (altCost === true ? getAlternatePlayCost(draft, playerId, cardId) : undefined);
+    // rule 356.4.d / 356.4.f — same story for the pip half: waivers the printed
+    // (or alternate) pips did not use keep eating the optional additional cost
+    // charged below. Read BEFORE `deductCost` consumes the one-shot discount.
+    const pipOverflow = getPlayPowerDiscountOverflow(
+      draft,
+      playerId,
+      cardId,
+      { board, ...(altCostSpec ? { altCost: altCostSpec } : {}) },
+      createMetaAccessor(context.cards),
+    );
     deductCost(
       draft,
       playerId,
@@ -1912,7 +1959,8 @@ export const playUnit: Defs["playUnit"] = {
         // rule 135.2.e.5.a/b — an additional cost's pips obey the same Power
         // rules as a printed cost: pooled [rainbow] Power pays a named-Domain
         // pip, and a [rainbow] pip is payable from any Domain.
-        const spend = planAdditionalCostPips(need.power ?? [], pool.power);
+        const needPips = applyPowerWaiversToPips(need.power ?? [], pipOverflow);
+        const spend = planAdditionalCostPips(needPips, pool.power);
         const canPay = xpOk && pool.energy >= needEnergy && spend !== undefined;
         if (canPay && spend) {
           pool.energy -= needEnergy;
@@ -1921,7 +1969,7 @@ export const playUnit: Defs["playUnit"] = {
             pool.power[key] = (pool.power[key] ?? 0) - count;
           }
           // rule 364.3.a — an additional cost's pips are power spent this turn too.
-          recordPowerSpent(draft, playerId, (need.power ?? []).length);
+          recordPowerSpent(draft, playerId, needPips.length);
           // rule 369.3 (unl-122-219) — "you may pay [chaos] … If you do, I
           // enter ready" replaces the entry exactly like a paid Accelerate.
           paidAccelerate = optional.kind === "accelerate" || optional.entersReadyIfPaid === true;

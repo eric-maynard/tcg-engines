@@ -109,7 +109,7 @@ describe("Undying Legion from trash × Rek'Sai (granted Accelerate) × Astral He
   // a player's hand", so Rek'Sai gives Undying Legion Accelerate and the play must offer the
   // optional additional cost. Actual: the playUnit option for the trash copy has only a `location`
   // field — no Accelerate / payOptional variant is enumerated.
-  test.failing("BUG: (b) with Rek'Sai out, the trash play (a non-hand play) must offer Accelerate as an optional additional cost (805.2, 355.1.a)", async () => {
+  test("(b) with Rek'Sai out, the trash play (a non-hand play) must offer Accelerate as an optional additional cost (805.2, 355.1.a)", async () => {
     const game = await board().build();
     await openWithRearguard(game);
     expect(game.p1.can("play", "ulTrash")).toBe(true);
@@ -121,7 +121,7 @@ describe("Undying Legion from trash × Rek'Sai (granted Accelerate) × Astral He
   // (4→2 energy, fury stays 2); the unit enters READY because the optional cost was "paid" even
   // though discounted to nothing; the discount is consumed. Actual: the accelerated trash play is
   // rejected outright (no such variant), so nothing is played.
-  test.failing("BUG: (b) Accelerate declared on the trash play: total [4][fury][fury] − Heron [2][A][A] = 2 energy, 0 power; enters READY; discount consumed (356.4.f.1, 805.6)", async () => {
+  test("(b) Accelerate declared on the trash play: total [4][fury][fury] − Heron [2][A][A] = 2 energy, 0 power; enters READY; discount consumed (356.4.f.1, 805.6)", async () => {
     const game = await board().build();
     await openWithRearguard(game);
     await game.p1.play("ulTrash", { accelerate: true, to: "base" });
