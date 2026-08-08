@@ -8,30 +8,40 @@
   },
   "id": "e315c542aa1a",
   "createdAt": "2026-08-06T18:35:08.347Z",
-  "attempts": 0,
+  "attempts": 1,
   "history": [
     {
       "at": "2026-08-06T18:35:08.347Z",
       "event": "enqueued:interaction-bug"
     },
     {
-      "at": "2026-08-07T05:09:46.179Z",
-      "event": "grabbed:w6-i5"
+      "at": "2026-08-06T22:41:46.107Z",
+      "event": "grabbed:w7-i6"
     },
     {
-      "at": "2026-08-07T05:13:07.145Z",
+      "at": "2026-08-06T22:42:35.165Z",
+      "event": "failed",
+      "note": "needs missing engine capability: targets for TRIGGERED chain items are chosen at resolution (resolve.ts executeResolvedItem), never at finalization (355.5). choseAtFinalize is hardcoded to non-triggered items and fireTriggers/addToChain cannot pause for a pendingChoice. Adding finalize-time binding means a new choose-target variant carrying chainItemId plus duplicating resolve.ts's option pipeline (deflect tax, any-number/upTo, hidden-zone, sequence lead) — global prompt-ordering change for every triggered ability, too broad to land safely in this lane."
+    },
+    {
+      "at": "2026-08-07T08:14:36.888Z",
+      "event": "requeued"
+    },
+    {
+      "at": "2026-08-08T15:06:33.792Z",
+      "event": "grabbed:w7-i5"
+    },
+    {
+      "at": "2026-08-08T15:07:01.250Z",
       "event": "done",
-      "note": "stale queue entry: repro already test() and passing at HEAD"
+      "note": "already fixed upstream; repro test passes"
     }
   ],
   "status": "done",
-  "claimedBy": "w6-i5",
-  "claimedAt": "2026-08-07T05:09:46.179Z",
+  "claimedBy": "w7-i5",
+  "claimedAt": "2026-08-08T15:06:33.792Z",
   "resolution": {
-    "note": "stale queue entry: repro already test() and passing at HEAD",
-    "files": [
-      "packages/riftbound-engine/src/__tests__/cards/interactions/karthus-deathknell-double-vs-not-so-fast.test.ts"
-    ],
-    "at": "2026-08-07T05:13:07.145Z"
+    "note": "already fixed upstream; repro test passes",
+    "at": "2026-08-08T15:07:01.250Z"
   }
 }

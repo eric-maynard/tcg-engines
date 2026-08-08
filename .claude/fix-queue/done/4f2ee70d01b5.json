@@ -8,45 +8,43 @@
   },
   "id": "4f2ee70d01b5",
   "createdAt": "2026-08-06T20:50:12.434Z",
-  "attempts": 0,
+  "attempts": 1,
   "history": [
     {
       "at": "2026-08-06T20:50:12.434Z",
       "event": "enqueued:core-rule-bug"
     },
     {
-      "at": "2026-08-07T03:40:34.176Z",
-      "event": "grabbed:w7-i4"
+      "at": "2026-08-07T05:33:06.393Z",
+      "event": "grabbed:w4-i18"
     },
     {
-      "at": "2026-08-07T03:43:58.612Z",
+      "at": "2026-08-07T05:34:08.051Z",
+      "event": "failed",
+      "note": "another lane holds uncommitted in-flight edits to riftbound-flow.ts + this test file (already flipped 316.3 there); fixing it here would force their WIP to ride along in land-patch"
+    },
+    {
+      "at": "2026-08-07T08:14:36.893Z",
+      "event": "requeued"
+    },
+    {
+      "at": "2026-08-08T15:02:20.767Z",
+      "event": "grabbed:w5-i3"
+    },
+    {
+      "at": "2026-08-08T15:02:27.028Z",
       "event": "done",
-      "note": "draw.onEnd empties EVERY player's rune pool at Main start (316.3)"
-    },
-    {
-      "at": "2026-08-07T03:52:17.237485Z",
-      "event": "reopened",
-      "note": "w7-i4: fix verified locally but unlandable — concurrent flow.ts Beginning-Phase-steps refactor + that lane's already-flipped tests fail on clean HEAD"
-    },
-    {
-      "at": "2026-08-07T03:52:40.564Z",
-      "event": "grabbed:w7-i5"
-    },
-    {
-      "at": "2026-08-07T03:54:38.699Z",
-      "event": "done",
-      "note": "empty EVERY player's rune pool at draw.onEnd (rule 316.3), not just the turn player's"
+      "note": "stale queue entry: test already flipped and green on staging"
     }
   ],
   "status": "done",
-  "claimedBy": "w7-i5",
-  "claimedAt": "2026-08-07T03:52:40.564Z",
+  "claimedBy": "w5-i3",
+  "claimedAt": "2026-08-08T15:02:20.767Z",
   "resolution": {
-    "note": "empty EVERY player's rune pool at draw.onEnd (rule 316.3), not just the turn player's",
+    "note": "stale queue entry: test already flipped and green on staging",
     "files": [
-      "packages/riftbound-engine/src/game-definition/flow/riftbound-flow.ts",
       "packages/riftbound-engine/src/__tests__/core-rules/turn-structure-phases-and-resources.test.ts"
     ],
-    "at": "2026-08-07T03:54:38.699Z"
+    "at": "2026-08-08T15:02:27.028Z"
   }
 }

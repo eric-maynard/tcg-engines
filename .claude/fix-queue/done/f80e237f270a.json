@@ -15,25 +15,24 @@
       "event": "enqueued:playtest"
     },
     {
-      "at": "2026-08-07T04:30:44.183Z",
-      "event": "grabbed:w10-i5"
+      "at": "2026-08-08T15:01:57.537Z",
+      "event": "grabbed:w2-i5"
     },
     {
-      "at": "2026-08-07T04:33:23.909Z",
+      "at": "2026-08-08T15:02:38.373Z",
       "event": "done",
-      "note": "for-each qualifier -> countable descriptor + {name:self} static filter"
+      "note": "already fixed on HEAD: parseForEachQualifier emits {count:{filter:{name:self},excludeSelf,location:here}} and resolver honours it; ven-097-166 test green"
     }
   ],
   "status": "done",
-  "claimedBy": "w10-i5",
-  "claimedAt": "2026-08-07T04:30:44.183Z",
+  "claimedBy": "w2-i5",
+  "claimedAt": "2026-08-08T15:01:57.537Z",
   "resolution": {
-    "note": "for-each qualifier -> countable descriptor + {name:self} static filter",
+    "note": "already fixed on HEAD: parseForEachQualifier emits {count:{filter:{name:self},excludeSelf,location:here}} and resolver honours it; ven-097-166 test green",
     "files": [
       "packages/riftbound-cards/src/parser/parsers/static-parser.ts",
-      "packages/riftbound-engine/src/abilities/static-abilities.ts",
-      "packages/riftbound-engine/src/__tests__/cards/ven-097-166.test.ts"
+      "packages/riftbound-engine/src/abilities/static-abilities.ts"
     ],
-    "at": "2026-08-07T04:33:23.909Z"
+    "at": "2026-08-08T15:02:38.373Z"
   }
 }

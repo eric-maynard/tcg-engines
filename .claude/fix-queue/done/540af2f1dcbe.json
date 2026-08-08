@@ -8,38 +8,43 @@
   },
   "id": "540af2f1dcbe",
   "createdAt": "2026-08-06T17:51:09.031Z",
-  "attempts": 0,
+  "attempts": 1,
   "history": [
     {
       "at": "2026-08-06T17:51:09.031Z",
       "event": "enqueued:interaction-bug"
     },
     {
-      "at": "2026-08-07T01:50:25.272Z",
-      "event": "grabbed:w4-i24"
+      "at": "2026-08-06T21:45:49.123Z",
+      "event": "grabbed:w12-i1"
     },
     {
-      "at": "2026-08-07T02:36:01.401Z",
-      "event": "reaped"
+      "at": "2026-08-06T21:48:28.143Z",
+      "event": "failed",
+      "note": "Temporal Portal NextSpellRepeat + Sacrifice mandatory-kill are being implemented right now by another lane (uncommitted cost.ts getEffectiveSpellRepeatCost nextSpellRepeat tier, grant-keyword.ts NextSpellRepeat, new operations/kill-as-cost.ts); this item is downstream of those and would collide"
     },
     {
-      "at": "2026-08-07T05:09:17.944Z",
-      "event": "grabbed:w6-i5"
+      "at": "2026-08-07T08:14:36.882Z",
+      "event": "requeued"
     },
     {
-      "at": "2026-08-07T05:09:43.431Z",
+      "at": "2026-08-08T15:05:10.785Z",
+      "event": "grabbed:w8-i8"
+    },
+    {
+      "at": "2026-08-08T15:05:25.511Z",
       "event": "done",
-      "note": "stale queue entry: repro already flipped to test() and passing at HEAD; no change needed"
+      "note": "already fixed by w7 commit c655718; test passes"
     }
   ],
   "status": "done",
-  "claimedAt": "2026-08-07T05:09:17.944Z",
-  "claimedBy": "w6-i5",
+  "claimedBy": "w8-i8",
+  "claimedAt": "2026-08-08T15:05:10.785Z",
   "resolution": {
-    "note": "stale queue entry: repro already flipped to test() and passing at HEAD; no change needed",
+    "note": "already fixed by w7 commit c655718; test passes",
     "files": [
-      "packages/riftbound-engine/src/__tests__/cards/ogn-134-298.test.ts"
+      "packages/riftbound-engine/src/__tests__/cards/interactions/temporal-portal-sacrifice-repeat.test.ts"
     ],
-    "at": "2026-08-07T05:09:43.431Z"
+    "at": "2026-08-08T15:05:25.511Z"
   }
 }

@@ -8,27 +8,43 @@
   },
   "id": "a4178f8c6196",
   "createdAt": "2026-08-06T20:50:12.436Z",
-  "attempts": 0,
+  "attempts": 1,
   "history": [
     {
       "at": "2026-08-06T20:50:12.436Z",
       "event": "enqueued:core-rule-bug"
     },
     {
-      "at": "2026-08-07T01:44:01.599Z",
-      "event": "claimed:w9-i18"
+      "at": "2026-08-07T01:16:42.758Z",
+      "event": "grabbed:w7-i19"
     },
     {
-      "at": "2026-08-07T01:44:14.169Z",
+      "at": "2026-08-07T01:21:41.839Z",
+      "event": "failed",
+      "note": "already passing on the current tree (fixed by another worker); test was already flipped to test() at grab time"
+    },
+    {
+      "at": "2026-08-07T08:14:36.885Z",
+      "event": "requeued"
+    },
+    {
+      "at": "2026-08-08T15:04:07.316Z",
+      "event": "grabbed:w8-i6"
+    },
+    {
+      "at": "2026-08-08T15:04:17.284Z",
       "event": "done",
-      "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)"
+      "note": "already green at current tree; repro test already flipped and passing"
     }
   ],
   "status": "done",
-  "claimedBy": "w9-i18",
-  "claimedAt": "2026-08-07T01:44:01.599Z",
+  "claimedBy": "w8-i6",
+  "claimedAt": "2026-08-08T15:04:07.316Z",
   "resolution": {
-    "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)",
-    "at": "2026-08-07T01:44:14.169Z"
+    "note": "already green at current tree; repro test already flipped and passing",
+    "files": [
+      "packages/riftbound-engine/src/__tests__/core-rules/score-denial-and-modification.test.ts"
+    ],
+    "at": "2026-08-08T15:04:17.284Z"
   }
 }

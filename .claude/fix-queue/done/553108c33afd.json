@@ -8,7 +8,7 @@
   },
   "id": "553108c33afd",
   "createdAt": "2026-08-06T17:51:09.030Z",
-  "attempts": 0,
+  "attempts": 1,
   "history": [
     {
       "at": "2026-08-06T17:51:09.030Z",
@@ -23,24 +23,36 @@
       "event": "reaped"
     },
     {
-      "at": "2026-08-07T05:08:41.073Z",
-      "event": "grabbed:w4-i13"
+      "at": "2026-08-07T02:39:17.874Z",
+      "event": "grabbed:w3-i1"
     },
     {
-      "at": "2026-08-07T05:09:17.133Z",
+      "at": "2026-08-07T02:44:59.304Z",
+      "event": "failed",
+      "note": "same as b076b4ebd634 — Portal Repeat mechanism already implemented uncommitted by a concurrent lane; not duplicating/riding along"
+    },
+    {
+      "at": "2026-08-07T08:14:36.888Z",
+      "event": "requeued"
+    },
+    {
+      "at": "2026-08-08T15:05:10.785Z",
+      "event": "grabbed:w8-i8"
+    },
+    {
+      "at": "2026-08-08T15:05:25.470Z",
       "event": "done",
-      "note": "already fixed at HEAD e27f61c; repro tests flipped and green on a clean checkout — stale queue entry"
+      "note": "already fixed by w7 commit c655718 (next-spell Repeat grant); test passes"
     }
   ],
   "status": "done",
-  "claimedAt": "2026-08-07T05:08:41.073Z",
-  "claimedBy": "w4-i13",
+  "claimedAt": "2026-08-08T15:05:10.785Z",
+  "claimedBy": "w8-i8",
   "resolution": {
-    "note": "already fixed at HEAD e27f61c; repro tests flipped and green on a clean checkout — stale queue entry",
+    "note": "already fixed by w7 commit c655718 (next-spell Repeat grant); test passes",
     "files": [
-      "packages/riftbound-engine/src/__tests__/cards/interactions/temporal-portal-sacrifice-repeat.test.ts",
-      "packages/riftbound-engine/src/__tests__/cards/interactions/bullet-time-vex-gold-x-payment.test.ts"
+      "packages/riftbound-engine/src/__tests__/cards/interactions/temporal-portal-sacrifice-repeat.test.ts"
     ],
-    "at": "2026-08-07T05:09:17.133Z"
+    "at": "2026-08-08T15:05:25.470Z"
   }
 }

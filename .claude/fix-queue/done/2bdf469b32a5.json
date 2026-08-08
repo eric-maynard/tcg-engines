@@ -8,34 +8,48 @@
   },
   "id": "2bdf469b32a5",
   "createdAt": "2026-08-06T20:50:12.434Z",
-  "attempts": 0,
+  "attempts": 1,
   "history": [
     {
       "at": "2026-08-06T20:50:12.434Z",
       "event": "enqueued:core-rule-bug"
     },
     {
-      "at": "2026-08-07T05:33:01.394Z",
-      "event": "grabbed:w5-i12"
+      "at": "2026-08-07T00:52:39.891Z",
+      "event": "grabbed:w5-i11"
     },
     {
-      "at": "2026-08-07T05:51:29.967Z",
+      "at": "2026-08-07T00:57:45.563Z",
       "event": "done",
-      "note": "ending phase: Expiration Step deferred to the phase onEnd so end-of-turn triggers see 'this turn' effects still live (317.1 before 317.2)"
+      "note": "ending phase split into ending-step/expiration-step so 'this turn' effects expire after end-of-turn triggers"
+    },
+    {
+      "at": "2026-08-07T01:27:25.419Z",
+      "event": "failed",
+      "note": "Splitting the ending phase into ending-step/expiration-step (expiry extracted to runExpirationStep, run after the end-of-turn chain empties) makes the target test pass but breaks 316.3 (opponent energy floated in the Beginning Phase survives into Main), sfd-109-221 Akshan (power floated during Aurora's end-of-turn trigger), and additional-turn tests 737/738 (flow step transitions interact with transitionToNextTurn). Reverted."
+    },
+    {
+      "at": "2026-08-07T08:14:36.891Z",
+      "event": "requeued"
+    },
+    {
+      "at": "2026-08-08T15:02:20.766Z",
+      "event": "grabbed:w5-i3"
+    },
+    {
+      "at": "2026-08-08T15:02:26.983Z",
+      "event": "done",
+      "note": "stale queue entry: test already flipped and green on staging"
     }
   ],
   "status": "done",
-  "claimedBy": "w5-i12",
-  "claimedAt": "2026-08-07T05:33:01.394Z",
+  "claimedBy": "w5-i3",
+  "claimedAt": "2026-08-08T15:02:20.766Z",
   "resolution": {
-    "note": "ending phase: Expiration Step deferred to the phase onEnd so end-of-turn triggers see 'this turn' effects still live (317.1 before 317.2)",
+    "note": "stale queue entry: test already flipped and green on staging",
     "files": [
-      "packages/riftbound-engine/src/game-definition/flow/riftbound-flow.ts",
-      "packages/riftbound-engine/src/__tests__/core-rules/turn-structure-phases-and-resources.test.ts",
-      "packages/riftbound-engine/src/__tests__/core-rules/score-denial-and-modification.test.ts",
-      "packages/riftbound-engine/src/__tests__/core-rules/runes-rune-deck-and-rune-pool.test.ts",
-      "packages/riftbound-engine/src/__tests__/cards/sfd-109-221.test.ts"
+      "packages/riftbound-engine/src/__tests__/core-rules/turn-structure-phases-and-resources.test.ts"
     ],
-    "at": "2026-08-07T05:51:29.967Z"
+    "at": "2026-08-08T15:02:26.983Z"
   }
 }

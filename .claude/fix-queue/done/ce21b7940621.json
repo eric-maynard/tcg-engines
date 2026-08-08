@@ -8,39 +8,43 @@
   },
   "id": "ce21b7940621",
   "createdAt": "2026-08-06T17:51:09.027Z",
-  "attempts": 0,
+  "attempts": 1,
   "history": [
     {
       "at": "2026-08-06T17:51:09.027Z",
       "event": "enqueued:interaction-bug"
     },
     {
-      "at": "2026-08-07T01:47:19.951Z",
-      "event": "grabbed:w3-i16"
+      "at": "2026-08-06T21:39:05.881Z",
+      "event": "grabbed:w2-i4"
     },
     {
-      "at": "2026-08-07T02:36:01.401Z",
-      "event": "reaped"
+      "at": "2026-08-06T21:42:54.118Z",
+      "event": "failed",
+      "note": "needs resolution-time pay-X prompt + Reaction activation during a pendingChoice; another lane is mid-flight on the pay-x pendingChoice (resolve.ts/pending-choice.ts) — not touching it to avoid conflicting edits"
     },
     {
-      "at": "2026-08-07T05:08:41.072Z",
-      "event": "grabbed:w4-i13"
+      "at": "2026-08-07T08:14:36.894Z",
+      "event": "requeued"
     },
     {
-      "at": "2026-08-07T05:09:17.049Z",
+      "at": "2026-08-08T15:04:21.658Z",
+      "event": "grabbed:w2-i7"
+    },
+    {
+      "at": "2026-08-08T15:04:28.350Z",
       "event": "done",
-      "note": "already fixed at HEAD e27f61c; repro tests flipped and green on a clean checkout — stale queue entry"
+      "note": "already fixed on HEAD; repro test file passes (13/13), no new edits"
     }
   ],
   "status": "done",
-  "claimedAt": "2026-08-07T05:08:41.072Z",
-  "claimedBy": "w4-i13",
+  "claimedBy": "w2-i7",
+  "claimedAt": "2026-08-08T15:04:21.658Z",
   "resolution": {
-    "note": "already fixed at HEAD e27f61c; repro tests flipped and green on a clean checkout — stale queue entry",
+    "note": "already fixed on HEAD; repro test file passes (13/13), no new edits",
     "files": [
-      "packages/riftbound-engine/src/__tests__/cards/interactions/temporal-portal-sacrifice-repeat.test.ts",
       "packages/riftbound-engine/src/__tests__/cards/interactions/bullet-time-vex-gold-x-payment.test.ts"
     ],
-    "at": "2026-08-07T05:09:17.049Z"
+    "at": "2026-08-08T15:04:28.350Z"
   }
 }

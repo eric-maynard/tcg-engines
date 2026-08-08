@@ -9,27 +9,51 @@
   },
   "id": "7164c8feb294",
   "createdAt": "2026-08-06T17:51:09.021Z",
-  "attempts": 0,
+  "attempts": 1,
   "history": [
     {
       "at": "2026-08-06T17:51:09.021Z",
       "event": "enqueued:unit-bug"
     },
     {
-      "at": "2026-08-07T01:44:01.624Z",
-      "event": "claimed:w9-i18"
+      "at": "2026-08-06T21:29:02.799Z",
+      "event": "grabbed:w9-i4"
     },
     {
-      "at": "2026-08-07T01:44:16.567Z",
+      "at": "2026-08-06T21:44:59.068Z",
+      "event": "reaped"
+    },
+    {
+      "at": "2026-08-06T21:45:24.043Z",
+      "event": "grabbed:w10-i1"
+    },
+    {
+      "at": "2026-08-06T21:46:13.818Z",
+      "event": "failed",
+      "note": "Owned by a concurrent worker: an uncommitted ~40-file change (ability xCost:'power', cost.ts xCostIsPower, resolve.ts resolution-time integer pay-X prompt, harness chooseX, bullet-time.ts) already implements X-as-Power; the two interaction BUG tests are already flipped and passing in the working tree. Landing anything here from clean HEAD would either duplicate or break, so no edits made."
+    },
+    {
+      "at": "2026-08-07T08:14:36.895Z",
+      "event": "requeued"
+    },
+    {
+      "at": "2026-08-08T15:04:17.330Z",
+      "event": "grabbed:w8-i6"
+    },
+    {
+      "at": "2026-08-08T15:04:27.327Z",
       "event": "done",
-      "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)"
+      "note": "already green at current tree; no test.failing remains"
     }
   ],
   "status": "done",
-  "claimedBy": "w9-i18",
-  "claimedAt": "2026-08-07T01:44:01.624Z",
+  "claimedAt": "2026-08-08T15:04:17.330Z",
+  "claimedBy": "w8-i6",
   "resolution": {
-    "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)",
-    "at": "2026-08-07T01:44:16.567Z"
+    "note": "already green at current tree; no test.failing remains",
+    "files": [
+      "packages/riftbound-engine/src/__tests__/cards/ogn-268-298.test.ts"
+    ],
+    "at": "2026-08-08T15:04:27.327Z"
   }
 }

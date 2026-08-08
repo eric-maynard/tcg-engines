@@ -8,7 +8,7 @@
   },
   "id": "1d202178fe9c",
   "createdAt": "2026-08-06T18:35:08.341Z",
-  "attempts": 0,
+  "attempts": 1,
   "history": [
     {
       "at": "2026-08-06T18:35:08.341Z",
@@ -23,24 +23,36 @@
       "event": "reaped"
     },
     {
-      "at": "2026-08-07T05:09:46.178Z",
-      "event": "grabbed:w6-i5"
+      "at": "2026-08-07T02:39:18.947Z",
+      "event": "grabbed:w12-i1"
     },
     {
-      "at": "2026-08-07T05:18:45.943Z",
+      "at": "2026-08-07T02:46:20.701Z",
+      "event": "failed",
+      "note": "needs play-time target locking for facedown spells PLUS resolution-time legality re-check (359.3.e.5) and linked-effect skip; also conflicts with the sibling green test '(d) P2 may respond...' which passes priority before any target is chosen"
+    },
+    {
+      "at": "2026-08-07T08:14:36.887Z",
+      "event": "requeued"
+    },
+    {
+      "at": "2026-08-08T15:04:43.165Z",
+      "event": "grabbed:w8-i7"
+    },
+    {
+      "at": "2026-08-08T15:05:01.429Z",
       "event": "done",
-      "note": "hidden spells lock their target when played (bindToChainItemId prompt in revealHidden), so a response mistargets them"
+      "note": "already fixed+flipped by prior worker; verified green on HEAD"
     }
   ],
   "status": "done",
-  "claimedAt": "2026-08-07T05:09:46.178Z",
-  "claimedBy": "w6-i5",
+  "claimedAt": "2026-08-08T15:04:43.165Z",
+  "claimedBy": "w8-i7",
   "resolution": {
-    "note": "hidden spells lock their target when played (bindToChainItemId prompt in revealHidden), so a response mistargets them",
+    "note": "already fixed+flipped by prior worker; verified green on HEAD",
     "files": [
-      "packages/riftbound-engine/src/game-definition/moves/play/hide.ts",
-      "packages/riftbound-engine/src/abilities/trigger-target-lock.ts"
+      "packages/riftbound-engine/src/__tests__/cards/interactions/hidden-blade-facedown-ruin-runner-flash.test.ts"
     ],
-    "at": "2026-08-07T05:18:45.943Z"
+    "at": "2026-08-08T15:05:01.429Z"
   }
 }

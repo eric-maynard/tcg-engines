@@ -9,7 +9,7 @@
   },
   "id": "267c1379880f",
   "createdAt": "2026-08-06T17:15:21.551Z",
-  "attempts": 0,
+  "attempts": 1,
   "history": [
     {
       "at": "2026-08-06T17:15:21.551Z",
@@ -24,20 +24,36 @@
       "event": "reaped"
     },
     {
-      "at": "2026-08-07T01:44:01.612Z",
-      "event": "claimed:w9-i18"
+      "at": "2026-08-06T20:58:32.828Z",
+      "event": "grabbed:w5-i1"
     },
     {
-      "at": "2026-08-07T01:44:15.408Z",
+      "at": "2026-08-06T21:02:06.849Z",
+      "event": "failed",
+      "note": "needs the excess-damage/afterAttack conquer plumbing another worker is mid-edit in resolve-full-combat.ts + game-events.ts (item 5ba3b82b6008); editing concurrently would clobber it"
+    },
+    {
+      "at": "2026-08-07T08:14:36.890Z",
+      "event": "requeued"
+    },
+    {
+      "at": "2026-08-08T15:02:55.715Z",
+      "event": "grabbed:w2-i6"
+    },
+    {
+      "at": "2026-08-08T15:03:27.806Z",
       "event": "done",
-      "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)"
+      "note": "already fixed+flipped upstream (afterAttack qualifier + excess-damage-assigned condition in HEAD); test passes, no change needed"
     }
   ],
   "status": "done",
-  "claimedAt": "2026-08-07T01:44:01.612Z",
-  "claimedBy": "w9-i18",
+  "claimedAt": "2026-08-08T15:02:55.715Z",
+  "claimedBy": "w2-i6",
   "resolution": {
-    "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)",
-    "at": "2026-08-07T01:44:15.408Z"
+    "note": "already fixed+flipped upstream (afterAttack qualifier + excess-damage-assigned condition in HEAD); test passes, no change needed",
+    "files": [
+      "packages/riftbound-engine/src/__tests__/cards/ogn-034-298.test.ts"
+    ],
+    "at": "2026-08-08T15:03:27.806Z"
   }
 }

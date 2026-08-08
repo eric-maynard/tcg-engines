@@ -62,3 +62,12 @@ downloads/
 apps/riftbound-app/.mcp.json
 riftbound-rules-video-transcript.txt
 do_not_commit/
+
+# fix-queue runtime state (not source)
+.claude/fix-queue/open/
+.claude/fix-queue/claimed/
+.claude/fix-queue/done/
+.claude/fix-queue/failed/
+.claude/fix-queue/metrics.jsonl
+.claude/fix-queue/.land.lock
+.claude/fix-queue/g7-*.txt

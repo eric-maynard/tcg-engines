@@ -8,34 +8,40 @@
   },
   "id": "d9f313efa319",
   "createdAt": "2026-08-06T18:35:08.344Z",
-  "attempts": 0,
+  "attempts": 1,
   "history": [
     {
       "at": "2026-08-06T18:35:08.344Z",
       "event": "enqueued:interaction-bug"
     },
     {
-      "at": "2026-08-06T22:21:45.932Z",
-      "event": "grabbed:w8-i3"
+      "at": "2026-08-07T05:14:36.511Z",
+      "event": "grabbed:w3-i8"
     },
     {
-      "at": "2026-08-06T22:25:59.176Z",
+      "at": "2026-08-07T05:19:48.257Z",
+      "event": "failed",
+      "note": "needs the in-flight cost.ts/pending-choice.ts accelerate-after-pick work owned by another lane; that subset also regresses runes-rune-deck 429.2 (can cast with tappable runes) — not landable piecemeal"
+    },
+    {
+      "at": "2026-08-07T08:14:36.893Z",
+      "event": "requeued"
+    },
+    {
+      "at": "2026-08-08T15:05:22.609Z",
+      "event": "grabbed:w5-i3"
+    },
+    {
+      "at": "2026-08-08T15:05:40.789Z",
       "event": "done",
-      "note": "Accelerate/optional additional costs: import canPayOptionalPlayCost in pending-choice; apply Ezreal's flex [1]-or-[rainbow] discount to optional play costs"
+      "note": "stale queue entry: repro test already flipped and green"
     }
   ],
   "status": "done",
-  "claimedBy": "w8-i3",
-  "claimedAt": "2026-08-06T22:21:45.932Z",
+  "claimedBy": "w5-i3",
+  "claimedAt": "2026-08-08T15:05:22.609Z",
   "resolution": {
-    "note": "Accelerate/optional additional costs: import canPayOptionalPlayCost in pending-choice; apply Ezreal's flex [1]-or-[rainbow] discount to optional play costs",
-    "files": [
-      "packages/riftbound-engine/src/game-definition/moves/play/cost.ts",
-      "packages/riftbound-engine/src/game-definition/moves/play/play-unit.ts",
-      "packages/riftbound-engine/src/game-definition/moves/pending-choice.ts",
-      "packages/riftbound-engine/src/__tests__/cards/interactions/matron-rearguard-accelerate-ezreal.test.ts",
-      "packages/riftbound-engine/src/__tests__/cards/rulings/ezreal-prodigy-29339d78dfd48122.test.ts"
-    ],
-    "at": "2026-08-06T22:25:59.176Z"
+    "note": "stale queue entry: repro test already flipped and green",
+    "at": "2026-08-08T15:05:40.789Z"
   }
 }

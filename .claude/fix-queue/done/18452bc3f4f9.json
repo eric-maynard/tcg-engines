@@ -9,7 +9,7 @@
   },
   "id": "18452bc3f4f9",
   "createdAt": "2026-08-06T17:15:21.549Z",
-  "attempts": 0,
+  "attempts": 1,
   "history": [
     {
       "at": "2026-08-06T17:15:21.549Z",
@@ -24,23 +24,33 @@
       "event": "reaped"
     },
     {
-      "at": "2026-08-07T01:43:43.849Z",
-      "event": "grabbed:w6-i12"
+      "at": "2026-08-06T20:58:23.088Z",
+      "event": "grabbed:w12-i1"
     },
     {
-      "at": "2026-08-07T01:44:23.922Z",
+      "at": "2026-08-06T21:02:51.707Z",
+      "event": "failed",
+      "note": "another lane is mid-flight on this exact fix (independentTargets: enrich-cards mergeRepeatedSpellAbilities + sequence.ts indepSlots + play-spell enumerator all appeared during my read); editing would clobber their in-progress work"
+    },
+    {
+      "at": "2026-08-07T08:14:36.885Z",
+      "event": "requeued"
+    },
+    {
+      "at": "2026-08-08T15:02:36.943Z",
+      "event": "grabbed:w5-i3"
+    },
+    {
+      "at": "2026-08-08T15:05:17.929Z",
       "event": "done",
-      "note": "stale queue entry: already fixed and flipped at HEAD; repro tests green"
+      "note": "stale queue entry: repro test already flipped and green"
     }
   ],
   "status": "done",
-  "claimedAt": "2026-08-07T01:43:43.849Z",
-  "claimedBy": "w6-i12",
+  "claimedAt": "2026-08-08T15:02:36.943Z",
+  "claimedBy": "w5-i3",
   "resolution": {
-    "note": "stale queue entry: already fixed and flipped at HEAD; repro tests green",
-    "files": [
-      "packages/riftbound-engine/src/__tests__/cards/ogn-029-298.test.ts"
-    ],
-    "at": "2026-08-07T01:44:23.922Z"
+    "note": "stale queue entry: repro test already flipped and green",
+    "at": "2026-08-08T15:05:17.929Z"
   }
 }

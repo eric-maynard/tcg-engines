@@ -8,27 +8,51 @@
   },
   "id": "35743486ba73",
   "createdAt": "2026-08-06T17:51:09.029Z",
-  "attempts": 0,
+  "attempts": 1,
   "history": [
     {
       "at": "2026-08-06T17:51:09.029Z",
       "event": "enqueued:interaction-bug"
     },
     {
-      "at": "2026-08-07T01:44:01.605Z",
-      "event": "claimed:w9-i18"
+      "at": "2026-08-06T21:43:24.967Z",
+      "event": "grabbed:w12-i6"
     },
     {
-      "at": "2026-08-07T01:44:14.712Z",
+      "at": "2026-08-06T21:44:59.067Z",
+      "event": "reaped"
+    },
+    {
+      "at": "2026-08-06T21:45:32.584Z",
+      "event": "grabbed:w8-i1"
+    },
+    {
+      "at": "2026-08-06T21:48:45.558Z",
+      "event": "failed",
+      "note": "already fixed in-tree by the concurrent Deathknell-keyword-trigger + Deflect-on-abilities lane; the test flip depends on their trigger-runner/resolve changes, so it belongs to that patch"
+    },
+    {
+      "at": "2026-08-07T08:14:36.887Z",
+      "event": "requeued"
+    },
+    {
+      "at": "2026-08-08T15:04:31.457Z",
+      "event": "grabbed:w2-i7"
+    },
+    {
+      "at": "2026-08-08T15:04:44.398Z",
       "event": "done",
-      "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)"
+      "note": "already fixed on HEAD; repro file passes 9/9, no new edits"
     }
   ],
   "status": "done",
-  "claimedBy": "w9-i18",
-  "claimedAt": "2026-08-07T01:44:01.605Z",
+  "claimedAt": "2026-08-08T15:04:31.457Z",
+  "claimedBy": "w2-i7",
   "resolution": {
-    "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)",
-    "at": "2026-08-07T01:44:14.712Z"
+    "note": "already fixed on HEAD; repro file passes 9/9, no new edits",
+    "files": [
+      "packages/riftbound-engine/src/__tests__/cards/interactions/ruined-rex-deathknell-into-deflect.test.ts"
+    ],
+    "at": "2026-08-08T15:04:44.398Z"
   }
 }

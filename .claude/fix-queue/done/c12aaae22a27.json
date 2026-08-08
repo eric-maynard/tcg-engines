@@ -8,32 +8,43 @@
   },
   "id": "c12aaae22a27",
   "createdAt": "2026-08-06T18:35:08.343Z",
-  "attempts": 0,
+  "attempts": 1,
   "history": [
     {
       "at": "2026-08-06T18:35:08.343Z",
       "event": "enqueued:interaction-bug"
     },
     {
-      "at": "2026-08-06T22:15:14.080Z",
-      "event": "grabbed:w11-i4"
+      "at": "2026-08-07T01:44:34.539Z",
+      "event": "grabbed:w9-i19"
     },
     {
-      "at": "2026-08-06T22:20:01.177Z",
+      "at": "2026-08-07T01:49:26.116Z",
+      "event": "failed",
+      "note": "repro expectation is self-contradictory: it asserts bfFoe ends at 2 damage AND 2 Might (6-4), which is lethal (rule 428.1.a.2) so the unit dies; engine already runs 4 executions with 4 distinct modes"
+    },
+    {
+      "at": "2026-08-07T08:14:36.890Z",
+      "event": "requeued"
+    },
+    {
+      "at": "2026-08-08T15:03:32.250Z",
+      "event": "grabbed:w8-i6"
+    },
+    {
+      "at": "2026-08-08T15:04:05.047Z",
       "event": "done",
-      "note": "Repeat sequence suspends on a modal prompt and resumes via choose-mode then, so each execution picks a different mode"
+      "note": "already green: Curtain Call 4-mode repeat execution passes at current tree; repro already flipped"
     }
   ],
   "status": "done",
-  "claimedBy": "w11-i4",
-  "claimedAt": "2026-08-06T22:15:14.080Z",
+  "claimedBy": "w8-i6",
+  "claimedAt": "2026-08-08T15:03:32.250Z",
   "resolution": {
-    "note": "Repeat sequence suspends on a modal prompt and resumes via choose-mode then, so each execution picks a different mode",
+    "note": "already green: Curtain Call 4-mode repeat execution passes at current tree; repro already flipped",
     "files": [
-      "packages/riftbound-engine/src/abilities/effects/sequence.ts",
-      "packages/riftbound-engine/src/game-definition/moves/pending-choice.ts",
-      "packages/riftbound-engine/src/types/game-state.ts"
+      "packages/riftbound-engine/src/__tests__/cards/interactions/curtain-call-marai-spire-ezreal-repeats.test.ts"
     ],
-    "at": "2026-08-06T22:20:01.177Z"
+    "at": "2026-08-08T15:04:05.047Z"
   }
 }

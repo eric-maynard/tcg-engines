@@ -9,27 +9,43 @@
   },
   "id": "6b8492d3e02d",
   "createdAt": "2026-08-06T17:39:26.580Z",
-  "attempts": 0,
+  "attempts": 1,
   "history": [
     {
       "at": "2026-08-06T17:39:26.580Z",
       "event": "enqueued:unit-bug"
     },
     {
-      "at": "2026-08-07T01:44:01.595Z",
-      "event": "claimed:w9-i18"
+      "at": "2026-08-06T21:25:25.860Z",
+      "event": "grabbed:w8-i5"
     },
     {
-      "at": "2026-08-07T01:44:13.778Z",
+      "at": "2026-08-06T21:29:25.204Z",
+      "event": "failed",
+      "note": "same root cause as dad03a93c255: no prompt exists to decline, because effects/optional.ts auto-applies and the executor has no mid-sequence suspension/continuation (sequence.ts and for-each.ts never check draft.pendingChoice). Declining cannot be expressed without a new pending-choice + continuation capability."
+    },
+    {
+      "at": "2026-08-07T08:14:36.883Z",
+      "event": "requeued"
+    },
+    {
+      "at": "2026-08-08T15:04:05.013Z",
+      "event": "grabbed:w2-i7"
+    },
+    {
+      "at": "2026-08-08T15:04:21.570Z",
       "event": "done",
-      "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)"
+      "note": "already fixed on HEAD (pick-many subset prompt in spend-buff handler); repro test passes, no new edits"
     }
   ],
   "status": "done",
-  "claimedBy": "w9-i18",
-  "claimedAt": "2026-08-07T01:44:01.595Z",
+  "claimedBy": "w2-i7",
+  "claimedAt": "2026-08-08T15:04:05.013Z",
   "resolution": {
-    "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)",
-    "at": "2026-08-07T01:44:13.778Z"
+    "note": "already fixed on HEAD (pick-many subset prompt in spend-buff handler); repro test passes, no new edits",
+    "files": [
+      "packages/riftbound-engine/src/abilities/effects/spend-buff.ts"
+    ],
+    "at": "2026-08-08T15:04:21.570Z"
   }
 }
