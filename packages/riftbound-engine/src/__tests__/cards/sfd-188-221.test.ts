@@ -86,7 +86,11 @@ describe("Void Rush (sfd-188-221)", () => {
     const game = await board(3).build(); // 3 - 2 (Void Rush) = 1 left = Skulker's discounted cost
     const d = (await castToReveal(game)) as PickDecision;
     expect(d).toMatchObject({ kind: "pick", seat: P1, semantics: "from-revealed" });
-    expect(d.options.map((o) => o.card)).toEqual(["top", "second"]);
+    // Both top cards are revealed, but only the PAYABLE one is a legal banish-and-play choice
+    // (419.2.a): Faefolk would still cost 7 − 2 = 5 with 1 energy left. With 7 energy both are offered.
+    expect(d.options.map((o) => o.card)).toEqual(["second"]);
+    const rich = (await castToReveal(await board(7).build())) as PickDecision;
+    expect(rich.options.map((o) => o.card)).toEqual(["top", "second"]);
     expect(d.allowDecline).toBe(true); // "You may"
     expect(game.zoneOf("top")).toBe("mainDeck"); // revealed cards are still in the deck (424.1.a.2)
     await game.p1.pick("second");
@@ -191,7 +195,7 @@ describe("Void Rush (sfd-188-221)", () => {
   test("short deck (431.1.c): with ONE card left only that card is revealed; declining draws it; no Burn Out", async () => {
     const game = await scenario()
       .fillDecks(false)
-      .resources(P1, { energy: 2, power: { rainbow: 1 } })
+      .resources(P1, { energy: 3, power: { rainbow: 1 } }) // 1 left so the lone Skulker (3 − 2) is a payable, hence offered, choice
       .deck(P1, [SKULKER], ["last"])
       .deck(P2, [FILLER, FILLER])
       .hand(P1, CARD, "vr")

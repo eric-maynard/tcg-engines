@@ -47,12 +47,16 @@ import { deductAbilityCost } from "./chain/activate-ability";
 import { canAffordPower } from "./chain/effect-context";
 import { payAnyDomainPower } from "./chain/resolve";
 import {
+  type CostExtras,
+  canPayResourceCost,
+  computePlayResourceCost,
+  createMetaAccessor,
   discountOptionalPlayCost,
   getCardEffectiveMight,
   getDeflectSurcharge,
-  getNotHandSelfEnergyReduction,
   getOptionalPlayCost,
   getPotentialRuneEnergy,
+  payResourceCost,
   staticEnterReadyApplies,
 } from "./play/cost";
 import { collectChoiceNodes, raisePlayTimeModeChoice } from "./play/play-time-modes";
@@ -491,6 +495,70 @@ export function recycleCostCandidates(
 }
 
 /**
+ * rule 357.2 (rule-id: ven-067-166) — the board permanents that can pay a
+ * "kill N [other] friendly units and/or gear to …" cost: `spec` is either a
+ * Target descriptor or `{ amount, target }`; `types` / `type` restrict the card
+ * types, `excludeSelf` drops the source, `controller` defaults to friendly.
+ */
+export function killCostCandidates(
+  state: RiftboundGameState,
+  playerId: string,
+  sourceCardId: string,
+  spec: unknown,
+  // biome-ignore lint/suspicious/noExplicitAny: move context bag is framework-typed
+  context: any,
+): string[] {
+  if (typeof context?.zones?.getCardsInZone !== "function") {
+    return [];
+  }
+  const raw = spec as { target?: Record<string, unknown> } & Record<string, unknown>;
+  const target = (raw.target ?? raw) as {
+    controller?: string;
+    excludeSelf?: boolean;
+    type?: string;
+    types?: readonly string[];
+  };
+  const types =
+    target.types && target.types.length > 0
+      ? target.types
+      : typeof target.type === "string" && target.type !== "permanent" && target.type !== "card"
+        ? [target.type]
+        : ["unit", "gear", "equipment"];
+  const wantTypes = new Set(types.flatMap((t) => (t === "gear" ? ["gear", "equipment"] : [t])));
+  const zoneIds = [
+    "base",
+    ...Object.keys((state as { battlefields?: Record<string, unknown> }).battlefields ?? {}).map(
+      (bf) => `battlefield-${bf}`,
+    ),
+  ];
+  const registry = getGlobalCardRegistry();
+  const out: string[] = [];
+  for (const zoneId of zoneIds) {
+    for (const seat of Object.keys(state.players ?? {})) {
+      for (const rawId of context.zones.getCardsInZone(zoneId as CoreZoneId, seat as CorePlayerId)) {
+        const id = rawId as string;
+        if (out.includes(id) || (target.excludeSelf === true && id === sourceCardId)) {
+          continue;
+        }
+        const controller =
+          context.cards?.getCardController?.(id as CoreCardId) ??
+          context.cards?.getCardOwner?.(id as CoreCardId) ??
+          seat;
+        const friendly = controller === playerId;
+        if (target.controller === "enemy" ? friendly : !friendly) {
+          continue;
+        }
+        if (!wantTypes.has(registry.getCardType(id) as string)) {
+          continue;
+        }
+        out.push(id);
+      }
+    }
+  }
+  return out;
+}
+
+/**
  * rule 355.10.c.1 (rule-id: sfd-026-221) — a cost paid WITHIN an instruction
  * ("recycle another friendly unit to play a Mech from your trash") is only
  * payable when the instruction itself has something to do: with no matching
@@ -563,6 +631,17 @@ function canPayOptInCost(
       return false;
     }
     if (!payCostInstructionIsPerformable(playerId, effect, context)) {
+      return false;
+    }
+  }
+  // rule 203 / 357.2 (rule-id: ven-067-166 Bottled Constellation) — "you may
+  // kill 3 other friendly units and/or gear to …": an object cost naming N Game
+  // Objects is payable only with at least N legal candidates on the board
+  // ("other" never counts the source; enemy permanents are never friendly).
+  const killSpec = cost.kill;
+  if (killSpec !== undefined && killSpec !== "self" && typeof killSpec === "object" && killSpec !== null) {
+    const needed = (killSpec as { amount?: number }).amount ?? 1;
+    if (killCostCandidates(state, playerId, sourceCardId, killSpec, context).length < needed) {
       return false;
     }
   }
@@ -946,6 +1025,54 @@ export function isValidPendingPick(choice: PendingChoice, cardId: string): boole
 }
 
 /**
+ * rule 419.2.a / 356.4 — a card an effect would PLAY (from banishment / deck /
+ * trash, "reducing its cost by [N]") must still have its remaining cost paid;
+ * one the prompter cannot pay right now cannot be chosen (it would strand in
+ * banishment). "Ignoring any and all costs" (a fixed `playTo`) or "ignoring
+ * its cost" plays are always affordable. Priced through the shared
+ * `computePlayResourceCost` with the instruction's modifications folded in.
+ */
+export function isAffordablePlayPick(
+  state: RiftboundGameState,
+  choice: PendingChoice,
+  cardId: string,
+  context?: { cards: unknown; zones: unknown },
+): boolean {
+  if (choice.type !== "reveal-and-pick" || choice.onPicked !== "play" || choice.playTo !== undefined) {
+    return true;
+  }
+  if (choice.playIgnoreCost || state.runePools[choice.prompter] === undefined) {
+    return true;
+  }
+  // A spell "played" from the trash is cast through its own path (castSpellFromTrash).
+  if (choice.playFrom === "trash" && getGlobalCardRegistry().getCardType(cardId) === "spell") {
+    return true;
+  }
+  const cards = context?.cards as
+    | { getCardOwner?: unknown; getCardMeta?: (id: CoreCardId) => unknown }
+    | undefined;
+  const zones = context?.zones as { getCardsInZone?: unknown } | undefined;
+  const hasBoard = typeof zones?.getCardsInZone === "function" && typeof cards?.getCardOwner === "function";
+  const extras: CostExtras = {
+    ...(hasBoard ? { board: { cards: context?.cards, zones: context?.zones } as CostExtras["board"] } : {}),
+    ...(choice.playIgnoreEnergy ? { ignoreEnergyCost: true } : {}),
+    ...((choice.playEnergyReduction ?? 0) > 0
+      ? { additionalCost: { energy: -(choice.playEnergyReduction ?? 0) } }
+      : {}),
+  };
+  const meta =
+    typeof cards?.getCardMeta === "function"
+      ? createMetaAccessor(cards as { getCardMeta: (id: CoreCardId) => unknown })
+      : undefined;
+  return canPayResourceCost(
+    state,
+    choice.prompter,
+    cardId,
+    computePlayResourceCost(state, choice.prompter, cardId, extras, meta, false),
+  );
+}
+
+/**
  * Pick a default (goldfish) card for the choice: the first revealed card
  * that passes the filter. Returns undefined if no valid pick exists.
  */
@@ -1319,7 +1446,11 @@ export const pendingChoiceMoves: Partial<
         }
         return multi.every((id) => isValidPendingPick(choice, id));
       }
-      return isValidPendingPick(choice, context.params.pickedCardId as string);
+      return (
+        isValidPendingPick(choice, context.params.pickedCardId as string) &&
+        // rule 419.2.a — an unaffordable "play it" pick is not a legal choice.
+        isAffordablePlayPick(state, choice, context.params.pickedCardId as string, context)
+      );
     },
     enumerator: (state, context) => {
       const choice = state.pendingChoice ?? state.pendingTriggerOrder;
@@ -1512,7 +1643,7 @@ export const pendingChoiceMoves: Partial<
       }
       const results: { playerId: string; pickedCardId?: string; accept?: boolean }[] = [];
       for (const cardId of choice.revealed) {
-        if (isValidPendingPick(choice, cardId)) {
+        if (isValidPendingPick(choice, cardId) && isAffordablePlayPick(state, choice, cardId, context)) {
           results.push({
             pickedCardId: cardId,
             playerId: context.playerId as string,
@@ -2978,36 +3109,42 @@ export const pendingChoiceMoves: Partial<
         draft.cannotPlayCardsThisTurn?.[choice.prompter] !== true
       ) {
         const pool = draft.runePools[choice.prompter];
-        const raw = getGlobalCardRegistry().getCostToDeduct(pickedCardId as string);
-        // rule 356.1.b.1 (ogn-025-298): "ignoring its cost" waives the whole
-        // cost; rule-id ogn-115-298: "ignoring Energy costs" waives only the
-        // energy — Power pips are still paid.
-        // rule 356.4 (rule-id: sfd-010-221) — the picked card is played from
-        // banishment / trash / deck, never from a hand, so its own "I cost [N]
-        // less to play from anywhere other than your hand" static stacks with
-        // the instruction's discount; the total floors at 0 (no refund).
-        const energy =
-          choice.playIgnoreCost || choice.playIgnoreEnergy
-            ? 0
-            : Math.max(
-                0,
-                raw.energy -
-                  (choice.playEnergyReduction ?? 0) -
-                  getNotHandSelfEnergyReduction(pickedCardId as string),
-              );
-        const power = choice.playIgnoreCost ? {} : raw.power;
+        // rule 356 / 357 — price and pay the instructed play through the ONE
+        // shared cost computation (board discounts/increases, pooled [rainbow]
+        // covering a named pip — 135.2.e.5.b, restricted Energy), with the
+        // instruction's own modifications folded in:
+        // rule 356.1.b.1 (ogn-025-298): "ignoring its cost" zeroes the base
+        // cost (increases still apply, 356.1.b.3); rule-id ogn-115-298:
+        // "ignoring Energy costs" waives only the energy — Power pips are still
+        // paid; "for [N] less" is a flat discount. rule 356.4 (sfd-010-221) —
+        // the picked card is played from banishment / trash / deck, never from
+        // a hand, so its own "costs less from anywhere other than your hand"
+        // static stacks (the board-aware computation sees the origin zone).
+        // (Minimal mock contexts in unit tests lack the board accessors.)
+        const hasBoard =
+          typeof context.zones.getCardsInZone === "function" &&
+          typeof context.cards.getCardOwner === "function";
+        const costExtras: CostExtras = {
+          ...(hasBoard ? { board: { cards: context.cards, zones: context.zones } as CostExtras["board"] } : {}),
+          ...(choice.playIgnoreCost ? { altCost: { energy: 0, power: [] } } : {}),
+          ...(choice.playIgnoreEnergy ? { ignoreEnergyCost: true } : {}),
+          ...((choice.playEnergyReduction ?? 0) > 0
+            ? { additionalCost: { energy: -(choice.playEnergyReduction ?? 0) } }
+            : {}),
+        };
+        const metaForCost =
+          typeof context.cards.getCardMeta === "function" ? createMetaAccessor(context.cards) : undefined;
         // rule 356.4 / 419.2.a: a discount reduces the cost, it does not waive
         // it — the reduced cost must still be payable in full, otherwise the
         // card cannot be played and simply stays where the pick put it.
         const affordable =
           pool === undefined ||
-          (pool.energy >= energy &&
-            Object.entries(power).every(
-              ([domain, amount]) =>
-                (pool.power[domain as keyof typeof pool.power] ?? 0) +
-                  (pool.power.rainbow ?? 0) >=
-                (amount ?? 0),
-            ));
+          canPayResourceCost(
+            draft,
+            choice.prompter,
+            pickedCardId as string,
+            computePlayResourceCost(draft, choice.prompter, pickedCardId as string, costExtras, metaForCost, false),
+          );
         // rule 354.2 (ogn-115-298 × ogn-095-298) — "play" a spell puts it on
         // the chain; it is never placed on the board like a permanent.
         const isSpell =
@@ -3041,11 +3178,12 @@ export const pendingChoiceMoves: Partial<
           );
         if (affordable && spellPlayable) {
           if (pool) {
-            pool.energy = Math.max(0, pool.energy - energy);
-            for (const [domain, amount] of Object.entries(power)) {
-              const key = domain as keyof typeof pool.power;
-              pool.power[key] = Math.max(0, (pool.power[key] ?? 0) - (amount ?? 0));
-            }
+            payResourceCost(
+              draft,
+              choice.prompter,
+              pickedCardId as string,
+              computePlayResourceCost(draft, choice.prompter, pickedCardId as string, costExtras, metaForCost, true),
+            );
           }
           // rule 359.2.c / 143.4 (ogn-196-298, ogn-226-298): "play a unit from
           // your trash" completes as part of the enclosing effect — the unit

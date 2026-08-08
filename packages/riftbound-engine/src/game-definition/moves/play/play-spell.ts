@@ -285,7 +285,7 @@ function mandatoryKillCandidates(
   cardId: string,
   descriptor: unknown,
 ): string[] {
-  return resolveTarget(
+  const all = resolveTarget(
     { ...(descriptor as Record<string, unknown>), quantity: "all" } as Parameters<
       typeof resolveTarget
     >[0],
@@ -297,6 +297,32 @@ function mandatoryKillCandidates(
       zones: context.zones,
     },
   ) as string[];
+  // rule 357.3 (rule-id: unl-142-219) — a cost payment that would
+  // deterministically leave the spell's own instruction with no legal choice is
+  // not a legal payment "unless they have no choice": for "kill a friendly unit
+  // … play a unit from your trash that costs no more Energy and no more Power
+  // than the killed unit" only victims that cap IN at least one trash unit may
+  // be named (all of them when none does).
+  const spell = (getGlobalCardRegistry().getAbilities(cardId) ?? []).find((a) => a.type === "spell") as
+    | { effect?: { type?: string; from?: string; target?: { type?: string } } }
+    | undefined;
+  if (spell?.effect?.type !== "play" || spell.effect.from !== "trash" || all.length <= 1) {
+    return all;
+  }
+  const registry = getGlobalCardRegistry();
+  const wantType = spell.effect.target?.type;
+  const trash = (context.zones.getCardsInZone("trash" as CoreZoneId, playerId as CorePlayerId) as readonly string[]).filter(
+    (id) => !wantType || wantType === "card" || registry.getCardType(id) === wantType,
+  );
+  const enables = (victim: string): boolean => {
+    const capEnergy = registry.getEnergyCost(victim) ?? 0;
+    const capPower = (registry.getPowerCost(victim) ?? []).length;
+    return trash.some(
+      (id) => (registry.getEnergyCost(id) ?? 0) <= capEnergy && (registry.getPowerCost(id) ?? []).length <= capPower,
+    );
+  };
+  const useful = all.filter(enables);
+  return useful.length > 0 ? useful : all;
 }
 
 /**

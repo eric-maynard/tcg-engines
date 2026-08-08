@@ -82,7 +82,8 @@ describe("Wild Claw (ven-089-166)", () => {
   });
 
   test("looks at exactly the top 5 and offers the units AND the gear among them — not the spell, not the 6th card; the pick is optional", async () => {
-    const game = await board(9).build();
+    // A [calm] in the pool so Simian Ancestor's remaining pip is payable (419.2.a: only PLAYABLE cards are choices).
+    const game = await board(9, [MEGA_MECH, "mega"], { body: 1, calm: 1 }).build();
     await game.p1.cast("wc");
     await game.settle();
     const d = game.decision() as PickDecision;
@@ -128,7 +129,7 @@ describe("Wild Claw (ven-089-166)", () => {
     expect(game.zoneOf("simian")).toBe("base");
   });
 
-  test.failing("BUG: a revealed card whose remaining cost cannot be paid (Mega-Mech at 2 with 0 energy, Simian's [calm] with no calm) must not be a legal pick (419.2.a)", async () => {
+  test("a revealed card whose remaining cost cannot be paid (Mega-Mech at 2 with 0 energy, Simian's [calm] with no calm) must not be a legal pick (419.2.a)", async () => {
     const game = await board(7).build();
     await game.p1.cast("wc");
     await game.settle();

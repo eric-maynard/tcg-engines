@@ -119,9 +119,7 @@ describe("Undertitan (sfd-175-221)", () => {
   // BUG — expected: Void Rush (2 + [rainbow]) leaves 2 energy; revealing Undertitan adds 2 (→ 4);
   // banish-and-play it for 6−2 = 4 + [order] → Undertitan on the board, pool empty, d2 drawn.
   // Actual: no [Add] happens, the 4-energy play is unaffordable and Undertitan is stranded in banishment.
-  // BUG — the reveal's [Add] [2] now happens, but a pooled [rainbow] pip is not spent to cover
-  // the [order] pip when Undertitan is played out of the reveal prompt: rainbow stays 1.
-  test.failing("BUG: the Void Rush line with EXACTLY 4 energy — the reveal's [Add] [2] is what makes the discounted Undertitan affordable", async () => {
+  test("the Void Rush line with EXACTLY 4 energy — the reveal's [Add] [2] is what makes the discounted Undertitan affordable", async () => {
     const game = await scenario()
       .resources(P1, { energy: 4, power: { order: 1, rainbow: 1 } })
       .hand(P1, VOID_RUSH, "vr")

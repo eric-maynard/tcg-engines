@@ -35,7 +35,9 @@ describe("Reinforce (ogn-062-298)", () => {
   });
 
   test("looks at the top 5 and offers only the UNITS among them (optional pick)", async () => {
-    const game = await board(5).build();
+    // 7 energy: 5 for Reinforce, 2 left so the discounted Faefolk (7 − 5) is payable and therefore
+    // choosable (rule 419.2.a — an unaffordable play is not a legal pick).
+    const game = await board(7).build();
     await game.p1.cast("rf");
     await game.settle();
     const d = game.decision() as PickDecision;

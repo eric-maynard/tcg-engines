@@ -139,7 +139,7 @@ describe("Bottled Constellation (ven-067-166)", () => {
   // Expected: with only 2 OTHER friendly permanents (the Constellation itself is not "other"; P2's unit and gear
   // are not friendly) the cost is unpayable → either no question at all or one that cannot be accepted, and no
   // way to reach a point. Actual: a plain accept-able yes/no is offered.
-  test.failing("BUG: only 2 other friendly permanents (enemy ones don't count, nor itself) → the option cannot be taken", async () => {
+  test("only 2 other friendly permanents (enemy ones don't count, nor itself) → the option cannot be taken", async () => {
     const game = await scenario()
       .turn(2)
       .active(P2)
