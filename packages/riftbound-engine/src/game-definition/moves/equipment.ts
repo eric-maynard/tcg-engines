@@ -12,7 +12,6 @@ import type {
   ZoneId as CoreZoneId,
 } from "@tcg/core";
 import type {
-  GrantedKeyword,
   RiftboundCardMeta,
   RiftboundGameState,
   RiftboundMoves,
@@ -24,26 +23,6 @@ import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import { getBattlefieldZoneId } from "../../zones/zone-configs";
 import { deductAbilityCost } from "./chain/activate-ability";
 import { canPayEquipCost, printedEquipCost } from "./equip-cost";
-
-/**
- * Check whether a unit has the given keyword, considering both its printed
- * Card definition and any runtime-granted keywords on its meta.
- */
-function unitHasKeyword(
-  cardId: string,
-  keyword: string,
-  meta: Partial<RiftboundCardMeta> | undefined,
-): boolean {
-  const registry = getGlobalCardRegistry();
-  if (registry.hasKeyword(cardId, keyword)) {
-    return true;
-  }
-  const granted = meta?.grantedKeywords as GrantedKeyword[] | undefined;
-  if (granted?.some((gk) => gk.keyword === keyword)) {
-    return true;
-  }
-  return false;
-}
 
 /**
  * rule 476.1: only an Equipment can be attached to a unit. Hand-authored defs
@@ -70,19 +49,6 @@ function isAttachable(cardId: string, cardType: string): boolean {
 function equipTimingAllowed(state: RiftboundGameState): boolean {
   const turnState = getTurnState(state.interaction ?? createInteractionState());
   return turnState === "neutral-open" || turnState === "neutral-closed";
-}
-
-/**
- * rule 377.3: [Equip] activations sitting on the chain have not attached yet;
- * count the ones already aimed at `unitId` so a second activation on the same
- * holder can be judged against rule 579.
- */
-function pendingEquipCount(state: RiftboundGameState, unitId: string): number {
-  const items = state.interaction?.chain?.items ?? [];
-  return items.filter((item) => {
-    const effect = (item as { effect?: { type?: string; unitId?: string } }).effect;
-    return effect?.type === "equip-attach" && effect.unitId === unitId;
-  }).length;
 }
 
 /**
@@ -170,15 +136,10 @@ export const equipmentMoves: Partial<
         if (registry.get(id)?.cardType !== "unit") {
           return false;
         }
-        if (controllerOf(id) !== playerId) {
-          return false;
-        }
-        // rule 579 (Weaponmaster): only a Weaponmaster may hold a second piece.
-        const meta = context.cards.getCardMeta(id as CoreCardId) as
-          | Partial<RiftboundCardMeta>
-          | undefined;
-        const equipped = meta?.equippedWith ?? [];
-        return equipped.length === 0 || unitHasKeyword(id, "Weaponmaster", meta);
+        // rule 434.1.b.1 / 818.3.b: a Top-Most card may hold "one or more"
+        // Equipment — nothing limits a unit to a single piece, and 821
+        // (Weaponmaster) only grants a discounted on-play Equip.
+        return controllerOf(id) === playerId;
       });
 
       const results: { playerId: string; equipmentId: string; unitId: string }[] = [];
@@ -244,23 +205,9 @@ export const equipmentMoves: Partial<
         return false;
       }
 
-      // Rule 579 (Weaponmaster): a unit may only hold more than one piece
-      // Of equipment if it has the Weaponmaster keyword. Without it, any
-      // Additional attach must be rejected.
-      const unitMeta = context.cards.getCardMeta(context.params.unitId as CoreCardId) as
-        | Partial<RiftboundCardMeta>
-        | undefined;
-      const currentlyEquipped = unitMeta?.equippedWith ?? [];
-      // An [Equip] already on the chain has not attached yet (377.3), but its
-      // holder is spoken for: a non-Weaponmaster unit can never end up with two
-      // Equipment, so the second activation is illegal rather than a fizzle.
-      const pendingEquips = pendingEquipCount(state, context.params.unitId);
-      if (
-        currentlyEquipped.length + pendingEquips > 0 &&
-        !unitHasKeyword(context.params.unitId, "Weaponmaster", unitMeta)
-      ) {
-        return false;
-      }
+      // rule 434.1.b.1 / 818.3.b: a Top-Most card may have "one or more"
+      // Equipment attached; no rule caps a unit at one. 821 (Weaponmaster)
+      // only grants a discounted on-play Equip, not a second-slot permission.
 
       // rule 476.1: the printed [Equip] cost must be payable.
       const equipCost = printedEquipCost(context.params.equipmentId);

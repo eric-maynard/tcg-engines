@@ -140,12 +140,18 @@ describe("Jagged Cutlass (ven-073-166)", () => {
     expect(game.state("assailant").might).toBe(8);
   });
 
-  test("one Equipment per non-Weaponmaster unit — after the Cutlass is on Deckhand, a second Cutlass may only go to the OTHER unit", async () => {
+  // rule 434.1.b.1 / 818.3.b: a Top-Most card may hold "one or more" Equipment —
+  // no rule caps a unit at one, and 821 (Weaponmaster) only grants a discounted
+  // on-play Equip rather than a second slot.
+  test("a second Cutlass may go to either unit — a unit is not capped at one Equipment", async () => {
     const game = await board({ body: 3 }).gear(P1, CARD, "cutlass2").unit(P1, "base", { might: 1, name: "Cabin Boy" }, "boy").build();
     await equip(game, "deckhand");
     expect(game.state("deckhand").might).toBe(4);
     const opt = equipOption(game);
     expect(opt?.fields.find((f) => f.name === "equipmentId")?.options).toEqual(["cutlass2"]); // the attached one's Equip text is inactive (718.2)
-    expect(opt?.fields.find((f) => f.name === "unitId")?.options).toEqual(["boy"]);
+    expect(opt?.fields.find((f) => f.name === "unitId")?.options?.slice().sort()).toEqual([
+      "boy",
+      "deckhand",
+    ]);
   });
 });

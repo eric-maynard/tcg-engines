@@ -41,6 +41,26 @@ describe("Gearhead (sfd-068-221)", () => {
     expect(game.state("squire").might).toBe(5);
   });
 
+  test("a second Equipment can be attached through the normal [Equip] move (rules 434.1.b.1, 818.3.b)", async () => {
+    const game = await scenario()
+      .resources(P1, { energy: 5, power: { fury: 2, mind: 2 } })
+      .unit(P1, "base", CARD, "gh")
+      .gear(P1, SKYFALL, "sky")
+      .gear(P1, DIRK, "dirk")
+      .build();
+    await game.p1.do("equipCard", { equipmentId: "sky", unitId: "gh" });
+    await game.settle();
+    const stillOffered = game.p1
+      .legal()
+      .filter((o) => o.moveId === "equipCard")
+      .flatMap((o) => o.variants ?? [])
+      .some((v) => v.params?.equipmentId === "dirk" && v.params?.unitId === "gh");
+    expect(stillOffered).toBe(true);
+    await game.p1.do("equipCard", { equipmentId: "dirk", unitId: "gh" });
+    await game.settle();
+    expect(game.state("gh").meta.equippedWith).toEqual(["sky", "dirk"]);
+  });
+
   test("equipping an on-board Equipment is a player-facing action (enumerated move)", async () => {
     const game = await scenario()
       .resources(P1, { energy: 3, power: { fury: 1 } })

@@ -449,14 +449,14 @@ describe("Ambush: can be played as Reaction at a battlefield where you have unit
 // Weaponmaster (can equip multiple equipment)
 // ===========================================================================
 
-describe("Weaponmaster: can hold multiple equipment (engine rule gap)", () => {
+describe("Weaponmaster (rule 821) and multi-Equipment attachment", () => {
   it("Weaponmaster keyword exists in KEYWORD_DEFINITIONS as a 'play' keyword", () => {
     const w = KEYWORD_DEFINITIONS.Weaponmaster;
     expect(w).toBeDefined();
     expect(w?.category).toBe("play");
   });
 
-  it("Rule 579: equipCard rejects a second equipment on a unit without Weaponmaster", () => {
+  it("rule 434.1.b.1: a unit without Weaponmaster may still hold a second equipment", () => {
     const engine = createMinimalGameState({ phase: "main" });
     createCard(engine, "knight", {
       cardType: "unit",
@@ -483,16 +483,18 @@ describe("Weaponmaster: can hold multiple equipment (engine rule gap)", () => {
     });
     expect(r1.success).toBe(true);
 
-    // Second equipment on the same (non-Weaponmaster) unit must be rejected.
+    // rule 434.1.b.1 / 818.3.b: a Top-Most card may hold "one or more"
+    // Equipment; nothing caps a unit at one, and 821 (Weaponmaster) only
+    // grants a discounted on-play Equip rather than a second slot.
     const r2 = applyMove(engine, "equipCard", {
       equipmentId: "shield",
       playerId: P1,
       unitId: "knight",
     });
-    expect(r2.success).toBe(false);
+    expect(r2.success).toBe(true);
   });
 
-  it("Rule 579: a Weaponmaster unit can hold multiple equipment", () => {
+  it("rule 821: a Weaponmaster unit can hold multiple equipment", () => {
     const engine = createMinimalGameState({ phase: "main" });
     createCard(engine, "dual-wielder", {
       cardType: "unit",

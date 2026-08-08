@@ -261,6 +261,30 @@ export function formatMoveLog(
     case "sendToHand": {
       return `${actor} moved ${resolveCard(params.cardId)} to hand.`;
     }
+    // rule 424.1: revealing presents the card to ALL players, so a pick made
+    // out of a revealed set has to name the card in the shared log — otherwise
+    // the opponent never learns which card was taken.
+    case "resolvePendingChoice": {
+      const picked: string[] = [];
+      if (typeof params.pickedCardId === "string") {
+        picked.push(resolveCard(params.pickedCardId));
+      }
+      if (Array.isArray(params.pickedCardIds)) {
+        for (const id of params.pickedCardIds) {
+          picked.push(resolveCard(id));
+        }
+      }
+      if (picked.length > 0) {
+        return `${actor} chose ${picked.join(", ")}.`;
+      }
+      if (typeof params.pickedName === "string" && params.pickedName) {
+        return `${actor} chose ${params.pickedName}.`;
+      }
+      if (typeof params.accept === "boolean") {
+        return `${actor} ${params.accept ? "accepted" : "declined"} an optional effect.`;
+      }
+      return `${actor} resolved a choice.`;
+    }
     default: {
       // Hide noisy system moves from the log
       const hiddenMoves = new Set([
