@@ -1331,7 +1331,10 @@ export function settleResolvedSpellCard(
   // the trash. An outstanding prompt means the effect is still mid-resolution,
   // so the card stays in the chain zone; `flushDeferredSpellSettle` finishes the
   // job once the last prompt of that resolution is answered.
-  if (draft?.pendingChoice) {
+  // rule 752.1 (ven-152-166) — the mode re-choice offered for a STOLEN chain
+  // item belongs to that item, not to the spell that handed it over: the
+  // thieving spell has finished and goes to the trash right away.
+  if (draft?.pendingChoice && (draft.pendingChoice as { reChoose?: boolean }).reChoose !== true) {
     draft.deferredSpellSettle = {
       cardId: resolved.cardId as string,
       controller: resolved.controller as string,
@@ -1365,7 +1368,9 @@ export function flushDeferredSpellSettle(
   context: Parameters<typeof buildEffectContext>[3],
 ): void {
   const parked = draft.deferredSpellSettle;
-  if (!parked || draft.pendingChoice) {
+  // rule 752.1 (ven-152-166) — a stolen item's re-choice prompt is not part of
+  // the parked spell's own resolution, so it does not hold that card on the chain.
+  if (!parked || (draft.pendingChoice && (draft.pendingChoice as { reChoose?: boolean }).reChoose !== true)) {
     return;
   }
   draft.deferredSpellSettle = undefined;

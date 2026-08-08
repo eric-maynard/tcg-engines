@@ -5,6 +5,7 @@ import {
   findSequenceLeadTarget,
   type SpellEffectTargetShape,
 } from "../../game-definition/moves/play/targeting";
+import { collectChoiceNodes } from "../../game-definition/moves/play/play-time-modes";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import { type EffectHelpers } from "./_helpers";
 
@@ -50,6 +51,26 @@ export function handle_gainControlOfSpell(
   (stolen as { controller: string }).controller = ctx.playerId;
 
   if (!(effect as { newChoices?: boolean }).newChoices || ctx.draft.pendingChoice) {
+    return;
+  }
+  // rule 752.1 (ven-152-166) — MODES are re-choosable too: a stolen modal spell
+  // offers its whole menu to the new controller (declining keeps the locked
+  // mode and targets), and picking one re-asks that mode's target from their
+  // seat, so "friendly"/"enemy" flip with the item's controller.
+  const menu = collectChoiceNodes(stolen.effect).find(
+    (n) => typeof (n as { _chosenIndex?: number })._chosenIndex === "number",
+  ) as { options?: unknown[] } | undefined;
+  if (menu && Array.isArray(menu.options) && menu.options.length > 1) {
+    ctx.draft.pendingChoice = {
+      bindToChainItemId: stolen.id,
+      effect: menu,
+      optional: true,
+      options: menu.options.map((_, i) => i),
+      playerId: ctx.playerId,
+      reChoose: true,
+      sourceCardId: stolen.cardId,
+      type: "choose-mode",
+    } as typeof ctx.draft.pendingChoice;
     return;
   }
   const stolenEffect = stolen.effect as { target?: TargetDescriptor } | undefined;

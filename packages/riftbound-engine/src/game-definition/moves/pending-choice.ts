@@ -23,6 +23,7 @@ import { executeEffect } from "../../abilities/effect-executor";
 import type { EffectContext, ExecutableEffect } from "../../abilities/effect-executor";
 import { locationKeyOf } from "../../abilities/effects/choose-per-location";
 import { markContestedOnArrival } from "../../abilities/effects/move";
+import { isBlockedByTwoOtherPlayers } from "./movement/helpers";
 import { castSpellFromTrash } from "../../abilities/effects/play";
 import { contestBattlefieldOnArrival } from "./movement/contest-arrival";
 import { openPendingContestedShowdown } from "./chain/showdown";
@@ -1354,6 +1355,11 @@ export const pendingChoiceMoves: Partial<
         if (choice.playerId !== context.params.playerId) {
           return false;
         }
+        // rule 752.1 (ven-152-166) — "you MAY make new choices": declining the
+        // re-choice menu keeps the previous controller's mode and targets.
+        if (choice.optional && context.params.accept === false) {
+          return true;
+        }
         return choice.options.includes(context.params.pickedMode as number);
       }
       // rule-id: unl-130-219 (rules 182–185) — only the chooser may name a
@@ -1609,10 +1615,14 @@ export const pendingChoiceMoves: Partial<
         if (choice.playerId !== (context.playerId as string)) {
           return [];
         }
-        return choice.options.map((idx) => ({
-          pickedMode: idx,
-          playerId: context.playerId as string,
-        }));
+        return [
+          ...choice.options.map((idx) => ({
+            pickedMode: idx,
+            playerId: context.playerId as string,
+          })),
+          // rule 752.1 (ven-152-166) — declining leaves the stolen item as it was.
+          ...(choice.optional ? [{ accept: false, playerId: context.playerId as string }] : []),
+        ];
       }
       if (choice.type === "choose-player") {
         if (choice.playerId !== (context.playerId as string)) {
@@ -2208,6 +2218,12 @@ export const pendingChoiceMoves: Partial<
         // Rule 355.8 (unl-182-219): execute the picked modal option; when
         // `notChosenThisTurn` is set, record the index on the source card's
         // meta so subsequent Repeat casts exclude it.
+        // rule 752.1 (ven-152-166) — the new controller declines to re-choose.
+        if (choice.optional && context.params.accept === false) {
+          draft.pendingChoice = undefined;
+          postChoiceCleanup(draft, context);
+          return;
+        }
         const idx = context.params.pickedMode as number;
         if (!choice.options.includes(idx)) {
           return;
@@ -2223,6 +2239,16 @@ export const pendingChoiceMoves: Partial<
             return;
           }
           const nodes = collectChoiceNodes(item.effect);
+          // rule 751.1 / 752.1 (ven-152-166) — new choices for a stolen item
+          // REPLACE the locked ones: drop the old mode and its bound targets so
+          // the new controller re-chooses both from their own seat.
+          if (choice.reChoose === true) {
+            for (const n of nodes) {
+              n._chosenIndex = undefined;
+              n._chosenTargets = undefined;
+            }
+            (item as { targets?: readonly string[] }).targets = undefined;
+          }
           const node = nodes.find((n) => n._chosenIndex === undefined);
           if (node) {
             node._chosenIndex = idx;
@@ -2684,26 +2710,65 @@ export const pendingChoiceMoves: Partial<
             paidAdditionalCost = true;
           }
         }
+        // rule 449.2 / 447.2.c / 456.1 — no unit may become present at a
+        // battlefield already holding units of two OTHER players. A named
+        // destination that has become illegal by the time the move executes
+        // turns the required Move into a Recall to base, and a Recall is not a
+        // Move: no `move` event and no Contested from the arrival.
+        const recalledToBase = (cardId: string): boolean => {
+          if (
+            !targetZoneId.startsWith("battlefield-") ||
+            choice.created === true ||
+            !isBoardZone(fromZone) ||
+            !context.cards ||
+            typeof context.zones.getCardsInZone !== "function" ||
+            getGlobalCardRegistry().get(cardId)?.cardType !== "unit"
+          ) {
+            return false;
+          }
+          const controller =
+            ((context.cards as { getCardController?: (id: CoreCardId) => string | undefined })
+              .getCardController?.(cardId as CoreCardId) ??
+              (context.cards.getCardOwner(cardId as CoreCardId) as string | undefined)) ??
+            choice.playerId;
+          return isBlockedByTwoOtherPlayers(
+            targetZoneId,
+            controller,
+            (zoneId) => context.zones.getCardsInZone(zoneId),
+            (id) =>
+              (context.cards as { getCardController?: (c: CoreCardId) => string | undefined })
+                .getCardController?.(id as CoreCardId) ??
+              (context.cards.getCardOwner(id as CoreCardId) as string | undefined),
+          );
+        };
+        const mainRecalled = recalledToBase(choice.cardId as string);
         if (!(choice.created && fromZone === targetZoneId)) {
           context.zones.moveCard({
             cardId: choice.cardId as CoreCardId,
-            targetZoneId: targetZoneId as CoreZoneId,
+            targetZoneId: (mainRecalled ? "base" : targetZoneId) as CoreZoneId,
           });
         }
         // rule-id: sfd-079-221 (rule 449) — "move any number of your units to an
         // open battlefield" is ONE move of a group: every other unit in the
         // group travels to the destination its controller just picked.
-        const movedGroup: string[] = [choice.cardId as string];
+        const movedGroup: string[] = mainRecalled ? [] : [choice.cardId as string];
         // rule 446.1 — each member of the group is moved, so each one's own
         // "When I move" trigger is owed a `move` event keyed to ITS from-zone.
-        const movedFrom: { cardId: string; from: string }[] = [
-          { cardId: choice.cardId as string, from: fromZone },
-        ];
+        const movedFrom: { cardId: string; from: string }[] = mainRecalled
+          ? []
+          : [{ cardId: choice.cardId as string, from: fromZone }];
         for (const extraId of ((choice as { alsoMoveCardIds?: readonly string[] })
           .alsoMoveCardIds ?? []) as readonly string[]) {
           const extraFrom =
             (context.zones.getCardZone?.(extraId as CoreCardId) as string | undefined) ?? "";
           if (extraFrom === targetZoneId) {
+            continue;
+          }
+          if (recalledToBase(extraId)) {
+            context.zones.moveCard({
+              cardId: extraId as CoreCardId,
+              targetZoneId: "base" as CoreZoneId,
+            });
             continue;
           }
           context.zones.moveCard({
@@ -2764,7 +2829,10 @@ export const pendingChoiceMoves: Partial<
           (context.cards?.getCardController?.(choice.cardId as never) as string | undefined) ??
           (context.cards?.getCardOwner?.(choice.cardId as never) as string | undefined) ??
           choice.playerId;
-        if (
+        if (mainRecalled && movedGroup.length === 0) {
+          // rule 456 — the Recall relocated the unit to base; nothing arrived,
+          // so no Contested mark and no Showdown is staged at the destination.
+        } else if (
           targetZoneId.startsWith("battlefield-") &&
           context.cards &&
           context.counters &&

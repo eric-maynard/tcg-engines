@@ -914,6 +914,18 @@ export interface ChooseModeChoice {
   readonly modeSlot?: number;
   /** Modes already locked for earlier executions (rule 355.8 narrows the menu). */
   readonly chosenModes?: readonly number[];
+  /**
+   * rule 752.1 (ven-152-166 Rebuttal / ogn-080-298) — "you may make new choices
+   * for it": the mode menu of a chain item whose control just changed. The
+   * pick REPLACES the locked mode (and clears the item's locked targets so the
+   * new controller re-chooses them); declining keeps every earlier choice.
+   */
+  readonly reChoose?: true;
+  /**
+   * rule 355.13 — the prompt may be declined (`accept:false`), leaving the
+   * item's existing choices untouched.
+   */
+  readonly optional?: true;
 }
 
 /**

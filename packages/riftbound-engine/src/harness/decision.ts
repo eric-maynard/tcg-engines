@@ -689,13 +689,15 @@ export function deriveFromPendingChoice(ctx: DecisionContext, pc: PendingChoice)
       return d;
     }
     case "choose-mode": {
+      // rule 752.1 (ven-152-166) — "you MAY make new choices" menus are declinable.
+      const modeDeclinable = pc.optional === true;
       const d: PickDecision = {
         ...base,
-        allowDecline: false,
+        allowDecline: modeDeclinable,
         id: decisionId(ctx.seq, seat, "pick"),
         kind: "pick",
         max: 1,
-        min: 1,
+        min: modeDeclinable ? 0 : 1,
         options: pc.options.map((idx) => ({ key: String(idx), label: modeLabel(pc.effect, idx), mode: idx })),
         prompt: "Choose a mode",
         semantics: "mode",
@@ -1072,6 +1074,11 @@ export function resolvePendingAnswer(ctx: DecisionContext, decision: Decision, a
     }
     case "choose-mode": {
       let k: string | undefined | ResolveOutcome;
+      // rule 752.1 (ven-152-166) — declining a re-choice menu keeps the old choices.
+      if (answer.kind === "decline") {
+        params.accept = false;
+        break;
+      }
       if (answer.kind === "integer") {
         k = String(answer.value);
       } else {
