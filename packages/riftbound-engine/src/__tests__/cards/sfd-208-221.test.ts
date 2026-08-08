@@ -67,7 +67,7 @@ describe("Forge of the Fluft (sfd-208-221)", () => {
   // BUG — expected: with P1 controlling the Forge, P1's legend offers an activated ability whose whole
   // cost is [Exhaust]; using it exhausts the legend, spends no energy/power, and attaches Doran's Blade
   // to the chosen unit (+2 Might). Actual: the grant is an unread virtual keyword — nothing is offered.
-  test.failing("BUG: while you control the Forge your legend has '[Exhaust]: Attach an Equipment you control to a unit you control' — free attach, legend exhausted, +2 Might", async () => {
+  test("while you control the Forge your legend has '[Exhaust]: Attach an Equipment you control to a unit you control' — free attach, legend exhausted, +2 Might", async () => {
     const game = await board(P1).build();
     expect(game.state("leg").isExhausted).toBe(false);
     await useForge(game, "p1", "leg", "blade", "squire");
@@ -80,7 +80,7 @@ describe("Forge of the Fluft (sfd-208-221)", () => {
   });
 
   // BUG — expected (434.4): the unit may be at a battlefield; the Equipment becomes located there with it.
-  test.failing("BUG: the target unit may be at another battlefield — the blade attaches to Fielder at 'plain' and is located there (434.4)", async () => {
+  test("the target unit may be at another battlefield — the blade attaches to Fielder at 'plain' and is located there (434.4)", async () => {
     const game = await board(P1).build();
     await useForge(game, "p1", "leg", "blade", "fielder");
     expect(game.state("blade").attachedTo).toBe("fielder");
@@ -90,7 +90,7 @@ describe("Forge of the Fluft (sfd-208-221)", () => {
 
   // BUG — expected (434.1.f): "Attach an Equipment you control" does not say "detached", so an
   // Equipment already on Holder can be re-attached to Squire: Holder loses the +2, Squire gains it.
-  test.failing("BUG: re-attach (434.1.f) — a blade already on Holder moves to Squire; Holder back to printed Might", async () => {
+  test("re-attach (434.1.f) — a blade already on Holder moves to Squire; Holder back to printed Might", async () => {
     const game = await board(P1).build();
     await game.p1.do("equipCard", { equipmentId: "blade", unitId: "holder" }); // the normal way: pay [body]
     await game.settle();
@@ -106,7 +106,7 @@ describe("Forge of the Fluft (sfd-208-221)", () => {
 
   // BUG — expected (377.3 / 381): the granted ability is a normal activated ability — it goes on the
   // chain as a non-triggered item controlled by P1 and P2 receives priority before it resolves.
-  test.failing("BUG: the granted ability uses the chain — P2 gets priority, nothing attaches until it resolves", async () => {
+  test("the granted ability uses the chain — P2 gets priority, nothing attaches until it resolves", async () => {
     const game = await board(P1).build();
     const opt = forgeOption(game, "p1", "leg");
     expect(opt).toBeDefined();
@@ -137,7 +137,7 @@ describe("Forge of the Fluft (sfd-208-221)", () => {
 
   // BUG — expected: control, not deck ownership, decides whose legends are "friendly": P2 controlling a
   // Forge from P1's deck has the ability on P2's legend during P2's turn (and P1's legend does not).
-  test.failing("BUG: P2 controlling P1's Forge — P2's legend gains the ability on P2's turn; P1's legend has nothing", async () => {
+  test("P2 controlling P1's Forge — P2's legend gains the ability on P2's turn; P1's legend has nothing", async () => {
     const game = await scenario()
       .active(P2)
       .battlefield("forge", { controller: P2, def: CARD, inert: false, owner: P1 })
@@ -190,7 +190,7 @@ describe("Forge of the Fluft (sfd-208-221)", () => {
   // battlefield whose effect grants friendly legends an activated ability costing [Exhaust] with an
   // `attach` effect (equipment you control → unit you control). Actual: condition "while-at-battlefield"
   // and an opaque `grant-keyword: "GrantAttachActivated"` with no cost and no effect.
-  test.failing("BUG: registry payload — control condition + a granted '[Exhaust]: attach' activated ability, not a virtual keyword", async () => {
+  test("registry payload — control condition + a granted '[Exhaust]: attach' activated ability, not a virtual keyword", async () => {
     const def = (await loadDefaultCardPool()).get(CARD);
     expect(def).toMatchObject({ cardType: "battlefield", name: "Forge of the Fluft" });
     expect(def?.abilities).toHaveLength(1);

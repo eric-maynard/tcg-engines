@@ -289,7 +289,23 @@ export class CardDefinitionRegistry {
    * Get a card's abilities.
    */
   getAbilities(cardId: string): CardDefinitionLookup["abilities"] {
-    return this.definitions.get(cardId)?.abilities ?? [];
+    const abilities = this.definitions.get(cardId)?.abilities ?? [];
+    // rule 135.4.b (sfd-208-221) — a static grant may print the granted text
+    // INLINE on the effect ("friendly legends have '[Exhaust]: …'"). Expose
+    // each inline ability at the index its grant names, so the granted ability
+    // is looked up exactly like a printed one. `granted-only` keeps the
+    // granting card itself from activating it.
+    const inline = abilities.flatMap((a) => {
+      const eff = (a as { type?: string; effect?: { type?: string; ability?: unknown } }).effect;
+      return (a as { type?: string }).type === "static" &&
+        eff?.type === "grant-ability" &&
+        eff.ability !== undefined
+        ? [eff.ability]
+        : [];
+    });
+    return inline.length > 0
+      ? ([...abilities, ...inline] as CardDefinitionLookup["abilities"])
+      : abilities;
   }
 
   /**
