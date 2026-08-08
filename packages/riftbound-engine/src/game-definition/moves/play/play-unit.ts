@@ -1948,116 +1948,183 @@ export const playUnit: Defs["playUnit"] = {
       }
     }
 
-    // rule 135.2.b.3 / 369.3 (unl-147-219): an "as you play me, add the …
-    // battlefield token; if you do, I enter there" clause runs during the play
-    // and replaces where the unit enters (play-location restrictions do not
-    // apply to an entry replacement).
-    const entryZone =
-      applyPlayBattlefieldToken({ cardId, draft, playerId, zones: zones as never }) ?? location;
-
-    zones.moveCard({
-      cardId: cardId as CoreCardId,
-      targetZoneId: entryZone as CoreZoneId,
-    });
-
-    // Rule 143.4: units enter exhausted unless a static "I enter ready"
-    // effect (enter-ready) says otherwise (e.g. Eager Drakehound sfd-006-221),
-    // Accelerate was paid (rule 717), or a runtime `enters-ready` replacement
-    // (rule 571 — Sun Disc ogn-021-298) applies.
-    // rule-id: unl-052-219 — the "next unit you play" replacement is consumed
-    // by this unit regardless of other enter-ready sources, so evaluate it
-    // first (it may also carry a Buff rider for the entering unit).
-    const replacedReady = consumeEntersReadyReplacement(draft, playerId, {
+    const paidIds = paidAdditionalCostActual ? paidIdsFromLegacyParams(cardId, context.params) : [];
+    // rule 357.2 / 371.2 (rule-id: ogn-208-298 × ogn-023-298) — the cost-kill
+    // met an OPTIONAL costed die replacement ("you may pay [fury] to … instead"):
+    // its controller answers now, in the middle of paying; the unit enters only
+    // once that prompt settles (`completeSuspendedPlay`, from the prompt's
+    // cleanup). Everything else is already paid, so nothing is asked twice.
+    if (draft.pendingChoice) {
+      draft.suspendedPlay = {
+        cardId,
+        kind: "playUnit",
+        location: location as string,
+        paidAccelerate,
+        paidAdditionalCost: paidAdditionalCostActual,
+        paidIds,
+        playerId,
+        wasFocusAction,
+      };
+      return;
+    }
+    completeUnitPlay(draft, context, {
       cardId,
-      ctx: { cards: context.cards, counters, zones },
-    });
-    // rule-id: ven-091-166 — a conditional "I enter ready" static must have
-    // its condition evaluated at play time (e.g. score not within 3 of the
-    // Victory Score); an unconditional one always applies.
-    // rule 369.3 (rule-id: ogn-011-298): a friendly board static may also
-    // grant "enters ready" to the units its controller plays.
-    const entersReady =
-      replacedReady ||
-      staticEnterReadyApplies(cardId, draft, playerId, zones, context.cards, entryZone) ||
-      boardEntersReadyGrantApplies(draft, zones, cardId, playerId, context.cards, entryZone) ||
-      paidAccelerate;
-    if (!entersReady) {
-      counters.setFlag(cardId as CoreCardId, "exhausted", true);
-    }
-
-    // Fire "play-self" and "play-card" triggers BEFORE incrementing the
-    // Rule-724 counter, so a Legion trigger on this card itself cannot
-    // Satisfy its own condition — it must observe the count of cards
-    // That were played EARLIER in this turn.
-    // rule 356.2 / 356.4.f.1 — record WHICH additional costs this play paid.
-    recordAdditionalCostsPaid(
-      draft,
-      cardId,
-      paidAdditionalCostActual ? paidIdsFromLegacyParams(cardId, context.params) : [],
-    );
-    fireTriggers(
-      { cardId, paidAdditionalCost: paidAdditionalCostActual, playerId, type: "play-self" },
-      { cards: context.cards, counters, draft, zones },
-    );
-    fireTriggers(
-      { cardId, cardType: "unit", playerId, type: "play-card" },
-      { cards: context.cards, counters, draft, zones },
-    );
-
-    // Rule 724 (Legion) tracker: count this play so subsequent cards
-    // Can satisfy their Legion conditions. Runes are NOT counted.
-    if (draft.cardsPlayedThisTurn) {
-      draft.cardsPlayedThisTurn[playerId] = (draft.cardsPlayedThisTurn[playerId] ?? 0) + 1;
-    }
-
-    // rule 190.3.a.1 / 323.11.a: a unit played to a battlefield its controller
-    // doesn't control (e.g. "You may play me to an open battlefield") contests
-    // it exactly as a Standard Move would, staging the showdown.
-    if (isBattlefieldZone(entryZone)) {
-      const arrivedAt = extractBattlefieldId(entryZone);
-      if (arrivedAt) {
-        contestBattlefieldOnArrival({
-          arrivingUnitIds: [cardId],
-          battlefieldId: arrivedAt,
-          cards: context.cards,
-          counters,
-          draft,
-          playerId,
-          zones,
-        });
-      }
-      // rule 464.2.c.3.a: a unit that becomes present at a battlefield during
-      // an ongoing combat gains its Attacker/Defender designation at the next
-      // Cleanup. `contestBattlefieldOnArrival` only stamps the arriving side of
-      // a battlefield its controller does NOT control, so a Reaction unit
-      // played to one you already hold (a defender joining mid-combat) needs
-      // the cleanup pass to designate it.
-      cleanupAndFireDeaths(draft, context as unknown as PostMoveCleanupContext);
-    }
-
-    // rule-id: ven-041-166-weaponmaster-on-play-equip
-    // Weaponmaster is a `{type:"keyword"}` ability, so trigger-matcher never
-    // schedules it. Surface the "you may Equip … for [rainbow] less" prompt
-    // directly: when the just-played unit has Weaponmaster and the player
-    // owns any on-board equipment, block on a pendingChoice so the
-    // controller can pick one (or decline). The reduced Equip cost is
-    // charged by the weaponmaster-equip reducer (rule 821.1.c;
-    // rule-id: sfd-119-221-weaponmaster-pays-reduced-equip-cost).
-    offerWeaponmasterEquip(
-      draft as unknown as Parameters<typeof offerWeaponmasterEquip>[0],
-      zones as unknown as Parameters<typeof offerWeaponmasterEquip>[1],
+      kind: "playUnit",
+      location: location as string,
+      paidAccelerate,
+      paidAdditionalCost: paidAdditionalCostActual,
+      paidIds,
       playerId,
-      cardId,
-    );
-
-    // rule 340.2.a / 347.1 — the unit resolved on finalize with nothing left
-    // on the chain and no prompt outstanding: Focus passes to the next
-    // Relevant Player. A play-trigger chain keeps Focus where it is (346.1).
-    if (wasFocusAction && !draft.pendingChoice && draft.interaction) {
-      const post = draft.interaction;
-      if (!post.chain?.items.length && getActiveShowdown(post)?.focusPlayer === playerId) {
-        draft.interaction = advanceFocusAfterAction(post);
-      }
-    }
+      wasFocusAction,
+    });
   },
 };
+
+/**
+ * rule 359.2 — the second half of a unit play, once every cost is paid: the
+ * unit leaves the chain for the board (entry zone / exhausted / enter-ready
+ * replacements), its play triggers fire, Legion counts it, an arrival contests
+ * the battlefield, [Weaponmaster] is offered, and a Focus action passes Focus.
+ * Split out so a play suspended mid-payment (`draft.suspendedPlay`) resumes
+ * exactly here.
+ */
+export function completeUnitPlay(
+  draft: RiftboundGameState,
+  // biome-ignore lint/suspicious/noExplicitAny: engine move context is framework-typed
+  context: any,
+  play: NonNullable<RiftboundGameState["suspendedPlay"]>,
+): void {
+  const { cardId, playerId, location, paidAccelerate, wasFocusAction } = play;
+  const paidAdditionalCostActual = play.paidAdditionalCost;
+  const { zones, counters } = context as {
+    zones: Parameters<NonNullable<Defs["playUnit"]["reducer"]>>[1]["zones"];
+    counters: Parameters<NonNullable<Defs["playUnit"]["reducer"]>>[1]["counters"];
+  };
+  // rule 135.2.b.3 / 369.3 (unl-147-219): an "as you play me, add the …
+  // battlefield token; if you do, I enter there" clause runs during the play
+  // and replaces where the unit enters (play-location restrictions do not
+  // apply to an entry replacement).
+  const entryZone =
+    applyPlayBattlefieldToken({ cardId, draft, playerId, zones: zones as never }) ?? location;
+
+  zones.moveCard({
+    cardId: cardId as CoreCardId,
+    targetZoneId: entryZone as CoreZoneId,
+  });
+
+  // Rule 143.4: units enter exhausted unless a static "I enter ready"
+  // effect (enter-ready) says otherwise (e.g. Eager Drakehound sfd-006-221),
+  // Accelerate was paid (rule 717), or a runtime `enters-ready` replacement
+  // (rule 571 — Sun Disc ogn-021-298) applies.
+  // rule-id: unl-052-219 — the "next unit you play" replacement is consumed
+  // by this unit regardless of other enter-ready sources, so evaluate it
+  // first (it may also carry a Buff rider for the entering unit).
+  const replacedReady = consumeEntersReadyReplacement(draft, playerId, {
+    cardId,
+    ctx: { cards: context.cards, counters, zones },
+  });
+  // rule-id: ven-091-166 — a conditional "I enter ready" static must have
+  // its condition evaluated at play time (e.g. score not within 3 of the
+  // Victory Score); an unconditional one always applies.
+  // rule 369.3 (rule-id: ogn-011-298): a friendly board static may also
+  // grant "enters ready" to the units its controller plays.
+  const entersReady =
+    replacedReady ||
+    staticEnterReadyApplies(cardId, draft, playerId, zones, context.cards, entryZone) ||
+    boardEntersReadyGrantApplies(draft, zones, cardId, playerId, context.cards, entryZone) ||
+    paidAccelerate;
+  if (!entersReady) {
+    counters.setFlag(cardId as CoreCardId, "exhausted", true);
+  }
+
+  // Fire "play-self" and "play-card" triggers BEFORE incrementing the
+  // Rule-724 counter, so a Legion trigger on this card itself cannot
+  // Satisfy its own condition — it must observe the count of cards
+  // That were played EARLIER in this turn.
+  // rule 356.2 / 356.4.f.1 — record WHICH additional costs this play paid.
+  recordAdditionalCostsPaid(draft, cardId, paidAdditionalCostActual ? play.paidIds : []);
+  fireTriggers(
+    { cardId, paidAdditionalCost: paidAdditionalCostActual, playerId, type: "play-self" },
+    { cards: context.cards, counters, draft, zones },
+  );
+  fireTriggers(
+    { cardId, cardType: "unit", playerId, type: "play-card" },
+    { cards: context.cards, counters, draft, zones },
+  );
+
+  // Rule 724 (Legion) tracker: count this play so subsequent cards
+  // Can satisfy their Legion conditions. Runes are NOT counted.
+  if (draft.cardsPlayedThisTurn) {
+    draft.cardsPlayedThisTurn[playerId] = (draft.cardsPlayedThisTurn[playerId] ?? 0) + 1;
+  }
+
+  // rule 190.3.a.1 / 323.11.a: a unit played to a battlefield its controller
+  // doesn't control (e.g. "You may play me to an open battlefield") contests
+  // it exactly as a Standard Move would, staging the showdown.
+  if (isBattlefieldZone(entryZone)) {
+    const arrivedAt = extractBattlefieldId(entryZone);
+    if (arrivedAt) {
+      contestBattlefieldOnArrival({
+        arrivingUnitIds: [cardId],
+        battlefieldId: arrivedAt,
+        cards: context.cards,
+        counters,
+        draft,
+        playerId,
+        zones,
+      });
+    }
+    // rule 464.2.c.3.a: a unit that becomes present at a battlefield during
+    // an ongoing combat gains its Attacker/Defender designation at the next
+    // Cleanup. `contestBattlefieldOnArrival` only stamps the arriving side of
+    // a battlefield its controller does NOT control, so a Reaction unit
+    // played to one you already hold (a defender joining mid-combat) needs
+    // the cleanup pass to designate it.
+    cleanupAndFireDeaths(draft, context as unknown as PostMoveCleanupContext);
+  }
+
+  // rule-id: ven-041-166-weaponmaster-on-play-equip
+  // Weaponmaster is a `{type:"keyword"}` ability, so trigger-matcher never
+  // schedules it. Surface the "you may Equip … for [rainbow] less" prompt
+  // directly: when the just-played unit has Weaponmaster and the player
+  // owns any on-board equipment, block on a pendingChoice so the
+  // controller can pick one (or decline). The reduced Equip cost is
+  // charged by the weaponmaster-equip reducer (rule 821.1.c;
+  // rule-id: sfd-119-221-weaponmaster-pays-reduced-equip-cost).
+  offerWeaponmasterEquip(
+    draft as unknown as Parameters<typeof offerWeaponmasterEquip>[0],
+    zones as unknown as Parameters<typeof offerWeaponmasterEquip>[1],
+    playerId,
+    cardId,
+  );
+
+  // rule 340.2.a / 347.1 — the unit resolved on finalize with nothing left
+  // on the chain and no prompt outstanding: Focus passes to the next
+  // Relevant Player. A play-trigger chain keeps Focus where it is (346.1).
+  if (wasFocusAction && !draft.pendingChoice && draft.interaction) {
+    const post = draft.interaction;
+    if (!post.chain?.items.length && getActiveShowdown(post)?.focusPlayer === playerId) {
+      draft.interaction = advanceFocusAfterAction(post);
+    }
+  }
+}
+
+/**
+ * rule 357.2.a — finish a unit play that was suspended while one of its object
+ * costs waited on a prompt (see `draft.suspendedPlay`). Called from the prompt
+ * layer once no choice is open; a replaced cost-kill still counts as paid.
+ */
+export function completeSuspendedPlay(
+  draft: RiftboundGameState,
+  // biome-ignore lint/suspicious/noExplicitAny: engine move context is framework-typed
+  context: any,
+): void {
+  const play = draft.suspendedPlay;
+  if (!play || draft.pendingChoice) {
+    return;
+  }
+  draft.suspendedPlay = undefined;
+  if (play.kind === "playUnit") {
+    completeUnitPlay(draft, context, play);
+  }
+}

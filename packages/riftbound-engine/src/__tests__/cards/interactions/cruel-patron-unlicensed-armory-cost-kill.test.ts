@@ -113,7 +113,7 @@ describe("Cruel Patron × Unlicensed Armory — optional costed replacement on t
   // P1 must be asked — a yes/no (payable) decision for P1 sourced from the Armory, surfaced while
   // Patron is still being played (not yet on the board). Actual: the engine pays the kill-cost without
   // consulting the optional replacement — no prompt, the Sergeant goes straight to the trash.
-  test.failing("BUG: (a) paying the kill-cost surfaces P1's optional 'pay [fury]?' decision mid-play, before Patron is on the board (371.2.a)", async () => {
+  test("(a) paying the kill-cost surfaces P1's optional 'pay [fury]?' decision mid-play, before Patron is on the board (371.2.a)", async () => {
     const game = await board().build();
     await shieldSergeant(game);
     await game.p1.play("patron", { sacrifice: "sarge", to: "base" });

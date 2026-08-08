@@ -46,6 +46,7 @@ import { buildEffectContext, executeResolvedItem } from "./chain-moves";
 import { deductAbilityCost } from "./chain/activate-ability";
 import { canAffordPower } from "./chain/effect-context";
 import { payAnyDomainPower } from "./chain/resolve";
+import { completeSuspendedPlay } from "./play/play-unit";
 import {
   type CostExtras,
   canPayResourceCost,
@@ -399,6 +400,11 @@ function postChoiceCleanup(draft: RiftboundGameState, context: unknown): void {
   flushDeferredSequenceRest(draft, context);
   const ctx = context as Partial<PostMoveCleanupContext> | undefined;
   if (ctx?.cards && ctx?.counters && ctx?.zones && typeof ctx.zones.getCardsInZone === "function") {
+    // rule 357.2.a — a play suspended while its cost-kill waited on an optional
+    // die replacement completes now that the payment has settled.
+    if (draft.suspendedPlay && !draft.pendingChoice) {
+      completeSuspendedPlay(draft, context);
+    }
     cleanupAndFireDeaths(draft, ctx as PostMoveCleanupContext);
     // rule 323.12 / 344.2 — the Cleanup after the last choice of a resolution
     // begins whatever Showdown that resolution staged (showdown-only

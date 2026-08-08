@@ -1306,6 +1306,25 @@ export interface RiftboundGameState {
   skipFirstDrawFor?: PlayerId;
 
   /**
+   * rule 357.2 / 371.2 — a unit play whose object cost (a cost-kill met by an
+   * OPTIONAL costed die replacement, "you may pay [fury] … instead") raised a
+   * prompt mid-payment. Resources and every other cost are already paid; the
+   * unit is still in its origin zone. Once the prompt chain settles the play
+   * completes (`completeSuspendedPlay`) — a replaced cost still counts as paid
+   * (357.2.a). Pure data so state stays serializable.
+   */
+  suspendedPlay?: {
+    readonly kind: "playUnit";
+    readonly cardId: string;
+    readonly playerId: string;
+    readonly location: string;
+    readonly paidAccelerate: boolean;
+    readonly paidAdditionalCost: boolean;
+    readonly paidIds: readonly string[];
+    readonly wasFocusAction: boolean;
+  };
+
+  /**
    * rule 356.2 — additional costs paid per played card: the list of paid cost
    * ids (see `moves/play/cost-model.ts`), or the legacy boolean. Read through
    * `additionalCostWasPaid(state, cardId, id?)`.
