@@ -1,7 +1,7 @@
 // Effect handler: "damage"
 import type { CardId as CoreCardId } from "@tcg/core";
 import type { RiftboundCardMeta, RiftboundGameState } from "../../types";
-import { getBonusDamage } from "../bonus-damage";
+import { getBonusDamage, getLocationBonusDamage } from "../bonus-damage";
 import { checkReplacement, markReplacementConsumed } from "../replacement-effects";
 import type { TargetDescriptor } from "../target-resolver";
 import { resolveTarget } from "../target-resolver";
@@ -304,7 +304,11 @@ export function handle_damage(effect: ExecutableEffect, ctx: EffectContext, h: E
       if (unitIgnoresDamage(targetId, ctx.draft, (id) => ctx.cards.getCardMeta?.(id as CoreCardId) as { empowered?: boolean; combatRole?: string } | undefined)) {
         continue;
       }
-      const dmg = doubleIfMarked(assigned[targetId] + surplus + bonusDamage, targetId, ctx);
+      const dmg = doubleIfMarked(
+        assigned[targetId] + surplus + bonusDamage + getLocationBonusDamage(targetId, ctx),
+        targetId,
+        ctx,
+      );
       surplus = 0;
       const total = addDamage(ctx, targetId, dmg, damageAttribution as Record<string, unknown>);
       noteLethalDamage(ctx, targetId, total, dmg);
@@ -324,8 +328,10 @@ export function handle_damage(effect: ExecutableEffect, ctx: EffectContext, h: E
   if (raiseSameLocationSubsetRepick(effect, ctx, targets)) {
     return;
   }
+  // rule 715.2 / 714: each instance is increased separately, by the dealer's
+  // own Bonus Damage plus any tied to the damaged unit's location (Void Gate).
   const hits: { targetId: string; amount: number }[] = targets.map((targetId) => ({
-    amount: amount > 0 ? amount + bonusDamage : amount,
+    amount: amount > 0 ? amount + bonusDamage + getLocationBonusDamage(targetId, ctx) : amount,
     targetId,
   }));
   // rule-id: unl-072-219 (Crescent Strike) — "Deal N to that unit and M to
@@ -355,7 +361,10 @@ export function handle_damage(effect: ExecutableEffect, ctx: EffectContext, h: E
         (id) => !targets.includes(id) && ctx.zones.getCardZone(id as CoreCardId) === zone,
       );
       for (const id of others) {
-        hits.push({ amount: splashOthers + bonusDamage, targetId: id });
+        hits.push({
+          amount: splashOthers + bonusDamage + getLocationBonusDamage(id, ctx),
+          targetId: id,
+        });
       }
     }
   }

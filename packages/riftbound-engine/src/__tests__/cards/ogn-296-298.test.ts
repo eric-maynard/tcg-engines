@@ -65,7 +65,7 @@ describe("Void Gate (ogn-296-298)", () => {
   });
 
   // BUG — expected (715.4.a names this exact pair): 3 + 1 = 4 damage on a unit at Void Gate. Actual: 3.
-  test.failing("BUG: Hextech Ray (Deal 3) into an enemy unit HERE should deal 4 (715.1 / 715.4.a)", async () => {
+  test("Hextech Ray (Deal 3) into an enemy unit HERE should deal 4 (715.1 / 715.4.a)", async () => {
     const game = await board().hand(P1, HEXTECH_RAY, "ray").build();
     await game.p1.cast("ray", { targets: "gateFoe" });
     await game.settle();
@@ -75,7 +75,7 @@ describe("Void Gate (ogn-296-298)", () => {
 
   // BUG — expected: the passive is symmetric — my own unit here takes 3+1 from my Falling Star while the
   // second instance into a unit in a base stays 3; and P2's Ray into my unit here is 4. Actual: 3 / 3 / 3.
-  test.failing("BUG: symmetric — my spell into my OWN unit here, and the opponent's spell into my unit here, are both +1", async () => {
+  test("symmetric — my spell into my OWN unit here, and the opponent's spell into my unit here, are both +1", async () => {
     const own = await board().hand(P1, FALLING_STAR, "star").build();
     await own.p1.cast("star", { targets: ["gateAlly", "homeFoe"] });
     await own.settle();
@@ -89,7 +89,7 @@ describe("Void Gate (ogn-296-298)", () => {
 
   // BUG — expected: a passive ability needs no controller; Incinerate (2) into a unit at an uncontrolled
   // Void Gate deals 3. Actual: 2.
-  test.failing("BUG: an UNCONTROLLED Void Gate still grants +1 (Incinerate deals 3 here)", async () => {
+  test("an UNCONTROLLED Void Gate still grants +1 (Incinerate deals 3 here)", async () => {
     const game = await scenario()
       .resources(P1, { energy: 2 })
       .battlefield("bf1", { controller: null, def: CARD, inert: false, owner: P2 })
@@ -104,7 +104,7 @@ describe("Void Gate (ogn-296-298)", () => {
 
   // BUG — expected: 2 + 1 = 3 ≥ 3 Might → the unit here dies; the same 3-Might unit at bf2 lives on 2.
   // Actual: both survive on 2.
-  test.failing("BUG: exactly lethal — Incinerate (2) kills a 3-Might unit HERE but not a 3-Might unit at bf2", async () => {
+  test("exactly lethal — Incinerate (2) kills a 3-Might unit HERE but not a 3-Might unit at bf2", async () => {
     const b = () =>
       scenario()
         .resources(P1, { energy: 2 })
@@ -121,11 +121,13 @@ describe("Void Gate (ogn-296-298)", () => {
     await here.p1.cast("inc", { targets: "gateGrunt" });
     await here.settle();
     expect(here.zoneOf("gateGrunt")).toBe("trash");
-    expect(here.gameState.battlefields.bf1?.controller).toBe(P2); // a spell kill empties bf1 but is no conquer
+    // rule 190.4.c / 323.6: the spell kill is no conquer for P1, but P2 has no Units left at bf1
+    // and the turn is in an Open State, so P2 loses control of it in the following cleanup.
+    expect(here.gameState.battlefields.bf1?.controller).toBeNull();
   });
 
   // BUG — expected (715.2): each damage instance is increased separately → 4 and 4; cost 2 + [fury][fury]. Actual: 3 and 3.
-  test.failing("BUG: Falling Star's two instances (3 + 3) into two units here deal 4 apiece (715.2)", async () => {
+  test("Falling Star's two instances (3 + 3) into two units here deal 4 apiece (715.2)", async () => {
     const game = await board().hand(P1, FALLING_STAR, "star").build();
     await game.p1.cast("star", { targets: ["gateFoe", "gateFoe2"] });
     expect(game.p1.resources()).toEqual({ energy: 8, power: { fury: 1 } });
@@ -135,7 +137,7 @@ describe("Void Gate (ogn-296-298)", () => {
   });
 
   // BUG — expected (715.2): every enemy unit at Void Gate takes 3+1; my unit here and units elsewhere take 0. Actual: 3 each.
-  test.failing("BUG: Firestorm (3 to ALL enemy units at a battlefield) aimed at Void Gate deals 4 to each enemy unit here", async () => {
+  test("Firestorm (3 to ALL enemy units at a battlefield) aimed at Void Gate deals 4 to each enemy unit here", async () => {
     const game = await board().hand(P1, FIRESTORM, "storm").build();
     await game.p1.cast("storm", { targets: "bf1" });
     await game.settle();
@@ -147,7 +149,7 @@ describe("Void Gate (ogn-296-298)", () => {
 
   // BUG — expected: "and abilities" — an ACTIVATED gear ability dealing 2 deals 3 to a unit here (and 2 at bf2).
   // Actual: 2 in both places.
-  test.failing("BUG: abilities count too — Iron Ballista's activated 'Deal 2' deals 3 to a unit here (2 at bf2)", async () => {
+  test("abilities count too — Iron Ballista's activated 'Deal 2' deals 3 to a unit here (2 at bf2)", async () => {
     const there = await board().gear(P1, IRON_BALLISTA, "ballista").build();
     await there.p1.activate("ballista", undefined, { answers: ["fieldFoe"] });
     await there.settle();
@@ -169,7 +171,7 @@ describe("Void Gate (ogn-296-298)", () => {
 
   // BUG — expected: a TRIGGERED unit ability ("When I attack, deal 1 to an enemy unit here") resolving in the
   // combat chain at Void Gate deals 1+1 = 2, readable while the showdown is still open. Actual: 1.
-  test.failing("BUG: Crackshot Corsair attacking INTO Void Gate — its 'deal 1' attack trigger deals 2 to the defender", async () => {
+  test("Crackshot Corsair attacking INTO Void Gate — its 'deal 1' attack trigger deals 2 to the defender", async () => {
     const game = await scenario()
       .battlefield("bf1", { controller: P2, def: CARD, inert: false, owner: P2 })
       .unit(P2, "bf1", { might: 8, name: "Gate Giant" }, "gateFoe")
@@ -210,7 +212,7 @@ describe("Void Gate (ogn-296-298)", () => {
 
   // BUG — expected (714): Tome +1 and Void Gate +1 sum → the next Ray deals 5 here; the Ray after that (Tome
   // spent) deals 4 here. Actual: 4 then 3 (only the Tome is applied).
-  test.failing("BUG: 714 stacking — Ravenborn Tome + Void Gate → Hextech Ray deals 5 here, the following Ray 4", async () => {
+  test("714 stacking — Ravenborn Tome + Void Gate → Hextech Ray deals 5 here, the following Ray 4", async () => {
     const game = await board(false).gear(P1, RAVENBORN_TOME, "tome").hand(P1, HEXTECH_RAY, "ray1").hand(P1, HEXTECH_RAY, "ray2").build();
     await game.p1.activate("tome");
     await game.settle();

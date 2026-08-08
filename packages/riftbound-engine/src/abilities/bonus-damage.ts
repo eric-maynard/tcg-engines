@@ -60,6 +60,31 @@ function staticBonusFor(ctx: EffectContext): number {
 }
 
 /**
+ * rule 715.4.a / 364 (ogn-296-298 Void Gate) — a battlefield passive
+ * "Spells and abilities deal 1 Bonus Damage to units here" is scoped to the
+ * DAMAGED unit's location, not to the damage's controller: it applies to every
+ * unit at that battlefield, whoever controls the battlefield or the spell.
+ * rule 714: several sources sum, so it adds to `getBonusDamage`.
+ */
+export function getLocationBonusDamage(targetId: string, ctx: EffectContext): number {
+  const zone = ctx.zones.getCardZone?.(targetId as CoreCardId) as string | undefined;
+  if (zone === undefined || !zone.startsWith("battlefield-")) {
+    return 0;
+  }
+  const battlefieldId = zone.slice("battlefield-".length);
+  let bonus = 0;
+  for (const ability of getGlobalCardRegistry().getAbilities(battlefieldId) ?? []) {
+    if (ability?.type !== "static") continue;
+    const effect = (ability as { effect?: Record<string, unknown> }).effect;
+    if (effect?.type !== "bonus-damage") continue;
+    const location = (effect.target as { location?: string } | undefined)?.location;
+    if (location !== undefined && location !== "here") continue;
+    bonus += typeof effect.amount === "number" ? effect.amount : 1;
+  }
+  return bonus;
+}
+
+/**
  * Total Bonus Damage to add to each damage instance this spell/ability deals.
  * Latches any `duration:"next"` delayed bonus onto the current source card.
  */
