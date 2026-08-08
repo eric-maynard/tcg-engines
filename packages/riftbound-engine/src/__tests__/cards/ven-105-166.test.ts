@@ -74,6 +74,7 @@ describe("Twilight Step (ven-105-166)", () => {
     await game.settle();
     expect(game.decision()).toMatchObject({ kind: "pick", seat: P1, semantics: "destination" });
     await game.p1.pick("battlefield-bf2");
+    await game.settle(); // rule 355.4: the destination is chosen at play, the move happens at resolution
     expect(game.zoneOf("small")).toBe("battlefield-bf2");
     await game.settle(); // hands back the auto-begun showdown once (344.2)
     await game.settle();
@@ -113,6 +114,10 @@ describe("Twilight Step (ven-105-166)", () => {
     await game.p1.cast("ts", { targets: "small" });
     await game.settle();
     await game.p1.pick("battlefield-bf1");
+    // rule 355.4: the destination is chosen at play; pass priority to resolve the spell only, so the
+    // showdown it starts can be observed before combat resolves
+    await game.acting().passPriority();
+    await game.acting().passPriority();
     expect(game.state("small").combatRole).toBe("attacker");
     expect(game.state("foe").combatRole).toBe("defender");
     await game.settle();

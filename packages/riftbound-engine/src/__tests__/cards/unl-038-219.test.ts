@@ -226,15 +226,14 @@ describe("Skyward Strike (unl-038-219)", () => {
 
   test("chain interplay: P2 may respond before it resolves — Foe is still at bf1 while Skyward Strike sits on the chain, and only moves on resolution", async () => {
     const game = await board().build();
-    await game.p1.cast("ss", { targets: "foe" });
+    // rule 355.4: the destination is chosen as the card is played, before anyone gets priority
+    await game.p1.cast("ss", { targets: "foe", answers: ["base"] });
     expect(game.chain()).toEqual([expect.objectContaining({ cardId: "ss", controller: P1, triggered: false })]);
     expect(game.locationOf("foe")).toBe("bf1");
     await game.p1.passPriority();
     expect(game.decision()).toMatchObject({ context: "chain", kind: "action", seat: P2 });
     expect(game.locationOf("foe")).toBe("bf1");
     await game.p2.passPriority();
-    await game.settle();
-    await game.p1.pick("base");
     await game.settle();
     expect(game.locationOf("foe")).toBe("base");
     expect(game.chain()).toHaveLength(0);

@@ -69,6 +69,7 @@ import {
   payResourceCost,
   staticEnterReadyApplies,
 } from "./play/cost";
+import { bindDestinationOnItem } from "./play/play-time-destinations";
 import { collectChoiceNodes, raisePlayTimeModeChoice } from "./play/play-time-modes";
 import { isLegalMultiTargetSet, spellEffectHasLegalTargets } from "./play/targeting";
 import type { SpellEffectTargetShape } from "./play/targeting";
@@ -2651,6 +2652,18 @@ export const pendingChoiceMoves: Partial<
 
       if (choice.type === "choose-destination") {
         const zoneId = context.params.pickedZoneId as string;
+        // rule 355.4 / 349 — a Move Destination chosen while the card is played
+        // / the ability finalized: nothing moves now; the choice rides on the
+        // chain item and the wrapper's finalization pass asks the next one.
+        if (choice.bindToChainItemId !== undefined) {
+          const declined = choice.optional === true && context.params.accept === false;
+          if (!declined && !choice.options.includes(zoneId)) {
+            return;
+          }
+          bindDestinationOnItem(draft, choice.bindToChainItemId, choice.destinationNodeIndex, declined ? null : zoneId);
+          draft.pendingChoice = undefined;
+          return;
+        }
         // rule-id: ogn-262-298 (rule 355.13) — the declined "you may move"
         // simply does nothing.
         if (choice.optional && context.params.accept === false) {

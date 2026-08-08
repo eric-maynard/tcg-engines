@@ -127,10 +127,10 @@ describe("Treasure Hunter (sfd-130-221)", () => {
       .unit(P1, "base", CARD, "th", { exhausted: true })
       .hand(P1, RIDE_THE_WIND, "rtw")
       .build();
-    await game.p1.cast("rtw", { targets: "th" });
-    await game.settle();
-    expect(game.decision()).toMatchObject({ kind: "pick", seat: P1 });
-    await game.p1.pick("battlefield-own");
+    // rule 355.4: the destination is chosen as Ride the Wind is played; the move happens on resolution
+    await game.p1.cast("rtw", { targets: "th", answers: ["battlefield-own"] });
+    await game.p1.passPriority();
+    await game.p2.passPriority();
     expect(game.locationOf("th")).toBe("own");
     expect(game.chain()).toEqual([expect.objectContaining({ cardId: "th", triggered: true })]);
     await game.settle();

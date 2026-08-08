@@ -167,6 +167,10 @@ describe("Relentless Pursuit (sfd-184-221)", () => {
     // pool is untouched beyond the spell's own cost (an effect attach pays no [Equip] cost, 434).
     const game = await board().build();
     await pursue(game, "runner", "battlefield-bf2");
+    // rule 355.4: the destination was chosen as the spell was played; the spell still has to resolve
+    // before the attach clause executes — pass the chain priority window rather than settling past it.
+    await game.acting().passPriority();
+    await game.acting().passPriority();
     const d = game.decision();
     expect(d?.seat === P1 && (d.kind === "yes-no" || d.kind === "pick")).toBe(true);
     await acceptAttach(game, "sword");
@@ -182,6 +186,9 @@ describe("Relentless Pursuit (sfd-184-221)", () => {
     // The prompt lists only P1's "sword" (not P2's "theirs"); declining keeps everything as is.
     const game = await board().gear(P2, BF_SWORD, "theirs").build();
     await pursue(game, "runner", "battlefield-bf2");
+    // rule 355.4: destination chosen at play; resolve the chain item before the attach clause
+    await game.acting().passPriority();
+    await game.acting().passPriority();
     const d = game.decision();
     expect(d?.seat).toBe(P1);
     if (d?.kind === "yes-no") {

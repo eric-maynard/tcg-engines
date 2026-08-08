@@ -47,13 +47,17 @@ function board() {
     .hand(P1, CHARM, "charm");
 }
 
-/** Cast Charm on Lucian, let it resolve, and answer the destination prompt. */
+/** Cast Charm on Lucian, answer the destination prompt as it is played (355.4), and let it resolve (both pass). */
 async function charmLucianTo(game: Game, destination: "battlefield-bfA" | "battlefield-bfC" | "base"): Promise<void> {
-  await game.p1.cast("charm", { targets: "lucian" });
+  if (game.zoneOf("charm") === "hand") {
+    await game.p1.cast("charm", { targets: "lucian" });
+  }
   expect(game.p1.resources()).toEqual({ energy: 0, power: { calm: 0 } });
-  await game.settle();
-  expect(game.decision()).toMatchObject({ kind: "pick", seat: P1, source: { pendingChoiceType: "choose-destination" } });
+  expect(game.decision()).toMatchObject({ kind: "pick", seat: P1, source: { pendingChoiceType: "choose-destination" }, timing: "FIN" });
   await game.p1.pick(destination);
+  expect(game.locationOf("lucian")).toBe("bfB"); // a choice, not yet a move
+  await game.p1.passPriority();
+  await game.p2.passPriority();
 }
 
 const showdown = (game: Game) => game.gameState.interaction?.showdownStack?.at(-1);
@@ -64,8 +68,7 @@ describe("Charm pulls Lucian onto Kha'Zix's battlefield on the CASTER's turn", (
     const game = await board().build();
     expect(game.p1.option("cast", "charm")?.fields.find((f) => f.arg === "targets")?.options).toEqual([["lucian"]]);
     await game.p1.cast("charm", { targets: "lucian" });
-    await game.settle();
-    const d = game.decision();
+    const d = game.decision(); // asked as the spell is played (355.4)
     expect(d?.kind).toBe("pick");
     expect(d?.kind === "pick" ? d.options.map((o) => o.key).sort() : []).toEqual(["base", "battlefield-bfA", "battlefield-bfC"]);
   });

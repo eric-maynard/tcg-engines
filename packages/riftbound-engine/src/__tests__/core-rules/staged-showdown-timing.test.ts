@@ -41,7 +41,7 @@ const GUST = {
   timing: "reaction",
 };
 
-/** Reaction spell: "Move a friendly unit in your base to a battlefield." (destination asked at resolution) */
+/** Reaction spell: "Move a friendly unit in your base to a battlefield." (destination chosen as it is played — 355.4) */
 const MARCH = {
   abilities: [
     {
@@ -189,13 +189,9 @@ describe("323.13 / 460 / 461.1 — two Combats staged in the same Closed State: 
       .hand(P1, MARCH, "march");
     const game = await (manual ? b.autoProcedures(false) : b).build();
     await game.p1.move("scout", "bfA");
-    await game.p1.cast("march", { targets: "grunt" });
+    await game.p1.cast("march", { answers: ["battlefield-bfB"], targets: "grunt" }); // 355.4: destination named at play
     await game.p1.passPriority();
-    await game.p2.passPriority(); // March resolves: destination prompt
-    const d = game.decision();
-    if (d?.kind === "pick" && d.seat === P1) {
-      await game.p1.pick("battlefield-bfB");
-    }
+    await game.p2.passPriority(); // March resolves
     expect(game.locationOf("grunt")).toBe("bfB");
     expect(game.chain()).toEqual([expect.objectContaining({ cardId: "scout", triggered: true })]);
     expect(activeShowdowns(game)).toEqual([]); // both merely staged

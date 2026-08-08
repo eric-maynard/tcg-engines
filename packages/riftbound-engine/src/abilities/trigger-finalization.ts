@@ -28,6 +28,7 @@ import type { ChainItem } from "../chain/chain-state";
 import { removeChainItem } from "../chain/chain-state";
 import { buildEffectContext } from "../game-definition/moves/chain/effect-context";
 import { executeResolvedItem, optInIsPerformable } from "../game-definition/moves/chain/resolve";
+import { raiseChainDestinationChoices } from "../game-definition/moves/play/play-time-destinations";
 import { raisePlayTimeModeChoice } from "../game-definition/moves/play/play-time-modes";
 import { continueRevealSlotLock, isSinglePickSlot } from "../game-definition/moves/play/reveal-target-lock";
 import {
@@ -464,6 +465,16 @@ export function finalizePendingItems(draftLike: unknown, ctx: FinalizationContex
     // card played from [Hidden] is itself a finalization in progress.
     continueRevealSlotLock(draft, ctx);
     if (draft.pendingChoice) {
+      return;
+    }
+    // rule 355.4 / 349 / 402.2 — Move Destinations of every FINALIZED item
+    // (a spell or activation just played, a trigger finalized on the previous
+    // pass) are chosen now, mover by mover, before anyone receives priority.
+    if (
+      raiseChainDestinationChoices(draft, (it) =>
+        buildEffectContext(draft, it.controller as string, it.cardId as string, toResolveContext(ctx)),
+      )
+    ) {
       return;
     }
     const items = chainItems(draft);

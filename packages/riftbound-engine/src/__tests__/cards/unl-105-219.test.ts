@@ -101,9 +101,9 @@ describe("Imposing Challenger (unl-105-219)", () => {
     if (d?.kind === "pick" && d.semantics === "target") {
       await game.p1.pick("small");
     }
+    // rule 355.4: the destination is chosen as the trigger finalizes; bf2 is the only other
+    // battlefield, so the single legal destination is bound silently (no prompt at all).
     await resolveChainItem(game);
-    expect(game.decision()).toMatchObject({ kind: "pick", seat: P1, semantics: "destination" });
-    await game.p1.pick("battlefield-bf2");
     expect(game.state("small")).toMatchObject({ controller: P2, zone: "battlefield-bf2" });
     expect(game.gameState.battlefields.bf2).toMatchObject({ contested: true, contestedBy: P2 });
     await game.settle(); // combat at bf1 with no defender
@@ -148,8 +148,9 @@ describe("Imposing Challenger (unl-105-219)", () => {
     if (d?.kind === "pick" && d.semantics === "target") {
       await game.p1.pick("small");
     }
+    // rule 355.4: destination chosen at finalization — bf2 is the only other battlefield, so it is
+    // bound silently; the push itself still happens on resolution.
     await resolveChainItem(game);
-    await game.p1.pick("battlefield-bf2");
     expect(game.gameState.battlefields.bf2).toMatchObject({ contested: true, contestedBy: P2, controller: P1 });
     await game.settle(); // bf1: no defender left → conquer
     expect(game.gameState.battlefields.bf1?.controller).toBe(P1);
@@ -174,9 +175,12 @@ describe("Imposing Challenger (unl-105-219)", () => {
     if (d?.kind === "pick" && d.semantics === "target") {
       expect(cards(d)).toEqual(["small"]);
     } else {
-      // auto-taken single target → on resolution we must be choosing SMALL's destination
+      // rule 355.4: single legal target (Small) auto-taken and the single legal destination (bf2, the
+      // only other battlefield) bound silently ⇒ no prompt; only Small may be pushed.
       await resolveChainItem(game);
-      expect(game.decision()).toMatchObject({ kind: "pick", semantics: "destination", source: { cardId: "small" } });
+      expect(game.locationOf("small")).toBe("bf2");
+      expect(game.locationOf("big")).toBe("bf1");
+      expect(game.locationOf("home")).toBe("base");
     }
   });
 
@@ -213,9 +217,9 @@ describe("Imposing Challenger (unl-105-219)", () => {
     let d = await moveAndAccept(game, "bf1");
     if (d?.kind === "pick" && d.semantics === "target") {
       await game.p1.pick("small");
+      d = game.decision();
     }
-    await resolveChainItem(game);
-    d = game.decision();
+    // rule 355.4: the destination menu is offered at finalization, not at resolution
     expect(d).toMatchObject({ kind: "pick", semantics: "destination" });
     expect(keys(d)).toEqual(["battlefield-bf2", "battlefield-bf3"]);
   });
@@ -280,12 +284,12 @@ describe("Imposing Challenger (unl-105-219)", () => {
       .hand(P2, CHARM, "charm")
       .build();
     await game.p2.cast("charm", { targets: "ic" });
-    const r = await game.settle();
-    expect(r.decision).toMatchObject({ kind: "pick", seat: P2, semantics: "destination" });
+    // rule 355.4: the destination is chosen as the spell is played, before priority
+    expect(game.decision()).toMatchObject({ kind: "pick", seat: P2, semantics: "destination" });
     await game.p2.pick("battlefield-bf2");
+    const r = await game.settle();
     expect(game.locationOf("ic")).toBe("bf2");
     expect(game.chain()).toEqual([expect.objectContaining({ cardId: "ic", controller: P1, triggered: true })]);
-    const r2 = await game.settle();
-    expect(r2.decision).toMatchObject({ kind: "yes-no", seat: P1 });
+    expect(r.decision).toMatchObject({ kind: "yes-no", seat: P1 });
   });
 });

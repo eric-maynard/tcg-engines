@@ -46,9 +46,10 @@ async function playAndMove(game: Game, unit: string, dest: string): Promise<void
   if (d?.kind === "pick" && d.semantics === "target") {
     await game.p1.pick(unit);
   }
-  const r = await game.settle();
-  expect(r.decision).toMatchObject({ kind: "pick", seat: P1, semantics: "destination", source: { cardId: unit } });
+  // rule 355.4: the destination is chosen as the trigger is finalized, before priority
+  expect(game.decision()).toMatchObject({ kind: "pick", seat: P1, semantics: "destination", source: { cardId: unit } });
   await game.p1.pick(dest);
+  await game.settle(); // nothing moves until the trigger resolves; the stun trigger follows the move
   expect(game.decision()).toMatchObject({ kind: "yes-no", seat: P1, source: { cardId: "bc" } });
 }
 
@@ -114,9 +115,9 @@ describe("Blast Cone (unl-133-219)", () => {
     expect(pick).toMatchObject({ kind: "pick", seat: P1, semantics: "target" });
     expect(cards(pick)).toEqual(["bruiser", "far"]);
     await game.p1.pick("bruiser");
-    await game.settle();
     expect(keys(game.decision())).toEqual(["battlefield-bf1", "battlefield-bf2"]);
     await game.p1.pick("battlefield-bf1");
+    await game.settle(); // rule 355.4: chosen at finalization, applied at resolution
     expect(game.state("bruiser")).toMatchObject({ controller: P2, owner: P2, zone: "battlefield-bf1" });
     expect(game.gameState.battlefields.bf1).toMatchObject({ contested: true, contestedBy: P2, controller: P1 });
   });
@@ -183,9 +184,10 @@ describe("Blast Cone (unl-133-219)", () => {
       .build();
     expect(game.state("bc").isReady).toBe(true);
     await game.p1.cast("charm", { targets: "far" });
-    const dest = await game.settle();
-    expect(dest.decision).toMatchObject({ kind: "pick", semantics: "destination" });
+    // rule 355.4: the destination is chosen as the spell is played, before priority
+    expect(game.decision()).toMatchObject({ kind: "pick", semantics: "destination" });
     await game.p1.pick("base");
+    await game.settle();
     expect(game.locationOf("far")).toBe("base");
     expect(game.chain()).toEqual([expect.objectContaining({ cardId: "bc", controller: P1, triggered: true })]);
     // rule 402 (finalization): the stun trigger asks as soon as the move happens
@@ -205,9 +207,7 @@ describe("Blast Cone (unl-133-219)", () => {
       .gear(P1, CARD, "bc", { exhausted: true })
       .hand(P1, CHARM, "charm")
       .build();
-    await game.p1.cast("charm", { targets: "far" });
-    await game.settle();
-    await game.p1.pick("base");
+    await game.p1.cast("charm", { targets: "far", answers: ["base"] });
     const r = await game.settle();
     if (r.reason === "unanswered") {
       expect(r.decision).toMatchObject({ canAccept: false, kind: "yes-no", seat: P1 });

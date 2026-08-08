@@ -74,11 +74,9 @@ describe("Dragon's Rage reflexive 'Then do this' × Not So Fast / Wind Wall", ()
     expect(game.chain()).toEqual([expect.objectContaining({ cardId: "rage", controller: P1, targets: ["x"], triggered: false })]);
   });
 
-  // Expected (355.4): the Move destination is a play-time choice, made while Dragon's Rage is being
-  // finalized — before anyone receives priority — so P2 responds knowing where X is headed.
-  // Actual: the cast finalizes with only X chosen; the "Choose a destination" prompt appears only
-  // when the spell RESOLVES (after both players have passed).
-  test.failing("BUG: (a) X's destination is chosen as Dragon's Rage is finalized, before P2 gets priority (355.4)", async () => {
+  // 355.4: the Move destination is a play-time choice, made while Dragon's Rage is being finalized —
+  // before anyone receives priority — so P2 responds knowing where X is headed.
+  test("(a) X's destination is chosen as Dragon's Rage is finalized, before P2 gets priority (355.4)", async () => {
     const game = await board().build();
     await game.p1.cast("rage", { targets: "x" });
     const d = game.decision();

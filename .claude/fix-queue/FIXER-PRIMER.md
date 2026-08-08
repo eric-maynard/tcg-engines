@@ -58,9 +58,17 @@ Recipe: 1) dump enriched abilities. 2) JSON wrong → explicit `abilities` in th
   removed), then the single caster-chosen target(s) (`executeResolvedItem(…, {finalizeOnly:true})` reuses the same
   planning; ≥2 options ⇒ `choose-target` with `bindToChainItemId`, 1 ⇒ auto-bound onto `item.targets`, 0 ⇒ removed
   per 402.4), then modes (`raisePlayTimeModeChoice`). Resolution uses `item.targets` and re-checks them against the
-  descriptor (illegal ⇒ that instruction fizzles, no re-target). Still at RESOLUTION: up-to-N/any-number picks, split
-  damage, reveal-and-pick/look, choose-destination, object-choosing costs (discard/recycle/kill), later "you may".
-  Harness: these prompts have `timing:"FIN"`; answer them right after the triggering verb (or `{answers:[…]}`), THEN settle.
+  descriptor (illegal ⇒ that instruction fizzles, no re-target). MOVE DESTINATIONS too (rule 355.4,
+  `play/play-time-destinations.ts`, hooked at the top of `finalizePendingItems` for EVERY finalized item — spells,
+  activations, triggers): a single caster-chosen / fixed mover already on the board with `to:"choose"|"any-battlefield"|
+  {battlefield:…}` gets a `choose-destination` prompt bound to the item (`bindToChainItemId`, ≥2 options; 1 ⇒ auto,
+  0 ⇒ null) right after its target; the answer is `_dest` on the move node; `effects/move.ts moveToBoundDestination`
+  re-checks it via the shared `abilities/move-destinations.ts moveDestinationOptions` (illegal ⇒ no move) and runs a
+  `then` at the landing zone. Still at RESOLUTION: up-to-N/any-number picks (and their destinations), split
+  damage, reveal-and-pick/look, destinations of cards an effect PLAYS / movers chosen at resolution, object-choosing
+  costs (discard/recycle/kill), later "you may".
+  Harness: these prompts have `timing:"FIN"`; answer them right after the triggering verb (or `{answers:[…]}` — e.g.
+  `cast("charm",{targets:"foe",answers:["bf2"]})`), THEN settle.
 Recipe — add a filter (non-token, in-base, at-a-battlefield, other, stunned…):
 1) `T/targeting/riftbound-target-dsl.ts` — add to `SimpleFilter` if new.
 2) `E/abilities/target-resolver.ts matchesFilter` — add the `case` (token: `cardId.startsWith("token-")`, as in

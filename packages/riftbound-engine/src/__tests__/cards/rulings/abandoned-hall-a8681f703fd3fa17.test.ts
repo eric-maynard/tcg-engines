@@ -40,9 +40,12 @@ async function rideTheWindTo(game: Game, dest: "hall" | "bf2"): Promise<void> {
   await game.p1.cast("rtw", { targets: "ally" });
   expect(game.zoneOf("rtw")).toBe("chain");
   expect(hallTriggers(game)).toBe(0);
-  await game.settle(); // both pass → RTW resolves → destination prompt
-  expect(game.decision()).toMatchObject({ kind: "pick", seat: P1, semantics: "destination" });
+  // rule 355.4 — the destination is named as the spell is played, before anyone gets priority.
+  expect(game.decision()).toMatchObject({ kind: "pick", seat: P1, semantics: "destination", timing: "FIN" });
   await game.p1.pick(`battlefield-${dest}`);
+  expect(hallTriggers(game)).toBe(0); // still only on the chain (419.4.a)
+  await game.p1.passPriority();
+  await game.p2.passPriority(); // RTW resolves → the move happens
   expect(game.locationOf("ally")).toBe(dest);
   expect(game.zoneOf("rtw")).toBe("trash");
   // The spell has now been "played" → exactly one Hall trigger is on the chain.
@@ -112,10 +115,10 @@ describe("Ruling a8681f703fd3fa17 — Abandoned Hall sees the board AFTER the sp
       .unit(P2, "base", { might: 2, name: "Bystander" }, "bystander")
       .hand(P1, RIDE_THE_WIND, "rtw")
       .build();
-    await game.p1.cast("rtw", { targets: "ally" });
+    await game.p1.cast("rtw", { answers: ["battlefield-bf2"], targets: "ally" }); // 355.4: destination at play
     expect(hallTriggers(game)).toBe(0);
-    await game.settle();
-    await game.p1.pick("battlefield-bf2");
+    await game.p1.passPriority();
+    await game.p2.passPriority();
     expect(game.locationOf("ally")).toBe("bf2");
 
     // Whatever the Hall still asks, the departed ally must never be a legal choice.

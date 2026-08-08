@@ -58,36 +58,40 @@ function openShowdown(game: Game): ShowdownView | undefined {
 const bf = (game: Game, id: string) => game.gameState.battlefields[id]!;
 
 /**
- * Cast Void Assault on (Runner, `enemy`), let it resolve (both pass), and answer the two destination
- * prompts in card order: Runner → `friendlyTo`, THEN enemy → `enemyTo`. Returns with whatever the
- * Cleanup began (showdown / combat) now open — nothing has been passed in it yet.
+ * Cast Void Assault on (Runner, `enemy`) and answer the two destination prompts in card order as the
+ * spell is PLAYED (355.4): Runner → `friendlyTo`, THEN enemy → `enemyTo`; then let it resolve (both
+ * pass). Returns with whatever the Cleanup began (showdown / combat) now open — nothing has been
+ * passed in it yet.
  */
 async function voidAssault(enemy: "enforcer" | "brute", friendlyTo: string, enemyTo: string, opts: { manual?: boolean } = {}): Promise<Game> {
   const game = await (opts.manual ? board().autoProcedures(false) : board()).build();
   await game.p1.cast("va", { targets: ["runner", enemy] });
   expect(game.p1.resources()).toEqual({ energy: 0, power: { body: 0 } });
+  expect(game.decision()).toMatchObject({ kind: "pick", seat: P1, semantics: "destination", source: { cardId: "runner" }, timing: "FIN" });
+  await game.p1.pick(`battlefield-${friendlyTo}`);
+  expect(game.decision()).toMatchObject({ kind: "pick", seat: P1, semantics: "destination", source: { cardId: enemy }, timing: "FIN" });
+  await game.p1.pick(`battlefield-${enemyTo}`);
+  expect(game.locationOf("runner")).toBe("base"); // choices, not effects — nothing has moved yet
   await game.p1.passPriority();
   await game.p2.passPriority();
-  expect(game.decision()).toMatchObject({ kind: "pick", seat: P1, semantics: "destination", source: { cardId: "runner" } });
-  await game.p1.pick(`battlefield-${friendlyTo}`);
-  expect(game.decision()).toMatchObject({ kind: "pick", seat: P1, semantics: "destination", source: { cardId: enemy } });
-  await game.p1.pick(`battlefield-${enemyTo}`);
   return game;
 }
 
 describe("Void Assault — sequential arrivals, Contested per arrival, staging order (unl-202-219 × ogn-054-298 × ogn-003-298)", () => {
-  test("resolution order: the friendly unit's destination is asked (and it moves) BEFORE the enemy unit's — Runner's arrival at bfC has already Contested it when Enforcer is asked", async () => {
+  test("choice order (355.4): the friendly unit's destination is asked BEFORE the enemy unit's, both as the spell is played; on resolution Runner arrives at bfC (Contested by P1) and Enforcer follows — nothing begins mid-resolution", async () => {
     const game = await board().build();
     await game.p1.cast("va", { targets: ["runner", "enforcer"] });
+    expect(game.decision()).toMatchObject({ kind: "pick", seat: P1, source: { cardId: "runner" }, timing: "FIN" });
+    await game.p1.pick("battlefield-bfC");
+    expect(game.locationOf("runner")).toBe("base"); // a choice, not yet a move
+    expect(game.decision()).toMatchObject({ kind: "pick", seat: P1, source: { cardId: "enforcer" }, timing: "FIN" });
+    await game.p1.pick("battlefield-bfC");
+    expect(game.decision()).toMatchObject({ context: "chain", kind: "action", seat: P1 }); // only now the priority window
     await game.p1.passPriority();
     await game.p2.passPriority();
-    expect(game.decision()?.source?.cardId).toBe("runner");
-    await game.p1.pick("battlefield-bfC");
-    expect(game.locationOf("runner")).toBe("bfC"); // 446.3: instantaneous, already there
-    expect(bf(game, "bfC")).toMatchObject({ contested: true, contestedBy: P1, controller: null }); // 190.3.a.1
-    expect(game.locationOf("enforcer")).toBe("bfB"); // not moved yet
-    expect(game.decision()?.source?.cardId).toBe("enforcer");
-    expect(openShowdown(game)).toBeUndefined(); // nothing begins mid-resolution (323.12/13 need Neutral Open)
+    expect(game.locationOf("runner")).toBe("bfC"); // 446.3: instantaneous
+    expect(game.locationOf("enforcer")).toBe("bfC");
+    expect(bf(game, "bfC")).toMatchObject({ contested: true, contestedBy: P1, controller: null }); // 190.3.a.1 — Runner arrived first
   });
 
   // ── (a) both to the open bfC ─────────────────────────────────────────────────────────────
@@ -126,13 +130,7 @@ describe("Void Assault — sequential arrivals, Contested per arrival, staging o
   // ── (b) both to P1's own bfA ─────────────────────────────────────────────────────────────
 
   test("(b) Runner→bfA applies nothing (P1 controls it); Enforcer's arrival Contests bfA for P2 → P2 is the Attacker with Focus on P1's turn — the reminder's condition fails", async () => {
-    const game = await board().build();
-    await game.p1.cast("va", { targets: ["runner", "enforcer"] });
-    await game.p1.passPriority();
-    await game.p2.passPriority();
-    await game.p1.pick("battlefield-bfA");
-    expect(bf(game, "bfA")).toMatchObject({ contested: false, controller: P1 });
-    await game.p1.pick("battlefield-bfA");
+    const game = await voidAssault("enforcer", "bfA", "bfA");
     expect(bf(game, "bfA")).toMatchObject({ contested: true, contestedBy: P2, controller: P1 });
     expect(openShowdown(game)).toMatchObject({ attackingPlayer: P2, battlefieldId: "bfA", defendingPlayer: P1, focusPlayer: P2, isCombatShowdown: true });
     expect(game.decision()).toMatchObject({ context: "showdown", kind: "action", seat: P2 });

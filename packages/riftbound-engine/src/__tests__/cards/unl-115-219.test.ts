@@ -204,9 +204,10 @@ describe("Nilah, Joyful Ascetic (unl-115-219)", () => {
       .unit(P1, "base", CARD, "nilah", { exhausted: true })
       .hand(P1, RIDE_THE_WIND, "rtw")
       .build();
-    await game.p1.cast("rtw", { targets: "nilah" });
-    await game.settle();
-    await game.p1.pick("battlefield-bf1");
+    // rule 355.4 — the destination is chosen as the spell is played, before priority
+    await game.p1.cast("rtw", { targets: "nilah", answers: ["battlefield-bf1"] });
+    await game.p1.passPriority();
+    await game.p2.passPriority();
     expect(game.chain()).toEqual([expect.objectContaining({ cardId: "nilah", triggered: true })]);
     await game.settle();
     expect(game.locationOf("nilah")).toBe("bf1");

@@ -880,6 +880,15 @@ export interface ChooseDestinationChoice {
    * prompt stands even when only one destination is legal.
    */
   readonly optional?: true;
+  /**
+   * rule 355.4 — a Move Destination chosen while the card is PLAYED / the
+   * ability FINALIZED (before anyone gets priority): the answer is recorded on
+   * the chain item's move instruction (`destinationNodeIndex`-th caster-chosen
+   * move node of the item's effect, see `play/play-time-destinations.ts`)
+   * instead of moving anything now.
+   */
+  readonly bindToChainItemId?: string;
+  readonly destinationNodeIndex?: number;
 }
 
 /**

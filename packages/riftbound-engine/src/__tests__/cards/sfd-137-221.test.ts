@@ -148,6 +148,10 @@ describe("Harpoon Squad (sfd-137-221)", () => {
     await game.settle();
     expect(game.decision()).toMatchObject({ kind: "pick", seat: P1 });
     await game.p1.pick("base");
+    // rule 355.4: the destination is picked as the spell is played; the move itself still happens at
+    // resolution, so pass the priority window to resolve Ride the Wind first.
+    await game.p1.passPriority();
+    await game.p2.passPriority();
     // The move happened during resolution → Harpoon Squad's trigger is now a chain item of P1's.
     expect(game.chain()).toEqual(expect.arrayContaining([expect.objectContaining({ cardId: "squad", controller: P1, triggered: true })]));
     await game.settle();

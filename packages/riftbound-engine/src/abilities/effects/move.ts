@@ -7,6 +7,7 @@ import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import { type EffectHelpers, getTargetIds, getEffectiveMight } from "./_helpers";
 import { isBlockedByTwoOtherPlayers } from "../../game-definition/moves/movement/helpers";
 import { noteArrival, stageContested, toBattlefieldId } from "../../operations/arrive-at-battlefield";
+import { moveDestinationOptions } from "../move-destinations";
 
 /**
  * rule 190.3.a / 450 — pure-data Contested mark for callers that only hold the
@@ -216,6 +217,43 @@ function handleSwapLocations(effect: ExecutableEffect, ctx: EffectContext): void
     sourceCardId: selfId,
     type: "opt-in",
   } as RiftboundGameState["pendingChoice"];
+}
+
+/**
+ * rule 355.4 / 355.4.a / 359.3.e.5 — perform ONE unit's move to the destination
+ * its controller chose while the card was played / the ability finalized
+ * (`_dest` on the instruction, see `moves/play/play-time-destinations.ts`).
+ * The choice is re-checked against the destinations valid NOW: no longer
+ * valid (or none existed / the "you may" was declined ⇒ `null`) ⇒ this move
+ * does nothing. A follow-up anchored "at its destination" (`then`) runs with
+ * the moved unit bound and its landing zone as `same`. Returns true when the
+ * instruction carried such a choice (handled here, moved or not).
+ */
+function moveToBoundDestination(
+  effect: ExecutableEffect,
+  ctx: EffectContext,
+  h: EffectHelpers,
+  cardId: string,
+): boolean {
+  const bound = (effect as unknown as { _dest?: string | null })._dest;
+  if (bound === undefined) {
+    return false;
+  }
+  if (bound === null) {
+    return true;
+  }
+  const legalNow = moveDestinationOptions(effect, cardId, ctx) ?? [];
+  if (!legalNow.includes(bound)) {
+    return true;
+  }
+  const landed = moveCardWithEvent(ctx, cardId, bound);
+  arriveByEffect(ctx, [cardId], landed);
+  const then = (effect as unknown as { then?: ExecutableEffect }).then;
+  if (then) {
+    const { pendingSequenceValue: _drop, ...rest } = ctx as EffectContext & { pendingSequenceValue?: unknown };
+    h.executeEffect(then, { ...(rest as EffectContext), boundTargets: [cardId], sameZone: landed });
+  }
+  return true;
 }
 
 export function handle_move(effect: ExecutableEffect, ctx: EffectContext, h: EffectHelpers): void {
@@ -553,6 +591,9 @@ export function handle_move(effect: ExecutableEffect, ctx: EffectContext, h: Eff
       h.executeEffect(thenAtDestination, { ...ctx, boundTargets: [movedId], sameZone: zone });
     };
     for (const cardId of moveTargets) {
+      if (moveToBoundDestination(effect, ctx, h, cardId)) {
+        continue;
+      }
       const currentZone = ctx.zones.getCardZone(cardId as CoreCardId);
       const moverMight = mightGate ? getEffectiveMight(cardId, ctx) : 0;
       const options = Object.entries(ctx.draft.battlefields)
@@ -649,6 +690,9 @@ export function handle_move(effect: ExecutableEffect, ctx: EffectContext, h: Eff
     if (cardId === undefined) {
       return;
     }
+    if (moveToBoundDestination(effect, ctx, h, cardId)) {
+      return;
+    }
     const currentZone = ctx.zones.getCardZone(cardId as CoreCardId);
     const options = Object.keys(ctx.draft.battlefields)
       .map((bfId) => `battlefield-${bfId}`)
@@ -671,8 +715,13 @@ export function handle_move(effect: ExecutableEffect, ctx: EffectContext, h: Eff
     // Rule 355.4 — no stated destination: the controller chooses base or
     // any battlefield other than the unit's current zone. Options must be
     // ZONE ids (base / battlefield-<bfId>) so resolvePendingChoice can pass
-    // them straight to zones.moveCard (rule 350.1).
+    // them straight to zones.moveCard (rule 350.1). Chosen when the card was
+    // played whenever the mover was known then; asked here otherwise (a card
+    // an effect is about to play, a mover another prompt only just named).
     const cardId = moveTargets[0];
+    if (cardId !== undefined && moveToBoundDestination(effect, ctx, h, cardId)) {
+      return;
+    }
     const currentZone = ctx.zones.getCardZone(cardId as CoreCardId);
     // rule-id: sfd-200-221 (rule 355.2 / 341) — a card entering play from
     // off-board (a pending "play it" from banishment) may only be placed at

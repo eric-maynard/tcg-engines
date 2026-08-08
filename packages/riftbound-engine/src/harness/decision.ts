@@ -684,7 +684,8 @@ export function deriveFromPendingChoice(ctx: DecisionContext, pc: PendingChoice)
         ]),
         prompt: `Choose a destination for ${ctx.label(pc.cardId)}`,
         semantics: "destination",
-        source: { cardId: pc.cardId, pendingChoiceType: pc.type },
+        // `cardId` is the MOVER; a play-time choice (rule 355.4) also names its chain item.
+        source: { ...base.source, cardId: pc.cardId, pendingChoiceType: pc.type },
       };
       return d;
     }

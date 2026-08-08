@@ -1,0 +1,10 @@
+packages/riftbound-engine/src/__tests__/cards/unl-038-219.test.ts
+packages/riftbound-engine/src/__tests__/cards/unl-144-219.test.ts
+packages/riftbound-engine/src/__tests__/cards/unl-133-219.test.ts
+packages/riftbound-engine/src/__tests__/cards/sfd-130-221.test.ts
+packages/riftbound-engine/src/__tests__/cards/unl-115-219.test.ts
+packages/riftbound-engine/src/__tests__/cards/ven-095-166.test.ts
+packages/riftbound-engine/src/__tests__/cards/unl-105-219.test.ts
+packages/riftbound-engine/src/__tests__/cards/ven-105-166.test.ts
+packages/riftbound-engine/src/__tests__/cards/sfd-137-221.test.ts
+packages/riftbound-engine/src/__tests__/cards/sfd-184-221.test.ts

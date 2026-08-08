@@ -117,7 +117,7 @@ describe("Void Assault in a 3-player FFA — dragging the third player's Lillia 
     const pairs = (game.p1.option("cast", "va")?.fields.find((f) => f.name === "targets")?.options ?? []) as string[][];
     expect(pairs).toContainEqual(["runner", "lillia"]);
     expect(pairs).toContainEqual(["runner", "guard"]);
-    await game.p1.cast("va", { targets: ["runner", "lillia"] });
+    await game.p1.cast("va", { answers: ["bfB", "bfA"], targets: ["runner", "lillia"] }); // 355.4: destinations at play
     expect(game.p1.resources()).toEqual({ energy: 0, power: { body: 0 } });
     expect(game.chain()).toEqual([expect.objectContaining({ cardId: "va", controller: P1 })]);
     expect(game.actingSeat()).toBe(P1);
@@ -127,9 +127,8 @@ describe("Void Assault in a 3-player FFA — dragging the third player's Lillia 
     expect(game.actingSeat()).toBe(P3);
   });
 
-  test.failing("BUG: both move destinations are chosen at FINALIZATION (355.4) — right after the cast, before anyone else acts, P1 is asked Runner's then Lillia's destination, and bfB (only P2's units then) is a legal choice for Lillia", async () => {
-    // Expected: cast → destination prompt(s) for P1 at play time; bfB offered for Lillia. Actual: the
-    // spell goes on the chain with no destinations and they are asked only as it resolves.
+  test("both move destinations are chosen at FINALIZATION (355.4) — right after the cast, before anyone else acts, P1 is asked Runner's then Lillia's destination, and bfB (only P2's units then) is a legal choice for Lillia", async () => {
+    // cast → destination prompt(s) for P1 at play time (timing FIN); bfB offered for Lillia.
     const game = await board().build();
     await game.p1.cast("va", { targets: ["runner", "lillia"] });
     const first = game.decision();
@@ -201,22 +200,12 @@ describe("Void Assault in a 3-player FFA — dragging the third player's Lillia 
   // ── LEGAL contrast: Runner → bfB, Lillia → bfA ──────────────────────────────────────────
 
   test("LEGAL: Lillia → bfA (only P1's units there) is valid — she Moves bfC→bfA, P3 applies Contested at bfA, and her move trigger is pending on the chain (Closed state): no showdown has begun and the empty bfC is still P3's (323.6/323.13 need an Open state)", async () => {
-    // Stop right after Lillia's destination is given (drive() would go on passing priority).
+    // Destinations are named at play (355.4); stop right after Void Assault itself has resolved
+    // (drive() would go on passing priority through Lillia's trigger).
     const game = await board().build();
-    await game.p1.cast("va", { targets: ["runner", "lillia"] });
-    for (let i = 0; i < 30; i++) {
-      const d = game.decision();
-      if (isDestinationPick(d)) {
-        const unit = d.source?.cardId;
-        await game.p1.pick(d.options.find((o) => o.key.endsWith(unit === "lillia" ? "bfA" : "bfB"))!.key);
-        if (unit === "lillia") {
-          break;
-        }
-      } else if (d?.kind === "action" && d.context === "chain" && d.passKey) {
-        await game.seat(d.seat).passPriority();
-      } else {
-        break;
-      }
+    await game.p1.cast("va", { answers: ["bfB", "bfA"], targets: ["runner", "lillia"] });
+    for (let i = 0; i < 6 && game.zoneOf("va") !== "trash"; i++) {
+      await game.acting().passPriority();
     }
     expect(game.zoneOf("lillia")).toBe("battlefield-bfA");
     expect(game.zoneOf("runner")).toBe("battlefield-bfB");

@@ -730,16 +730,12 @@ describe("Empty destination → Non-Combat Showdown; enemy-held destination → 
       .hand(P1, MOVE_TO_BATTLEFIELD_SPELL, "march")
       .hand(P1, MOVE_TO_BATTLEFIELD_REACTION, "flank")
       .build();
-    await game.p1.cast("march", { targets: "a" });
+    // 355.4 — each destination is named by the mover's controller as the spell is played.
+    await game.p1.cast("march", { answers: ["battlefield-bf1"], targets: "a" });
     expect(game.actingSeat()).toBe(P1); // caster keeps priority first
-    await game.p1.cast("flank", { targets: "b" });
+    await game.p1.cast("flank", { answers: ["battlefield-bf2"], targets: "b" });
     expect(game.chain().map((i) => i.cardId)).toEqual(["march", "flank"]);
-    let s = await game.settle();
-    while (s.reason === "unanswered" && s.decision?.kind === "pick") {
-      expect(s.decision.seat).toBe(P1); // the mover's controller picks each destination
-      await game.p1.pick(/\bfor b\b/.test(s.decision.prompt) ? "battlefield-bf2" : "battlefield-bf1");
-      s = await game.settle();
-    }
+    await game.settle();
     expect(game.locationOf("a")).toBe("bf1");
     expect(game.locationOf("b")).toBe("bf2");
     expect(game.gameState.battlefields.bf1).toMatchObject({ contested: true, contestedBy: P1, controller: null });

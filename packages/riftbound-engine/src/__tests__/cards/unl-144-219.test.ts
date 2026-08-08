@@ -225,14 +225,14 @@ describe("Maduli the Gatekeeper (unl-144-219)", () => {
       .unit(P1, "base", CARD, "mad", { exhausted: true })
       .build();
     await game.p1.activate("mad");
-    await game.p1.passPriority();
-    await game.p2.passPriority();
+    // rule 355.4 — the destination is chosen as the ability is finalized, before priority
     const d = game.decision() as PickDecision;
-    expect(d).toMatchObject({ kind: "pick", seat: P1 });
+    expect(d).toMatchObject({ kind: "pick", seat: P1, timing: "FIN" });
     expect(d.options.map((o) => o.key).sort()).toEqual(["battlefield-bf1", "battlefield-bf2"]);
     await game.p1.pick("battlefield-bf2");
-    expect(game.locationOf("mad")).toBe("bf2");
+    expect(game.locationOf("mad")).toBe("base"); // nothing moves until resolution
     await game.settle();
+    expect(game.locationOf("mad")).toBe("bf2");
     expect(game.zoneOf("b")).toBe("trash"); // 6 vs 5
     expect(game.locationOf("a")).toBe("bf1");
     expect(game.gameState.battlefields.bf2?.controller).toBe(P1);

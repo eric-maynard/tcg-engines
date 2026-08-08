@@ -220,6 +220,10 @@ describe("Shadow Order Disciple (ven-095-166)", () => {
     await game.settle();
     expect(game.decision()).toMatchObject({ kind: "pick", seat: P1 });
     await game.p1.pick("battlefield-bf1");
+    // rule 355.4: the destination is chosen as Twilight Step is played; the move happens at resolution,
+    // so pass the priority window before checking the location and the re-triggered ability.
+    await game.p1.passPriority();
+    await game.p2.passPriority();
     expect(game.locationOf("sod")).toBe("bf1");
     expect(game.chain()).toEqual(expect.arrayContaining([expect.objectContaining({ cardId: "sod", triggered: true })]));
     const asked = await answerMay(game, false);
