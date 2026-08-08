@@ -122,7 +122,21 @@ export function handle_recycle(effect: ExecutableEffect, ctx: EffectContext, _h:
   // under their OWNER's Rune Deck (no power for anyone — 429.4.a), and when
   // more than one is recycled at once the owner chooses the order they are put
   // there, so park a pick prompt even when every rune must go.
-  if ((effect as { what?: string }).what === "rune" && (effect as { amount?: unknown }).amount !== undefined) {
+  // rule 416.6 (ogn-287-298) — the same counted-rune form spelled as a target
+  // descriptor ("recycle one of your runes", `target:{type:"rune"}` + `amount`):
+  // it names no rune up front, so the pool is read HERE, at resolution.
+  const runeTargetType =
+    typeof effect.target === "object" && effect.target !== null
+      ? (effect.target as { type?: unknown }).type
+      : undefined;
+  const ownRunePoolRecycle =
+    runeTargetType === "rune" &&
+    (effect.target as { controller?: unknown }).controller === "friendly" &&
+    (ctx.boundTargets?.length ?? 0) === 0;
+  const countedRuneRecycle =
+    ((effect as { what?: string }).what === "rune" || ownRunePoolRecycle) &&
+    (effect as { amount?: unknown }).amount !== undefined;
+  if (countedRuneRecycle) {
     const owner = ctx.playerId;
     const pool = ctx.zones
       .getCardsInZone("runePool" as CoreZoneId, owner as CorePlayerId)

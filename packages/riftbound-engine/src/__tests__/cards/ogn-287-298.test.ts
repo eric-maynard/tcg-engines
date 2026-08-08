@@ -50,7 +50,7 @@ describe("Sigil of the Storm (ogn-287-298)", () => {
     expect(def?.abilities).toHaveLength(1);
     expect(def?.abilities?.[0]).toMatchObject({
       effect: { amount: 1, from: "board", target: { controller: "friendly", type: "rune" }, type: "recycle" },
-      trigger: { event: "conquer", on: "controller" },
+      trigger: { event: "conquer", on: { controller: "friendly", location: "here" } },
       type: "triggered",
     });
   });
@@ -58,6 +58,11 @@ describe("Sigil of the Storm (ogn-287-298)", () => {
   test("conquering here puts ONE triggered item (controlled by the conqueror) on the chain and P1 must name one of P1's runes — no decline, the opponent's rune not offered", async () => {
     const game = await board().build();
     await game.p1.move("raider", "bf1");
+    await game.p1.passFocus();
+    await game.p2.passFocus();
+    // rule 416.6 — the item sits on the chain with no rune named; it leaves the
+    // chain as it resolves, and only then is a rune picked.
+    expect(game.chain()).toEqual([expect.objectContaining({ cardId: "bf1", controller: P1, name: "Sigil of the Storm", triggered: true })]);
     const r = await game.settle();
     expect(game.zoneOf("def")).toBe("trash");
     expect(game.gameState.battlefields.bf1?.controller).toBe(P1);
@@ -66,7 +71,6 @@ describe("Sigil of the Storm (ogn-287-298)", () => {
     const d = game.decision() as PickDecision;
     expect(d).toMatchObject({ allowDecline: false, kind: "pick", max: 1, min: 1, seat: P1 });
     expect(d.options.map((o) => o.key).sort()).toEqual(["r1", "r2"]);
-    expect(game.chain()).toEqual([expect.objectContaining({ cardId: "bf1", controller: P1, name: "Sigil of the Storm", triggered: true })]);
   });
 
   test("the named rune (an EXHAUSTED one is fine) goes to the BOTTOM of P1's rune deck; no Power is produced; the other rune and P2's rune stay", async () => {
@@ -165,7 +169,7 @@ describe("Sigil of the Storm (ogn-287-298)", () => {
   // nothing is recycled (383.4.c.2.b / 471.2.a). Actual: the parsed trigger has no `location: "here"`
   // (contrast Zaun Warrens / Minefield), so it fires on ANY conquer by the Sigil's controller and P1 is
   // asked to recycle a rune.
-  test.failing("BUG: 'here' — conquering ANOTHER battlefield while you control the Sigil must not trigger it", async () => {
+  test("'here' — conquering ANOTHER battlefield while you control the Sigil must not trigger it", async () => {
     const game = await scenario()
       .battlefield("bf1", { controller: P1, def: CARD, inert: false, owner: P1 })
       .battlefield("bf2", { controller: P2 })
@@ -187,7 +191,7 @@ describe("Sigil of the Storm (ogn-287-298)", () => {
   // the chain with NO target; P1 receives priority first (and may tap runes for energy in response), and
   // which rune to recycle is decided only as the ability RESOLVES. Actual: the engine asks for a rune
   // "target" while finalizing the trigger (before any priority) and records it as the item's target.
-  test.failing("BUG: doesn't choose — no rune is named until resolution; P1 can float energy from r1 in response and then recycle the exhausted r1, keeping the energy", async () => {
+  test("doesn't choose — no rune is named until resolution; P1 can float energy from r1 in response and then recycle the exhausted r1, keeping the energy", async () => {
     const game = await board().build();
     await game.p1.move("raider", "bf1");
     await game.p1.passFocus();
@@ -210,7 +214,7 @@ describe("Sigil of the Storm (ogn-287-298)", () => {
   // in response (here: P1 uses r1's own Recycle for 1 power), P1 must still recycle one of the runes that
   // remain — r2 goes to the rune deck. Actual: r1 was locked in as a "target" up front, the ability finds
   // it gone and does nothing; r2 stays in the pool.
-  test.failing("BUG: cannot fizzle — the rune P1 had in mind leaves in response, so the remaining rune r2 must be recycled instead", async () => {
+  test("cannot fizzle — the rune P1 had in mind leaves in response, so the remaining rune r2 must be recycled instead", async () => {
     const game = await board().build();
     await game.p1.move("raider", "bf1");
     await game.p1.passFocus();

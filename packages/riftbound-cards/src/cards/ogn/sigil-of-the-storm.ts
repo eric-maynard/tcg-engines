@@ -15,9 +15,12 @@ const abilities: Ability[] = [
       target: { controller: "friendly", type: "rune" },
       type: "recycle",
     },
+    // rule 383.4.c.2.b / 471.2.a — "When you conquer HERE": a Conquer Effect of
+    // the conquering player, checked at THIS battlefield. Conquering another
+    // battlefield while controlling the Sigil never fires it.
     trigger: {
       event: "conquer",
-      on: "controller",
+      on: { controller: "friendly", location: "here" },
     },
     type: "triggered",
   },

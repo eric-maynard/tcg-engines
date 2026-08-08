@@ -864,6 +864,15 @@ export function executeResolvedItem(
       (effect as { player?: unknown }).player === "opponent" &&
       typeof target === "object" &&
       (target as { controller?: unknown }).controller === "enemy"
+    ) &&
+    // rule 416.6 (ogn-287-298) — "recycle one of your runes" does not choose
+    // anything: no rune is named while the item is finalized, and the rune is
+    // picked out of the pool by the recycle handler as the effect RESOLVES
+    // (416.4 — one of whatever remains, so nothing can make it fizzle).
+    !(
+      effect.type === "recycle" &&
+      (target as { type?: unknown }).type === "rune" &&
+      (target as { controller?: unknown }).controller === "friendly"
     )
   ) {
     let options = resolveTarget(

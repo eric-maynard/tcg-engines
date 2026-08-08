@@ -91,6 +91,13 @@ export function casterChosenTarget(effect: unknown): TargetDescriptor | undefine
   if (e.type === "kill" && e.player === "opponent" && t.controller === "enemy") {
     return undefined;
   }
+  // rule 416.6 (ogn-287-298) — "recycle one of your runes" does NOT choose
+  // anything: nothing is named while the item is finalized, so no rune is
+  // locked in and none can be "removed" from under the ability (416.4); the
+  // rune is picked out of the pool as the effect resolves (`effects/recycle.ts`).
+  if (e.type === "recycle" && t.type === "rune" && t.controller === "friendly") {
+    return undefined;
+  }
   if (typeof t.type !== "string") {
     return undefined;
   }
