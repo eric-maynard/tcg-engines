@@ -34,7 +34,11 @@ function describeCardCost(card) {
   const energy = typeof card?.effectiveEnergyCost === "number"
     ? card.effectiveEnergyCost
     : (typeof card?.energyCost === "number" ? card.energyCost : 0);
-  const power = Array.isArray(card?.powerCost) ? card.powerCost.slice() : [];
+  // rule 356.3 — the server-priced pips include added surcharges (an Empowered
+  // Helm's [rainbow]) and waived ones; the printed list is only the fallback.
+  const power = Array.isArray(card?.effectivePowerCost)
+    ? card.effectivePowerCost.slice()
+    : (Array.isArray(card?.powerCost) ? card.powerCost.slice() : []);
   return { energy, power };
 }
 

@@ -40,6 +40,12 @@ export type { CostReductionContext } from "./operations/static-cost-reduction";
 // rule 356.4 — the played card's own scaled self discount is NOT part of the
 // board scan above; price a hand card with both or the pay bar over-charges.
 export { getSelfScaledEnergyReduction } from "./game-definition/moves/play/cost";
+// rule 356 — the ONE resource computation behind both the affordability gate
+// and the payment. Any UI that quotes a price must call this, not re-derive a
+// subset of the discounts (self conditional discounts and rule 356.3 enemy
+// cost increases live only here).
+export { computePlayResourceCost } from "./game-definition/moves/play/cost";
+export type { PlayResourceCost } from "./game-definition/moves/play/cost";
 
 // Game definition export
 export { riftboundDefinition } from "./game-definition/definition";

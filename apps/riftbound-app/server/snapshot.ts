@@ -4,10 +4,8 @@
 
 import type { Card } from "@tcg/riftbound-types/cards";
 import {
-  applyStaticCostReduction,
-  computeStaticCostReduction,
+  computePlayResourceCost,
   effectiveVictoryScore,
-  getSelfScaledEnergyReduction,
   getGlobalCardRegistry,
   modeOptionLabel,
 } from "@tcg/riftbound";
@@ -441,6 +439,7 @@ export function buildGameSnapshot(session: GameSession, viewingPlayer?: string) 
     cardType: string;
     energyCost?: number;
     effectiveEnergyCost?: number;
+    effectivePowerCost?: string[];
     powerCost?: string[];
     might?: number;
     domain?: unknown;
@@ -457,25 +456,35 @@ export function buildGameSnapshot(session: GameSession, viewingPlayer?: string) 
     zoneId === "hand" || zoneId === "mainDeck" || zoneId === "runeDeck";
 
   const costCtx = buildCostReductionContext(internal, state.battlefields);
-  // rule 356.4 — only hand cards are ever priced by the UI's pay bar.
+  // rule 356 — only hand cards are ever priced by the UI's pay bar, and the
+  // quoted price must be the engine's own Total Cost computation: a snapshot
+  // that re-derives a subset of the modifications silently disagrees with what
+  // legality charges (rule 356.3 enemy cost increases, self conditional
+  // "if an enemy unit has died this turn, this costs [2] less", one-shot
+  // discounts). `consume: false` keeps one-shot riders unspent.
   const effectiveCostFor = (zoneId: string, cardId: string, controller: string, printed?: number) => {
     if (zoneId !== "hand" || typeof printed !== "number" || !controller) {return undefined;}
     try {
-      const afterBoard = applyStaticCostReduction(
-        printed,
-        computeStaticCostReduction(costCtx, controller, cardId),
-      );
-      // rule 356.4 (rule-id: unl-196-219 Daisy!) — the card's own scaled
-      // discount ("reduce my cost by [1] for each … among your units") lives on
-      // the hand card, which the board scan above deliberately skips; the
-      // engine charges both, so the pay bar must show both.
-      const self = getSelfScaledEnergyReduction(
+      const cost = computePlayResourceCost(
         state as never,
         controller,
         cardId,
         { board: { cards: costCtx.cards, zones: costCtx.zones } } as never,
+        (id: string) => internal.cardMetas[id],
+        false,
       );
-      return Math.max(0, afterBoard - self);
+      const energy = cost.free || cost.ignoreEnergy ? 0 : cost.energy;
+      // rule 135.2.e.5 — pips the engine will actually require: named domains,
+      // then any-Domain/[rainbow] pips (Empowered surcharges, Deflect, X in
+      // Power) and hybrid pips, both shown as [rainbow].
+      const power: string[] = [];
+      if (!cost.free) {
+        for (const [domain, n] of Object.entries(cost.named)) {
+          for (let i = 0; i < (n ?? 0); i++) {power.push(domain);}
+        }
+        for (let i = 0; i < cost.any + (cost.hybrid?.n ?? 0); i++) {power.push("rainbow");}
+      }
+      return { energy, power };
     } catch {
       return undefined;
     }
@@ -545,6 +554,13 @@ export function buildGameSnapshot(session: GameSession, viewingPlayer?: string) 
         equipmentMightBonus += getGlobalCardRegistry().getMightBonus(equipId as string);
       }
 
+      const effectiveCost = effectiveCostFor(
+        zoneId,
+        cardId,
+        cardInstance?.controller ?? owner,
+        def?.energyCost,
+      );
+
       return {
         cardType: def?.cardType ?? "unknown",
         controller: cardInstance?.controller ?? "",
@@ -560,12 +576,8 @@ export function buildGameSnapshot(session: GameSession, viewingPlayer?: string) 
           cardInstance?.definitionId ??
           "",
         domain: def?.domain,
-        effectiveEnergyCost: effectiveCostFor(
-          zoneId,
-          cardId,
-          cardInstance?.controller ?? owner,
-          def?.energyCost,
-        ),
+        effectiveEnergyCost: effectiveCost?.energy,
+        effectivePowerCost: effectiveCost?.power,
         energyCost: def?.energyCost,
         id: cardId,
         meta: {
