@@ -79,21 +79,21 @@ describe("Seat of Power (sfd-217-221)", () => {
     expect(game.decision()).toMatchObject({ context: "chain", kind: "action", seat: P2 });
   });
 
-  test.failing("BUG: with exactly ONE other battlefield you control, conquering here draws exactly 1 (engine counts the Seat itself and draws 2)", async () => {
+  test("with exactly ONE other battlefield you control, conquering here draws exactly 1 (engine counts the Seat itself and draws 2)", async () => {
     // Expected: bf2 is the only OTHER battlefield P1 controls → +1 card. Actual: `excludeSelf` is ignored → +2.
     const game = await board().battlefield("bf2", { controller: P1 }).unit(P1, "bf2", { might: 2 }, "h2").build();
     expect(await conquerSeat(game)).toBe(1);
     expect(game.violations()).toEqual([]);
   });
 
-  test.failing("BUG: with NO other battlefield under your control the trigger resolves and draws nothing (engine draws 1 for the Seat itself)", async () => {
+  test("with NO other battlefield under your control the trigger resolves and draws nothing (engine draws 1 for the Seat itself)", async () => {
     // Expected: the just-conquered Seat is not an "other" battlefield → 0 cards. Actual: +1.
     const game = await board().battlefield("bf2", { controller: P2 }).unit(P2, "bf2", { might: 2 }, "theirs").build();
     expect(await conquerSeat(game)).toBe(0);
     expect(game.p1.points()).toBe(1);
   });
 
-  test.failing("BUG: with TWO other battlefields you control it draws exactly 2 (engine draws 3)", async () => {
+  test("with TWO other battlefields you control it draws exactly 2 (engine draws 3)", async () => {
     const game = await board()
       .battlefield("bf2", { controller: P1 })
       .battlefield("bf3", { controller: P1 })

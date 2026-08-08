@@ -207,7 +207,13 @@ export function resolveTarget(
 
   // Battlefield definitions live in battlefieldRow, not the unit board.
   if (target.type === "battlefield") {
-    const all = ctx.zones.getCardsInZone("battlefieldRow" as CoreZoneId).map((c) => c as string);
+    // rule-id: sfd-217-221 — "each OTHER battlefield": the source battlefield
+    // itself never counts, even once its controller conquered it.
+    const excludeSelf = (target as { excludeSelf?: boolean }).excludeSelf === true;
+    const all = ctx.zones
+      .getCardsInZone("battlefieldRow" as CoreZoneId)
+      .map((c) => c as string)
+      .filter((id) => !excludeSelf || id !== ctx.sourceCardId);
     // rule-id: unl-015-219 — "battlefield you (or allies) control" counts by
     // battlefield CONTROL (draft.battlefields[id].controller), not card owner;
     // uncontrolled battlefields (controller null) never match friendly/enemy.
