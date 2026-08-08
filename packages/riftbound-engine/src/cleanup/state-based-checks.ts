@@ -30,6 +30,7 @@ import { fireTriggers, type TriggerRunnerContext } from "../abilities/trigger-ru
 import { getGlobalCardRegistry } from "../operations/card-lookup";
 import { getDamage } from "../operations/damage-store";
 import { collectAnyDamageLethalPlayers } from "../operations/lethal-damage";
+import { combatRoleMightBonus } from "../operations/combat-role-might";
 import { hiddenCapacityAt } from "../operations/hidden-capacity";
 import {
   type LeaveResult,
@@ -216,6 +217,10 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
     for (const equipId of meta?.equippedWith ?? []) {
       equipBonus += registry.getMightBonus(equipId as string);
     }
+    // rule 814.1.c / 432.1.a — Shield (defender) and Assault (attacker) are real
+    // Might while the role is stamped, so damage from ANY source — including a
+    // spell resolving mid-combat — is measured against the raised value.
+    const roleBonus = combatRoleMightBonus(cardId as string, meta);
     // rule 323.5 — lethal damage is re-evaluated against a set base Might.
     const effectiveMight = Math.max(
       0,
@@ -224,7 +229,8 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
         (meta?.extraBuffs ?? 0) +
         (meta?.mightModifier ?? 0) +
         (meta?.staticMightBonus ?? 0) +
-        equipBonus,
+        equipBonus +
+        roleBonus,
     );
 
     // rule 142.4.c — the modifier only applies to damage its controller dealt,
