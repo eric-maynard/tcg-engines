@@ -8,6 +8,7 @@ import {
   computeStaticCostReduction,
   effectiveVictoryScore,
   getGlobalCardRegistry,
+  modeOptionLabel,
 } from "@tcg/riftbound";
 import type { CostReductionContext, RiftboundCardMeta } from "@tcg/riftbound";
 import type { PlayerId } from "@tcg/core";
@@ -24,7 +25,28 @@ import { type GameSession, getInternalSnapshot } from "./state";
 export function buildAvailableMoves(session: GameSession, playerId: string) {
   return session.engine
     .enumerateMoves(playerId as PlayerId, { validOnly: true })
-    .map((m) => ({ moveId: m.moveId, params: m.params as Record<string, unknown>, playerId: m.playerId as string }));
+    .map((m) => ({ moveId: m.moveId, params: m.params as Record<string, unknown>, playerId: m.playerId as string }))
+    // rule 355.3 — the engine also plans one playSpell per pre-named mode of a
+    // "Choose one —" spell (agents/tests name it up front). The board UI plays
+    // the printed variant and answers the engine's labelled mode → target
+    // prompts, so the per-mode variants would only crowd the targeting flow.
+    .filter((m) => !(m.moveId === "playSpell" && m.params.mode !== undefined));
+}
+
+/**
+ * rule 355.3 — a "Choose one —" prompt names its modes by their printed
+ * bullets (or a rendering of the instruction), never by raw effect ids; a
+ * choose-target prompt may carry its own title.
+ */
+function enrichPendingChoice(pending: unknown): unknown {
+  const pc = pending as { type?: string; effect?: { options?: unknown[] } } | undefined;
+  if (pc?.type === "choose-mode" && Array.isArray(pc.effect?.options)) {
+    return {
+      ...pc,
+      optionLabels: pc.effect.options.map((_unused, i) => modeOptionLabel(pc.effect, i)),
+    };
+  }
+  return pending;
 }
 
 /**
@@ -540,7 +562,7 @@ export function buildGameSnapshot(session: GameSession, viewingPlayer?: string) 
         : null,
     },
     log: buildHistoryLog(session),
-    pendingChoice: state.pendingChoice,
+    pendingChoice: enrichPendingChoice(state.pendingChoice),
     playerNames: session.playerNames,
     players: state.players,
     runePools: state.runePools,

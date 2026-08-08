@@ -10,6 +10,58 @@ function resolveParamValue(value) {
   return value.replace(/^player-[12]-/, "");
 }
 
+/**
+ * Rule 355.3 — display text for mode `idx` of a "Choose one —" prompt: the
+ * server-computed `optionLabels`, else the option's printed `label`/`text`,
+ * else a short rendering of its instruction (never a raw id like "create-token 4").
+ */
+function modeOptionText(pending, idx) {
+  const fromServer = pending?.optionLabels?.[idx];
+  if (typeof fromServer === "string" && fromServer.trim()) return fromServer;
+  const opt = pending?.effect?.options?.[idx];
+  const printed = opt?.label ?? opt?.text ?? opt?.effect?.text;
+  if (typeof printed === "string" && printed.trim()) return printed;
+  return humanizeEffect(opt?.effect) || `Option ${Number(idx) + 1}`;
+}
+
+/** Minimal English rendering of an effect payload (label fallback only). */
+function humanizeEffect(e) {
+  if (!e || typeof e !== "object") return "";
+  const t = e.target && typeof e.target === "object" ? e.target : null;
+  const noun = t ? `${t.controller === "friendly" ? "a friendly " : t.controller === "enemy" ? "an enemy " : "a "}${t.type ?? "target"}${t.location === "battlefield" ? " at a battlefield" : t.location === "base" ? " in a base" : ""}` : "";
+  const n = typeof e.amount === "number" ? e.amount : null;
+  const turn = e.duration === "turn" ? " this turn" : "";
+  switch (e.type) {
+    case "damage": return `Deal ${n ?? "damage"} to ${noun || "a unit"}`;
+    case "draw": return `Draw ${n ?? 1}`;
+    case "counter": return "Counter a spell";
+    case "create-token": {
+      const k = e.token ?? {};
+      const c = n ?? 1;
+      return `Play ${c === 1 ? "a" : c} ${k.might != null ? `${k.might} Might ` : ""}${k.name ?? "token"} ${k.type ?? "unit"} token${c === 1 ? "" : "s"}${k.keywords?.length ? ` with ${k.keywords.join(", ")}` : ""}`;
+    }
+    case "kill": return `Kill ${noun || "a unit"}`;
+    case "buff": return `Buff ${noun || "a unit"}`;
+    case "stun": return `Stun ${noun || "a unit"}`;
+    case "ready": return `Ready ${noun || "a permanent"}`;
+    case "exhaust": return `Exhaust ${noun || "a permanent"}`;
+    case "modify-might": return `Give ${noun || "a unit"} ${n != null && n >= 0 ? "+" : ""}${n ?? ""} Might${turn}`;
+    case "return-to-hand": return `Return ${noun || "a unit"} to its owner's hand`;
+    case "recycle": return `Recycle ${noun || "cards"}`;
+    case "discard": return `${e.player === "opponent" ? "Opponent discards" : "Discard"} ${n ?? 1}`;
+    case "channel": return `Channel ${n ?? 1} rune${n === 1 ? "" : "s"}${e.exhausted ? " exhausted" : ""}`;
+    case "grant-keyword": return `${noun ? `Give ${noun} ` : "Gain "}${e.keyword ?? "a keyword"}${e.value != null ? ` ${e.value}` : ""}${turn}`;
+    case "empower": return `Empower ${noun || "a unit"}${turn}`;
+    case "disempower": return `Disempower ${noun || "a unit"}${turn}`;
+    case "sequence": return (e.effects ?? []).map(humanizeEffect).filter(Boolean).join(", then ");
+    case "raw": return String(e.text ?? "");
+    default: {
+      const verb = String(e.type ?? "effect").replace(/-/g, " ");
+      return `${verb.charAt(0).toUpperCase()}${verb.slice(1)}${n != null ? ` ${n}` : ""}${noun ? ` — ${noun}` : ""}`;
+    }
+  }
+}
+
 /** Fallback param formatter: show only resolved values without raw key names */
 function formatParamsFallback(params) {
   if (!params) return "";
@@ -292,7 +344,7 @@ function renderActions() {
         const modeIdx = m.params?.pickedMode;
         const modeOpt = pending.type === "choose-mode" && modeIdx != null ? pending.effect?.options?.[modeIdx] : null;
         const label = modeOpt
-          ? (modeOpt.label ?? modeOpt.text ?? modeOpt.effect?.text ?? `${modeOpt.effect?.type ?? "mode"}${modeOpt.effect?.amount != null ? ` ${modeOpt.effect.amount}` : ""}`)
+          ? modeOptionText(pending, modeIdx)  // Rule 355.3: printed bullet, never a raw effect id
           : typeof accept === "boolean" ? (accept ? "Yes" : "No")  // Rule ogn-067-298
           // Rule unl-144-219: humanize destination zone ids like the choice modal does.
           : (!m.params?.pickedCardId && zid != null)

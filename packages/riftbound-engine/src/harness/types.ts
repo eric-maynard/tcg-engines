@@ -222,6 +222,8 @@ export interface ActionField {
   readonly options?: readonly unknown[];
   /** Display text per entry of `options` (rule 355.3 — a `mode` field names the printed bullets). */
   readonly labels?: readonly string[];
+  /** rule 355.5 — for a two-role `targets` tuple, what each position is (`[target1, target2]`). */
+  readonly roles?: readonly string[];
   readonly min?: number;
   readonly max?: number;
   /** true when every variant sets this param (agent must supply or accept a follow-up). */

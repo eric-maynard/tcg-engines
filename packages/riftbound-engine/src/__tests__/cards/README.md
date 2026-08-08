@@ -69,7 +69,7 @@ when illegal — so an unexpected illegality fails the test at that line.
 | Verb | Meaning / engine move |
 |---|---|
 | `play(card, { to?: "base"\|"bf1", accelerate?: true, payOptional?, sacrifice?, targets?, x?, repeat? })` | play a unit/gear from hand (`playUnit`/`playGear`; spells are forwarded to `cast`) |
-| `cast(card, { targets?: "x" \| ["a","b"], x?, repeat?, flow?, payOptional? })` | play a spell (`playSpell`); `targets` order = card text order (e.g. `[friendly, enemy]`) |
+| `cast(card, { targets?: "x" \| ["a","b"], mode?, modes?, x?, repeat?, flow?, payOptional? })` | play a spell (`playSpell`); `targets` order = card text order (e.g. `[friendly, enemy]`, two roles `[target1, target2]`); `mode` = printed bullet index of a "Choose one —" spell (rule 355.3), `modes` = one per [Repeat] execution |
 | `activate(card, abilityIndex = 0, { sacrifice?, discard?, answers? })` | activated ability (legend, gear, unit). Targets are asked on resolution → answer them (below) |
 | `move(unit \| [units], "bf1" \| "base")` `gank(unit, "bf2")` | standard move (multi-unit OK) / ganking move |
 | `hide(card, "bf1")` `reveal(card)` `playChampion("base")` | hidden cards / champion |
@@ -96,6 +96,7 @@ argument and the legal values (e.g. ``cast(cleave): needs `targets` — one of: 
 | Situation | How |
 |---|---|
 | Spell/ability target chosen when played | `cast(card, { targets: "foe" })`, two roles: `{ targets: ["mine", "theirs"] }` |
+| Modal spell ("Choose one —"), rule 355.3 | `cast(card, { mode: 1, targets: "foe" })` names mode + its target on the play (nothing is asked); a bare `cast(card)` is asked at once, before priority: `chooseMode(1)` then `pick("foe")` (both `timing:"FIN"`, mode options carry printed `label`s), THEN `settle()`. Illegal modes (355.8) are absent from `option("cast",c).fields` `mode.options`/`labels`; a forced single mode is locked without asking. [Repeat]: `cast(card, { repeat: 1, modes: [1, 0], targets: ["foe"] })`. The chain view shows `{ mode, targets }`. |
 | X (Bullet Time) | `cast(card, { x: 3 })` |
 | Repeat / Accelerate / optional extra cost | `{ repeat: 2 }` / `play(card, { accelerate: true })` / `{ payOptional: true }`, kill-a-unit costs: `{ sacrifice: "ally" }` |
 | Where a unit is played / moved | `play(card, { to: "bf1" })`, `move(["a","b"], "bf1")` |

@@ -16,6 +16,7 @@
 
 import type { PlayerId } from "@tcg/core";
 import { modeOptionLabel, spellModeLabels } from "../game-definition/moves/play/play-time-modes";
+import { pairEffectRoles } from "../game-definition/moves/play/targeting";
 import { getGlobalCardRegistry } from "../operations/card-lookup";
 import type { PendingChoice, RiftboundGameState } from "../types/game-state";
 import { getActingSeat, getPendingChoiceChooser } from "../views/acting-seat";
@@ -336,6 +337,20 @@ function buildFields(ctx: DecisionContext, moveId: string, variants: FlatMove[],
   }
   if (moveId === "playSpell" && variants.length > 0) {
     const cardId = variants[0]?.params.cardId as string | undefined;
+    // rule 355.5 — name the two roles of a `target1`/`target2` spell so a UI can title them.
+    const spellEffect = cardId
+      ? ((getGlobalCardRegistry().getAbilities(cardId) ?? []).find((a) => a.type === "spell")?.effect as
+          | { type?: string }
+          | undefined)
+      : undefined;
+    const targetsField = fields.find((f) => f.name === "targets");
+    if (targetsField && pairEffectRoles(spellEffect as Parameters<typeof pairEffectRoles>[0])) {
+      const roles =
+        spellEffect?.type === "increase-might-to"
+          ? ["target1: unit whose Might increases", "target2: reference unit"]
+          : ["target1: first unit", "target2: second unit"];
+      fields.splice(fields.indexOf(targetsField), 1, { ...targetsField, roles });
+    }
     if (cardId && spellSupportsX(cardId)) {
       fields.push({
         arg: "x",

@@ -88,7 +88,15 @@ Recipe — add a filter (non-token, in-base, at-a-battlefield, other, stunned…
   `spend-buff`/`spend-xp` steps gate the rest.
 - `effects/conditional.ts` — `{condition, then, else}`. `effects/optional.ts` — AUTO-APPLIES the inner `effect` (no prompt).
   Real "you may" prompts exist only for triggered abilities (`optional:true` → `opt-in`) and inside specific handlers.
-- `effects/choice.ts` — ≥2 `options` ⇒ `choose-mode` pendingChoice (`player:"opponent"` ⇒ opponent picks, `controllerId` resolves).
+- `effects/choice.ts` — resolution-time `choose-mode` only for menus someone ELSE picks (`player:"opponent"|"target-controller"`,
+  rule 355.10.e) or nested/for-each choices. A SPELL's own "Choose one —" (rule 355.3) is chosen AT PLAY: `playSpell {mode, targets}`
+  (enumerator: `play-spell.ts expandSpellModes` → one variant per legal mode × that mode's targets; 355.8 falls out of
+  `spellEffectHasLegalTargets` on the mode's effect), `{modes, targets}` for [Repeat]; unnamed ⇒ `play-time-modes.ts
+  raisePlayTimeModeChoice` asks mode → target bound to the chain item (`_chosenIndex` on the choice node, target on `item.targets`)
+  before priority; `chain/resolve.ts` unwraps the pre-chosen mode so 359.3.e.5 re-checks apply. Labels: parser keeps each bullet as
+  `options[i].label`; `modeOptionLabel/spellModeLabels/summarizeEffect` (exported) render them; harness `fields[mode].labels`.
+  Two-role spells (`target1`/`target2`: swap-might, swap-locations, increase-might-to): `targeting.ts pairEffectRoles /
+  enumerateTargetPairs`; both chosen at play, bare play illegal, 355.8 needs a legal PAIR.
 - PendingChoice kinds (`E/types/game-state.ts PendingChoice`): `reveal-and-pick` (discard.ts, look.ts, reveal-hand.ts,
   recycle.ts, predict.ts; carries `then`), `choose-target` (resolve.ts, damage.ts split), `choose-destination` (move.ts,
   create-token.ts), `choose-mode` (choice.ts), `opt-in` (resolve.ts), `name-card`, `weaponmaster-equip` (play-unit.ts),

@@ -78,8 +78,9 @@ function renderPendingChoiceModal() {
     // Rule 355.14 (ogn-041-298): fixed-total split damage — one button per legal split.
     : pending.type === "choose-target" && pending.assign && typeof pending.total === "number"
       ? `Split ${pending.total} damage`
-    : pending.type === "choose-target" ? "Choose a target"
-    : pending.type === "choose-mode" ? "Choose one"  // Rule sfd-091-221
+    // Rule 355.5: a play-time target prompt may name what is being chosen.
+    : pending.type === "choose-target" ? (pending.prompt ?? `Choose a target${findCard(pending.sourceCardId)?.name ? ` for ${findCard(pending.sourceCardId).name}` : ""}`)
+    : pending.type === "choose-mode" ? `${findCard(pending.sourceCardId)?.name ?? "Choose one"} — choose one`  // Rule 355.3 / sfd-091-221
     // Rules 372/373/383.3.d/355.11.b: generic order / pick-many prompts carry their own prompt text.
     : (pending.type === "order" || pending.type === "pick-many") ? (pending.prompt ?? (pending.type === "order" ? "Choose an order" : "Choose"))
     : "Choose a card";
@@ -151,7 +152,8 @@ function renderPendingChoiceModal() {
       const label = allocLabel != null
         ? allocLabel
         : modeOpt
-        ? (modeOpt.label ?? modeOpt.text ?? modeOpt.effect?.text ?? `${modeOpt.effect?.type ?? "mode"}${modeOpt.effect?.amount != null ? ` ${modeOpt.effect.amount}` : ""}`)
+        // Rule 355.3: printed bullet (server `optionLabels` / parser `label`), never a raw effect id.
+        ? modeOptionText(pending, modeIdx)
         : typeof accept === "boolean"
         // Rule ogn-067-298 / ogn-256-298 / 355.13: an optional reveal-and-pick
         // is declined AFTER the hand is revealed, so "Decline" reads better
