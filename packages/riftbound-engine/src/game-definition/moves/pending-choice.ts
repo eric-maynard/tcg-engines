@@ -27,6 +27,7 @@ import { isBlockedByTwoOtherPlayers } from "./movement/helpers";
 import { castSpellFromTrash } from "../../abilities/effects/play";
 import { contestBattlefieldOnArrival } from "./movement/contest-arrival";
 import { openPendingContestedShowdown } from "./chain/showdown";
+import { hasTrashToBanishReplacement } from "../../abilities/replacement-effects";
 import { resolveTarget } from "../../abilities/target-resolver";
 import * as triggerRunner from "../../abilities/trigger-runner";
 import { fireTriggers } from "../../abilities/trigger-runner";
@@ -47,7 +48,11 @@ import type {
 import { buildEffectContext, executeResolvedItem } from "./chain-moves";
 import { deductAbilityCost } from "./chain/activate-ability";
 import { canAffordPower } from "./chain/effect-context";
-import { flushDeferredSpellSettle, payAnyDomainPower } from "./chain/resolve";
+import {
+  flushDeferredSpellSettle,
+  minDeflectSurchargeForItem,
+  payAnyDomainPower,
+} from "./chain/resolve";
 import { completeSuspendedPlay } from "./play/play-unit";
 import { offerWeaponmasterEquip } from "./play/weaponmaster";
 import {
@@ -618,6 +623,44 @@ function optInEffectOf(choice: PendingChoice): unknown {
   return choice.type === "opt-in"
     ? (choice.resolved as { effect?: unknown } | undefined)?.effect
     : undefined;
+}
+
+/**
+ * rule 809.1.c / 809.1.d (356.2.a.2) — [Deflect] taxes ABILITIES as well as
+ * spells, and rule 404.1 puts that surcharge in the SAME cost payment as the
+ * trigger's own base cost ("you may kill me to move an attacking unit …").
+ * A controller who cannot cover both may only decline (404.2) — there is no
+ * partial payment that spends the base cost alone. This folds the unavoidable
+ * any-domain pips into the cost used for the payability GATE only; the
+ * surcharge itself is charged when the finalized item picks its target.
+ */
+function optInCostForPayability(
+  state: RiftboundGameState,
+  choice: PendingChoice,
+  // biome-ignore lint/suspicious/noExplicitAny: move context bag is framework-typed
+  context: any,
+): Record<string, unknown> | undefined {
+  const cost = optInCostOf(choice);
+  if (choice.type !== "opt-in" || !context?.cards || !context?.zones) {
+    return cost;
+  }
+  const resolved = choice.resolved as
+    | { cardId: string; controller: string; effect?: unknown; targets?: readonly string[] }
+    | undefined;
+  if (!resolved) {
+    return cost;
+  }
+  const pips = minDeflectSurchargeForItem(resolved, state, context);
+  if (pips <= 0) {
+    return cost;
+  }
+  return {
+    ...(cost ?? {}),
+    power: [
+      ...((cost?.power as readonly string[] | undefined) ?? []),
+      ...Array.from({ length: pips }, () => "rainbow"),
+    ],
+  };
 }
 
 /**
@@ -1334,7 +1377,7 @@ export const pendingChoiceMoves: Partial<
         // rule-id: sfd-119-221 — accepting a "you may pay [N] to …" trigger
         // is only legal when the cost is payable.
         if (context.params.accept === true) {
-          const cost = optInCostOf(choice);
+          const cost = optInCostForPayability(state, choice, context);
           if (
             cost &&
             !canPayOptInCost(state, choice.playerId, choice.sourceCardId, cost, context, optInEffectOf(choice))
@@ -1593,7 +1636,7 @@ export const pendingChoiceMoves: Partial<
           return [];
         }
         // rule-id: sfd-119-221 — only offer "accept" when the pay-cost is payable.
-        const cost = optInCostOf(choice);
+        const cost = optInCostForPayability(state, choice, context);
         const canAccept =
           !cost ||
           canPayOptInCost(state, choice.playerId, choice.sourceCardId, cost, context, optInEffectOf(choice));
@@ -1955,35 +1998,39 @@ export const pendingChoiceMoves: Partial<
           // paid NOW, as part of finalizing; unpayable ⇒ the item cannot be
           // finalized and leaves the Chain (404.2).
           const cost = optInCostOf(choice);
+          // rule 404.1 — the gate also carries the [Deflect] pips this item's
+          // own choice will owe; only the base cost is deducted here.
+          const gateCost = optInCostForPayability(draft, choice, context);
+          if (
+            accepted &&
+            gateCost &&
+            !canPayOptInCost(draft, choice.playerId, choice.sourceCardId, gateCost, context, optInEffectOf(choice))
+          ) {
+            accepted = false;
+          }
           if (accepted && cost) {
-            if (
-              !canPayOptInCost(draft, choice.playerId, choice.sourceCardId, cost, context, optInEffectOf(choice))
-            ) {
-              accepted = false;
-            } else {
-              deductAbilityCost(draft, choice.playerId, cost, context.zones, context.counters);
-              if (cost.exhaust === true) {
-                context.counters.setFlag(choice.sourceCardId as CoreCardId, "exhausted", true);
-              }
-              // rule 204.3.a / 383.3.b.1 (rule-id: sfd-128-221) — "you may kill
-              // me to …": the kill is the COST, so the source is already in the
-              // trash while its ability still sits on the Chain awaiting
-              // priority; it can no longer be removed in response.
-              if (cost.kill === "self") {
-                executeEffect(
-                  { target: { type: "self" }, type: "kill" } as unknown as ExecutableEffect,
-                  buildEffectContext(draft, choice.playerId, choice.sourceCardId, context),
-                );
-              }
-              // rule 383.3.b / 427.1 (rule-id: ven-102-166) — "you may banish me
-              // to …": same shape, but the source is banished rather than killed
-              // (no Deathknell), and it is already gone while the ability waits.
-              if (cost.banish === "self") {
-                executeEffect(
-                  { target: { type: "self" }, type: "banish" } as unknown as ExecutableEffect,
-                  buildEffectContext(draft, choice.playerId, choice.sourceCardId, context),
-                );
-              }
+            deductAbilityCost(draft, choice.playerId, cost, context.zones, context.counters);
+            if (cost.exhaust === true) {
+              context.counters.setFlag(choice.sourceCardId as CoreCardId, "exhausted", true);
+            }
+            // rule 204.3.a / 383.3.b.1 (rule-id: sfd-128-221) — "you may kill
+            // me to …": the kill is the COST, so the source is already in the
+            // trash while its ability still sits on the Chain awaiting
+            // priority; it can no longer be removed in response.
+            if (cost.kill === "self") {
+              executeEffect(
+                { target: { type: "self" }, type: "kill" } as unknown as ExecutableEffect,
+                buildEffectContext(draft, choice.playerId, choice.sourceCardId, context),
+              );
+            }
+            // rule 383.3.b / 427.1 (rule-id: ven-102-166) — "you may banish me
+            // to …": same shape, but the source is banished rather than killed
+            // (no Deathknell), and it is already gone while the ability waits.
+            if (cost.banish === "self") {
+              executeEffect(
+                { target: { type: "self" }, type: "banish" } as unknown as ExecutableEffect,
+                buildEffectContext(draft, choice.playerId, choice.sourceCardId, context),
+              );
             }
           }
           const interaction = draft.interaction;
@@ -3094,6 +3141,19 @@ export const pendingChoiceMoves: Partial<
           // CORRESPONDING deck; a rune goes to its owner's Rune Deck.
           if (getGlobalCardRegistry().get(id)?.cardType === "rune") {
             moveParams.targetZoneId = "runeDeck" as CoreZoneId;
+          }
+        }
+        // rule 571 (rule-id: ven-022-166) — "if a card would go to your trash
+        // from anywhere other than your Main Deck, banish it instead". A
+        // discard chosen through a prompt moves hand → trash directly here
+        // (the board departures go through `leaveBoard`, which already asks),
+        // so the destination replacement has to be applied at this hop too.
+        if (choice.onPicked === "discard" && typeof context.zones.getCardsInZone === "function") {
+          const getCardsInZone = context.zones.getCardsInZone.bind(context.zones);
+          const getCardOwner = (c: CoreCardId) => context.cards.getCardOwner?.(c);
+          const owner = getCardOwner(id as CoreCardId) ?? choice.revealer;
+          if (hasTrashToBanishReplacement(draft, { getCardOwner, getCardsInZone }, owner)) {
+            moveParams.targetZoneId = "banishment" as CoreZoneId;
           }
         }
         context.counters.clearAllCounters(id as CoreCardId);

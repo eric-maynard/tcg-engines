@@ -151,7 +151,10 @@ export const EFFECT_HANDLERS: Record<string, EffectHandler> = {
   "play": handle_play,
   "look": handle_look,
   // rule 440.1 — [Burn N]: put the top N cards of a Main Deck into its trash.
+  // "burn" is the printed keyword; "mill" is the legacy internal spelling —
+  // both must dispatch to the same handler.
   "mill": handle_mill,
+  "burn": handle_mill,
   "reveal": handle_reveal,
   "reveal-hand": handle_revealHand,
   "prevent-damage": handle_preventDamage,
