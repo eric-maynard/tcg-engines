@@ -15,6 +15,7 @@ import type {
   RiftboundMoves,
 } from "../../../types";
 import { type EffectContext, executeEffect } from "../../../abilities/effect-executor";
+import { addToChain, createInteractionState } from "../../../chain";
 import { evaluateLegionCondition } from "../../../abilities/legion-conditions";
 import { evaluateWhileLevel } from "../../../abilities/xp-conditions";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
@@ -1055,6 +1056,12 @@ export interface ActiveReplacementEntry {
   target?: { type?: string; controller?: string };
   /** rule-id: unl-052-219 — also [Buff] the entering unit. */
   buff?: boolean;
+  /**
+   * rule 390.2 (rule-id: unl-052-219) — the armed one-shot is a DELAYED
+   * TRIGGERED ability, not a replacement: instead of altering how the unit
+   * enters, it puts a triggered item on the Chain when the unit is played.
+   */
+  delayedTrigger?: boolean;
 }
 
 /**
@@ -1108,6 +1115,16 @@ export function consumeEntersReadyReplacement(
     if (entry.duration === "next") {
       active.splice(i, 1);
     }
+    // rule 390.2 — a delayed TRIGGERED ability does not change how the unit
+    // enters: the unit enters exhausted/unbuffed and a triggered item sourced
+    // from the arming card goes on the Chain (ordered against any other
+    // trigger of the same play per 383.3.d) to ready and Buff it on resolution.
+    if (entry.delayedTrigger) {
+      if (entering) {
+        queueDelayedEntersReadyTrigger(draft, playerId, entry, entering.cardId);
+      }
+      return false;
+    }
     if (entry.buff && entering) {
       executeEffect(
         { type: "buff" },
@@ -1123,6 +1140,37 @@ export function consumeEntersReadyReplacement(
     return true;
   }
   return false;
+}
+
+/**
+ * rule 390.2 / 392 — put the delayed trigger's payoff on the Chain as a
+ * Pending triggered item sourced from the arming card (which may already have
+ * left the board). Its instruction is pinned to the unit that was just played.
+ */
+function queueDelayedEntersReadyTrigger(
+  draft: RiftboundGameState,
+  playerId: string,
+  entry: ActiveReplacementEntry,
+  enteringCardId: string,
+): void {
+  const target = { filter: { idIn: [enteringCardId] }, quantity: 1, type: "permanent" };
+  const effects: unknown[] = [{ target, type: "ready" }];
+  if (entry.buff) {
+    effects.push({ target, type: "buff" });
+  }
+  const turnOrder = Object.keys(draft.players ?? {});
+  (draft as { interaction?: unknown }).interaction = addToChain(
+    draft.interaction ?? createInteractionState(),
+    {
+      cardId: entry.sourceCardId ?? enteringCardId,
+      controller: playerId as PlayerId,
+      effect: (effects.length === 1 ? effects[0] : { effects, type: "sequence" }) as never,
+      status: "pending",
+      triggered: true,
+      type: "ability",
+    } as never,
+    turnOrder,
+  );
 }
 
 /**

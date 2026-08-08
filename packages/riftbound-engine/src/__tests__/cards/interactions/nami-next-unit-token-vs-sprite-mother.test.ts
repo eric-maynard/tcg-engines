@@ -124,7 +124,7 @@ describe("Nami, Headstrong's hold payoff × Sprite Mother × Sprite Call — wha
     expect(game.state("r1")).toMatchObject({ isBuffed: false, isExhausted: true, might: 2 });
   });
 
-  test.failing("BUG: A: the payoff is a delayed TRIGGERED ability (390.2) — playing Sprite Mother makes TWO triggered items pending (Nami's delayed trigger + Mother's play effect, ordered by P1 per 383.3.d) and Mother sits exhausted/unbuffed until Nami's item resolves", async () => {
+  test("A: the payoff is a delayed TRIGGERED ability (390.2) — playing Sprite Mother makes TWO triggered items pending (Nami's delayed trigger + Mother's play effect, ordered by P1 per 383.3.d) and Mother sits exhausted/unbuffed until Nami's item resolves", async () => {
     // Expected: right after the play, either an order offer for P1 or a chain holding both triggered
     // items (one sourced from Nami), with Sprite Mother still exhausted and unbuffed.
     // Actual: the engine models it as an enters-ready replacement — Mother is ready+buffed instantly and

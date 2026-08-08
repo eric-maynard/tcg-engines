@@ -45,6 +45,11 @@ const abilities: Ability[] = [
     // No `target` so resolution never prompts to choose an existing unit.
     effect: {
       buff: true,
+      // rule 390.2 — this is a DELAYED TRIGGERED ability, not a replacement:
+      // the armed entry only watches for the next unit played, then puts a
+      // triggered item on the Chain (the unit still enters exhausted and is
+      // readied/Buffed when that item resolves).
+      delayedTrigger: true,
       duration: "next",
       replaces: "enters-ready",
       type: "replacement",
