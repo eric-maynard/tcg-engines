@@ -125,6 +125,14 @@ describe("Bard, Mercurial (sfd-079-221)", () => {
     expect(game.chain()).toEqual([expect.objectContaining({ cardId: "bard", controller: P1, triggered: true })]);
   });
 
+  test("the legend exhaust is a cost of PLAYING me, not of playing me to base: it is offered for a battlefield I control too", async () => {
+    const game = await board().build();
+    await game.p1.play("bard", { payOptional: true, to: "held" });
+    expect(game.state("legend").isExhausted).toBe(true);
+    expect(game.locationOf("bard")).toBe("held");
+    expect(game.chain()).toEqual([expect.objectContaining({ cardId: "bard", controller: P1, triggered: true })]);
+  });
+
   test("paid → move both Chimes to the OPEN battlefield (not the empty enemy-held or own-held ones); they contest and conquer it", async () => {
     // Expected: only `open` is a legal destination (170.11.c); a and b end up there, P1 conquers it
     // (+1 point). Actual: the additional cost / trigger are not implemented, nothing moves.

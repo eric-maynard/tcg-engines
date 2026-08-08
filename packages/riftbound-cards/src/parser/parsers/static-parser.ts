@@ -351,6 +351,20 @@ export function isStaticAbility(text: string): boolean {
 export function parseStaticAbility(text: string): StaticAbilityParseResult | undefined {
   const cleanText = normalizeTokens(removeReminderText(text));
 
+  // rule 355.1 (unl-041-219) — "While I'm at a battlefield, ... here ..." scopes
+  // the aura to the source's battlefield. Left in place, the leading clause is
+  // swallowed by the aura patterns as part of the subject and the grant stays
+  // live while the source sits in base; a base is not a battlefield, so the
+  // engine's `here-battlefield` is the correct location.
+  const whileAtBfMatch = cleanText.match(/^While I'm at a battlefield,\s*/i);
+  if (whileAtBfMatch) {
+    const inner = parseStaticAbilityInner(cleanText.slice(whileAtBfMatch[0].length).trim(), text);
+    const scoped = inner ? scopeHereToBattlefield(inner) : undefined;
+    if (scoped) {
+      return withIncludeSelf(scoped, text);
+    }
+  }
+
   // First try the inner parser as-is. Many existing patterns already accept a
   // "While you control this battlefield, ..." prefix natively (cost reductions,
   // Grants, etc.).
@@ -383,6 +397,28 @@ export function parseStaticAbility(text: string): StaticAbilityParseResult | und
     }
   }
   return undefined;
+}
+
+/**
+ * rule 355.1 — narrow an aura whose target is `here` to `here-battlefield`.
+ * Returns undefined when the parsed ability has no `here` target, so the caller
+ * can fall back to the unscoped parse rather than silently dropping the clause.
+ */
+function scopeHereToBattlefield(
+  result: StaticAbilityParseResult,
+): StaticAbilityParseResult | undefined {
+  const effect = (result.ability as { effect?: { target?: { location?: string } } }).effect;
+  const target = effect?.target;
+  if (!effect || !target || target.location !== "here") {
+    return undefined;
+  }
+  return {
+    ...result,
+    ability: {
+      ...result.ability,
+      effect: { ...effect, target: { ...target, location: "here-battlefield" } },
+    } as StaticAbility,
+  };
 }
 
 function withIncludeSelf(
