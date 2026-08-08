@@ -55,7 +55,7 @@ describe("Ornn's Forge (sfd-213-221)", () => {
     expect(JSON.stringify(a?.effect?.reduction ?? a?.effect?.by ?? a?.effect?.amount)).toMatch(/^1$|energy_1|"energy":1/);
   });
 
-  test.failing("BUG: while P1 controls the Forge, P1's first gear this turn (The Syren, 2) costs 1", async () => {
+  test("while P1 controls the Forge, P1's first gear this turn (The Syren, 2) costs 1", async () => {
     // Expected: 5 → 4 energy and the Syren is in P1's base. Actual: full price, 5 → 3.
     const game = await board().build();
     await game.p1.play("syren");
@@ -64,7 +64,7 @@ describe("Ornn's Forge (sfd-213-221)", () => {
     expect(game.p1.energy()).toBe(4);
   });
 
-  test.failing("BUG: only the FIRST gear each turn — Syren 2→1, then Orb pays its full 1, then Dirk its full 1 (5 → 4 → 3 → 2)", async () => {
+  test("only the FIRST gear each turn — Syren 2→1, then Orb pays its full 1, then Dirk its full 1 (5 → 4 → 3 → 2)", async () => {
     // Expected energy trail 4, 3, 2. Actual: 3, 2, 1 (no discount at all).
     const game = await board().build();
     await game.p1.play("syren");
@@ -79,7 +79,7 @@ describe("Ornn's Forge (sfd-213-221)", () => {
     expect(game.p1.gear().sort()).toEqual(["dirk", "orb", "syren"]);
   });
 
-  test.failing("BUG: Equipment is gear and the reduction reaches exactly 0 — a 1-cost Serrated Dirk is playable with 0 energy (356.6)", async () => {
+  test("Equipment is gear and the reduction reaches exactly 0 — a 1-cost Serrated Dirk is playable with 0 energy (356.6)", async () => {
     // Expected: `play dirk` is legal at 0 energy and leaves the pool at 0. Actual: not legal.
     const game = await board().resources(P1, { energy: 0 }).build();
     expect(game.p1.can("play", "dirk")).toBe(true);
@@ -89,7 +89,7 @@ describe("Ornn's Forge (sfd-213-221)", () => {
     expect(game.p1.resources()).toEqual({ energy: 0, power: {} });
   });
 
-  test.failing("BUG: 'each turn' — the slot refreshes: Syren discounted this turn, Orb (1) is free on P1's next turn", async () => {
+  test("'each turn' — the slot refreshes: Syren discounted this turn, Orb (1) is free on P1's next turn", async () => {
     // Expected: turn 2 Syren costs 1 (5→4); on turn 4 with a fresh pool of 0 + nothing tapped, Orb is playable for 0.
     // Actual: no discount on either turn.
     const game = await board().build();
@@ -108,7 +108,7 @@ describe("Ornn's Forge (sfd-213-221)", () => {
     expect(game.p1.energy()).toBe(0);
   });
 
-  test.failing("BUG: a Gold gear TOKEN entering first does not use the slot — after Treasure Hunter's token, the Syren still costs 1 (185.2.a)", async () => {
+  test("a Gold gear TOKEN entering first does not use the slot — after Treasure Hunter's token, the Syren still costs 1 (185.2.a)", async () => {
     // Expected: Gold token in base, then Syren for 1 (5 → 4). Actual: Syren full price (3 left).
     const game = await board().battlefield("bf2", { controller: null }).unit(P1, "base", TREASURE_HUNTER, "hunter").build();
     await game.p1.move("hunter", "bf2");
@@ -162,7 +162,7 @@ describe("Ornn's Forge (sfd-213-221)", () => {
     expect(game.p1.energy()).toBe(3);
   });
 
-  test.failing("BUG: conquering the empty Forge mid-turn turns the passive on — the first gear afterwards costs 1 less", async () => {
+  test("conquering the empty Forge mid-turn turns the passive on — the first gear afterwards costs 1 less", async () => {
     // Expected: Walker takes the Forge (P1 scores 1), then Syren costs 1 (5 → 4). Actual: full price.
     const game = await scenario()
       .resources(P1, { energy: 5 })

@@ -9,14 +9,11 @@ import type {
   GameMoveDefinitions,
 } from "@tcg/core";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../../types";
-import { fireTriggers } from "../../../abilities/trigger-runner";
 import { createInteractionState, getTurnState } from "../../../chain";
 import { isLegalTiming } from "../../../chain/chain-state";
-import { attachEquipment } from "../../../abilities/effects/_attachment";
 import { hasKeyword } from "../movement/helpers";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
 import {
-  hasStaticEffect,
   createMetaAccessor,
   getPotentialRuneEnergy,
   canAffordCard,
@@ -25,6 +22,7 @@ import {
 } from "./cost";
 import { legacyParamsFromSelection, withCostsParam } from "./cost-model";
 import { reactionWindowOpen } from "./reaction-window";
+import { enterPlayedPermanent } from "./play-pipeline";
 
 /**
  * rule 813.1 (unl-085-219 Sumpworks Map) — the gear prints [Reaction] (which
@@ -160,6 +158,9 @@ export const playGear: Defs["playGear"] = {
         context.params.playerId,
         context.params.cardId,
         {
+          // rule 356.4 — board statics (e.g. a battlefield's "gear you play
+          // costs [1] less") price gear plays like every other play.
+          board: { cards: context.cards, zones: context.zones },
           chosenTargetId: context.params.chosenTargetId,
           ignoreEnergyCost:
             findEnergyWaiver(state, context.params.playerId as string, context.params.cardId as string) >= 0,
@@ -248,6 +249,7 @@ export const playGear: Defs["playGear"] = {
           context.playerId as string,
           cardId as string,
           {
+            board: { cards: context.cards, zones: context.zones },
             ignoreEnergyCost:
               findEnergyWaiver(state, context.playerId as string, cardId as string) >= 0,
           },
@@ -289,7 +291,11 @@ export const playGear: Defs["playGear"] = {
       draft,
       playerId,
       cardId,
-      { chosenTargetId, ignoreEnergyCost: waiverIdx >= 0 },
+      {
+        board: { cards: context.cards, zones: context.zones },
+        chosenTargetId,
+        ignoreEnergyCost: waiverIdx >= 0,
+      },
       createMetaAccessor(context.cards),
       {
         counters: context.counters,
@@ -297,70 +303,11 @@ export const playGear: Defs["playGear"] = {
       },
     );
 
-    zones.moveCard({
-      cardId: cardId as CoreCardId,
-      targetZoneId: "base" as CoreZoneId,
-    });
-
-    // Gear normally enters ready (rule 143.4 applies to units only), but a
-    // static "This enters exhausted" effect forces it to enter tapped
-    // (e.g. Honeyfruit unl-049-219).
-    if (hasStaticEffect(cardId, "enters-exhausted")) {
-      context.counters.setFlag(cardId as CoreCardId, "exhausted", true);
-    }
-
-    // Fire "play-self" / "play-card" triggers BEFORE incrementing the
-    // Rule-724 counter (see comment in playUnit).
-    fireTriggers(
-      { cardId, playerId, type: "play-self" },
+    // rule 359.2 / 143.1.a.1 — the ONE enter path (`play-pipeline.ts`): base,
+    // "enters exhausted" statics, play triggers, Legion count, [Quick-Draw].
+    enterPlayedPermanent(
       { cards: context.cards, counters: context.counters, draft, zones },
+      { cardId: cardId as string, entryZone: "base", from: "hand", playerId: playerId as string, via: "hand" },
     );
-    fireTriggers(
-      { cardId, cardType: "gear", playerId, type: "play-card" },
-      { cards: context.cards, counters: context.counters, draft, zones },
-    );
-
-    // rule 819.1.d (sfd-054-221) — [Quick-Draw]: "When you play it, attach it
-    // to a unit you control." With exactly one friendly unit the attachment is
-    // forced; with several the controller is prompted (choose-target).
-    if (hasKeyword(cardId, "Quick-Draw", (id) => context.cards.getCardMeta(id))) {
-      const zoneIds = ["base", ...Object.keys(draft.battlefields ?? {}).map((bf) => `battlefield-${bf}`)];
-      const registry = getGlobalCardRegistry();
-      const units: string[] = [];
-      for (const zoneId of zoneIds) {
-        for (const id of zones.getCardsInZone(zoneId as CoreZoneId, playerId as CorePlayerId)) {
-          if (registry.get(id as string)?.cardType === "unit") {
-            units.push(id as string);
-          }
-        }
-      }
-      if (units.length === 1) {
-        attachEquipment(
-          {
-            cards: context.cards,
-            counters: context.counters,
-            draft,
-            playerId,
-            zones,
-          } as never,
-          cardId,
-          units[0] as string,
-        );
-      } else if (units.length > 1 && !draft.pendingChoice) {
-        draft.pendingChoice = {
-          effect: { holderCandidates: units, type: "attach" },
-          options: units,
-          playerId,
-          remaining: 1,
-          sourceCardId: cardId,
-          type: "choose-target",
-        } as typeof draft.pendingChoice;
-      }
-    }
-
-    // Rule 724 (Legion) tracker: count this gear/equipment play.
-    if (draft.cardsPlayedThisTurn) {
-      draft.cardsPlayedThisTurn[playerId] = (draft.cardsPlayedThisTurn[playerId] ?? 0) + 1;
-    }
   },
 };

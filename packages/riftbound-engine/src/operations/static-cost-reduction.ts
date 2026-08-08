@@ -33,6 +33,7 @@ import type {
 import type { RiftboundCardMeta, RiftboundGameState } from "../types";
 import { getGlobalCardRegistry } from "./card-lookup";
 import { evaluateCondition } from "../abilities/static-abilities";
+import { playedIdsThisTurn } from "./plays-this-turn";
 
 /**
  * Minimal context for the static cost-reduction scan. A subset of what
@@ -192,8 +193,10 @@ export function computeStaticCostReduction(
   const totalPower: Partial<Record<string, number>> = {};
   const entries: StaticCostReductionEntry[] = [];
 
-  // Build the per-player scan zone list (base/legend/champion + every bf).
-  const zonesToScan: string[] = [...PLAYER_BOARD_ZONES];
+  // Build the per-player scan zone list (base/legend/champion + battlefield
+  // cards + every bf). Battlefield cards live in `battlefieldRow` and carry
+  // cost statics of their own ("While you control this battlefield, …").
+  const zonesToScan: string[] = [...PLAYER_BOARD_ZONES, "battlefieldRow"];
   for (const bfId of Object.keys(ctx.draft.battlefields ?? {})) {
     zonesToScan.push(`battlefield-${bfId}`);
   }
@@ -208,9 +211,14 @@ export function computeStaticCostReduction(
       : ctx.zones.getCardsInZone(zoneId as CoreZoneId);
 
     for (const permId of ids) {
-      const controller =
-        ctx.cards.getCardController?.(permId as CoreCardId) ??
-        ctx.cards.getCardOwner(permId as CoreCardId);
+      // rule 190.6.d — on a battlefield card "you" is the battlefield's
+      // CONTROLLER, which moves with conquest; an uncontrolled battlefield
+      // has no "you" at all, so its statics reach nobody.
+      const asBattlefield = ctx.draft.battlefields?.[permId as string];
+      const controller = asBattlefield
+        ? asBattlefield.controller ?? null
+        : ctx.cards.getCardController?.(permId as CoreCardId) ??
+          ctx.cards.getCardOwner(permId as CoreCardId);
       if (controller !== playerId) {
         continue;
       }
@@ -244,6 +252,20 @@ export function computeStaticCostReduction(
             playedTags,
             playContext,
             permId as string,
+          )
+        ) {
+          continue;
+        }
+
+        // rule 356.4 riders ("the FIRST friendly NON-TOKEN gear played each
+        // turn") narrow which play the discount reaches.
+        if (
+          !costRestrictionsSatisfied(
+            (effect as { restrictions?: unknown }).restrictions,
+            ctx,
+            playerId,
+            playedCardId,
+            target,
           )
         ) {
           continue;
@@ -849,6 +871,90 @@ function matchesPlayedCard(
   const shape =
     t.keyword === "Flow" && playContext?.viaFlow === true ? { ...t, keyword: undefined } : t;
   return matchesCardShape(shape, playedCardType, playedKeywords, playedTags);
+}
+
+/**
+ * rule 356.4 — restriction riders on a static cost reduction. Ornn's Forge
+ * (sfd-213-221) prints "the FIRST friendly NON-TOKEN gear played each turn
+ * costs [1] less": both riders narrow WHICH play the discount reaches, not
+ * how big it is. An unknown rider denies the discount rather than silently
+ * widening it.
+ */
+function costRestrictionsSatisfied(
+  raw: unknown,
+  ctx: CostReductionContext,
+  playerId: string,
+  playedCardId: string,
+  target: unknown,
+): boolean {
+  if (!Array.isArray(raw) || raw.length === 0) {
+    return true;
+  }
+  const registry = getGlobalCardRegistry();
+  const shapeOf = (t: unknown) =>
+    (t ?? {}) as { type?: string; keyword?: string; tag?: string; filter?: { tag?: string } };
+  const wantsNonToken = raw.some(
+    (r) => (r as { type?: string } | undefined)?.type === "non-token",
+  );
+  for (const rider of raw) {
+    const kind = (rider as { type?: string } | undefined)?.type;
+    if (kind === "non-token") {
+      // rule 185.2.a — a token is played, but it is never "non-token".
+      if (registry.isToken(playedCardId)) {
+        return false;
+      }
+      continue;
+    }
+    if (kind === "first-of-turn") {
+      // The slot is spent by the first matching play of the turn whether or
+      // not the discount actually lowered anything (a free gear still uses it).
+      const priors = playedIdsThisTurn(ctx.draft, playerId);
+      for (const priorId of priors) {
+        if (priorId === playedCardId) {
+          continue;
+        }
+        if (wantsNonToken && registry.isToken(priorId)) {
+          continue;
+        }
+        const def = registry.get(priorId);
+        if (!def) {
+          continue;
+        }
+        if (
+          matchesCardShape(
+            shapeOf(target),
+            def.cardType,
+            def.keywords ?? [],
+            def.tags ?? [],
+          )
+        ) {
+          return false;
+        }
+      }
+      // Second source for the same question: the trigger runner stamps every
+      // play as `played-<type>` / `played-non-token-<type>` on the per-turn
+      // event log, so a play made through a path that doesn't reach the
+      // identity ledger still spends the slot.
+      const events =
+        (ctx.draft as { turnEvents?: Record<string, readonly string[]> }).turnEvents?.[playerId] ??
+        [];
+      const prefix = wantsNonToken ? "played-non-token-" : "played-";
+      for (const entry of events) {
+        if (!entry.startsWith(prefix)) {
+          continue;
+        }
+        if (!wantsNonToken && entry.startsWith("played-non-token-")) {
+          continue; // the same play, logged under the narrower key
+        }
+        if (matchesCardShape(shapeOf(target), entry.slice(prefix.length), [], [])) {
+          return false;
+        }
+      }
+      continue;
+    }
+    return false;
+  }
+  return true;
 }
 
 /**

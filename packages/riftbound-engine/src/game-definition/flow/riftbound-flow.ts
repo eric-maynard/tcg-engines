@@ -34,6 +34,7 @@ import { hasSkipDrawPhaseGrant } from "../moves/play/cost";
 import { clearDamage, getDamage } from "../../operations/damage-store";
 import { type LeaveBoardContext, removeFromBoard } from "../../operations/leave-board";
 import { emptyRunePoolInPlace } from "../../operations/riftbound-operations";
+import { resetPlaysThisTurn } from "../../operations/plays-this-turn";
 import {
   beginAdditionalTurn,
   dequeueExtraTurn,
@@ -664,6 +665,9 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
             // Fire only on plays made during the current turn.
             context.state.cardsPlayedThisTurn[currentPlayer] = 0;
           }
+          // rule 356.4 — the matching identity ledger refreshes with it, so
+          // "the first … played each turn" slots reopen every turn.
+          resetPlaysThisTurn(context.state, currentPlayer);
 
           // Increment per-player turn count (used by Forgotten Monument etc.)
           const turnPlayer = context.state.players[currentPlayer];
