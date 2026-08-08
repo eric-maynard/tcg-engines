@@ -1531,6 +1531,31 @@ export interface RiftboundGameState {
   }[];
 
   /**
+   * rule 359.3.d — a resolving spell card is placed in the trash only AFTER its
+   * effect has finished executing top to bottom. When the effect suspends on a
+   * prompt the card stays in the chain zone and its settle is parked here,
+   * flushed once the whole prompt chain has been answered.
+   */
+  deferredSpellSettle?: {
+    cardId: string;
+    controller: string;
+    resolveTo?: string;
+  };
+
+  /**
+   * rule 424.1 — revealing a card presents it to ALL players. A reveal that
+   * takes no decision (Diana, Lunari: "reveal the top card of your Main Deck.
+   * If it's a spell, draw it") parks no prompt, so this is the only record any
+   * layer — log, UI, spectator — can name the revealed card from. Newest last;
+   * `recordPublicReveal` keeps only the most recent entries.
+   */
+  publicReveals?: {
+    readonly playerId: string;
+    readonly cardIds: readonly string[];
+    readonly turn: number;
+  }[];
+
+  /**
    * rule-id: ogn-220-298 (rule 355.5 / 811.1.b) — open multi-slot target locks
    * for spells played from [Hidden], keyed by chain item id. A card naming two
    * caster-chosen targets is asked one prompt per slot; this keeps the picks

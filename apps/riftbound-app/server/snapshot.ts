@@ -7,6 +7,7 @@ import {
   applyStaticCostReduction,
   computeStaticCostReduction,
   effectiveVictoryScore,
+  getSelfScaledEnergyReduction,
   getGlobalCardRegistry,
   modeOptionLabel,
 } from "@tcg/riftbound";
@@ -371,6 +372,27 @@ export function buildHistoryLog(session: GameSession): LogEntry[] {
       );
     });
   } catch { /* History not available */ }
+  // rule 424.1 — a reveal presents the card to ALL players. Reveals that park
+  // no prompt (Diana, Lunari) are invisible in the move-derived narration
+  // above, so name them from the engine's shared reveal record.
+  try {
+    const state = session.engine.getState() as unknown as {
+      publicReveals?: { playerId: string; cardIds: readonly string[] }[];
+    };
+    (state.publicReveals ?? []).forEach((rev, index) => {
+      const names = rev.cardIds.map((id) => {
+        const defId = String(id).replace(/^player-[12]-(?:main|rune)-\d+-/, "");
+        return registry.get(defId)?.name ?? defId;
+      });
+      if (names.length === 0) {return;}
+      entries.push(
+        makeLogEntry(
+          `${actorName(rev.playerId, session.playerNames)} revealed ${names.join(", ")}.`,
+          { key: `reveal-${index}` },
+        ),
+      );
+    });
+  } catch { /* Reveal record not available */ }
   return entries.slice(-80);
 }
 
@@ -389,6 +411,7 @@ function buildCostReductionContext(
   return {
     cards: {
       getCardController: (id: string) => controllerOf(id),
+      getCardMeta: (id: string) => internal.cardMetas[id],
       getCardOwner: (id: string) => internal.cards[id]?.owner ?? "",
     },
     draft: { battlefields: battlefields ?? {} },
@@ -438,10 +461,21 @@ export function buildGameSnapshot(session: GameSession, viewingPlayer?: string) 
   const effectiveCostFor = (zoneId: string, cardId: string, controller: string, printed?: number) => {
     if (zoneId !== "hand" || typeof printed !== "number" || !controller) {return undefined;}
     try {
-      return applyStaticCostReduction(
+      const afterBoard = applyStaticCostReduction(
         printed,
         computeStaticCostReduction(costCtx, controller, cardId),
       );
+      // rule 356.4 (rule-id: unl-196-219 Daisy!) — the card's own scaled
+      // discount ("reduce my cost by [1] for each … among your units") lives on
+      // the hand card, which the board scan above deliberately skips; the
+      // engine charges both, so the pay bar must show both.
+      const self = getSelfScaledEnergyReduction(
+        state as never,
+        controller,
+        cardId,
+        { board: { cards: costCtx.cards, zones: costCtx.zones } } as never,
+      );
+      return Math.max(0, afterBoard - self);
     } catch {
       return undefined;
     }
@@ -563,6 +597,10 @@ export function buildGameSnapshot(session: GameSession, viewingPlayer?: string) 
     },
     log: buildHistoryLog(session),
     pendingChoice: enrichPendingChoice(state.pendingChoice),
+    // rule 383.3.d — the soft "order your simultaneous triggers" offer is not a
+    // pendingChoice (nothing is blocked); ship it so the client can label the
+    // resolvePendingChoice{orderedKeys} variants it enumerates alongside it.
+    pendingTriggerOrder: state.pendingChoice ? undefined : state.pendingTriggerOrder,
     playerNames: session.playerNames,
     players: state.players,
     runePools: state.runePools,

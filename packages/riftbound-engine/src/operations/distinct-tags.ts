@@ -8,6 +8,7 @@
  */
 
 import type { CardId as CoreCardId, PlayerId as CorePlayerId, ZoneId as CoreZoneId } from "@tcg/core";
+import { effectiveTags } from "../abilities/card-tags";
 import { getGlobalCardRegistry } from "./card-lookup";
 
 interface ZoneReader {
@@ -17,6 +18,7 @@ interface ZoneReader {
 interface CardReader {
   getCardController?(cardId: CoreCardId): string | undefined;
   getCardOwner(cardId: CoreCardId): string | undefined;
+  getCardMeta?(cardId: CoreCardId): unknown;
 }
 
 /** Distinct listed tags carried by units the player controls (base + every battlefield). */
@@ -38,8 +40,14 @@ export function countDistinctTagsAmongUnits(
     if (controller !== playerId) {
       return;
     }
-    const cardTags =
-      (registry.get(id as string) as { tags?: readonly string[] } | undefined)?.tags ?? [];
+    // rule 135.2.b.3 — a tag gained as the unit was played ("choose Bird, Cat,
+    // Dog, or Poro. I gain that tag.") counts wherever a printed tag counts.
+    const cardTags = effectiveTags(
+      (registry.get(id as string) as { tags?: readonly string[] } | undefined)?.tags,
+      cards?.getCardMeta?.(id) as
+        | { namedTag?: string; grantedTags?: readonly string[] }
+        | undefined,
+    );
     for (const t of cardTags) {
       const key = t.toLowerCase();
       if (wanted.has(key)) {

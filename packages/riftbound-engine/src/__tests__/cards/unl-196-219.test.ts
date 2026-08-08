@@ -117,6 +117,45 @@ describe("Daisy! (unl-196-219)", () => {
     expect(game.p1.resources()).toEqual({ energy: 0, power: { rainbow: 0 } });
   });
 
+  test("GAINED tags count for the discount too — 2 printed + 2 named/granted tags = 4 distinct (rule 135.2.b.3)", async () => {
+    const game = await scenario()
+      .resources(P1, { energy: 5, power: { rainbow: 2 } })
+      .unit(P1, "base", BIRD, "token-bird")
+      .unit(P1, "base", LOYAL_PORO, "poro")
+      .unit(P1, "base", { might: 2, name: "Named Cat" }, "namedcat", { namedTag: "Cat" })
+      .unit(P1, "base", { might: 2, name: "Granted Dog" }, "granteddog", { grantedTags: ["Dog"] })
+      .hand(P1, CARD, "daisy")
+      .build();
+    expect(game.p1.can("play", "daisy")).toBe(true); // 9 − 4 = 5
+    await game.p1.play("daisy");
+    expect(game.p1.resources()).toEqual({ energy: 0, power: { rainbow: 0 } });
+  });
+
+  test("the attack trigger sees gained tags as well: 2 printed + 2 gained completes all 4 and Stuns an enemy unit here", async () => {
+    const game = await scenario()
+      .resources(P1, { energy: 9, power: { rainbow: 2 } })
+      .battlefield("bf1", { controller: P2 })
+      .unit(P1, "base", BIRD, "token-bird")
+      .unit(P1, "base", LOYAL_PORO, "poro")
+      .unit(P1, "base", { might: 2, name: "Named Cat" }, "namedcat", { namedTag: "Cat" })
+      .unit(P1, "base", { might: 2, name: "Granted Dog" }, "granteddog", { grantedTags: ["Dog"] })
+      .unit(P2, "bf1", { might: 8, name: "Blocker" }, "blocker")
+      .hand(P1, CARD, "daisy")
+      .build();
+    await game.p1.play("daisy");
+    await game.settle();
+    await game.p1.move("daisy", "bf1");
+    expect(game.chain()).toEqual([expect.objectContaining({ cardId: "daisy", controller: P1, triggered: true })]);
+    for (let i = 0; i < 6 && game.chain().length > 0; i++) {
+      if (game.decision()?.kind === "pick") {
+        await game.p1.pick("blocker");
+        continue;
+      }
+      await game.acting().pass();
+    }
+    expect(game.state("blocker").isStunned).toBe(true);
+  });
+
   test("the discount counts distinct TAGS among YOUR units — two Poros = 1, Bird + Poro = 2, all four = 4 (5 energy), the opponent's Cat adds nothing", async () => {
     const twoPoros = await scenario()
       .resources(P1, { energy: 7, power: { rainbow: 2 } })

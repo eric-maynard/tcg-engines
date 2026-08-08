@@ -7,7 +7,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { formatMoveLog } from "../snapshot";
+import { buildHistoryLog, formatMoveLog } from "../snapshot";
 
 const NAMES = { "player-1": "Dev", "player-2": "Opp" };
 
@@ -46,5 +46,26 @@ describe("formatMoveLog: resolvePendingChoice", () => {
       NAMES,
     );
     expect(text).toBe("Opp declined an optional effect.");
+  });
+});
+
+describe("buildHistoryLog: public reveals", () => {
+  test("names a card revealed with no prompt (rule 424.1)", () => {
+    const session = {
+      clients: new Map(),
+      engine: {
+        getReplayHistory: () => [],
+        getState: () => ({
+          publicReveals: [{ cardIds: ["player-1-main-3-sfd-030-221"], playerId: "player-1", turn: 2 }],
+        }),
+      },
+      log: [],
+      playerNames: NAMES,
+      players: ["player-1", "player-2"],
+      sandbox: true,
+      seq: 0,
+    } as unknown as Parameters<typeof buildHistoryLog>[0];
+    const texts = buildHistoryLog(session).map((e) => e.text);
+    expect(texts.some((t) => t.includes("Dev") && t.includes("Skyfall of Areion") && t.includes("revealed"))).toBe(true);
   });
 });

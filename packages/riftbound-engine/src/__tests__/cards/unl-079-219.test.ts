@@ -141,6 +141,24 @@ describe("Diana, Lunari (unl-079-219)", () => {
     expect(game.violations()).toEqual([]);
   });
 
+  test("rule 424.1: the revealed card is presented to ALL players — its identity is recorded on the shared state, hit or miss", async () => {
+    const drawn = await board([FILLER, BOLT, FILLER], ["u1", "bolt", "u3"]).build();
+    await drawn.p1.move("diana", "bf1");
+    await toPayPrompt(drawn);
+    await drawn.p1.yes();
+    await predict(drawn, "u1", true); // bottom the unit → the spell is revealed and drawn
+    await drawn.settle();
+    expect(drawn.gameState.publicReveals?.at(-1)).toMatchObject({ cardIds: ["bolt"], playerId: P1 });
+
+    const kept = await board([FILLER, BOLT, FILLER], ["u1", "bolt", "u3"]).build();
+    await kept.p1.move("diana", "bf1");
+    await toPayPrompt(kept);
+    await kept.p1.yes();
+    await predict(kept, "u1", false); // keep the unit on top → the MISS is still revealed
+    await kept.settle();
+    expect(kept.gameState.publicReveals?.at(-1)).toMatchObject({ cardIds: ["u1"], playerId: P1 });
+  });
+
   test("pay [1], KEEP the unit on top → the revealed card is that unit: nothing is drawn and it stays on top of the deck (not trashed, not bottomed)", async () => {
     const game = await board([FILLER, BOLT, FILLER], ["u1", "bolt", "u3"]).build();
     const deckSize = game.p1.deck().length;

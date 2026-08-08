@@ -56,6 +56,29 @@ function offerRevealLook(
   return false;
 }
 
+/** How many past reveals the shared record keeps (rule 424.1 is about the moment, not a permanent log). */
+const PUBLIC_REVEAL_HISTORY = 20;
+
+/**
+ * rule 424.1 — a reveal presents the card to ALL players. Every reveal path
+ * goes through here so the identity is on the state for the log / UI / a
+ * spectator to name, whether or not the reveal parks a prompt.
+ */
+export function recordPublicReveal(
+  ctx: EffectContext,
+  playerId: string,
+  cardIds: readonly string[],
+): void {
+  if (cardIds.length === 0) return;
+  const draft = ctx.draft as unknown as {
+    publicReveals?: { playerId: string; cardIds: readonly string[]; turn: number }[];
+    turn?: { number?: number };
+  };
+  const entries = draft.publicReveals ?? [];
+  entries.push({ cardIds: [...cardIds], playerId, turn: draft.turn?.number ?? 0 });
+  draft.publicReveals = entries.slice(-PUBLIC_REVEAL_HISTORY);
+}
+
 export function handle_reveal(effect: ExecutableEffect, ctx: EffectContext, _h: EffectHelpers): void {
   // Rule 354.2 (ogn-160-298 Dazzling Aurora): "reveal cards from the top
   // of your Main Deck until you reveal a <cardType>" — scan the deck
@@ -94,6 +117,7 @@ export function handle_reveal(effect: ExecutableEffect, ctx: EffectContext, _h: 
       if (top !== undefined) revealed.push(top as string);
     }
     if (revealed.length === 0) return;
+    recordPublicReveal(ctx, actor, revealed);
     ctx.draft.pendingChoice = {
       onPicked: "play",
       onRest: "recycle",
@@ -135,6 +159,9 @@ export function handle_reveal(effect: ExecutableEffect, ctx: EffectContext, _h: 
     const top = ctx.zones
       .getCardsInZone("mainDeck" as CoreZoneId, actor as CorePlayerId)
       .slice(0, Math.max(1, revEff.amount ?? 1));
+    // rule 424.1 — present the cards to every player BEFORE anything moves
+    // them: once a match is drawn or a miss is recycled the identity is gone.
+    recordPublicReveal(ctx, actor, top.map((c) => c as string));
     // rule 424 / 429.2 — the revealed cards' own mandatory on-reveal abilities
     // resolve immediately, before the reveal's draw/recycle follow-up.
     fireMandatoryRevealAbilities(top.map((c) => c as string), actor, ctx, _h);
@@ -180,6 +207,8 @@ export function handle_reveal(effect: ExecutableEffect, ctx: EffectContext, _h: 
       }
       rest.push(id);
     }
+    // rule 424.1 — every card turned over by the scan was revealed, hit or not.
+    recordPublicReveal(ctx, actor, hit ? [...rest, hit] : rest);
     if (hit) {
       ctx.zones.moveCard({
         cardId: hit as CoreCardId,

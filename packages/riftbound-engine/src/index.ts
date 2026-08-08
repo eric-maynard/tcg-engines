@@ -37,6 +37,9 @@ export {
   computeStaticCostReduction,
 } from "./operations/static-cost-reduction";
 export type { CostReductionContext } from "./operations/static-cost-reduction";
+// rule 356.4 — the played card's own scaled self discount is NOT part of the
+// board scan above; price a hand card with both or the pay bar over-charges.
+export { getSelfScaledEnergyReduction } from "./game-definition/moves/play/cost";
 
 // Game definition export
 export { riftboundDefinition } from "./game-definition/definition";

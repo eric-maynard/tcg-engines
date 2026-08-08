@@ -2290,7 +2290,15 @@ export function getNotHandSelfEnergyReduction(cardId: string): number {
   return total;
 }
 
-function getSelfScaledEnergyReduction(
+/**
+ * rule 356.4 — a card's OWN scaled/gated self discount ("Reduce my cost by [1]
+ * for each … among your units"). It lives on the card being played, so
+ * `computeStaticCostReduction` (which walks board permanents and skips the
+ * played card) never sees it; any surface that prices a hand card — the pay
+ * bar included — has to add this on top or it shows a cost the engine will not
+ * charge.
+ */
+export function getSelfScaledEnergyReduction(
   state: RiftboundGameState,
   playerId: string,
   cardId: string,
