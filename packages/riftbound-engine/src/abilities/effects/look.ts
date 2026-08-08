@@ -2,7 +2,58 @@
 import type { CardId as CoreCardId, PlayerId as CorePlayerId, ZoneId as CoreZoneId } from "@tcg/core";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
+import { findAllReplacements } from "../replacement-effects";
 import { type EffectHelpers, resolveAmount } from "./_helpers";
+
+/**
+ * rule 369.1 / 424 (sfd-018-221 Void Hatchling) — "If you would reveal cards
+ * from a deck, look at the top card first. You may recycle it. Then reveal
+ * those cards."
+ *
+ * A REVEAL from a deck is a replaceable event (a private look is not), so the
+ * replacement's leading steps run before the reveal happens, against the deck
+ * as it stands. Its trailing "then reveal those cards" step IS the original
+ * reveal, so it is dropped here and the original effect continues instead.
+ */
+function revealReplacementPrefix(
+  ctx: EffectContext,
+  looker: string,
+): ExecutableEffect | undefined {
+  const replacementCtx = {
+    cards: {
+      getCardMeta: ctx.cards.getCardMeta ?? (() => undefined),
+      getCardOwner: ctx.cards.getCardOwner,
+    },
+    draft: ctx.draft,
+    zones: { getCardsInZone: ctx.zones.getCardsInZone },
+  };
+  const matches = findAllReplacements(
+    { owner: looker, playerId: looker, type: "reveal" },
+    replacementCtx as Parameters<typeof findAllReplacements>[1],
+  );
+  for (const match of matches) {
+    // "If YOU would reveal" — only the replacement's own controller is meant.
+    if (match.sourceOwner !== looker) {
+      continue;
+    }
+    const replacement = match.replacement as
+      | { type?: string; effects?: readonly unknown[] }
+      | undefined;
+    if (!replacement || replacement.type !== "sequence" || !Array.isArray(replacement.effects)) {
+      continue;
+    }
+    const prefix = replacement.effects.filter(
+      (step) => (step as { type?: string }).type !== "reveal",
+    );
+    if (prefix.length === 0) {
+      continue;
+    }
+    return (
+      prefix.length === 1 ? prefix[0] : { effects: prefix, type: "sequence" }
+    ) as ExecutableEffect;
+  }
+  return undefined;
+}
 
 /**
  * rule 369.1 / 370.1 (ogn-194-298 Nocturne) — the optional replacement a card
@@ -102,6 +153,36 @@ export function handle_look(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
     (effect as { player?: string }).player === "opponent"
       ? (Object.keys(ctx.draft.players).find((p) => p !== ctx.playerId) ?? ctx.playerId)
       : ctx.playerId;
+  // rule 424 (sfd-188-221 Void Rush + sfd-018-221 Void Hatchling) — a look
+  // flagged as a public REVEAL from a deck can be replaced before it happens;
+  // the replacement's prefix resolves first and the reveal then sees the deck
+  // it left behind.
+  if (
+    from === "mainDeck" &&
+    (effect as { reveal?: boolean }).reveal === true &&
+    (effect as { revealReplaced?: boolean }).revealReplaced !== true
+  ) {
+    const prefix = revealReplacementPrefix(ctx, looker);
+    if (prefix) {
+      const continuation = {
+        ...(effect as object),
+        revealReplaced: true,
+      } as ExecutableEffect;
+      _h.executeEffect(prefix, { ...ctx, playerId: looker as CorePlayerId });
+      const raised = ctx.draft.pendingChoice as { then?: unknown } | undefined;
+      if (raised) {
+        ctx.draft.pendingChoice = {
+          ...(raised as NonNullable<typeof ctx.draft.pendingChoice>),
+          then: raised.then
+            ? { effects: [raised.then, continuation], type: "sequence" }
+            : continuation,
+        } as NonNullable<typeof ctx.draft.pendingChoice>;
+        return;
+      }
+      _h.executeEffect(continuation, ctx);
+      return;
+    }
+  }
   const deck = ctx.zones.getCardsInZone(from as CoreZoneId, looker as CorePlayerId);
   const topN = deck.slice(0, n).map((c) => c as string);
   if (topN.length === 0) return;

@@ -230,10 +230,9 @@ describe("Void Rush (sfd-188-221)", () => {
     expect(game.isOver()).toBe(false);
   });
 
-  test.failing("BUG: Void Hatchling interplay (sfd-018) — Void Rush REVEALS from a deck, so its controller must first look at/recycle the top card and then see the NEXT two; the engine runs it as a private look and skips the replacement", async () => {
-    // Expected: with a Hatchling on P1's board, a look/recycle prompt precedes the reveal; recycling
-    // "top" makes the offered pair [second, third]. Actual: Void Rush is executed as a private look,
-    // the reveal replacement never applies and [top, second] are offered straight away.
+  test("Void Hatchling interplay (sfd-018) — Void Rush REVEALS from a deck, so its controller must first look at/recycle the top card and then see the NEXT two", async () => {
+    // With a Hatchling on P1's board, a look/recycle prompt precedes the reveal; recycling
+    // "top" makes the offered pair [second, third].
     const game = await board(9).unit(P1, "base", HATCHLING, "vh").build();
     await game.p1.cast("vr");
     let sawHatchling = false;
