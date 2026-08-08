@@ -14,8 +14,7 @@ import { fireTriggers } from "../../../abilities/trigger-runner";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
 import { canPlayViaAmbush } from "../../../keywords/keyword-effects";
 import { removeFromBoard } from "../../../operations/leave-board";
-import { contestBattlefieldOnArrival } from "../movement/contest-arrival";
-import { cleanupAndFireDeaths, type PostMoveCleanupContext } from "../../../cleanup/post-move-cleanup";
+import { enterPlayedPermanent } from "./play-pipeline";
 import {
   extractBattlefieldId,
   getBattlefieldZoneId,
@@ -26,14 +25,12 @@ import {
   battlefieldHasEnemyUnits,
   canAffordCard,
   canPlayToEnemyOccupiedBattlefield,
-  staticEnterReadyApplies,
-  consumeEntersReadyReplacement,
   createMetaAccessor,
   getOptionalPlayCost,
   getPotentialRuneEnergy,
   deductCost,
 } from "./cost";
-import { legacyParamsFromSelection, withCostsParam } from "./cost-model";
+import { legacyParamsFromSelection, paidIdsFromLegacyParams, withCostsParam } from "./cost-model";
 
 type Defs = GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>;
 
@@ -458,62 +455,24 @@ export const playFromChampionZone: Defs["playFromChampionZone"] = {
           }
         }
 
-        zones.moveCard({
-          cardId: championId,
-          targetZoneId: location as CoreZoneId,
-        });
-
-        // rule-id: unl-052-219 — consume the "next unit you play" replacement
-        // first so its Buff rider (if any) lands on the entering champion.
-        const replacedReady = consumeEntersReadyReplacement(draft, playerId, {
-          cardId: championId as string,
-          ctx: { cards: context.cards, counters, zones },
-        });
-        const entersReady =
-          replacedReady ||
-          // rule 717: a paid Accelerate enters the champion ready.
-          paidAccelerate ||
-          // rule 143.4 (rule-id: sfd-176-221): a conditional "I enter ready" is
-          // evaluated as the champion enters — an unmet "if" leaves him exhausted.
-          staticEnterReadyApplies(championId as string, draft, playerId, zones);
-        if (!entersReady) {
-          counters.setFlag(championId, "exhausted", true);
-        }
-
-        // rule 355.10.a.1: playing a champion from the Champion Zone is still
-        // "playing" it — "when you play me" triggers must fire exactly as they
-        // do for a play from hand.
-        fireTriggers(
-          { cardId: championId, paidAdditionalCost: paidOptional, playerId, type: "play-self" },
+        // rule 355.10.a.1 / 359.2 — playing a champion from the Champion Zone is
+        // still playing it: the ONE enter path (`play-pipeline.ts`) handles the
+        // "next unit you play" replacement, Accelerate / "I enter ready", play
+        // triggers with the paid additional cost, Legion count and an Ambush
+        // arrival's contest exactly as for a play from hand.
+        enterPlayedPermanent(
           { cards: context.cards, counters, draft, zones },
+          {
+            cardId: championId as string,
+            entersReady: paidAccelerate,
+            entryZone: location as string,
+            from: "championZone",
+            paidAdditionalCost: paidOptional,
+            paidIds: paidOptional ? paidIdsFromLegacyParams(championId as string, context.params) : [],
+            playerId: playerId as string,
+            via: "champion",
+          },
         );
-        fireTriggers(
-          { cardId: championId, cardType: "unit", playerId, type: "play-card" },
-          { cards: context.cards, counters, draft, zones },
-        );
-
-        if (draft.cardsPlayedThisTurn) {
-          draft.cardsPlayedThisTurn[playerId] = (draft.cardsPlayedThisTurn[playerId] ?? 0) + 1;
-        }
-
-        // rule 190.3.a.1 / 464.2.c.3.a — a champion played straight to a
-        // battlefield (Ambush) contests it and picks up its combat
-        // designation exactly like a unit played there does.
-        if (isBattlefieldZone(location as string)) {
-          const arrivedAt = extractBattlefieldId(location as string);
-          if (arrivedAt) {
-            contestBattlefieldOnArrival({
-              arrivingUnitIds: [championId as string],
-              battlefieldId: arrivedAt,
-              cards: context.cards,
-              counters,
-              draft,
-              playerId,
-              zones,
-            });
-          }
-          cleanupAndFireDeaths(draft, context as unknown as PostMoveCleanupContext);
-        }
       }
     }
   },

@@ -270,7 +270,12 @@ export interface GrantedKeyword {
 export interface GrantedAbility {
   sourceCardId: CardId;
   abilityIndex: number;
-  duration: "turn" | "permanent";
+  /**
+   * rule 364 (unl-213-219) — "static" is a continuous grant from a static
+   * ability: stripped and re-applied on every static recalculation, so it
+   * lasts exactly as long as the unit matches the granting descriptor.
+   */
+  duration: "turn" | "permanent" | "static";
 }
 
 /**
@@ -1049,10 +1054,14 @@ export interface OptInChoice {
    */
   readonly instructedPlay?: {
     readonly cardId: CardId;
+    /** rule 419.1 — the zone the card is played from (it waits in `chain` limbo meanwhile — 354.2). */
+    readonly playFrom?: string;
     readonly playTo: string;
     readonly playStun: boolean;
     /** Fallback controller when the card has no recorded owner. */
     readonly revealer: PlayerId;
+    /** rule 323.13 — the caster whose effect forces this play (stages the arrival). */
+    readonly stagedBy?: PlayerId;
   };
   readonly acceleratePlay?: {
     readonly cardId: CardId;
@@ -1246,6 +1255,13 @@ export interface RiftboundGameState {
    * path always initializes it.
    */
   readonly cardsPlayedThisTurn?: Record<string, number>;
+
+  /**
+   * rule 356.4 — the card ids behind `cardsPlayedThisTurn`, in play order.
+   * A cost modifier scoped to "the first friendly non-token gear played each
+   * turn" needs the shape of the earlier plays, not just their count.
+   */
+  readonly cardsPlayedIdsThisTurn?: Record<string, readonly string[]>;
 
   /**
    * rule 419.4.a (rule-id: ven-044-166) — a spell's play is tallied when it

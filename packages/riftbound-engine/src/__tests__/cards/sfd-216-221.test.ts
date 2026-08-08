@@ -132,7 +132,7 @@ describe("Rockfall Path (sfd-216-221)", () => {
     expect(game.zoneOf("fiora")).toBe("base");
   });
 
-  test.failing("BUG: 'play a Recruit token HERE' at Rockfall must be ignored (054, 359.3.e.6) — Noxian Drummer marching onto Rockfall still gets its Recruit there", async () => {
+  test("'play a Recruit token HERE' at Rockfall must be ignored (054, 359.3.e.6) — Noxian Drummer marching onto Rockfall still gets its Recruit there", async () => {
     // Expected: Drummer arrives, its trigger resolves, no token exists anywhere (not at Rockfall, not in base).
     // Actual: a Recruit token is created at battlefield-rock.
     const game = await scenario()
@@ -155,7 +155,7 @@ describe("Rockfall Path (sfd-216-221)", () => {
     expect(game.chain()).toEqual([]); // 811.1.c.2 — hiding opens no chain
   });
 
-  test.failing("BUG: a hidden UNIT at Rockfall can never be played from facedown (811.1.d.1 + 054) — the engine offers 'reveal' and plays it onto Rockfall", async () => {
+  test("a hidden UNIT at Rockfall can never be played from facedown (811.1.d.1 + 054) — the engine offers 'reveal' and plays it onto Rockfall", async () => {
     // Expected: no reveal/play option for the facedown Pakaa Cub at Rockfall; it stays facedown.
     // Actual: `reveal` is legal and the Cub lands in battlefield-rock.
     const game = await board().turn(3).facedown(P1, "rock", PAKAA_CUB, "cub").build();

@@ -57,6 +57,7 @@ import {
 import { equipCostForTarget } from "./equip-cost";
 import { completeSuspendedPlay } from "./play/play-unit";
 import { offerWeaponmasterEquip } from "./play/weaponmaster";
+import { enterPlayedPermanent, playDestinationOptions } from "./play/play-pipeline";
 import {
   type CostExtras,
   canPayResourceCost,
@@ -68,7 +69,6 @@ import {
   getOptionalPlayCost,
   getPotentialRuneEnergy,
   payResourceCost,
-  staticEnterReadyApplies,
 } from "./play/cost";
 import { bindDestinationOnItem } from "./play/play-time-destinations";
 import { collectChoiceNodes, raisePlayTimeModeChoice } from "./play/play-time-modes";
@@ -433,34 +433,6 @@ function postChoiceCleanup(draft: RiftboundGameState, context: unknown): void {
   }
 }
 
-/**
- * rule 354.2 / 419.4.a / 423 (unl-139-219 Bone Skewer) — the play triggers of a
- * card an effect instructed its own player to play to a fixed location, fired
- * once the (possibly zeroed) optional additional cost has been declared.
- */
-function fireInstructedPlayTriggers(
-  draft: RiftboundGameState,
-  context: unknown,
-  spec: { cardId: string; paidAdditionalCost: boolean; playStun: boolean; playerId: string },
-): void {
-  const { cardId, paidAdditionalCost, playStun, playerId } = spec;
-  const ctx = context as { cards: unknown; counters: unknown; zones: unknown };
-  const playCtx = {
-    cards: ctx.cards,
-    counters: ctx.counters,
-    draft,
-    zones: ctx.zones,
-  } as unknown as Parameters<typeof fireTriggers>[1];
-  fireTriggers({ cardId, paidAdditionalCost, playerId, type: "play-self" }, playCtx);
-  fireTriggers({ cardId, cardType: "unit", playerId, type: "play-card" }, playCtx);
-  if (playStun) {
-    fireTriggers({ cardId, type: "stun" }, playCtx);
-  }
-  if (draft.cardsPlayedThisTurn) {
-    draft.cardsPlayedThisTurn[playerId] = (draft.cardsPlayedThisTurn[playerId] ?? 0) + 1;
-  }
-}
-
 /** rule-id: sfd-119-221 — the pay-cost carried on an opt-in choice's chain item. */
 function optInCostOf(choice: PendingChoice): Record<string, unknown> | undefined {
   if (choice.type !== "opt-in") {
@@ -579,6 +551,53 @@ export function killCostCandidates(
     }
   }
   return out;
+}
+
+/**
+ * rule 108.2 / 190.6.d (rule-id: sfd-207-221) — a Battlefield card's own
+ * ability acts AT its battlefield: the card itself sits in `battlefieldRow`,
+ * so "here" is the units' zone `battlefield-<id>`, never the row.
+ */
+function sourceHereZone(
+  state: RiftboundGameState,
+  sourceCardId: string,
+  // biome-ignore lint/suspicious/noExplicitAny: move context bag is framework-typed
+  context: any,
+): string | undefined {
+  if ((state as { battlefields?: Record<string, unknown> }).battlefields?.[sourceCardId]) {
+    return `battlefield-${sourceCardId}`;
+  }
+  return context?.zones?.getCardZone?.(sourceCardId as CoreCardId) as string | undefined;
+}
+
+/**
+ * rule 203 / 205 (rule-id: sfd-207-221) — the board cards that can pay a
+ * "return a unit you control here to its owner's hand" cost. The descriptor is
+ * an ordinary Target, so "here" is the source's own battlefield and the
+ * controller side is read live (control, not ownership — rule 740.1.a).
+ */
+export function returnToHandCostCandidates(
+  state: RiftboundGameState,
+  playerId: string,
+  sourceCardId: string,
+  spec: unknown,
+  // biome-ignore lint/suspicious/noExplicitAny: move context bag is framework-typed
+  context: any,
+): string[] {
+  if (!context?.cards || typeof context?.zones?.getCardsInZone !== "function") {
+    return [];
+  }
+  const descriptor = (spec as { target?: Record<string, unknown> } & Record<string, unknown>)
+    .target ?? (spec as Record<string, unknown>);
+  return resolveTarget({ ...(descriptor as never), quantity: "all" }, {
+    cards: context.cards,
+    choosing: true,
+    draft: state,
+    playerId,
+    sourceCardId,
+    sourceZone: sourceHereZone(state, sourceCardId, context),
+    zones: context.zones,
+  } as Parameters<typeof resolveTarget>[1]) as string[];
 }
 
 /**
@@ -703,6 +722,15 @@ function canPayOptInCost(
   if (killSpec !== undefined && killSpec !== "self" && typeof killSpec === "object" && killSpec !== null) {
     const needed = (killSpec as { amount?: number }).amount ?? 1;
     if (killCostCandidates(state, playerId, sourceCardId, killSpec, context).length < needed) {
+      return false;
+    }
+  }
+  // rule 205 / 355.10.c.1 (rule-id: sfd-207-221) — "you may pay [1] AND return
+  // a unit you control here …": both halves are one payment, so with no legal
+  // unit to return the option cannot be taken (never the energy alone).
+  const bounceSpec = cost.returnToHand;
+  if (bounceSpec !== undefined && typeof bounceSpec === "object" && bounceSpec !== null) {
+    if (returnToHandCostCandidates(state, playerId, sourceCardId, bounceSpec, context).length === 0) {
       return false;
     }
   }
@@ -1148,12 +1176,7 @@ function finalizePendingPlay(
   play: { cardId: string; playerId: string; sourceCardId?: string; then?: unknown },
 ): boolean {
   // rule 355.2 / 355.4: base, or any battlefield this player controls.
-  const destOptions = [
-    "base",
-    ...Object.entries(draft.battlefields)
-      .filter(([, bf]) => bf.controller === play.playerId)
-      .map(([bfId]) => `battlefield-${bfId}`),
-  ];
+  const destOptions = playDestinationOptions(draft, play.playerId, play.cardId);
   if (destOptions.length > 1) {
     draft.pendingChoice = {
       cardId: play.cardId,
@@ -1165,44 +1188,16 @@ function finalizePendingPlay(
     } as RiftboundGameState["pendingChoice"];
     return true;
   }
-  context.zones.moveCard({
-    cardId: play.cardId as CoreCardId,
-    targetZoneId: "base" as CoreZoneId,
-  });
-  // rule 143.4: a unit entering the board is exhausted however it was played.
-  if (
-    getGlobalCardRegistry().get(play.cardId)?.cardType === "unit" &&
-    !staticEnterReadyApplies(play.cardId, draft, play.playerId, context.zones)
-  ) {
-    context.counters?.setFlag?.(play.cardId as CoreCardId, "exhausted", true);
-  }
   // Guarded so unit-test stubs that omit the full context bags don't crash.
   if (!context.cards || !context.counters || typeof context.zones.getCardsInZone !== "function") {
+    context.zones.moveCard({ cardId: play.cardId as CoreCardId, targetZoneId: "base" as CoreZoneId });
     return false;
   }
-  const trigCtx = {
-    cards: context.cards,
-    counters: context.counters,
-    draft,
-    zones: context.zones,
-  };
-  // rule 419.4.a: a card played by an effect is still played.
-  fireTriggers(
-    { cardId: play.cardId, paidAdditionalCost: false, playerId: play.playerId, type: "play-self" },
-    trigCtx,
+  // rule 419.4.a / 359.2 — a card played by an effect is still played: the ONE enter path.
+  enterPlayedPermanent(
+    { cards: context.cards, counters: context.counters, draft, zones: context.zones },
+    { cardId: play.cardId, entryZone: destOptions[0] ?? "base", playerId: play.playerId, via: "effect" },
   );
-  fireTriggers(
-    {
-      cardId: play.cardId,
-      cardType: getGlobalCardRegistry().get(play.cardId)?.cardType ?? "unit",
-      playerId: play.playerId,
-      type: "play-card",
-    },
-    trigCtx,
-  );
-  if (draft.cardsPlayedThisTurn) {
-    draft.cardsPlayedThisTurn[play.playerId] = (draft.cardsPlayedThisTurn[play.playerId] ?? 0) + 1;
-  }
   return false;
 }
 
@@ -2031,7 +2026,7 @@ export const pendingChoiceMoves: Partial<
         // optional additional cost counts as paid.
         const instructed = (
           choice as {
-            instructedPlay?: { cardId: string; playStun: boolean };
+            instructedPlay?: { cardId: string; playFrom?: string; playStun: boolean; playTo?: string; stagedBy?: string };
           }
         ).instructedPlay;
         // rule 158.1 (sfd-136-221) — "Counter a spell unless its controller pays
@@ -2104,19 +2099,27 @@ export const pendingChoiceMoves: Partial<
           // rule 717 / 356.5.a (unl-139-219 Bone Skewer × ogn-010-298) — the
           // folded-in optional cost had its AMOUNT zeroed by "ignoring any and
           // all costs", but electing it still buys its benefit: an accepted
-          // [Accelerate] readies the unit that already entered exhausted.
-          if (
-            context.params.accept === true &&
-            getOptionalPlayCost(instructed.cardId)?.kind === "accelerate"
-          ) {
-            context.counters.setFlag(instructed.cardId as CoreCardId, "exhausted", false);
-          }
-          fireInstructedPlayTriggers(draft, context, {
-            cardId: instructed.cardId,
-            paidAdditionalCost: context.params.accept === true,
-            playStun: instructed.playStun,
-            playerId: choice.playerId,
-          });
+          // [Accelerate] enters the unit ready, and "if you paid the additional
+          // cost" riders on its play trigger see it as paid. The play commits
+          // now, through the ONE enter path.
+          const accepted = context.params.accept === true;
+          const optional = getOptionalPlayCost(instructed.cardId);
+          enterPlayedPermanent(
+            { cards: context.cards, counters: context.counters, draft, zones: context.zones },
+            {
+              cardId: instructed.cardId,
+              entersReady:
+                accepted && (optional?.kind === "accelerate" || optional?.entersReadyIfPaid === true),
+              entryZone: instructed.playTo ?? "base",
+              from: instructed.playFrom,
+              paidAdditionalCost: accepted,
+              paidIds: accepted ? [optional?.kind === "accelerate" ? "accelerate" : (optional?.kind ?? "pay")] : [],
+              playerId: choice.playerId,
+              stagedBy: instructed.stagedBy,
+              stun: instructed.playStun,
+              via: "effect",
+            },
+          );
           if (!draft.pendingChoice) {
             postChoiceCleanup(draft, context);
           }
@@ -2179,6 +2182,54 @@ export const pendingChoiceMoves: Partial<
                 then: (choice.resolved as { effect?: unknown } | undefined)?.effect,
                 type: "reveal-and-pick",
               } as typeof draft.pendingChoice;
+              return;
+            }
+            // rule 205 / 108.2 (rule-id: sfd-207-221) — "you may pay [1] and
+            // return a unit you control HERE to its OWNER's hand. If you do,
+            // …": the bounce is the other half of the cost, so the payer picks
+            // which of their units here goes home and the payoff runs only
+            // once it has (355.10.c.1 — never a free token).
+            const bounceCost = cost.returnToHand as Record<string, unknown> | undefined;
+            if (bounceCost && typeof bounceCost === "object") {
+              const hereZone = sourceHereZone(draft, choice.sourceCardId, context);
+              const candidates = returnToHandCostCandidates(
+                draft,
+                choice.playerId,
+                choice.sourceCardId,
+                bounceCost,
+                context,
+              );
+              if (candidates.length === 0) {
+                return;
+              }
+              const payoff = (choice.resolved as { effect?: unknown } | undefined)?.effect;
+              const bounceEffect = { target: bounceCost, type: "return-to-hand" } as ExecutableEffect;
+              const zoneCarry = typeof hereZone === "string" ? { sourceZone: hereZone } : {};
+              if (candidates.length > 1) {
+                draft.pendingChoice = {
+                  effect: bounceEffect,
+                  options: candidates,
+                  playerId: choice.playerId,
+                  remaining: 1,
+                  sourceCardId: choice.sourceCardId,
+                  then: payoff,
+                  type: "choose-target",
+                  ...zoneCarry,
+                } as typeof draft.pendingChoice;
+                return;
+              }
+              const bounceCtx = {
+                ...buildEffectContext(draft, choice.playerId, choice.sourceCardId, context),
+                ...zoneCarry,
+                boundTargets: candidates,
+              };
+              executeEffect(bounceEffect, bounceCtx);
+              if (payoff) {
+                executeEffect(payoff as ExecutableEffect, bounceCtx);
+              }
+              if (!draft.pendingChoice) {
+                postChoiceCleanup(draft, context);
+              }
               return;
             }
             const discardCount = typeof cost.discard === "number" ? cost.discard : 0;
@@ -2742,6 +2793,64 @@ export const pendingChoiceMoves: Partial<
             paidAdditionalCost = true;
           }
         }
+        if (enteringPlay) {
+          // rule 354.2 / 419.4.a / 359.2 (sfd-109-221, sfd-200-221) — the
+          // location its player just chose completes a PLAY an effect
+          // instructed: the card enters through the ONE enter path (fresh
+          // object, exhausted / enter-ready, controller = the player playing it,
+          // play triggers carrying the paid additional cost, Legion count,
+          // contest of a battlefield they don't control — begun by the Cleanup).
+          const cardId = choice.cardId as string;
+          const paidOptional = paidAdditionalCost ? getOptionalPlayCost(cardId) : undefined;
+          draft.pendingChoice = undefined;
+          enterPlayedPermanent(
+            { cards: context.cards, counters: context.counters, draft, zones: context.zones },
+            {
+              cardId,
+              entersReady: paidOptional?.entersReadyIfPaid === true || paidOptional?.kind === "accelerate",
+              entryZone: targetZoneId,
+              paidAdditionalCost,
+              paidIds: paidOptional ? [paidOptional.kind === "accelerate" ? "accelerate" : "pay"] : [],
+              playerId: choice.playerId as string,
+              skipWeaponmaster: true,
+              via: "effect",
+            },
+          );
+          // rule-id: ogn-258-298 (rule 387) — a follow-up carried on the prompt
+          // ("…play it. Then …") resolves now with the played card bound.
+          if (choice.then) {
+            executeEffect(choice.then as ExecutableEffect, {
+              ...buildEffectContext(
+                draft,
+                choice.playerId,
+                (choice.sourceCardId ?? choice.cardId) as string,
+                context,
+              ),
+              boundTargets: [cardId],
+              sameZone: targetZoneId,
+            });
+          }
+          // rule 356.2.b.1 — [Accelerate] is an optional additional cost of the
+          // play: the player who PLAYS the card may pay it to have the unit
+          // enter ready (offered when payable and nothing else is being asked).
+          maybeOfferAccelerate(draft, cardId, choice.playerId, context);
+          // rule 821.1.c / 356.1.b (sfd-127-221) — [Weaponmaster] on every play.
+          if (getGlobalCardRegistry().get(cardId)?.cardType === "unit") {
+            offerWeaponmasterEquip(
+              draft as unknown as Parameters<typeof offerWeaponmasterEquip>[0],
+              context.zones as unknown as Parameters<typeof offerWeaponmasterEquip>[1],
+              choice.playerId as string,
+              cardId,
+              context.cards as unknown as Parameters<typeof offerWeaponmasterEquip>[4],
+            );
+          }
+          // rule 323.6 / 323.12 — the answer ends the resolution: Cleanup (and the
+          // staged Showdown) unless another prompt is parked.
+          if (!draft.pendingChoice) {
+            postChoiceCleanup(draft, context);
+          }
+          return;
+        }
         // rule 449.2 / 447.2.c / 456.1 — no unit may become present at a
         // battlefield already holding units of two OTHER players. A named
         // destination that has become illegal by the time the move executes
@@ -2907,50 +3016,6 @@ export const pendingChoiceMoves: Partial<
           executeEffect(choice.then as ExecutableEffect, thenCtx);
           if (!draft.pendingChoice) {
             postChoiceCleanup(draft, context);
-          }
-        }
-        // rule-id: sfd-109-221 (rule 354.2 / 419.4.a) — a card played by an
-        // effect is still played: fire "When you play me" (carrying whether
-        // the optional additional cost was paid) and "when you play a card",
-        // and count it toward this turn's plays (rule 724), mirroring playUnit.
-        if (enteringPlay) {
-          const trigCtx = { cards: context.cards, counters: context.counters, draft, zones: context.zones };
-          const cardId = choice.cardId as string;
-          // rule 143.4: a unit entering the board is exhausted, however it was
-          // played — unless a static "enters ready" ability applies.
-          if (
-            getGlobalCardRegistry().get(cardId)?.cardType === "unit" &&
-            !staticEnterReadyApplies(cardId, draft, choice.playerId, context.zones)
-          ) {
-            context.counters.setFlag(cardId as CoreCardId, "exhausted", true);
-          }
-          fireTriggers(
-            { cardId, paidAdditionalCost, playerId: choice.playerId, type: "play-self" },
-            trigCtx,
-          );
-          const cardType = getGlobalCardRegistry().get(cardId)?.cardType ?? "unit";
-          fireTriggers({ cardId, cardType, playerId: choice.playerId, type: "play-card" }, trigCtx);
-          if (draft.cardsPlayedThisTurn) {
-            draft.cardsPlayedThisTurn[choice.playerId] =
-              (draft.cardsPlayedThisTurn[choice.playerId] ?? 0) + 1;
-          }
-          // rule 356.2.b.1 — [Accelerate] is an optional additional cost of the
-          // play, so the player who PLAYS the card (here: the one who chose the
-          // destination, even on a free "its owner plays it" replay) may pay it
-          // to have the unit enter ready. Offered only when they can pay it and
-          // no other prompt is already parked.
-          maybeOfferAccelerate(draft, choice.cardId as string, choice.playerId, context);
-          // rule 821.1.c / 356.1.b (rule-id: sfd-127-221) — a play finalized by
-          // this destination prompt is still a play, so [Weaponmaster] offers
-          // its discounted Equip here exactly as the playUnit move does.
-          if (getGlobalCardRegistry().get(cardId)?.cardType === "unit") {
-            offerWeaponmasterEquip(
-              draft as unknown as Parameters<typeof offerWeaponmasterEquip>[0],
-              context.zones as unknown as Parameters<typeof offerWeaponmasterEquip>[1],
-              choice.playerId as string,
-              cardId,
-              context.cards as unknown as Parameters<typeof offerWeaponmasterEquip>[4],
-            );
           }
         }
         // rule 323.6 (rule-id: sfd-165-221) — answering the destination prompt
@@ -3250,47 +3315,26 @@ export const pendingChoiceMoves: Partial<
       // Play). rule 143.4: it enters exhausted; rule 423: stunned if asked.
       if (choice.onPicked === "play" && choice.playTo !== undefined) {
         const playedOwner = context.cards.getCardOwner(pickedCardId as CoreCardId) ?? choice.revealer;
-        context.zones.moveCard({
-          cardId: pickedCardId as CoreCardId,
-          targetZoneId: choice.playTo as CoreZoneId,
-        });
-        context.counters.setFlag(pickedCardId as CoreCardId, "exhausted", true);
-        // rule 190.3.a.1 (unl-139-219) — a unit ARRIVING at a battlefield its
-        // controller does not control applies Contested by itself, however it
-        // got there; the Cleanup after this resolution opens the showdown.
-        if ((choice.playTo as string).startsWith("battlefield-")) {
-          contestBattlefieldOnArrival({
-            arrivingUnitIds: [pickedCardId as string],
-            autoBegun: true,
-            battlefieldId: (choice.playTo as string).slice("battlefield-".length),
-            cards: context.cards,
-            counters: context.counters,
-            deferToCleanup: true,
-            draft,
-            playerId: playedOwner,
-            stagedBy: choice.prompter ?? choice.revealer,
-            zones: context.zones,
-          });
-        }
-        if (choice.playStun === true) {
-          context.counters.setFlag(pickedCardId as CoreCardId, "stunned", true);
-          context.cards.updateCardMeta(pickedCardId as CoreCardId, {
-            stunned: true,
-          } as Partial<RiftboundCardMeta>);
-        }
         // rule 356.4.f.1 / 356.2 (unl-139-219 × unl-052-219) — "ignoring any and
         // all costs" zeroes the AMOUNT of a folded-in optional additional cost,
         // but the decision to pay is still the playing player's and is made
-        // before costs are determined; an optional cost counts as paid by that
-        // decision. Ask them now, then fire the play triggers with the answer so
-        // "if you paid the additional cost" riders see it.
+        // before costs are determined (and before the unit enters); an optional
+        // cost counts as paid by that decision. Ask them now — the answer
+        // commits the play (opt-in `instructedPlay`).
         if (getOptionalPlayCost(pickedCardId as string) !== undefined) {
+          // rule 354.2 — the card being played waits on the Chain (limbo), no
+          // longer in the zone it is played from, while its player answers.
+          const playFromZone =
+            (context.zones.getCardZone?.(pickedCardId as CoreCardId) as string | undefined) ?? "hand";
+          context.zones.moveCard({ cardId: pickedCardId as CoreCardId, targetZoneId: "chain" as CoreZoneId });
           draft.pendingChoice = {
             instructedPlay: {
               cardId: pickedCardId as string,
+              playFrom: playFromZone,
               playStun: choice.playStun === true,
               playTo: choice.playTo,
               revealer: choice.revealer,
+              stagedBy: choice.prompter ?? choice.revealer,
             },
             playerId: playedOwner,
             resolved: {},
@@ -3299,12 +3343,21 @@ export const pendingChoiceMoves: Partial<
           } as NonNullable<typeof draft.pendingChoice>;
           return;
         }
-        fireInstructedPlayTriggers(draft, context, {
-          cardId: pickedCardId as string,
-          paidAdditionalCost: false,
-          playStun: choice.playStun === true,
-          playerId: playedOwner,
-        });
+        // rule 419.3 / 190.3.a.1 (unl-139-219) — the OWNER plays it to that
+        // battlefield through the ONE enter path: exhausted (143.4), stunned if
+        // asked (423), contesting a battlefield they do not control (the caster's
+        // action staged it — 323.13), play triggers, Legion count.
+        enterPlayedPermanent(
+          { cards: context.cards, counters: context.counters, draft, zones: context.zones },
+          {
+            cardId: pickedCardId as string,
+            entryZone: choice.playTo as string,
+            playerId: playedOwner,
+            stagedBy: choice.prompter ?? choice.revealer,
+            stun: choice.playStun === true,
+            via: "effect",
+          },
+        );
       } else if (
         choice.onPicked === "play" &&
         // rule 358.3.a (ogn-115-298 × ogn-026-298) — an instruction to play a
@@ -3410,14 +3463,9 @@ export const pendingChoiceMoves: Partial<
             // rule 355.2 / 355.4 (rule-id: sfd-165-221-glasc-mixologist-deathknell-destination):
             // a card entering play from off-board may be placed at its player's base OR
             // any battlefield they control — the choice is theirs. The
-            // choose-destination handler finalizes the play (exhaust, play triggers,
-            // play count, contest) exactly as the base path below does.
-            const destOptions = [
-              "base",
-              ...Object.entries(draft.battlefields)
-                .filter(([, bf]) => bf.controller === choice.prompter)
-                .map(([bfId]) => `battlefield-${bfId}`),
-            ];
+            // choose-destination handler completes the play through the same
+            // enter path as the single-destination case below.
+            const destOptions = playDestinationOptions(draft, choice.prompter, pickedCardId as string);
             if (destOptions.length > 1) {
               draft.pendingChoice = {
                 cardId: pickedCardId as string,
@@ -3428,53 +3476,23 @@ export const pendingChoiceMoves: Partial<
               } as RiftboundGameState["pendingChoice"];
               return;
             }
-            const playedOwner =
-              context.cards.getCardOwner(pickedCardId as CoreCardId) ?? choice.prompter;
-            context.zones.moveCard({
-              cardId: pickedCardId as CoreCardId,
-              targetZoneId: "base" as CoreZoneId,
-            });
-            // rule 108.2 (rule-id: ven-114-166 Kharox) — a card played out of
-            // an OPPONENT's trash keeps its owner but is controlled by the
-            // player who played it.
-            if (playedOwner !== choice.prompter) {
-              context.cards.setCardController?.(
-                pickedCardId as CoreCardId,
-                choice.prompter as CorePlayerId,
-              );
-            }
-            context.counters.setFlag(pickedCardId as CoreCardId, "exhausted", true);
-            const playCtx = {
-              cards: context.cards,
-              counters: context.counters,
-              draft,
-              zones: context.zones,
-            };
-            fireTriggers(
+            // rule 419.3 / 359.2 — the ONE enter path: fresh object, exhausted,
+            // controlled by the player who plays it even out of an OPPONENT's
+            // trash (108.2 / 191.1 — ven-114-166 Kharox), play triggers, Legion.
+            draft.pendingChoice = undefined;
+            enterPlayedPermanent(
+              { cards: context.cards, counters: context.counters, draft, zones: context.zones },
               {
                 cardId: pickedCardId as string,
-                paidAdditionalCost: false,
-                playerId: playedOwner,
-                type: "play-self",
+                entryZone: destOptions[0] ?? "base",
+                playerId: choice.prompter,
+                skipWeaponmaster: true,
+                via: "effect",
               },
-              playCtx,
             );
-            fireTriggers(
-              {
-                cardId: pickedCardId as string,
-                cardType: "unit",
-                playerId: playedOwner,
-                type: "play-card",
-              },
-              playCtx,
-            );
-            if (draft.cardsPlayedThisTurn) {
-              draft.cardsPlayedThisTurn[playedOwner] =
-                (draft.cardsPlayedThisTurn[playedOwner] ?? 0) + 1;
-            }
             // rule 356.2.b.1 / 805.2.b — the play's [Accelerate] is still the
             // playing player's to elect; paying it readies the unit.
-            accelerateAfterPick = { cardId: pickedCardId as string, playerId: playedOwner };
+            accelerateAfterPick = { cardId: pickedCardId as string, playerId: choice.prompter };
           } else if (isSpell) {
             // rule 354.2 / 419.1 (ogn-115-298) — the instructed spell play puts
             // it on the chain under the instructed player; it resolves there and
@@ -3636,6 +3654,14 @@ export const pendingChoiceMoves: Partial<
           accelerateAfterPick.cardId,
           accelerateAfterPick.playerId,
           context,
+        );
+        // rule 821.1.c / 356.1.b (sfd-127-221) — [Weaponmaster] on every play.
+        offerWeaponmasterEquip(
+          draft as unknown as Parameters<typeof offerWeaponmasterEquip>[0],
+          context.zones as unknown as Parameters<typeof offerWeaponmasterEquip>[1],
+          accelerateAfterPick.playerId,
+          accelerateAfterPick.cardId,
+          context.cards as unknown as Parameters<typeof offerWeaponmasterEquip>[4],
         );
       }
       // rule 319.7 / rule-id: ogn-019-298 — the pick changed game state (a

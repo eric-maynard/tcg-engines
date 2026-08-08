@@ -20,16 +20,15 @@ import {
 } from "../../../chain";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
 import { hiddenCapacityAt } from "../../../operations/hidden-capacity";
-import { playIsForbidden } from "../../../abilities/play-restrictions";
+import { battlefieldForbidsUnitPlays, playIsForbidden } from "../../../abilities/play-restrictions";
 import { computeStaticCostIncrease } from "../../../operations/static-cost-reduction";
 import type { CostReductionContext } from "../../../operations/static-cost-reduction";
 import { getBattlefieldZoneId, getFacedownZoneId } from "../../../zones/zone-configs";
 import {
-  hasStaticEffect,
-  consumeEntersReadyReplacement,
   getCardEffectiveMight,
   getGrantedAcceleratePlayCost,
 } from "./cost";
+import { enterPlayedPermanent } from "./play-pipeline";
 import { beginRevealPairLock, beginRevealSlotLock, isSinglePickSlot } from "./reveal-target-lock";
 import {
   collectSequenceTargetSlots,
@@ -920,6 +919,17 @@ export const revealHidden: Defs["revealHidden"] = {
     if (revealIsPrevented(meta.hiddenAt, context.params.playerId as string, context)) {
       return false;
     }
+    // rule 811.1.d.1 + 054 (rule-id: sfd-216-221) — revealing PLAYS the card at
+    // the battlefield it was hidden at, so a battlefield that forbids unit
+    // plays ("Units can't be played here") traps a hidden UNIT facedown for
+    // good. A hidden spell there is unaffected.
+    if (
+      typeof meta.hiddenAt === "string" &&
+      battlefieldForbidsUnitPlays(meta.hiddenAt) &&
+      getGlobalCardRegistry().getCardType(context.params.cardId as string) === "unit"
+    ) {
+      return false;
+    }
     // rule 811.1.c.3 / 419.1 — revealing a facedown card IS playing it, so a
     // board static that forbids playing it (ven-132-166 Fallen Feline) refuses
     // the flip exactly as it refuses the copy in hand.
@@ -1189,50 +1199,36 @@ export const revealHidden: Defs["revealHidden"] = {
       return;
     }
 
-    // Unit / gear / equipment: move to the associated battlefield's
-    // Physical zone. The card becomes face-up and "in play" without
-    // Going through the chain.
-    if (battlefieldId) {
-      const battlefieldZoneId = getBattlefieldZoneId(battlefieldId);
-      zones.moveCard({
-        cardId: cardId as CoreCardId,
-        targetZoneId: battlefieldZoneId as CoreZoneId,
-      });
-    }
-
-    if (cardType === "unit") {
-      // rule-id: ogn-121-298 — Rule 143.4: units enter exhausted unless a
-      // static enter-ready effect or an enters-ready replacement applies
-      // (mirrors the normal playCard path).
-      // rule-id: unl-052-219 — consume the "next unit you play" replacement
-      // first so its Buff rider (if any) lands on the entering unit.
-      const replacedReady = consumeEntersReadyReplacement(draft, playerId, {
-        cardId,
-        ctx: { cards, counters, zones },
-      });
-      // rule-id: sfd-029-221 (rule 805.1.a) — paying the granted Accelerate cost
-      // as part of this play makes the unit enter ready.
+    // Unit / gear / equipment: rule 811.1.d.3 — it enters the board at the
+    // battlefield it was hidden at, face up, without using the chain. The ONE
+    // enter path (`play-pipeline.ts`) applies the "next unit you play"
+    // replacement / "I enter ready" statics / a paid granted Accelerate
+    // (sfd-029-221), fires the play triggers (with `fromHiddenAt` so their
+    // targets stay at that battlefield — 811.1.d.2) and counts the play.
+    if (cardType === "unit" || cardType === "gear" || cardType === "equipment") {
       let paidAccelerate = false;
-      if (context.params.paidAdditionalCost === true) {
+      if (cardType === "unit" && context.params.paidAdditionalCost === true) {
         const cost = grantedAccelerateForReveal(draft, playerId, cardId, { cards, zones });
         if (cost) {
           payGrantedAccelerate(draft, playerId, cost);
           paidAccelerate = true;
         }
       }
-      const entersReady = paidAccelerate || replacedReady || hasStaticEffect(cardId, "enter-ready");
-      if (!entersReady) {
-        counters.setFlag(cardId as CoreCardId, "exhausted", true);
-      }
-      // rule-id: ogn-097-298 — Rule 723.1.d (811.1.d.2): thread the facedown
-      // battlefield so the play-effect's targets are restricted to it.
-      fireTriggers(
-        { cardId, playerId, type: "play-self", ...(battlefieldId ? { fromHiddenAt: battlefieldId } : {}) },
+      enterPlayedPermanent(
         { cards, counters, draft, zones },
-      );
-      fireTriggers(
-        { cardId, cardType: "unit", playerId, type: "play-card" },
-        { cards, counters, draft, zones },
+        {
+          cardId,
+          entersReady: paidAccelerate,
+          entryZone: battlefieldId
+            ? (getBattlefieldZoneId(battlefieldId) as string)
+            : ((zones.getCardZone(cardId as CoreCardId) as string | undefined) ?? "base"),
+          from: battlefieldId ? `facedown-${battlefieldId}` : "facedown",
+          paidAdditionalCost: paidAccelerate,
+          paidIds: paidAccelerate ? ["accelerate-granted"] : [],
+          playerId,
+          via: "hidden",
+          ...(battlefieldId ? { fromHiddenAt: battlefieldId } : {}),
+        },
       );
     }
 

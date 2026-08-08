@@ -14,6 +14,7 @@ import {
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import type { EffectHelpers } from "./_helpers";
 import { enterUnitFromEffect } from "./play";
+import { playDestinationOptions } from "../../game-definition/moves/play/play-pipeline";
 
 /** Cards a `look` with `onPicked: "banish"` put into banishment, per source card. */
 export interface LookBanishRecord {
@@ -191,12 +192,7 @@ export function handle_playBanishedCard(
   }
   // rule 355.2 / 355.4: a permanent entering from off-board goes to its
   // player's base or any battlefield they control — their choice.
-  const destOptions = [
-    "base",
-    ...Object.entries(ctx.draft.battlefields)
-      .filter(([, bf]) => (bf as { controller?: string }).controller === owner)
-      .map(([bfId]) => `battlefield-${bfId}`),
-  ];
+  const destOptions = playDestinationOptions(ctx.draft, owner, cardId);
   if (destOptions.length > 1 && !ctx.draft.pendingChoice) {
     ctx.draft.pendingChoice = {
       cardId,
@@ -207,5 +203,5 @@ export function handle_playBanishedCard(
     } as NonNullable<typeof ctx.draft.pendingChoice>;
     return;
   }
-  enterUnitFromEffect(cardId, "base", { ...ctx, playerId: owner });
+  enterUnitFromEffect(cardId, destOptions[0] ?? "base", { ...ctx, playerId: owner });
 }

@@ -7,16 +7,13 @@ import {
   type CostExtras,
   deductCost,
   getOptionalPlayCost,
-  hasStaticEffect,
-  staticEnterReadyApplies,
 } from "../../game-definition/moves/play/cost";
-import { offerWeaponmasterEquip } from "../../game-definition/moves/play/weaponmaster";
+import { enterPlayedPermanent, type PlayVia } from "../../game-definition/moves/play/play-pipeline";
 import { extractBattlefieldId } from "../../zones/zone-configs";
 import { battlefieldForbidsUnitPlays } from "../play-restrictions";
 import { spellEffectHasLegalTargets, type SpellEffectTargetShape } from "../../game-definition/moves/play/targeting";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import { type EffectHelpers, getTargetIds } from "./_helpers";
-import { arriveByEffect } from "./move";
 
 /**
  * rule 358.3.a (rule-id: ogn-026-298 Brynhir Thundersong) — a "player can't play
@@ -1131,66 +1128,33 @@ function playGearFromHand(effect: ExecutableEffect, ctx: EffectContext): void {
   sink?.ids.push(chosen);
 }
 
-/**
- * rule 143.1.a.1 — gear played by an effect enters its controller's base ready
- * (rule 143.4 exhausts units only), firing its play triggers and counting
- * toward this turn's plays (rule 724), mirroring the playGear reducer.
- */
+/** rule 143.1.a.1 — gear an effect plays enters its player's base through the ONE enter path. */
 function enterGearFromEffect(cardId: string, ctx: EffectContext): void {
-  ctx.zones.moveCard({ cardId: cardId as CoreCardId, targetZoneId: "base" as CoreZoneId });
-  if (hasStaticEffect(cardId, "enters-exhausted")) {
-    ctx.counters.setFlag(cardId as CoreCardId, "exhausted", true);
-  }
-  const owner = ctx.cards.getCardOwner(cardId as CoreCardId) ?? ctx.playerId;
-  ctx.fireTriggers?.({ cardId, paidAdditionalCost: false, playerId: owner, type: "play-self" });
-  ctx.fireTriggers?.({ cardId, cardType: "gear", playerId: owner, type: "play-card" });
-  if (ctx.draft.cardsPlayedThisTurn) {
-    ctx.draft.cardsPlayedThisTurn[owner] = (ctx.draft.cardsPlayedThisTurn[owner] ?? 0) + 1;
-  }
+  enterPlayedPermanent(ctx, { cardId, entryZone: "base", playerId: ctx.playerId, via: "effect" });
 }
 
 /**
- * rule-id: ogn-107-298 — a unit played by an effect to a fixed location,
- * ignoring its cost, enters the board there: exhausted (rule 143.4), firing
- * its play triggers and counting toward this turn's plays (rule 724),
- * mirroring the playUnit reducer.
+ * rule 419.3 / 359.2 — a unit an effect plays enters the board at `zoneId`
+ * through the ONE enter path shared with hand plays (`play-pipeline.ts`):
+ * fresh object (124.1), exhausted unless an enter-ready effect / paid
+ * Accelerate applies (143.4), controlled by `ctx.playerId` (191.1), play
+ * triggers with `via:"effect"` + origin zone, Legion count, arrival contest,
+ * [Weaponmaster].
  */
-export function enterUnitFromEffect(cardId: string, zoneId: string, ctx: EffectContext): void {
-  ctx.zones.moveCard({ cardId: cardId as CoreCardId, targetZoneId: zoneId as CoreZoneId });
-  // rule 337.2: the played card is a new object — board state from its
-  // previous existence (damage, buffs, stun, granted keywords) is gone.
-  ctx.counters.setFlag(cardId as CoreCardId, "stunned", false);
-  ctx.counters.setFlag(cardId as CoreCardId, "buffed", false);
-  ctx.cards.updateCardMeta?.(cardId as CoreCardId, {
-    buffed: false,
-    combatRole: null,
-    damage: 0,
-    grantedKeywords: undefined,
-    mightModifier: 0,
-    stunned: false,
-  } as Record<string, unknown>);
-  // rule 143.4: a unit entering the board is exhausted however it was played,
-  // unless a static "I enter ready" applies (rule-id: ven-013-166 — its
-  // condition is checked here, after the card has left its origin zone).
-  if (!staticEnterReadyApplies(cardId, ctx.draft, ctx.playerId, ctx.zones)) {
-    ctx.counters.setFlag(cardId as CoreCardId, "exhausted", true);
-  }
-  const owner = ctx.cards.getCardOwner(cardId as CoreCardId) ?? ctx.playerId;
-  ctx.fireTriggers?.({ cardId, paidAdditionalCost: false, playerId: owner, type: "play-self" });
-  ctx.fireTriggers?.({ cardId, cardType: "unit", playerId: owner, type: "play-card" });
-  // rule 190.3.a.1 — played to a battlefield its controller does not control:
-  // Contested + staged like any other arrival (Cleanup begins the showdown).
-  arriveByEffect(ctx, [cardId], zoneId, "play");
-  // rule 821.1.c / 356.1.b (rule-id: sfd-127-221) — an effect-instructed play is
-  // still a play, so Weaponmaster offers its Equip here exactly as from hand.
-  offerWeaponmasterEquip(
-    ctx.draft as unknown as Parameters<typeof offerWeaponmasterEquip>[0],
-    ctx.zones as unknown as Parameters<typeof offerWeaponmasterEquip>[1],
-    owner,
+export function enterUnitFromEffect(
+  cardId: string,
+  zoneId: string,
+  ctx: EffectContext,
+  opts?: { entersReady?: boolean; paidIds?: readonly string[]; stun?: boolean; stagedBy?: string; via?: PlayVia },
+): void {
+  enterPlayedPermanent(ctx, {
     cardId,
-    ctx.cards as unknown as Parameters<typeof offerWeaponmasterEquip>[4],
-  );
-  if (ctx.draft.cardsPlayedThisTurn) {
-    ctx.draft.cardsPlayedThisTurn[owner] = (ctx.draft.cardsPlayedThisTurn[owner] ?? 0) + 1;
-  }
+    entryZone: zoneId,
+    playerId: ctx.playerId,
+    via: opts?.via ?? "effect",
+    ...(opts?.entersReady ? { entersReady: true } : {}),
+    ...(opts?.paidIds && opts.paidIds.length > 0 ? { paidAdditionalCost: true, paidIds: opts.paidIds } : {}),
+    ...(opts?.stun ? { stun: true } : {}),
+    ...(opts?.stagedBy ? { stagedBy: opts.stagedBy } : {}),
+  });
 }

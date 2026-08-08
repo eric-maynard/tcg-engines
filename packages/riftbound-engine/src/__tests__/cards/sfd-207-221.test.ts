@@ -89,7 +89,7 @@ describe("Emperor's Dais (sfd-207-221)", () => {
     expect(game.gameState.battlefields.dais?.controller).toBe(P1);
   });
 
-  test.failing("BUG: accepting pays [1], returns the lone conqueror to hand and plays an exhausted 2-Might Sand Soldier token AT THE DAIS — P1 keeps control (205, 184.1, 190.4.a)", async () => {
+  test("accepting pays [1], returns the lone conqueror to hand and plays an exhausted 2-Might Sand Soldier token AT THE DAIS — P1 keeps control (205, 184.1, 190.4.a)", async () => {
     // Expected: energy 1→0, Centurion in hand, one Sand Soldier token (2 Might, exhausted) at the Dais,
     // Dais still P1's. Actual: the [1] is taken but nothing is returned and no token is played.
     const game = await walkIn(1).build();
@@ -137,7 +137,7 @@ describe("Emperor's Dais (sfd-207-221)", () => {
     expect(game.decision()).toMatchObject({ context: "main", kind: "action", seat: P1 });
   });
 
-  test.failing("BUG: two conquerors — the payer picks WHICH unit here returns (base units are not candidates); returning the 1-Might Squire leaves the Centurion plus a Sand Soldier at the Dais", async () => {
+  test("two conquerors — the payer picks WHICH unit here returns (base units are not candidates); returning the 1-Might Squire leaves the Centurion plus a Sand Soldier at the Dais", async () => {
     // Expected: a pick over exactly {centurion, squire}; afterwards squire in hand, centurion + token at
     // the Dais, energy 0. Actual: no return / no token happens at all.
     const game = await walkIn(1).unit(P1, "base", { might: 1, name: "Squire" }, "squire").build();
@@ -163,7 +163,7 @@ describe("Emperor's Dais (sfd-207-221)", () => {
     expect(game.p1.energy()).toBe(0);
   });
 
-  test.failing("BUG: control ≠ ownership — a P2-OWNED conqueror that P1 controls returns to P2's hand ('its owner's hand') while the Sand Soldier is P1's, so P1 keeps the Dais", async () => {
+  test("control ≠ ownership — a P2-OWNED conqueror that P1 controls returns to P2's hand ('its owner's hand') while the Sand Soldier is P1's, so P1 keeps the Dais", async () => {
     // Expected: defector in P2's hand, P1 token at the Dais, Dais controller P1. Actual: no return, no token.
     const game = await scenario()
       .resources(P1, { energy: 1 })
@@ -182,7 +182,7 @@ describe("Emperor's Dais (sfd-207-221)", () => {
     expect(game.gameState.battlefields.dais?.controller).toBe(P1);
   });
 
-  test.failing("BUG: a unit TOKEN can be the returned unit — the Recruit ceases to exist (186.1: in no hand) and the Sand Soldier is still played here", async () => {
+  test("a unit TOKEN can be the returned unit — the Recruit ceases to exist (186.1: in no hand) and the Sand Soldier is still played here", async () => {
     // Expected: recruit gone (not in hand, not on board), one Sand Soldier at the Dais. Actual: nothing happens.
     const game = await scenario()
       .resources(P1, { energy: 1 })
@@ -236,7 +236,7 @@ describe("Emperor's Dais (sfd-207-221)", () => {
     expect(game.decision()).toMatchObject({ context: "main", kind: "action", seat: P2 });
   });
 
-  test.failing("BUG: the opponent accepting at YOUR Dais card: P2 pays [1], the Raider returns to P2's hand and a P2 Sand Soldier holds the Dais for P2", async () => {
+  test("the opponent accepting at YOUR Dais card: P2 pays [1], the Raider returns to P2's hand and a P2 Sand Soldier holds the Dais for P2", async () => {
     // Expected: raider in P2's hand, P2-controlled Sand Soldier at the Dais, P2 energy 0, Dais controller P2.
     // Actual: only the energy is taken.
     const game = await scenario()

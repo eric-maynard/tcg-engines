@@ -4,6 +4,7 @@ import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import { consumeEntersReadyReplacement } from "../../game-definition/moves/play/cost";
 import { arriveByEffect } from "./move";
+import { battlefieldForbidsUnitPlays } from "../play-restrictions";
 import { buildConsumedKey, findAllReplacements } from "../replacement-effects";
 import { type EffectHelpers, resolveAmount, tokenEntersReadyFromStaticGrant } from "./_helpers";
 
@@ -163,6 +164,16 @@ export function handle_createToken(effect: ExecutableEffect, ctx: EffectContext,
     targetZone = effect.location as string;
   } else {
     targetZone = "base";
+  }
+  // rule 054 / 359.3.e.6 (rule-id: sfd-216-221) — "play a … token HERE" names
+  // one location: when that battlefield forbids unit plays the instruction
+  // can't be followed, so it is ignored entirely (never redirected to base).
+  if (
+    tokenDef.type !== "gear" &&
+    targetZone.startsWith("battlefield-") &&
+    battlefieldForbidsUnitPlays(targetZone.slice("battlefield-".length))
+  ) {
+    return;
   }
 
   // rule-id: sfd-081-221 — a token an effect plays "for" another player (the
