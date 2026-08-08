@@ -253,7 +253,7 @@ describe("Switcheroo (sfd-145-221)", () => {
     expect(game.p1.can("reveal", "sw")).toBe(false);
   });
 
-  test.failing("BUG: 811.1.d.2 / 355.5 — played from facedown with THREE units at that battlefield, the caster must choose which two to swap (chump↔raider), not have the engine auto-pair the first two", async () => {
+  test("811.1.d.2 / 355.5 — played from facedown with THREE units at that battlefield, the caster must choose which two to swap (chump↔raider), not have the engine auto-pair the first two", async () => {
     // Expected: revealing offers a target choice (a targets field on the reveal, or a pick prompt) restricted to
     // bf1's three units; choosing chump+raider yields chump 5 / raider 1 and pal untouched.
     // Actual: no choice is offered — the engine silently swaps chump with pal (the first two it finds).
@@ -277,7 +277,8 @@ describe("Switcheroo (sfd-145-221)", () => {
       const d = game.decision();
       expect(d).toMatchObject({ kind: "pick", seat: P1 });
       expect((d as PickDecision).options.map((o) => o.card ?? o.key).sort()).toEqual(["chump", "pal", "raider"]);
-      await game.p1.pick("chump", "raider");
+      // one prompt per object of the pair (rule 355.5)
+      await game.p1.pick("chump");
       if (game.decision()?.kind === "pick") {
         await game.p1.pick("raider");
       }

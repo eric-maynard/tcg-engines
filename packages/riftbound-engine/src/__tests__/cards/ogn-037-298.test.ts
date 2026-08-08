@@ -141,4 +141,18 @@ describe("Immortal Phoenix (ogn-037-298)", () => {
     expect(game.decision()?.kind).toBe("action");
     expect(game.zoneOf("phoenix")).toBe("trash");
   });
+  // rule 366.1 / 812 — the "you may pay [1][fury] to play me from your trash" line is a
+  // TRIGGERED ability, not a standing permission: sitting in the trash with no trigger on
+  // the stack, Phoenix is not a playable card at all (and certainly not for free).
+  test("Phoenix in the trash is NOT an at-will free play — no trigger, no permission", async () => {
+    const game = await scenario()
+      .resources(P1, { energy: 5, power: { fury: 2 } })
+      .trash(P1, CARD, "phoenix")
+      .build();
+    expect(game.p1.can("play", "phoenix")).toBe(false);
+    const t = await game.p1.try((p) => p.play("phoenix"));
+    expect(t.ok).toBe(false);
+    expect(game.zoneOf("phoenix")).toBe("trash");
+    expect(game.p1.resources()).toEqual({ energy: 5, power: { fury: 2 } });
+  });
 });

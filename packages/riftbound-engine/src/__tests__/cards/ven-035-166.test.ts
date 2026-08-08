@@ -224,6 +224,23 @@ describe("Sanction (ven-035-166)", () => {
     expect(broke.state("plain").isEmpowered).toBe(true);
   });
 
+  // rule 441.1.c.1 — "Disempower it at end of turn" has to undo the COUNT too, or a
+  // count-based [Empowered] static (Kayle's "+2 Might for each time I'm Empowered")
+  // keeps paying out on a unit that is no longer Empowered.
+  test("mode 1 on Kayle (count-based Empowered static): +2 at 1 empower, and end of turn takes her all the way back to 3", async () => {
+    const KAYLE = "ven-134-166";
+    const game = await scenario()
+      .resources(P1, { energy: 3, power: { calm: 1 } })
+      .unit(P1, "base", KAYLE, "kayle")
+      .hand(P1, CARD, "sanction")
+      .build();
+    await game.p1.cast("sanction");
+    await resolve(game, [EMPOWER, "kayle"]);
+    expect(game.state("kayle")).toMatchObject({ isEmpowered: true, might: 5 });
+    await game.advanceTurn();
+    expect(game.state("kayle")).toMatchObject({ isEmpowered: false, might: 3 });
+  });
+
   test("parsed abilities: one reaction-timed spell ability whose effect is a 2-option choice; option 1 = empower a unit until end of turn (option 2 should be a disempower — currently raw)", async () => {
     const pool = await loadDefaultCardPool();
     const def = pool.get(CARD);

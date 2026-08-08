@@ -26,6 +26,16 @@ export function getSelfTrashPlayCost(
     if (effect?.type !== "play" || effect.from !== "trash") {
       continue;
     }
+    // rule 366.1 / 812 (rule-id: ogn-037-298) — only a STANDING permission
+    // (keyword / static) makes the trash a legal play-from zone. A triggered or
+    // activated ability that plays the card from the trash ("When you kill a
+    // unit with a spell, you may pay [1][fury] to play me from your trash")
+    // does so only when it resolves, and its cost lives on that ability — it
+    // must never become a free at-will play from the trash.
+    const abilityType = (ability as { type?: string }).type;
+    if (abilityType !== "keyword" && abilityType !== "static") {
+      continue;
+    }
     const keyword = (ability as { keyword?: string }).keyword;
     if (keyword === "Legion" && (state.cardsPlayedThisTurn?.[playerId] ?? 0) < 1) {
       continue;

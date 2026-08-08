@@ -29,7 +29,7 @@ import {
   consumeEntersReadyReplacement,
   getGrantedAcceleratePlayCost,
 } from "./cost";
-import { beginRevealSlotLock, isSinglePickSlot } from "./reveal-target-lock";
+import { beginRevealPairLock, beginRevealSlotLock, isSinglePickSlot } from "./reveal-target-lock";
 import {
   collectSequenceTargetSlots,
   findSequenceLeadTarget,
@@ -639,6 +639,19 @@ function lockRevealedSpellTarget(
     | undefined;
   const item = items?.[items.length - 1];
   if (!item || item.cardId !== cardId || item.targets !== undefined) {
+    return;
+  }
+  // rule-id: sfd-145-221 (rule 355.5 / 811.1.d.2) — a `swap-might` /
+  // `swap-locations` names its two objects through target1/target2 rather than
+  // a sequence, so `casterChosenTarget` sees nothing and the resolver would
+  // silently auto-pair. Ask for the pair the same way as a two-slot sequence.
+  const pairSlots = pairEffectSlots(item.effect);
+  if (pairSlots && pairSlots.every((s) => isSinglePickSlot(s))) {
+    beginRevealPairLock(
+      draft,
+      { battlefieldId, cardId, itemId: item.id, playerId, slots: pairSlots },
+      ctx,
+    );
     return;
   }
   // rule-id: ogn-220-298 (rule 355.5 / 811.1.b) — "Stun a friendly unit and an

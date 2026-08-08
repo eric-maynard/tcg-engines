@@ -167,6 +167,49 @@ export function beginRevealSlotLock(
 }
 
 /**
+ * rule-id: sfd-145-221 (rule 355.5 / 811.1.d.2) — a `swap-might` /
+ * `swap-locations` played from [Hidden] names its two objects at once ("swap
+ * the Might of TWO units at the same battlefield"), so it is ONE choice of a
+ * pair, not two ordered slots: the caster answers with both cards in a single
+ * pick. A board where exactly one legal pair exists is bound without asking
+ * (rule 402.2).
+ */
+export function beginRevealPairLock(
+  draft: RiftboundGameState,
+  args: {
+    playerId: string;
+    cardId: string;
+    itemId: string;
+    battlefieldId: string;
+    slots: readonly unknown[];
+  },
+  ctx: RevealLockContext,
+): void {
+  const lock: RevealSlotLock = { ...args, picked: [] };
+  const pools = args.slots.map((slot) => slotOptions(draft, ctx, lock, slot));
+  const pairs: [string, string][] = [];
+  for (const a of pools[0] ?? []) {
+    for (const b of pools[1] ?? []) {
+      if (a !== b && !pairs.some(([x, y]) => x === b && y === a)) {
+        pairs.push([a, b]);
+      }
+    }
+  }
+  if (pairs.length === 0) {
+    return;
+  }
+  // rule 402.2 — a forced pair is not a decision; bind it and move on.
+  if (pairs.length === 1) {
+    lock.picked = [...(pairs[0] as [string, string])];
+    writeLockedTargets(draft, args.itemId, lock);
+    return;
+  }
+  // Several legal pairs: ask for the two objects one prompt at a time, exactly
+  // like a two-slot sequence (rule 355.5).
+  beginRevealSlotLock(draft, args, ctx);
+}
+
+/**
  * Continue an open lock after `pending-choice.ts` answered one slot: the answer
  * branch overwrote the item's `targets` with that single pick, so merge it back
  * into the accumulated list and ask for the next slot.

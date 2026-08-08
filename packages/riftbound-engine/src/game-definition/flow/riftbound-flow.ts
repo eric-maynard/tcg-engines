@@ -251,6 +251,9 @@ function runExpirationStep(context: FlowStepContext): void {
           getCardMeta(cardId: CoreCardId): object | undefined;
           updateCardMeta(cardId: CoreCardId, meta: Record<string, unknown>): void;
         };
+        // rule 364 — [Empowered] statics are dependent on the status, so an
+        // expiry here has to be re-layered before anything reads Might again.
+        let empowerStatusChanged = false;
         for (const cardId of allBoardCards) {
           const meta = context.cards.getCardMeta(cardId);
           if (!meta) {
@@ -330,10 +333,16 @@ function runExpirationStep(context: FlowStepContext): void {
 
           // rule-id: ven-099-166 — "Disempower it at end of turn" (rule 517.2.b)
           if ((meta as { empoweredUntilEndOfTurn?: boolean }).empoweredUntilEndOfTurn) {
+            // rule 441.1.c.1 (rule-id: ven-134-166) — losing the status also
+            // zeroes the count, exactly as handle_empower's disempower path
+            // does; otherwise "+2 [Might] for each time I'm [Empowered]"
+            // statics keep paying out on a no-longer-Empowered permanent.
             context.cards.updateCardMeta(cardId, {
               empowered: false,
+              empowerCount: 0,
               empoweredUntilEndOfTurn: false,
             } as unknown as Partial<RiftboundCardMeta>);
+            empowerStatusChanged = true;
           }
 
           // rule-id: ven-035-166 — the mirror "Empower it at end of turn" after
@@ -342,7 +351,12 @@ function runExpirationStep(context: FlowStepContext): void {
             context.cards.updateCardMeta(cardId, {
               disempoweredUntilEndOfTurn: false,
               empowered: true,
+              empowerCount: Math.max(
+                1,
+                (meta as { empowerCount?: number }).empowerCount ?? 0,
+              ),
             } as unknown as Partial<RiftboundCardMeta>);
+            empowerStatusChanged = true;
           }
 
           // rule-id: sfd-194-221 — "the next time … this turn, prevent it" is a
@@ -363,6 +377,20 @@ function runExpirationStep(context: FlowStepContext): void {
           if (meta.combatMightModifier) {
             context.cards.updateCardMeta(cardId, { combatMightModifier: 0 });
           }
+        }
+
+        // rule 364 / 828.1.c — [Empowered] came or went above; re-apply statics
+        // now so count-based bonuses ("+2 for each time I'm Empowered") follow.
+        if (empowerStatusChanged && context.cards.updateCardMeta) {
+          recalculateStaticEffects({
+            cards: {
+              getCardMeta: context.cards.getCardMeta,
+              getCardOwner: context.cards.getCardOwner ?? (() => undefined),
+              updateCardMeta: context.cards.updateCardMeta,
+            },
+            draft: context.state,
+            zones: context.zones,
+          });
         }
 
         // rule 317.1 / 455 (sfd-202-221 Hostile Takeover) — "…at end of
