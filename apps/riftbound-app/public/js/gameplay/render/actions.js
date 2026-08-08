@@ -342,16 +342,14 @@ function renderActions() {
   if (softOrder && softOrder.playerId === viewingPlayer) {
     const picks = availableMoves.filter(m => m.moveId === "resolvePendingChoice");
     if (picks.length) {
+      // Compact hint only — the arrangement itself is built in the draggable
+      // stack popup over the board (modals.js renderTriggerOrderPopup).
+      const n = Array.isArray(softOrder.items) ? softOrder.items.length : 0;
       html += `<div class="action-section-title trigger-order-title" data-trigger-order style="background:#2a3a4a;color:#a0e0ff;padding:6px;border-radius:3px;">
         ${esc(softOrder.prompt ?? "Order your triggers")} <span style="opacity:.7;font-weight:400">(optional — any other action keeps this order)</span>
       </div>`;
-      for (const m of picks) {
-        const label = m.params?.label ?? (Array.isArray(m.params?.orderedKeys) ? m.params.orderedKeys.map(k => softOrder.items?.find(i => i.key === k)?.label ?? k).join(" → ") : "Keep this order");
-        html += `<button class="action-btn" data-trigger-order-pick
-          onclick='executeMove("resolvePendingChoice", ${JSON.stringify(m.params)}, ${JSON.stringify(m.playerId)})'>
-          ${esc(label)}
-        </button>`;
-      }
+      html += `<button class="action-btn highlighted" data-trigger-order-open onclick="focusTriggerOrderPopup()">Reorder ${n} triggers in the chain popup…</button>`;
+      html += `<button class="action-btn" data-trigger-order-pick onclick="sendTriggerOrder(null)">Keep this order</button>`;
     }
   }
   if (pending) {

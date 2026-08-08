@@ -37,6 +37,20 @@ sub-step is intentionally not implemented; see `moves/play/cost-model.ts`).
   - The Boss (ogn-269) "you may pay [rainbow], exhaust me, and spend its buff … instead": offered when a buffed
     friendly unit would die and the [rainbow] POWER is in the pool (Energy irrelevant); unpayable → never asked.
 
+## Trigger ordering
+Rule 383.3.d ("the controller selects the order to place simultaneous triggers on the Chain") is a SOFT offer.
+- When one move leaves ≥2 finalized, non-interchangeable triggered items of the same controller on the Chain, the
+  engine sets `pendingTriggerOrder` (an `order` decision, `defaultable: true`) for that player. Answering
+  `resolvePendingChoice{orderedKeys}` rearranges them (first key = bottom of the Chain, LAST key = top → resolves
+  first); taking ANY other action (pass, play, Space…) silently accepts the listed scan order. Nobody is ever
+  blocked on it; finalization questions ("you may exhaust me…") are asked BEFORE the offer, in scan order.
+- UI: an in-board, draggable STACK POPUP (`#triggerOrderPopup`, Arena-style, no backdrop) listing the controller's
+  triggers TOP OF CHAIN FIRST with live "resolves 1st/2nd/…" numbers; rows reorder by drag-and-drop or ↑/↓
+  (keyboard: focus a row, ArrowUp/ArrowDown); "Confirm order" dispatches the arrangement, "Use default" the listed
+  order. It never covers the hand, can be dragged by its header, and disappears the moment the engine stops
+  offering the order. The sidebar only keeps a compact hint ("Reorder N triggers in the chain popup…" + "Keep this
+  order").
+
 ## Interactions
 - Hover on any card → floating enlarged card image ONLY (no name/type/rules-text panel)
 - No fly-animation on zone change — cards appear at destination immediately

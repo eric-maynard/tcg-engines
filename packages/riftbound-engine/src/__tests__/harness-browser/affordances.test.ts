@@ -799,21 +799,25 @@ describeLive("affordances — every pendingChoice type renders a titled, labelle
         await ui.resync(backend);
       }
 
-      // rule 383.3.d soft trigger-order: a sidebar panel (not a modal), other moves stay listed.
+      // rule 383.3.d soft trigger-order (DESIGN.md §Trigger ordering): a compact sidebar HINT (not a modal) pointing at
+      // the draggable stack popup over the board; other moves stay listed; the popup lists the triggers top-of-chain first.
       await ui.injectPending(page, null as unknown as Record<string, unknown>, [{ label: "A → B", orderedKeys: ["x", "y"] }, { label: "B → A", orderedKeys: ["y", "x"] }], {
         __keepMoves: true,
         pendingTriggerOrder: { defaultable: true, items: [{ cardId: a, key: "x", label: "A" }, { cardId: b, key: "y", label: "B" }], playerId: P1, prompt: "Order your simultaneous triggers on the Chain", resume: { itemIds: ["x", "y"], kind: "trigger-batch" }, type: "order" },
       });
-      const soft = await page.evaluate<{ panel: string; picks: string[]; endTurn: boolean; modal: boolean }>(
-        `(() => ({ panel: (document.querySelector('#actionsList [data-trigger-order]') || {}).textContent || "", picks: Array.from(document.querySelectorAll('#actionsList [data-trigger-order-pick]')).map(b => b.textContent.trim()), endTurn: Array.from(document.querySelectorAll('#actionsList .action-btn')).some(b => b.textContent.trim() === 'End Turn'), modal: !!document.querySelector('#choiceOverlay.visible') }))()`,
+      const soft = await page.evaluate<{ panel: string; picks: string[]; open: string[]; endTurn: boolean; modal: boolean; rows: string[] }>(
+        `(() => ({ panel: (document.querySelector('#actionsList [data-trigger-order]') || {}).textContent || "", picks: Array.from(document.querySelectorAll('#actionsList [data-trigger-order-pick]')).map(b => b.textContent.trim()), open: Array.from(document.querySelectorAll('#actionsList [data-trigger-order-open]')).map(b => b.textContent.trim()), endTurn: Array.from(document.querySelectorAll('#actionsList .action-btn')).some(b => b.textContent.trim() === 'End Turn'), modal: !!document.querySelector('#choiceOverlay.visible'), rows: Array.from(document.querySelectorAll('#triggerOrderPopup [data-trigger-row]')).map(r => r.getAttribute('data-trigger-row')) }))()`,
       );
       if (!/Order your simultaneous triggers/.test(soft.panel) || !/optional/.test(soft.panel)) {
         failures.push(`[trigger-order] panel "${soft.panel.trim()}"`);
       }
-      if (soft.picks.join("|") !== "A → B|B → A" || !soft.endTurn || soft.modal) {
+      if (soft.picks.join("|") !== "Keep this order" || soft.open.length !== 1 || !/Reorder 2 triggers/.test(soft.open[0] ?? "") || !soft.endTurn || soft.modal || soft.rows.join("|") !== "y|x") {
         failures.push(`[trigger-order] ${JSON.stringify(soft)}`);
       }
       await ui.resync(backend);
+      if (await page.evaluate<boolean>(`!!document.getElementById('triggerOrderPopup')`)) {
+        failures.push("[trigger-order] popup still shown after the offer is gone");
+      }
 
       // Zoom never sits above a prompt: open zoom, then a prompt arrives → zoom closes, modal on top.
       await page.evaluate(`openZoom(${JSON.stringify(a)})`);
@@ -829,6 +833,126 @@ describeLive("affordances — every pendingChoice type renders a titled, labelle
       expect(backend.pageErrors.filter((e) => !/favicon|card-image/.test(e))).toEqual([]);
     },
     LIVE_TIMEOUT * 2,
+  );
+
+  // DESIGN.md §Trigger ordering — rule 383.3.d stays SOFT but gets a real UI: an in-board, draggable STACK POPUP
+  // listing the controller's N pending triggers top-of-chain first (resolution numbers live), reorderable by
+  // drag-and-drop or ↑/↓, "Confirm order" → resolvePendingChoice{orderedKeys} (engine order = bottom first =
+  // REVERSE of the display), "Use default" → the listed scan order. Non-blocking: no modal, hand still clickable.
+  test(
+    "trigger-order stack popup: N rows top-of-chain-first with live numbers, ↑/↓ + drag reorder, Confirm dispatches the reversed display as orderedKeys, Use default sends the listed order, no modal / board not covered, gone with the offer",
+    async () => {
+      live = await launchTest(BASE_URL);
+      const { backend, game } = live;
+      const page = backend.page;
+      await ui.prepare(page);
+      const a = await fieldUnit(live, "sfd-018-221");
+      const b = await fieldUnit(live, "unl-001-219");
+      const legend = game.p1.legend() as string;
+      const items = [
+        { cardId: a, key: "k1", label: "Alpha trigger" },
+        { cardId: b, key: "k2", label: "Beta trigger" },
+        { cardId: legend, key: "k3", label: "Gamma trigger" },
+      ];
+      // 3 items → the engine enumerates all 6 permutations (labelled); the popup must send the exact one.
+      const perms = [["k1", "k2", "k3"], ["k1", "k3", "k2"], ["k2", "k1", "k3"], ["k2", "k3", "k1"], ["k3", "k1", "k2"], ["k3", "k2", "k1"]];
+      const labelOf = (k: string) => items.find((i) => i.key === k)?.label ?? k;
+      const variants = perms.map((orderedKeys) => ({ label: orderedKeys.map(labelOf).join(" → "), orderedKeys }));
+      const inject = () =>
+        ui.injectPending(page, null as unknown as Record<string, unknown>, variants, {
+          __keepMoves: true,
+          pendingTriggerOrder: { defaultable: true, items, playerId: P1, prompt: "Order your simultaneous triggers on the Chain (first = bottom, last = top → resolves first)", resume: { itemIds: ["k1", "k2", "k3"], kind: "trigger-batch" }, type: "order" },
+        });
+      const snapshot = () =>
+        page.evaluate<{ exists: boolean; rows: string[]; nums: string[]; labels: string[]; title: string; hint: string; modal: boolean; buttons: string[]; box: { left: number; top: number; width: number; height: number } | null; hand: { top: number } | null; vw: number; vh: number }>(
+          `(() => { const p = document.getElementById('triggerOrderPopup'); const r = p ? p.getBoundingClientRect() : null; const h = document.getElementById('player-hand'); const hr = h ? h.getBoundingClientRect() : null; return {
+            exists: !!p,
+            rows: p ? Array.from(p.querySelectorAll('[data-trigger-row]')).map(x => x.getAttribute('data-trigger-row')) : [],
+            nums: p ? Array.from(p.querySelectorAll('[data-trigger-num]')).map(x => x.textContent.trim()) : [],
+            labels: p ? Array.from(p.querySelectorAll('[data-trigger-row] .top-label')).map(x => x.firstChild ? x.firstChild.textContent.trim() : '') : [],
+            title: p ? (p.querySelector('.top-title') || {}).textContent || '' : '',
+            hint: p ? (p.querySelector('.top-hint') || {}).textContent || '' : '',
+            modal: !!document.querySelector('#choiceOverlay.visible'),
+            buttons: p ? Array.from(p.querySelectorAll('.top-btn')).map(x => x.textContent.trim()) : [],
+            box: r ? { left: r.left, top: r.top, width: r.width, height: r.height } : null,
+            hand: hr ? { top: hr.top } : null,
+            vw: window.innerWidth, vh: window.innerHeight }; })()`,
+        );
+
+      await inject();
+      let s = await snapshot();
+      expect(s.exists).toBe(true);
+      expect(s.modal).toBe(false);
+      // Listed (scan) order is bottom→top, so the display (top of chain first) is its reverse.
+      expect(s.rows).toEqual(["k3", "k2", "k1"]);
+      expect(s.nums).toEqual(["1", "2", "3"]);
+      expect(s.labels).toEqual(["Gamma trigger", "Beta trigger", "Alpha trigger"]);
+      expect(s.title).toMatch(/3 triggers/);
+      expect(s.hint).toMatch(/Top of chain resolves first/);
+      expect(s.buttons).toEqual(["Confirm order", "Use default"]);
+      expectHuman([s.title, s.hint, ...s.labels, ...s.buttons], "trigger-order popup");
+      // Non-blocking: a compact box (well under half the viewport) that leaves the hand row uncovered.
+      expect(s.box).not.toBeNull();
+      expect((s.box?.width ?? 9999) <= 360 && (s.box?.height ?? 9999) < s.vh * 0.7).toBe(true);
+      expect(await page.evaluate<boolean>(`Array.from(document.querySelectorAll('#actionsList .action-btn')).some(b => b.textContent.trim() === 'End Turn')`)).toBe(true);
+
+      // ↑ on the last row (k1) twice → k1 on top: display k1,k3,k2 ; numbers re-computed live.
+      await page.evaluate(`document.querySelector('#triggerOrderPopup [data-trigger-up="k1"]').click()`);
+      await page.evaluate(`document.querySelector('#triggerOrderPopup [data-trigger-up="k1"]').click()`);
+      s = await snapshot();
+      expect(s.rows).toEqual(["k1", "k3", "k2"]);
+      expect(s.nums).toEqual(["1", "2", "3"]);
+      // HTML5 drag-and-drop: drop k2 BEFORE k1 (synthetic DragEvents; dataTransfer may be null → the popup keeps its own drag key).
+      await page.evaluate(`(() => {
+        const src = document.querySelector('#triggerOrderPopup [data-trigger-row="k2"]');
+        const dst = document.querySelector('#triggerOrderPopup [data-trigger-row="k1"]');
+        const mk = (type, y) => { let ev; try { ev = new DragEvent(type, { bubbles: true, cancelable: true, clientY: y }); } catch (e) { ev = new Event(type, { bubbles: true, cancelable: true }); ev.clientY = y; } return ev; };
+        const r = dst.getBoundingClientRect();
+        src.dispatchEvent(mk('dragstart', 0));
+        dst.dispatchEvent(mk('dragover', r.top + 2));
+        dst.dispatchEvent(mk('drop', r.top + 2));
+        src.dispatchEvent(mk('dragend', 0));
+      })()`);
+      s = await snapshot();
+      expect(s.rows).toEqual(["k2", "k1", "k3"]);
+
+      // Confirm → the engine order is bottom-first = reverse of the display: k3, k1, k2 (exact enumerated variant, label included).
+      let got = await ui.capture(page, async () => {
+        await page.evaluate(`document.querySelector('#triggerOrderPopup [data-trigger-order-confirm]').click()`);
+      });
+      expect(got).toHaveLength(1);
+      expect(got[0]?.moveId).toBe("resolvePendingChoice");
+      expect(canon((({ playerId: _p, ...rest }) => rest)(got[0]?.params as Record<string, unknown> & { playerId?: string }))).toBe(
+        canon({ label: ["k3", "k1", "k2"].map(labelOf).join(" → "), orderedKeys: ["k3", "k1", "k2"] }),
+      );
+      expect(got[0]?.params.playerId).toBe(P1);
+
+      // Use default → the listed scan order verbatim; the sidebar "Keep this order" hint does the same.
+      await inject();
+      got = await ui.capture(page, async () => {
+        await page.evaluate(`document.querySelector('#triggerOrderPopup [data-trigger-order-default]').click()`);
+      });
+      expect(canon((({ playerId: _p, ...rest }) => rest)(got[0]?.params as Record<string, unknown> & { playerId?: string }))).toBe(
+        canon({ label: ["k1", "k2", "k3"].map(labelOf).join(" → "), orderedKeys: ["k1", "k2", "k3"] }),
+      );
+      got = await ui.capture(page, async () => {
+        await page.evaluate(`document.querySelector('#actionsList [data-trigger-order-pick]').click()`);
+      });
+      expect(got[0]?.params.orderedKeys).toEqual(["k1", "k2", "k3"]);
+
+      // The offer disappears (any other action / a fresh sync) → the popup is removed at once.
+      await ui.resync(backend);
+      expect(await page.evaluate<boolean>(`!!document.getElementById('triggerOrderPopup')`)).toBe(false);
+      // Not ours → never shown.
+      await ui.injectPending(page, null as unknown as Record<string, unknown>, [], {
+        __keepMoves: true,
+        pendingTriggerOrder: { defaultable: true, items, playerId: P2, prompt: "Order", resume: { itemIds: ["k1", "k2", "k3"], kind: "trigger-batch" }, type: "order" },
+      });
+      expect(await page.evaluate<boolean>(`!!document.getElementById('triggerOrderPopup')`)).toBe(false);
+      await ui.resync(backend);
+      expect(backend.pageErrors.filter((e) => !/favicon|card-image/.test(e))).toEqual([]);
+    },
+    LIVE_TIMEOUT,
   );
 });
 

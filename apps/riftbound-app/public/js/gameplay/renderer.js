@@ -32,6 +32,8 @@ function render() {
   renderActions();
   renderChainOverlay();
   renderPendingChoiceModal();
+  // rule 383.3.d — soft trigger-order stack popup (non-blocking; gone when the offer is).
+  if (typeof renderTriggerOrderPopup === "function") renderTriggerOrderPopup();
   renderGameOver();
 
   // Re-apply valid target highlights after DOM rebuild

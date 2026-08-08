@@ -666,3 +666,242 @@ function renderChainOverlay() {
 
   box.innerHTML = html;
 }
+
+/* ============================================================
+   rule 383.3.d — soft trigger-order STACK POPUP (DESIGN.md §Trigger ordering)
+   ------------------------------------------------------------
+   When ≥2 of the viewing player's triggers went on the Chain at once, the
+   engine offers `gameState.pendingTriggerOrder` (soft: any other action keeps
+   the listed scan order). This popup shows those triggers as a stack — TOP OF
+   CHAIN FIRST (= resolves first) — lets the player drag rows (or use ↑/↓),
+   and confirms with resolvePendingChoice{orderedKeys} (engine order: first
+   key = bottom of the Chain, LAST key = top → resolves first, i.e. the
+   REVERSE of what is displayed). Non-blocking: no backdrop, sits over the
+   board's edge, can be dragged by its header, and is removed the moment the
+   engine stops offering the order.
+   ============================================================ */
+let _trigOrder = { key: null, seq: [], pos: null, dragKey: null };
+
+/** The live soft offer for the viewing player, or null. */
+function triggerOrderOffer() {
+  const soft = !gameState?.pendingChoice ? gameState?.pendingTriggerOrder : null;
+  if (!soft || soft.playerId !== viewingPlayer || !Array.isArray(soft.items) || soft.items.length < 2) return null;
+  return soft;
+}
+
+function ensureTriggerOrderStyles() {
+  if (document.getElementById("triggerOrderStyles")) return;
+  const st = document.createElement("style");
+  st.id = "triggerOrderStyles";
+  st.textContent = `
+    .trigger-order-popup { position: fixed; z-index: 1550; width: 320px; max-height: 62vh; display: flex; flex-direction: column;
+      background: #1a1830; border: 2px solid #4a3f6a; border-radius: 12px; box-shadow: 0 10px 32px rgba(0,0,0,.55); color: #e0dced;
+      font-size: 13px; user-select: none; }
+    .trigger-order-popup .top-head { cursor: move; padding: 10px 12px 6px; border-bottom: 1px solid #2a2740; background: #221f3a; border-radius: 10px 10px 0 0; }
+    .trigger-order-popup .top-title { font-size: 14px; font-weight: 700; color: #a0e0ff; }
+    .trigger-order-popup .top-hint { font-size: 11px; color: #8a82a6; margin-top: 2px; }
+    .trigger-order-popup .top-list { list-style: none; margin: 0; padding: 8px 10px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
+    .trigger-order-popup .top-edge { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #6a6288; text-align: center; padding: 2px 0; }
+    .trigger-order-popup .top-row { display: flex; align-items: center; gap: 8px; padding: 6px; background: #2a2645; border: 1px solid #4a3f6a; border-radius: 8px; cursor: grab; }
+    .trigger-order-popup .top-row.dragging { opacity: .45; }
+    .trigger-order-popup .top-row.drop-before { box-shadow: 0 -3px 0 #ffd070; }
+    .trigger-order-popup .top-row.drop-after { box-shadow: 0 3px 0 #ffd070; }
+    .trigger-order-popup .top-num { min-width: 22px; height: 22px; border-radius: 11px; background: #ffd070; color: #1a1830; font-weight: 700; font-size: 12px; display: flex; align-items: center; justify-content: center; }
+    .trigger-order-popup .top-thumb { width: 34px; height: 48px; border-radius: 4px; object-fit: cover; background: #0e0a1c; flex-shrink: 0; }
+    .trigger-order-popup .top-label { flex: 1; min-width: 0; line-height: 1.25; }
+    .trigger-order-popup .top-label small { display: block; color: #8a82a6; font-size: 10px; }
+    .trigger-order-popup .top-mv { background: #1e1b30; border: 1px solid #3a3560; color: #e0dced; border-radius: 4px; width: 24px; height: 22px; cursor: pointer; font-size: 11px; padding: 0; }
+    .trigger-order-popup .top-mv:disabled { opacity: .3; cursor: default; }
+    .trigger-order-popup .top-mv:hover:not(:disabled) { border-color: #ffd070; }
+    .trigger-order-popup .top-foot { display: flex; gap: 6px; padding: 8px 10px 10px; border-top: 1px solid #2a2740; flex-wrap: wrap; }
+    .trigger-order-popup .top-btn { flex: 1; background: #2a2645; border: 1px solid #4a3f6a; border-radius: 6px; color: #e0dced; padding: 8px 10px; cursor: pointer; font-size: 12px; }
+    .trigger-order-popup .top-btn.primary { border-color: #ffd070; color: #ffd070; font-weight: 700; }
+    .trigger-order-popup .top-btn:hover { background: #3a3560; }
+    .trigger-order-popup .top-note { width: 100%; font-size: 10px; color: #6a6288; text-align: center; }
+    .trigger-order-popup.flash { animation: topFlash .6s ease; }
+    @keyframes topFlash { 0%,100% { border-color: #4a3f6a; } 50% { border-color: #ffd070; } }
+  `;
+  document.head.appendChild(st);
+}
+
+const _ordinal = (n) => n === 1 ? "1st" : n === 2 ? "2nd" : n === 3 ? "3rd" : `${n}th`;
+
+/** Send the answer: `displaySeq` is top-of-chain-first; the engine wants bottom-first. `null` = keep the listed order. */
+function sendTriggerOrder(displaySeq) {
+  const soft = triggerOrderOffer();
+  if (!soft) return;
+  const listed = soft.items.map(i => i.key);
+  const orderedKeys = displaySeq ? displaySeq.slice().reverse() : listed;
+  const picks = availableMoves.filter(m => m.moveId === "resolvePendingChoice" && Array.isArray(m.params?.orderedKeys));
+  const me = picks[0]?.playerId ?? viewingPlayer;
+  const exact = picks.find(m => JSON.stringify(m.params.orderedKeys) === JSON.stringify(orderedKeys));
+  const params = exact ? exact.params : (displaySeq ? { playerId: me, orderedKeys } : { playerId: me, orderedKeys: [] });
+  executeMove("resolvePendingChoice", params, exact ? exact.playerId : me);
+}
+
+/** Move one row within the displayed stack (delta −1 = towards the top of the chain). */
+function moveTriggerRow(key, delta) {
+  const i = _trigOrder.seq.indexOf(key);
+  const j = i + delta;
+  if (i < 0 || j < 0 || j >= _trigOrder.seq.length) return;
+  const seq = _trigOrder.seq.slice();
+  [seq[i], seq[j]] = [seq[j], seq[i]];
+  _trigOrder.seq = seq;
+  renderTriggerOrderPopup();
+}
+
+/** Scroll/flash the popup (sidebar hint → "where is it?"). */
+function focusTriggerOrderPopup() {
+  const pop = document.getElementById("triggerOrderPopup");
+  if (!pop) return;
+  pop.classList.remove("flash");
+  void pop.offsetWidth;
+  pop.classList.add("flash");
+  pop.querySelector(".top-row")?.focus?.();
+}
+
+function renderTriggerOrderPopup() {
+  const soft = triggerOrderOffer();
+  let pop = document.getElementById("triggerOrderPopup");
+  if (!soft) {
+    if (pop) pop.remove();
+    _trigOrder.key = null;
+    _trigOrder.dragKey = null;
+    return;
+  }
+  ensureTriggerOrderStyles();
+  if (!pop) {
+    pop = document.createElement("div");
+    pop.id = "triggerOrderPopup";
+    pop.className = "trigger-order-popup";
+    pop.setAttribute("role", "dialog");
+    pop.setAttribute("aria-label", "Order your triggers on the Chain");
+    pop.dataset.triggerOrderPopup = "";
+    document.body.appendChild(pop);
+  }
+  const items = soft.items.map(i => ({ key: i.key, cardId: i.cardId, label: i.label ?? promptName(i.cardId ?? i.key) }));
+  const offerKey = JSON.stringify(items.map(i => i.key));
+  if (_trigOrder.key !== offerKey) {
+    _trigOrder.key = offerKey;
+    // Listed order is bottom → top; display the TOP of the chain first.
+    _trigOrder.seq = items.map(i => i.key).reverse();
+  }
+  // Keep the working sequence a permutation of the offered keys.
+  const known = new Set(items.map(i => i.key));
+  _trigOrder.seq = [..._trigOrder.seq.filter(k => known.has(k)), ...items.map(i => i.key).reverse().filter(k => !_trigOrder.seq.includes(k))];
+  const seq = _trigOrder.seq;
+  const byKey = new Map(items.map(i => [i.key, i]));
+  const n = seq.length;
+
+  let html = `<div class="top-head" data-trigger-order-drag>
+      <div class="top-title">Your ${n} triggers → the Chain</div>
+      <div class="top-hint">Top of chain resolves first · drag rows or use ↑/↓ · optional</div>
+    </div>
+    <ol class="top-list" data-trigger-order-list>
+      <li class="top-edge">▲ top of chain — resolves first</li>`;
+  seq.forEach((key, idx) => {
+    const it = byKey.get(key);
+    const card = it?.cardId ? findCard(it.cardId) : null;
+    const defId = (card?.definitionId || it?.cardId || "").replace(/^player-[12]-(?:(?:main|rune)-\d+-|bf-|legend-|champion-)?/, "");
+    html += `<li class="top-row" data-trigger-row="${esc(key)}" draggable="true" tabindex="0" aria-label="${esc(it?.label ?? key)} — resolves ${_ordinal(idx + 1)}">
+        <span class="top-num" data-trigger-num>${idx + 1}</span>
+        ${defId ? `<img class="top-thumb" src="/card-image/${esc(defId)}" alt="" onerror="this.style.visibility='hidden'">` : `<span class="top-thumb"></span>`}
+        <span class="top-label">${esc(it?.label ?? key)}<small>resolves ${_ordinal(idx + 1)}${idx === n - 1 ? " (bottom — last)" : ""}</small></span>
+        <button class="top-mv" type="button" data-trigger-up="${esc(key)}" title="Move up (resolves earlier)" aria-label="Move up" ${idx === 0 ? "disabled" : ""}>▲</button>
+        <button class="top-mv" type="button" data-trigger-down="${esc(key)}" title="Move down (resolves later)" aria-label="Move down" ${idx === n - 1 ? "disabled" : ""}>▼</button>
+      </li>`;
+  });
+  html += `<li class="top-edge">▼ bottom of chain — resolves last</li></ol>
+    <div class="top-foot">
+      <button class="top-btn primary" type="button" data-trigger-order-confirm>Confirm order</button>
+      <button class="top-btn" type="button" data-trigger-order-default>Use default</button>
+      <div class="top-note">Any other action (or Space) keeps the default order.</div>
+    </div>`;
+  pop.innerHTML = html;
+
+  // Placement: user-dragged position wins; else hug the board's right edge, above the hand.
+  if (_trigOrder.pos) {
+    pop.style.left = `${_trigOrder.pos.left}px`;
+    pop.style.top = `${_trigOrder.pos.top}px`;
+    pop.style.right = "";
+  } else {
+    const boardEl = document.getElementById("board");
+    const r = boardEl ? boardEl.getBoundingClientRect() : { right: window.innerWidth, top: 0, height: window.innerHeight };
+    const left = Math.max(8, Math.min(window.innerWidth - 336, r.right - 336));
+    const top = Math.max(8, r.top + r.height * 0.14);
+    pop.style.left = `${left}px`;
+    pop.style.top = `${top}px`;
+  }
+
+  // ↑/↓ buttons.
+  pop.querySelectorAll("[data-trigger-up]").forEach(b => b.addEventListener("click", (e) => { e.stopPropagation(); moveTriggerRow(b.dataset.triggerUp, -1); }));
+  pop.querySelectorAll("[data-trigger-down]").forEach(b => b.addEventListener("click", (e) => { e.stopPropagation(); moveTriggerRow(b.dataset.triggerDown, 1); }));
+  // Keyboard on a focused row: ArrowUp/ArrowDown move it.
+  pop.querySelectorAll("[data-trigger-row]").forEach(row => {
+    row.addEventListener("keydown", (e) => {
+      if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+        e.preventDefault();
+        const k = row.dataset.triggerRow;
+        moveTriggerRow(k, e.key === "ArrowUp" ? -1 : 1);
+        document.querySelector(`#triggerOrderPopup [data-trigger-row="${CSS.escape(k)}"]`)?.focus();
+      }
+    });
+    // HTML5 drag-and-drop between rows.
+    row.addEventListener("dragstart", (e) => {
+      _trigOrder.dragKey = row.dataset.triggerRow;
+      row.classList.add("dragging");
+      try { e.dataTransfer.setData("text/plain", _trigOrder.dragKey); e.dataTransfer.effectAllowed = "move"; } catch (_) { /* jsdom / synthetic */ }
+    });
+    row.addEventListener("dragend", () => { _trigOrder.dragKey = null; row.classList.remove("dragging"); pop.querySelectorAll(".drop-before,.drop-after").forEach(x => x.classList.remove("drop-before", "drop-after")); });
+    row.addEventListener("dragover", (e) => {
+      if (!_trigOrder.dragKey || _trigOrder.dragKey === row.dataset.triggerRow) return;
+      e.preventDefault();
+      const rr = row.getBoundingClientRect();
+      const before = (e.clientY || rr.top) < rr.top + rr.height / 2;
+      row.classList.toggle("drop-before", before);
+      row.classList.toggle("drop-after", !before);
+    });
+    row.addEventListener("dragleave", () => row.classList.remove("drop-before", "drop-after"));
+    row.addEventListener("drop", (e) => {
+      e.preventDefault();
+      const from = _trigOrder.dragKey || (e.dataTransfer && e.dataTransfer.getData("text/plain"));
+      const to = row.dataset.triggerRow;
+      if (!from || from === to) return;
+      const rr = row.getBoundingClientRect();
+      const before = (e.clientY || rr.top) < rr.top + rr.height / 2;
+      const rest = _trigOrder.seq.filter(k => k !== from);
+      const at = rest.indexOf(to) + (before ? 0 : 1);
+      rest.splice(at, 0, from);
+      _trigOrder.seq = rest;
+      _trigOrder.dragKey = null;
+      renderTriggerOrderPopup();
+    });
+  });
+  pop.querySelector("[data-trigger-order-confirm]")?.addEventListener("click", () => sendTriggerOrder(_trigOrder.seq));
+  pop.querySelector("[data-trigger-order-default]")?.addEventListener("click", () => sendTriggerOrder(null));
+
+  // Drag the popup itself by its header.
+  const head = pop.querySelector("[data-trigger-order-drag]");
+  head?.addEventListener("mousedown", (e) => {
+    if (e.button !== 0) return;
+    const start = { x: e.clientX, y: e.clientY, left: pop.offsetLeft, top: pop.offsetTop };
+    const onMove = (ev) => {
+      const left = Math.max(0, Math.min(window.innerWidth - 80, start.left + ev.clientX - start.x));
+      const top = Math.max(0, Math.min(window.innerHeight - 40, start.top + ev.clientY - start.y));
+      _trigOrder.pos = { left, top };
+      pop.style.left = `${left}px`;
+      pop.style.top = `${top}px`;
+    };
+    const onUp = () => { document.removeEventListener("mousemove", onMove); document.removeEventListener("mouseup", onUp); };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+    e.preventDefault();
+  });
+}
+
+if (typeof window !== "undefined") {
+  window.renderTriggerOrderPopup = renderTriggerOrderPopup;
+  window.moveTriggerRow = moveTriggerRow;
+  window.focusTriggerOrderPopup = focusTriggerOrderPopup;
+  window.sendTriggerOrder = sendTriggerOrder;
+}

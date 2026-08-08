@@ -16,7 +16,8 @@
  * "exhaust me" up front = opt-in AND base cost paid at FINALIZATION), 383.3.a.2 (declined /
  * unpayable → removed, treated as not having triggered).
  *
- * Expected: four pending triggers, order Decision for P1. First Altar item finalized: P1 opts in
+ * Expected: four pending triggers; the batch finalizes in scan order and P1 is then OFFERED a soft
+ * order Decision over what is left (DESIGN.md §Trigger ordering). First Altar item finalized: P1 opts in
  * and exhausts the Altar. Second Altar item: Altar already exhausted → cost unpayable → removed.
  * Exactly ONE Altar resolution regardless of order → 3 draws total (2 Sentry + 1 Altar), 1 card put
  * back → hand net +2, Altar ends exhausted. LIFO nuance: Altar resolving before a Sentry item and
@@ -113,18 +114,29 @@ describe("Altar of Memories × two Watchful Sentries dying to one Flurry of Blad
     expect(game.p2.resources()).toEqual({ energy: 0, power: {} });
   });
 
-  // Expected: Sentry DK ×2 + Altar ×2 trigger simultaneously, all P1's → P1 gets an ORDER decision
-  // over the four pending items (383.3.d). Actual: no order prompt; the engine sequences them itself.
-  test.failing("BUG: P1 controls four simultaneous triggers (2× Deathknell, 2× Altar) and must be asked to order them (383.3.d)", async () => {
+  // DESIGN: soft 383.3.d prompt (DESIGN.md §Trigger ordering). Sentry DK ×2 + Altar ×2 trigger simultaneously,
+  // all P1's. The batch is FINALIZED first in scan order (Altar #1 opt-in → paid; Altar #2 can no longer pay its
+  // exhaust → removed unasked, 383.3.a.2), then P1 is OFFERED — not forced — an `order` decision over every item of
+  // the batch still on the chain: the paid Altar + both Deathknells. `defaultable` = any other action keeps the
+  // listed scan order; the app shows it as the draggable trigger-stack popup.
+  test("DESIGN (soft 383.3.d): after the single payable Altar opt-in, P1 is OFFERED a defaultable order decision over its three surviving simultaneous triggers (Altar + 2× Deathknell); the unpayable second Altar copy is already gone (383.3.a.2)", async () => {
     const game = await flurry();
     const r = await game.settle();
     expect(r.reason).toBe("unanswered");
+    // Finalization question first (383.3.a/b): the one Altar copy that can pay.
+    expect(game.decision()).toMatchObject({ kind: "yes-no", seat: P1 });
+    await game.p1.yes();
     const d = game.decision();
     expect(d?.seat).toBe(P1);
     expect(d?.kind).toBe("order");
+    expect(d?.kind === "order" ? d.defaultable : undefined).toBe(true);
     const items = d?.kind === "order" ? d.items.map((i) => i.card) : [];
-    expect(items.filter((c) => c === "altar")).toHaveLength(2);
+    expect(items).toHaveLength(3);
+    expect(items.filter((c) => c === "altar")).toHaveLength(1);
     expect(items.filter((c) => c === "s1" || c === "s2")).toHaveLength(2);
+    // Soft: P1's ordinary menu (pass priority) is offered alongside, and the chain already holds all three.
+    expect(d?.kind === "order" ? (d.actions ?? []).some((o) => o.verb === "passPriority") : false).toBe(true);
+    expect(game.chain().map((c) => c.cardId).sort()).toEqual(["altar", "s1", "s2"]);
   });
 
   // Expected: the opt-in ("you may exhaust me") is asked at FINALIZATION, before any chain item has
@@ -205,21 +217,55 @@ describe("Altar of Memories × two Watchful Sentries dying to one Flurry of Blad
     expect(game.p1.deck()[0]).toBe("keep");
   });
 
-  // Expected: if P1 orders the Altar item FIRST onto the chain it resolves LAST (LIFO): both
-  // Deathknells draw d1 and d2, then the Altar draws d3 and the put-back pick offers all four of
-  // keep/d1/d2/d3. Actual: no order prompt; the Altar always resolves early and offers 3 cards.
-  test.failing("BUG: P1 may order the Altar to resolve last and then chooses the put-back from keep + d1 + d2 + d3 (383.3.d, LIFO)", async () => {
-    const game = await flurry();
+  /** Opt in, then answer the soft order offer: Altar at the BOTTOM (resolves last) or on TOP (resolves first). */
+  async function orderAltar(game: Game, where: "last" | "first"): Promise<void> {
     const r = await game.settle();
     expect(r.reason).toBe("unanswered");
+    await game.p1.yes();
     const d = game.decision();
     expect(d?.kind).toBe("order");
     if (d?.kind === "order") {
       const altarKeys = d.items.filter((i) => i.card === "altar").map((i) => i.key);
       const rest = d.items.filter((i) => i.card !== "altar").map((i) => i.key);
-      await game.p1.order([...altarKeys, ...rest]); // appended first → resolves last
+      // orderedKeys: first = bottom of the chain (resolves LAST), last = top (resolves FIRST).
+      await game.p1.order(where === "last" ? [...altarKeys, ...rest] : [...rest, ...altarKeys]);
     }
+  }
+
+  // DESIGN: soft 383.3.d prompt (DESIGN.md §Trigger ordering) — ANSWERING it rearranges the chain (LIFO):
+  test("DESIGN (soft 383.3.d, answered): ordering the Altar to resolve LAST → both Deathknells draw first, then the Altar draws d3 and the put-back is chosen from keep + d1 + d2 + d3", async () => {
+    const game = await flurry();
+    await orderAltar(game, "last");
+    expect(game.chain()[0]?.cardId).toBe("altar"); // bottom of the chain
     const t = await drive(game, { dest: "bottom", pay: true, put: "keep" });
+    expect(t.orderPrompts).toBe(0); // the offer is made once per batch
+    expect(t.putBackOffered[0]).toEqual(["d1", "d2", "d3", "keep"]);
+    expect(game.p1.hand().sort()).toEqual(["d1", "d2", "d3"]);
+  });
+
+  test("DESIGN (soft 383.3.d, answered the other way — discriminates): ordering the Altar to resolve FIRST → it draws d1 and the put-back offers only keep + d1; the Deathknells then draw d2, d3", async () => {
+    const game = await flurry();
+    await orderAltar(game, "first");
+    expect(game.chain().at(-1)?.cardId).toBe("altar"); // top of the chain
+    const t = await drive(game, { dest: "bottom", pay: true, put: "keep" });
+    expect(t.putBackOffered[0]).toEqual(["d1", "keep"]);
+    expect(game.p1.hand().sort()).toEqual(["d1", "d2", "d3"]);
+    expect(game.p1.deck().at(-1)).toBe("keep");
+  });
+
+  // …and NOT answering it (any other action — here P1 just passes priority) keeps the listed SCAN order:
+  // the Altar item was appended first (oldest, 337.1.b) so it sits at the bottom and resolves last.
+  test("DESIGN (soft 383.3.d, unanswered): taking any other action keeps scan order — identical to 'Altar last': put-back from keep + d1 + d2 + d3, no further order prompt", async () => {
+    const game = await flurry();
+    await game.settle();
+    await game.p1.yes();
+    expect(game.decision()?.kind).toBe("order");
+    await game.p1.passPriority(); // ignores the offer → accepted as listed
+    expect(game.decision()?.kind).not.toBe("order");
+    expect(game.gameState.pendingTriggerOrder).toBeUndefined();
+    expect(game.chain()[0]?.cardId).toBe("altar");
+    const t = await drive(game, { dest: "bottom", pay: true, put: "keep" });
+    expect(t.orderPrompts).toBe(0);
     expect(t.putBackOffered[0]).toEqual(["d1", "d2", "d3", "keep"]);
     expect(game.p1.hand().sort()).toEqual(["d1", "d2", "d3"]);
   });
