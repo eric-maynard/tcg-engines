@@ -1,6 +1,7 @@
 // Effect handler: "reveal-hand"
 import type { PlayerId as CorePlayerId, ZoneId as CoreZoneId } from "@tcg/core";
-import { getGlobalCardRegistry } from "../../operations/card-lookup";
+import { matchesRevealPickFilter } from "../../operations/reveal-pick-filter";
+import type { RevealPickFilter } from "../../operations/reveal-pick-filter";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import { type EffectHelpers } from "./_helpers";
 
@@ -25,9 +26,7 @@ export function handle_revealHand(effect: ExecutableEffect, ctx: EffectContext, 
     .getCardsInZone("hand" as CoreZoneId, revealer as CorePlayerId)
     .map((id) => id as string);
 
-  const { filter } = effect as unknown as {
-    filter?: { excludeCardTypes?: string[]; cardTypes?: string[] };
-  };
+  const { filter } = effect as unknown as { filter?: RevealPickFilter };
   const revealEff = effect as unknown as {
     chooseBattlefield?: boolean;
     optional?: boolean;
@@ -72,20 +71,13 @@ export function handle_revealHand(effect: ExecutableEffect, ctx: EffectContext, 
     }
   }
 
-  // If the revealer has no cards in hand, or every revealed card is
-  // excluded by the filter, there is no valid pick — skip so play can
-  // continue (otherwise pendingChoice deadlocks the game).
-  const revealRegistry = getGlobalCardRegistry();
-  const excluded = filter?.excludeCardTypes ?? [];
-  const allowed = filter?.cardTypes;
-  const validPicks = revealed.filter((id) => {
-    const t = revealRegistry.get(id)?.cardType;
-    if (t && excluded.includes(t)) {
-      return false;
-    }
-    return !(t && allowed && allowed.length > 0 && !allowed.includes(t));
-  });
-  if (validPicks.length === 0) {
+  // rule 359.3.e.11 — if the revealer has no cards in hand, or every revealed
+  // card fails the pick filter, there is no valid pick: the choose/recycle
+  // instructions are skipped so play can continue (otherwise pendingChoice
+  // deadlocks the game on a prompt with no legal answer). Shares the exact
+  // predicate `resolvePendingChoice` validates picks with, so a filter the
+  // prompt would reject can never open a prompt.
+  if (!revealed.some((id) => matchesRevealPickFilter(filter, id))) {
     return;
   }
 

@@ -36,6 +36,7 @@ import { addToChain, createInteractionState, removeChainItem } from "../../chain
 import { cleanupAndFireDeaths } from "../../cleanup/post-move-cleanup";
 import type { PostMoveCleanupContext } from "../../cleanup/post-move-cleanup";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
+import { matchesRevealPickFilter } from "../../operations/reveal-pick-filter";
 import { leaveBoard } from "../../operations/leave-board";
 import type {
   OrderChoice,
@@ -1043,52 +1044,7 @@ export function isValidPendingPick(choice: PendingChoice, cardId: string): boole
   if (!choice.revealed.includes(cardId)) {
     return false;
   }
-  const excluded = choice.filter?.excludeCardTypes;
-  if (excluded && excluded.length > 0) {
-    const def = getGlobalCardRegistry().get(cardId);
-    const cardType = def?.cardType;
-    if (cardType && excluded.includes(cardType)) {
-      return false;
-    }
-  }
-  // rule-id: unl-139-219 — "You may choose a UNIT from it": an allow-list of
-  // card types on the pick.
-  const allowedTypes = choice.filter?.cardTypes;
-  if (allowedTypes && allowedTypes.length > 0) {
-    const cardType = getGlobalCardRegistry().get(cardId)?.cardType;
-    if (cardType && !allowedTypes.includes(cardType)) {
-      return false;
-    }
-  }
-  // rule 135.2 (ven-085-166 Decree of Strength) — "choose a Mind card from
-  // it": the filter is a DOMAIN allow-list; a multi-domain card qualifies when
-  // any of its domains is listed.
-  const allowedDomains = choice.filter?.domains;
-  if (allowedDomains && allowedDomains.length > 0) {
-    const d = getGlobalCardRegistry().get(cardId)?.domain;
-    const ds = d === undefined ? [] : Array.isArray(d) ? d : [d];
-    if (!ds.some((x) => allowedDomains.includes(x))) {
-      return false;
-    }
-  }
-  // rule-id: ogn-242-298 — "a unit … that has Might up to 1 more than the
-  // killed unit": a Might ceiling on the pick, read from printed Might.
-  const maxMight = choice.filter?.maxMight;
-  if (typeof maxMight === "number") {
-    if (getGlobalCardRegistry().getMight(cardId) > maxMight) {
-      return false;
-    }
-  }
-  // rule 206 (unl-064-219 Fate Weaver) — "a spell with Energy cost [4] or
-  // more": the floor reads the card's PRINTED Energy cost; Power pips never
-  // count toward it.
-  const minEnergyCost = choice.filter?.minEnergyCost;
-  if (typeof minEnergyCost === "number") {
-    if (getGlobalCardRegistry().getEnergyCost(cardId) < minEnergyCost) {
-      return false;
-    }
-  }
-  return true;
+  return matchesRevealPickFilter(choice.filter, cardId);
 }
 
 /**
