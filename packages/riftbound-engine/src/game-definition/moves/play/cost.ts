@@ -122,6 +122,42 @@ export function staticEnterReadyApplies(
   return false;
 }
 
+/**
+ * Card text spells small counts as words ("two or more other units"); the
+ * parser keeps them verbatim. Returns undefined for a count this module cannot
+ * read, so the caller can leave the gate unknown rather than guessing.
+ */
+const COUNT_WORDS: Record<string, number> = {
+  eight: 8,
+  five: 5,
+  four: 4,
+  nine: 9,
+  one: 1,
+  seven: 7,
+  six: 6,
+  ten: 10,
+  three: 3,
+  two: 2,
+  zero: 0,
+};
+
+function countWord(value: unknown): number | undefined {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === "string") {
+    const word = COUNT_WORDS[value.trim().toLowerCase()];
+    if (word !== undefined) {
+      return word;
+    }
+    const n = Number.parseInt(value, 10);
+    if (Number.isFinite(n)) {
+      return n;
+    }
+  }
+  return undefined;
+}
+
 /** Card-meta reader for play-time gates that read board statuses. */
 type EnterReadyCardAccessor = {
   getCardMeta: (cardId: CoreCardId) => Partial<RiftboundCardMeta> | undefined;
@@ -400,6 +436,30 @@ function evaluateEnterReadyCondition(
         }
       }
       return false;
+    }
+    // rule 143.4 (rule-id: sfd-176-221) — "I enter ready if you have N or more
+    // other units in your base": counted as the unit enters, over YOUR base
+    // only. The entering unit never counts itself, units at battlefields and
+    // non-units (gear) in base don't count, and the opponent's base is
+    // irrelevant.
+    case "unit-count": {
+      if (!zones) {
+        return false;
+      }
+      const want = countWord(condition.count);
+      if (want === undefined) {
+        return undefined;
+      }
+      const zone = (condition.location as string | undefined) ?? "base";
+      if (zone !== "base") {
+        return undefined;
+      }
+      const registry = getGlobalCardRegistry();
+      const n = zones
+        .getCardsInZone("base" as CoreZoneId, playerId as CorePlayerId)
+        .filter((id) => (id as string) !== cardId && registry.getCardType(id as string) === "unit")
+        .length;
+      return n >= want;
     }
     // rule 143.4 (rule-id: unl-037-219) — the parser leaves gates it cannot
     // model as `{type:"custom", text}`. A gate that cannot be shown to HOLD
