@@ -5,9 +5,25 @@ import { createCardId } from "@tcg/riftbound-types/cards";
 // rule 417/712: "Deal 2" is a flat Deal action — the trailing "for each time this spell has dealt
 // damage this turn" rider belongs to the [rainbow] replay, not to the printed 2. The generic parser
 // folds that "for each" into the first amount (2 x count(all units)), so the payload is explicit here.
+// rule 108.2 / 809.1.c.1 / 715.1: the replay rides on the Deal action — its
+// offer goes to the DAMAGED unit's controller (who may be the opponent), costs
+// one power of any domain and no energy, and each replay adds 1 Bonus Damage
+// ("for each time this spell has dealt damage this turn", rule 317.2.c).
 const abilities: Ability[] = [
   {
-    effect: { amount: 2, target: { type: "unit" }, type: "damage" },
+    effect: {
+      amount: 2,
+      target: { type: "unit" },
+      then: {
+        cost: { power: ["rainbow"] },
+        escalate: true,
+        optional: true,
+        player: "target-controller",
+        target: "self",
+        type: "play",
+      },
+      type: "damage",
+    },
     type: "spell",
   } as unknown as Ability,
 ];

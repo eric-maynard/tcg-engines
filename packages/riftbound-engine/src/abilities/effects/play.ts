@@ -400,20 +400,38 @@ function offerAccelerateOnInstructedPlay(cardId: string, ctx: EffectContext): vo
  */
 function replaySelfSpell(effect: ExecutableEffect, ctx: EffectContext): void {
   const cardId = ctx.sourceCardId;
-  const { optional, cost, from } = effect as { optional?: boolean; cost?: unknown; from?: string };
+  const { optional, cost, from, player, escalate, accepted } = effect as {
+    optional?: boolean;
+    cost?: unknown;
+    from?: string;
+    player?: string;
+    escalate?: boolean;
+    accepted?: boolean;
+  };
   const fromZone = from ?? "trash";
   const registry = getGlobalCardRegistry();
   const spellEffect = (registry.getAbilities(cardId) ?? []).find((a) => a.type === "spell")?.effect as
     | SpellEffectTargetShape
     | undefined;
   const zone = ctx.zones.getCardZone(cardId as CoreCardId);
-  if (optional || cost !== undefined || zone === "chain") {
+  // rule 108.2 (rule-id: unl-020-219) — "ITS controller may play this spell
+  // again": the player who gets the offer is the damaged unit's controller,
+  // which may well be the opponent of the player resolving this spell.
+  const replayPlayer =
+    player === "target-controller"
+      ? ((ctx.boundTargets?.[0] === undefined
+          ? undefined
+          : ((ctx.cards.getCardController?.(ctx.boundTargets[0] as CoreCardId) ??
+              ctx.cards.getCardOwner(ctx.boundTargets[0] as CoreCardId)) as string | undefined)) ??
+        ctx.playerId)
+      : ctx.playerId;
+  if (accepted !== true && (optional || cost !== undefined || zone === "chain")) {
     // Rule 355.8: never offer a play that would have no legal target.
     const legal = spellEffectHasLegalTargets(spellEffect, {
       cards: ctx.cards,
       choosing: true,
       draft: ctx.draft,
-      playerId: ctx.playerId,
+      playerId: replayPlayer,
       sourceCardId: cardId,
       zones: ctx.zones,
     } as Parameters<typeof spellEffectHasLegalTargets>[1]);
@@ -421,11 +439,20 @@ function replaySelfSpell(effect: ExecutableEffect, ctx: EffectContext): void {
       return;
     }
     ctx.draft.pendingChoice = {
-      playerId: ctx.playerId,
+      playerId: replayPlayer,
       resolved: {
         cardId,
-        controller: ctx.playerId,
-        effect: { from: fromZone, target: "self", type: "play" },
+        controller: replayPlayer,
+        // `accepted` marks the re-entry: the answer IS the decision to play, so
+        // the second pass performs the replay instead of asking again (the card
+        // is still in the `chain` zone while its first resolution finishes).
+        effect: {
+          accepted: true,
+          from: fromZone,
+          target: "self",
+          type: "play",
+          ...(escalate === true ? { escalate: true } : {}),
+        },
         ...(cost !== undefined ? { optInCost: cost } : {}),
         type: "ability",
       },
@@ -434,18 +461,37 @@ function replaySelfSpell(effect: ExecutableEffect, ctx: EffectContext): void {
     };
     return;
   }
-  if (zone !== fromZone) {
+  if (accepted !== true && zone !== fromZone) {
     return;
+  }
+  // rule 354.3 / 359.3.d — the card is being played again, so the parked
+  // "place it in the trash" step of the resolution it is leaving no longer
+  // applies; dropping it keeps the replayed card on the chain.
+  if (ctx.draft.deferredSpellSettle?.cardId === cardId) {
+    ctx.draft.deferredSpellSettle = undefined;
+  }
+  // rule 715.1 / 317.2.c (rule-id: unl-020-219) — "this deals 1 additional
+  // Bonus Damage for each time this spell has dealt damage this turn": one
+  // pip per replay, scoped to this card and expiring with the turn.
+  if (escalate === true) {
+    const entries = (ctx.draft.activeReplacements ?? []) as unknown as Record<string, unknown>[];
+    entries.push({
+      appliedToSourceId: cardId,
+      bonusDamage: 1,
+      duration: "next",
+      replaces: "deals-bonus-damage",
+    });
+    (ctx.draft as { activeReplacements?: unknown }).activeReplacements = entries;
   }
   ctx.zones.moveCard({ cardId: cardId as CoreCardId, targetZoneId: "chain" as CoreZoneId });
   ctx.draft.interaction = addToChain(
     ctx.draft.interaction ?? createInteractionState(),
-    { cardId, controller: ctx.playerId, effect: spellEffect, resolveTo: "trash", type: "spell" },
+    { cardId, controller: replayPlayer, effect: spellEffect, resolveTo: "trash", type: "spell" },
     Object.keys(ctx.draft.players),
   );
   // Rule 724 (Legion): a replay is still a card played this turn.
   if (ctx.draft.cardsPlayedThisTurn) {
-    ctx.draft.cardsPlayedThisTurn[ctx.playerId] = (ctx.draft.cardsPlayedThisTurn[ctx.playerId] ?? 0) + 1;
+    ctx.draft.cardsPlayedThisTurn[replayPlayer] = (ctx.draft.cardsPlayedThisTurn[replayPlayer] ?? 0) + 1;
   }
 }
 

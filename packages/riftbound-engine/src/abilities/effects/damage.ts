@@ -359,6 +359,7 @@ export function handle_damage(effect: ExecutableEffect, ctx: EffectContext, h: E
       }
     }
   }
+  const dealtTo: string[] = [];
   for (const { targetId, amount: rawHitAmount } of hits) {
     // rule 437.2 (unl-013-219 Lotus Trap) — "Double all damage that would be
     // dealt to it": a damage-amount replacement, so it applies before any
@@ -450,6 +451,17 @@ export function handle_damage(effect: ExecutableEffect, ctx: EffectContext, h: E
     // are written together so death checks, the end-of-turn clear and the UI agree.
     const total = addDamage(ctx, targetId, dealt, damageAttribution as Record<string, unknown>);
     noteLethalDamage(ctx, targetId, total, dealt);
-    if (dealt > 0) reactAnyUnitDamaged(targetId);
+    if (dealt > 0) {
+      dealtTo.push(targetId);
+      reactAnyUnitDamaged(targetId);
+    }
+  }
+  // rule 417 / 715.4 (rule-id: unl-020-219) — a rider hanging off the Deal
+  // action ("Deal 2 to a unit. ITS controller may …") runs once the damage has
+  // actually been dealt, with the damaged units bound as its referent. Damage
+  // that was fully prevented never happened, so the rider never runs.
+  const then = (effect as { then?: ExecutableEffect }).then;
+  if (then !== undefined && dealtTo.length > 0 && !ctx.draft.pendingChoice) {
+    executeEffect(then, { ...ctx, boundTargets: dealtTo });
   }
 }

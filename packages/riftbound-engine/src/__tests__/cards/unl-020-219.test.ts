@@ -111,7 +111,7 @@ describe("Dancing Grenade (unl-020-219)", () => {
     expect(game.p1.can("cast", "dg")).toBe(false);
   });
 
-  test.failing("BUG: hitting an ENEMY unit offers the replay to ITS controller (P2), who pays one power of any domain and no energy to put it back on the chain (replay clause not implemented)", async () => {
+  test("hitting an ENEMY unit offers the replay to ITS controller (P2), who pays one power of any domain and no energy to put it back on the chain", async () => {
     // Expected: after resolution P2 (Giant's controller, holding 1 calm) is offered the replay;
     // accepting spends P2's calm power only and the spell is on the chain under P2's control.
     // Actual: the spell goes straight to P1's trash and P1's main phase resumes.
@@ -133,7 +133,7 @@ describe("Dancing Grenade (unl-020-219)", () => {
     expect(game.chain()).toEqual([expect.objectContaining({ cardId: "dg", controller: P2 })]);
   });
 
-  test.failing("BUG: replay escalation — the [rainbow] replay deals 3 (2 + 1 Bonus for the one prior deal this turn), so an 8-Might unit sits at 5 damage after two resolutions (replay not implemented)", async () => {
+  test("replay escalation — the [rainbow] replay deals 3 (2 + 1 Bonus for the one prior deal this turn), so an 8-Might unit sits at 5 damage after two resolutions", async () => {
     // Expected: 2, then 3 → 5 total damage on Giant, P2 paid 1 calm. Actual: no offer; damage stays 2.
     const game = await lone({ calm: 1 }).build();
     await game.p1.cast("dg", { targets: "giant" });
