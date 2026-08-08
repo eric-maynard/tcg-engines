@@ -112,6 +112,57 @@ export function findReplacementChosenTarget(
 }
 
 /**
+ * rule 356.2.b / 560 (rule-id: unl-140-219 Conscription) — "If you paid the
+ * additional cost, choose ANY enemy unit at a battlefield instead": an effect
+ * may carry `paidTarget`, the descriptor that REPLACES its caster-chosen target
+ * on a play whose optional additional cost was paid. The widened shape is used
+ * by play-time enumeration, by the move's target validation, and by the effect
+ * stored on the chain item, so the wider pick stays legal when the spell
+ * resolves (rule 359.3.e.4 re-checks against the same descriptor).
+ */
+export function paidModeTarget(
+  effect: SpellEffectTargetShape | undefined,
+): Exclude<SpellEffectTargetDescriptor, string> | undefined {
+  const t = (effect as { paidTarget?: unknown } | undefined)?.paidTarget;
+  return t !== null && typeof t === "object"
+    ? (t as Exclude<SpellEffectTargetDescriptor, string>)
+    : undefined;
+}
+
+/**
+ * The effect as it reads on a play that paid the optional additional cost:
+ * every caster-chosen `target` of the same kind swapped for `paidTarget`
+ * ("Take control of it, exhaust it, and recall it" keeps naming ONE unit, now
+ * chosen from the wider pool). Returns the effect unchanged when it declares no
+ * paid mode.
+ */
+export function applyPaidModeTarget<T>(effect: T): T {
+  const widened = paidModeTarget(effect as SpellEffectTargetShape | undefined);
+  if (widened === undefined) {
+    return effect;
+  }
+  const swap = (node: unknown): unknown => {
+    if (Array.isArray(node)) {
+      return node.map(swap);
+    }
+    if (node === null || typeof node !== "object") {
+      return node;
+    }
+    const out: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
+      const sameKind =
+        key === "target" &&
+        value !== null &&
+        typeof value === "object" &&
+        (value as { type?: string }).type === widened.type;
+      out[key] = sameKind ? { ...widened } : swap(value);
+    }
+    return out;
+  };
+  return swap(effect) as T;
+}
+
+/**
  * rule-id: ven-008-166 (rule 355.8) — "Deal 3 to a unit at a battlefield. If you
  * paid the additional cost, deal 5 to IT instead": both branches of a
  * `conditional` name the same caster-chosen object, so the choice belongs to the

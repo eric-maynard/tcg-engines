@@ -339,6 +339,14 @@ export interface BattlefieldState {
   contestedBy?: PlayerId;
 
   /**
+   * rule 190.4.a / 323.6 — set once a Cleanup has seen the current controller's
+   * own Units here. The vacancy check (lose control of a Battlefield with none
+   * of your Units in an Open State) only applies to control a Unit actually
+   * held, so control that never rested on a Unit is not wiped by it.
+   */
+  controllerOccupied?: boolean;
+
+  /**
    * Set when the mandatory Combat Showdown at this battlefield has completed
    * (all Relevant Players passed). Rule 625.1 / 516.4.f: the Showdown is a
    * required sub-phase of Combat — `resolveFullCombat` may not run until it

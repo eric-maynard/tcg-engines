@@ -9,12 +9,19 @@ import { createCardId } from "@tcg/riftbound-types/cards";
 // sequence whose three steps share one caster-chosen enemy unit at a
 // battlefield (bound at play time as targets[0] via the sequence lead target,
 // so every step acts on the same unit even after control changes).
-// FIXME: the paid (5 XP) variant should widen the choice to any enemy unit at
-// a battlefield; the engine's optional play-cost path does not yet charge XP
-// or swap the target descriptor, so only the ≤3 [Might] mode is offered.
+// rule 356.2.b — "If you paid the additional cost, choose any enemy unit at a
+// battlefield instead": `paidTarget` is the descriptor that replaces the
+// printed one on a play that paid the 5 XP, read by play-time enumeration,
+// target validation and the chain item's stored effect.
 const conscriptTarget = {
   controller: "enemy",
   filter: { might: { lte: 3 } },
+  location: "battlefield",
+  type: "unit",
+} as const;
+
+const paidTarget = {
+  controller: "enemy",
   location: "battlefield",
   type: "unit",
 } as const;
@@ -35,6 +42,7 @@ const abilities: Ability[] = [
         { target: conscriptTarget, type: "exhaust" },
         { target: conscriptTarget, type: "recall" },
       ],
+      paidTarget,
       type: "sequence",
     } as unknown as Effect,
     timing: "action",

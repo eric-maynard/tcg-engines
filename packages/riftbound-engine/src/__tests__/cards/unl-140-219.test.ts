@@ -132,7 +132,7 @@ describe("Conscription (unl-140-219)", () => {
     expect(game.state("two")).toMatchObject({ controller: P1, isBuffed: true, location: "base" });
   });
 
-  test.failing("BUG: fizzle (359.3.e.4) — target pumped to 5 in response → unit untouched AND the spell card goes to the trash (engine 'recalls' the Conscription card itself into P1's base)", async () => {
+  test("fizzle (359.3.e.4) — target pumped to 5 in response → unit untouched AND the spell card goes to the trash (engine 'recalls' the Conscription card itself into P1's base)", async () => {
     // Expected: Small stays P2's, ready, on bf1 (this part holds) and Conscription lands in P1's trash.
     // Actual: with the target illegal the recall step falls back to the source — the SPELL card ends in zone "base".
     const game = await board().resources(P2, { energy: 0 }).hand(P2, PUMP, "pump").build();
@@ -160,10 +160,7 @@ describe("Conscription (unl-140-219)", () => {
     expect(opp.p1.can("cast", "con")).toBe(false);
   });
 
-  test.failing("BUG: paid mode — with 5 XP, paying the optional cost lets P1 choose the 6-Might enemy; 5 XP + 5 energy + 2 chaos are all deducted and Big ends up conscripted", async () => {
-    // Expected (356.2.b + card text): cast with payOptional targeting "big" is legal at 5 XP; XP → 0,
-    // energy → 0, chaos → 0; on resolution Big is in P1's base, exhausted, controlled by P1.
-    // Actual: the optional XP cost path never widens the target descriptor, so "big" is not a legal choice.
+  test("paid mode — with 5 XP, paying the optional cost lets P1 choose the 6-Might enemy; 5 XP + 5 energy + 2 chaos are all deducted and Big ends up conscripted", async () => {
     const game = await board(5).build();
     await game.p1.cast("con", { payOptional: true, targets: "big" });
     expect(game.p1.xp()).toBe(0);

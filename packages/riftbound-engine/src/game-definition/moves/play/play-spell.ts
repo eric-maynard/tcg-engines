@@ -52,6 +52,7 @@ import {
   withCostsParam,
 } from "./cost-model";
 import {
+  applyPaidModeTarget,
   casterModeChoice,
   chosenMoveDestinations,
   collectIndependentTargetSlots,
@@ -67,6 +68,7 @@ import {
   findSequenceLeadTarget,
   findSplitDamageEffect,
   enumerateSubsetsUpTo,
+  paidModeTarget,
   offBoardPlayIsCasterChosen,
   offBoardPlayZone,
   spellEffectHasLegalTargets,
@@ -665,7 +667,14 @@ export const playSpell: Defs["playSpell"] = {
 
     // Rule 355.8 / 419.2.a: gate on caster-chosen targets (including modal options).
     const abilities = registry.getAbilities(context.params.cardId) ?? [];
-    const printedSpellAbility = abilities.find((a: { type: string }) => a.type === "spell");
+    const rawSpellAbility = abilities.find((a: { type: string }) => a.type === "spell");
+    // rule 356.2.b (rule-id: unl-140-219) — a play that paid the optional
+    // additional cost reads the card's paid mode ("choose ANY enemy unit
+    // instead"), so every target check below judges the widened descriptor.
+    const printedSpellAbility =
+      rawSpellAbility && context.params.paidAdditionalCost
+        ? ({ ...rawSpellAbility, effect: applyPaidModeTarget(rawSpellAbility.effect) } as typeof rawSpellAbility)
+        : rawSpellAbility;
     // rule 355.3 — a mode named as the spell is played: it must be one the
     // caster may choose (355.8: legal targets; "not chosen this turn"), and every
     // target check below then reads THAT mode's instruction as the spell's text.
@@ -1232,7 +1241,18 @@ export const playSpell: Defs["playSpell"] = {
       // rule 355.8 — for a named mode this is exactly "a mode with no legal
       // target may not be chosen": that mode is simply not offered.
       if (!spellEffectHasLegalTargets(spellEffect, resolverCtx)) {
-        continue;
+        // rule 356.2.b (rule-id: unl-140-219) — the paid mode may reach units
+        // the printed text cannot, so keep planning when it has a legal choice;
+        // only its own (paid) variants are enumerated below.
+        if (
+          paidModeTarget(spellEffect) === undefined ||
+          !spellEffectHasLegalTargets(
+            applyPaidModeTarget(spellEffect) as SpellEffectTargetShape | undefined,
+            resolverCtx,
+          )
+        ) {
+          continue;
+        }
       }
 
       // Rule 355.8: targets are chosen when the spell is PLAYED. For a
@@ -1848,7 +1868,26 @@ export const playSpell: Defs["playSpell"] = {
       if (optionalPay?.kind === "pay" && xpAffordable) {
         const extra = optionalPay.cost ?? {};
         const metaForPay = createMetaAccessor(context.cards);
-        for (const base of baseVariants) {
+        // rule 356.2.b (rule-id: unl-140-219) — when the paid mode WIDENS the
+        // choice ("choose any enemy unit at a battlefield instead"), plan the
+        // paid variants from that descriptor instead of copying the unpaid
+        // plan's picks, which were drawn from the narrower pool.
+        const widenedTarget = paidModeTarget(spellEffect);
+        const paidBases =
+          widenedTarget === undefined
+            ? baseVariants
+            : (
+                resolveTarget(
+                  { ...widenedTarget, quantity: "all" } as Parameters<typeof resolveTarget>[0],
+                  resolverCtx,
+                ) as string[]
+              ).map((id) => ({
+                cardId: cardId as string,
+                playerId: context.playerId as string,
+                targets: [id],
+                ...(mode === undefined ? {} : { mode }),
+              }));
+        for (const base of paidBases) {
           if (
             canAffordCard(
               state,
@@ -2370,8 +2409,14 @@ export const playSpell: Defs["playSpell"] = {
     // Look up spell effect from card definition
     const registry = getGlobalCardRegistry();
     const abilities = registry.getAbilities(cardId) ?? [];
+    // rule 356.2.b (rule-id: unl-140-219) — this play's text: with the optional
+    // additional cost paid the card's paid mode replaces the printed target
+    // descriptor, and the chain item stores THAT shape so resolution re-checks
+    // the locked pick against the descriptor it was chosen from.
+    const forThisPlay = <T,>(effect: T): T =>
+      paidAdditionalCost ? applyPaidModeTarget(effect) : effect;
     const spellAbility = abilities.find((a) => a.type === "spell");
-    const spellEffect = spellAbility?.effect;
+    const spellEffect = forThisPlay(spellAbility?.effect);
 
     // For X-cost spells, wrap the effect so the chosen X value travels
     // With it through the chain. The effect executor reads `variables.x`
@@ -2384,7 +2429,9 @@ export const playSpell: Defs["playSpell"] = {
     // ability with a `while-level` condition. ALL of them resolve, in printed
     // order, each gated by its own condition — resolving only the first would
     // silently drop the rider.
-    const spellAbilities = abilities.filter((a) => a.type === "spell");
+    const spellAbilities = abilities
+      .filter((a) => a.type === "spell")
+      .map((a) => (paidAdditionalCost ? { ...a, effect: forThisPlay(a.effect) } : a));
     // rule 824.1.b.1 (rule-id: unl-031-219 Combat Experience) — a rider phrased
     // "… instead" REPLACES the instruction(s) it follows instead of stacking:
     // fold the gated riders (highest printed level first) into a
