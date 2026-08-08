@@ -154,22 +154,30 @@ function renderBattlefieldShowdownPanel(battlefieldEl, battlefieldId, showdown) 
   const pending = gameState?.pendingChoice;
   const choiceBlocking = pending && (pending.prompter ?? pending.playerId) === viewingPlayer;
 
+  // rule 509.1 / 401.1: while a chain is on top of the showdown the game is in
+  // a Closed State — focus cannot pass, so don't advertise "your focus".
+  const chainBlocking = Boolean(gameState?.interaction?.chain?.active);
+
   const focusName = pName(showdown.focusPlayer);
   const bannerText = choiceBlocking
     ? "Resolve your choice first"
+    : chainBlocking
+    ? "Chain resolving — showdown paused"
     : readyToClose
     ? "All passes registered — showdown closing"
     : hasFocus
     ? "Showdown in progress — your focus"
     : `Waiting on ${focusName}...`;
-  const bannerClass = readyToClose
+  const bannerClass = chainBlocking
+    ? "battlefield__showdown-banner--theirs"
+    : readyToClose
     ? "battlefield__showdown-banner--ready"
     : hasFocus
     ? "battlefield__showdown-banner--mine"
     : "battlefield__showdown-banner--theirs";
 
   // Pass Focus button — only the focus holder can pass.
-  const passMove = hasFocus ? findShowdownMove("passShowdownFocus") : null;
+  const passMove = hasFocus && !chainBlocking ? findShowdownMove("passShowdownFocus") : null;
   const passDisabled = !passMove;
 
   // Rule 347.2.a / 348.2.a: when all Relevant Players pass, the Showdown
@@ -185,7 +193,7 @@ function renderBattlefieldShowdownPanel(battlefieldEl, battlefieldId, showdown) 
   const panel = document.createElement("div");
   panel.className = "battlefield__showdown-panel";
   panel.setAttribute("data-battlefield-id", battlefieldId);
-  if (choiceBlocking) {
+  if (choiceBlocking || chainBlocking) {
     panel.style.opacity = "0.5";
     panel.style.pointerEvents = "none";
   }
