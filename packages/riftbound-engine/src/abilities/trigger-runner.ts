@@ -1546,6 +1546,31 @@ export function fireTriggers(rawEvent: GameEvent, ctx: TriggerRunnerContext): nu
       }
     }
   }
+  // rule 392 (rule-id: unl-050-219 Iascylla) — a delayed ability is independent
+  // of its source: once installed it executes at its time even if the card
+  // carrying it has left the board (bounced to hand, banished, …), so scan the
+  // off-board zones for cards whose meta still holds delayed entries.
+  for (const playerId of Object.keys(ctx.draft.players ?? {})) {
+    for (const offBoard of ["hand", "trash", "banishment"]) {
+      const cards = ctx.zones.getCardsInZone(offBoard as CoreZoneId, playerId as CorePlayerId);
+      for (const cardId of cards) {
+        if (boardCards.some((c) => c.id === (cardId as string))) {
+          continue;
+        }
+        const delayed = delayedTriggerAbilities(ctx.cards.getCardMeta(cardId));
+        if (delayed.length > 0) {
+          boardCards.push({
+            abilities: delayed,
+            id: cardId as string,
+            owner: ctx.cards.getCardOwner(cardId) ?? playerId,
+            // matched as a floating ability: the card itself is off-board and
+            // must not match anything else from `hand`/`trash`/`banishment`.
+            zone: "floating",
+          });
+        }
+      }
+    }
+  }
   // rule 323.5 / 808.1.d.2 — units that die together leave the board only
   // AFTER their death triggers are queued, so a card dying in the same batch
   // is still present for statics that shape those triggers ("your [Deathknell]

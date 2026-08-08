@@ -11,6 +11,40 @@ import { type EffectHelpers, getTargetIds } from "./_helpers";
  * `getBoardCards` offers it alongside the printed ones; the Ending Step
  * expires turn-scoped entries (rule 517.2.b).
  */
+/**
+ * The location "here"/"this battlefield" names as the installing trigger
+ * resolves: the source's own board location, else the battlefield the firing
+ * event named (rule 359.3.f.3 — e.g. the battlefield a "when I hold" trigger
+ * scored at, which stays the referent even after the source is bounced).
+ */
+function hereAnchor(ctx: EffectContext): string | undefined {
+  const zone = ctx.sourceZone;
+  if (zone !== undefined && (zone === "base" || zone.startsWith("battlefield-"))) {
+    return zone;
+  }
+  return ctx.triggerBattlefieldZone;
+}
+
+/** Replace every `to: "here"` inside a stored delayed effect with `anchor`. */
+function freezeHereReferent(node: unknown, anchor: string | undefined): void {
+  if (anchor === undefined || node === null || typeof node !== "object") {
+    return;
+  }
+  if (Array.isArray(node)) {
+    for (const child of node) {
+      freezeHereReferent(child, anchor);
+    }
+    return;
+  }
+  const obj = node as Record<string, unknown>;
+  if (obj.to === "here") {
+    obj.to = anchor;
+  }
+  for (const value of Object.values(obj)) {
+    freezeHereReferent(value, anchor);
+  }
+}
+
 export function handle_delayedTrigger(
   effect: ExecutableEffect,
   ctx: EffectContext,
@@ -29,6 +63,11 @@ export function handle_delayedTrigger(
   // The effect reaches here as part of a chain item (an immer draft node), so
   // snapshot it into plain data before it is stored on card meta.
   const stored = JSON.parse(JSON.stringify(dt.effect)) as unknown;
+  // rule 359.3.f.3.b (rule-id: unl-050-219 Iascylla) — "this battlefield" is a
+  // referent fixed when the INSTALLING trigger resolves, so freeze it into the
+  // stored effect: by the time the delayed ability executes its source may sit
+  // in hand (rule 392) and "here" would no longer resolve to any location.
+  freezeHereReferent(stored, hereAnchor(ctx));
   // rule 390.2 (rule-id: sfd-166-221) — "When a friendly unit is played this
   // turn, buff it" hangs on the PLAYER, not on a permanent: no unit is chosen
   // and the window outlives the spell that created it.
