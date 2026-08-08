@@ -44,7 +44,7 @@ function forge(energy: number) {
 }
 
 describe("Piltovan Forge (ven-161-166)", () => {
-  test.failing("BUG: registry payload — the printed static ('first friendly gear activated ability each turn costs [1] less while you control this') is not parsed at all", async () => {
+  test("registry payload — the printed static ('first friendly gear activated ability each turn costs [1] less while you control this') is not parsed at all", async () => {
     // Expected: exactly one static ability carrying a 1-energy cost reduction scoped to friendly gear activated abilities, first per turn.
     // Actual: the pool entry has no `abilities`.
     const def = (await loadDefaultCardPool()).get(CARD);
@@ -57,7 +57,7 @@ describe("Piltovan Forge (ven-161-166)", () => {
     expect(json).toMatch(/"amount":1|"energy":1/);
   });
 
-  test.failing("BUG: Tools of Empire's [2] Empower costs 1 while you control the Forge (2 energy → 1 left, gear Empowered)", async () => {
+  test("Tools of Empire's [2] Empower costs 1 while you control the Forge (2 energy → 1 left, gear Empowered)", async () => {
     // Expected: energy 1 after the activation resolves. Actual: full 2 is charged → 0.
     const game = await forge(2).build();
     await game.p1.activate("tools", 0);
@@ -67,7 +67,7 @@ describe("Piltovan Forge (ven-161-166)", () => {
     expect(game.p1.energy()).toBe(1);
   });
 
-  test.failing("BUG: affordability at the discounted price — with exactly 1 energy the [2] Empower is legal and leaves 0", async () => {
+  test("affordability at the discounted price — with exactly 1 energy the [2] Empower is legal and leaves 0", async () => {
     // Expected: activateAbility:tools#0 offered at 1 energy. Actual: not offered (needs the printed 2).
     const game = await forge(1).build();
     expect(canActivate(game, "p1", "tools", 0)).toBe(true);
@@ -77,7 +77,7 @@ describe("Piltovan Forge (ven-161-166)", () => {
     expect(game.p1.energy()).toBe(0);
   });
 
-  test.failing("BUG: reduced to zero (356.6) — The Syren's '[1], [Exhaust]' is free as the first gear ability: legal at 0 energy, the unit goes home, the Syren exhausts", async () => {
+  test("reduced to zero (356.6) — The Syren's '[1], [Exhaust]' is free as the first gear ability: legal at 0 energy, the unit goes home, the Syren exhausts", async () => {
     // Expected: legal with an empty pool; keeper moved to base; energy stays 0. Actual: not legal at 0 energy.
     const game = await scenario()
       .resources(P1, { energy: 0 })
@@ -95,7 +95,7 @@ describe("Piltovan Forge (ven-161-166)", () => {
     expect(game.p1.energy()).toBe(0);
   });
 
-  test.failing("BUG: only the FIRST each turn — Empower pays 1, then The Syren pays its full [1]: 3 energy → 1", async () => {
+  test("only the FIRST each turn — Empower pays 1, then The Syren pays its full [1]: 3 energy → 1", async () => {
     // Expected: 3 − 1 (discounted Empower) − 1 (full Syren) = 1. Actual: 3 − 2 − 1 = 0.
     const game = await forge(3).unit(P1, "forge", { might: 2, name: "Buddy" }, "buddy").gear(P1, THE_SYREN, "syren").build();
     await game.p1.activate("tools", 0);
@@ -123,7 +123,7 @@ describe("Piltovan Forge (ven-161-166)", () => {
     expect(game.p1.energy()).toBe(0);
   });
 
-  test.failing("BUG: 'each turn' resets — after using the discount, on P1's NEXT turn the first gear ability is discounted again (Syren free at 0 energy)", async () => {
+  test("'each turn' resets — after using the discount, on P1's NEXT turn the first gear ability is discounted again (Syren free at 0 energy)", async () => {
     // Expected: turn N Empower for 1 (1 → 0); two turns later, with an empty pool, the Syren is legal and free. Actual: neither discount exists.
     const game = await forge(1).unit(P1, "forge", { might: 2, name: "Buddy" }, "buddy").gear(P1, THE_SYREN, "syren").build();
     await game.p1.activate("tools", 0);

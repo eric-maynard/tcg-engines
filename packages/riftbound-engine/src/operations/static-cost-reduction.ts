@@ -219,9 +219,7 @@ export function computeStaticCostReduction(
         ? asBattlefield.controller ?? null
         : ctx.cards.getCardController?.(permId as CoreCardId) ??
           ctx.cards.getCardOwner(permId as CoreCardId);
-      if (controller !== playerId) {
-        continue;
-      }
+      const controlledByPlayer = controller === playerId;
       // Skip the played card itself — the self-cost-reduction path on its
       // OWN printed cost is handled by the meta `costModifier` machinery
       // And/or the card's own static auras applying separately. Including
@@ -244,6 +242,29 @@ export function computeStaticCostReduction(
         const target =
           (effect as { appliesTo?: unknown }).appliesTo ??
           (effect as { target?: unknown }).target;
+        // rule 364 (rule-id: ven-164-166) — an unconditional passive scoped to
+        // "each spell" reaches BOTH players, so its aura is read even by the
+        // player who doesn't control the permanent. Every other shape keeps
+        // rule 190.6.d's "you = controller" restriction.
+        const reachesEveryone =
+          (target as { controller?: string } | undefined)?.controller === "any";
+        if (!controlledByPlayer && !reachesEveryone) {
+          continue;
+        }
+        // rule 355.8 / 740.1.a (rule-id: ven-164-166) — a `chooses` DESCRIPTOR
+        // ("spells that choose one or more units here friendly to it") is
+        // matched against the play's real chosen targets.
+        if (
+          !choosesDescriptorSatisfied(
+            (target as { chooses?: unknown } | undefined)?.chooses,
+            ctx,
+            playerId,
+            permId as string,
+            playContext,
+          )
+        ) {
+          continue;
+        }
         if (
           !matchesPlayedCard(
             target,
@@ -817,6 +838,60 @@ export function reducePowerCost(
  *
  * Unknown / malformed → no match.
  */
+/**
+ * rule 355.8 / 740.1.a (rule-id: ven-164-166) — Sandswept Tomb prints "each
+ * spell that chooses one or more units HERE that are FRIENDLY TO IT". That
+ * scope is a descriptor over the play's chosen targets, not a fixed card id,
+ * so it is matched here against the real choices: at least one chosen object
+ * must sit in the aura's own battlefield zone (`location:"here"`) and be
+ * controlled by the SPELL's controller (`controller:"friendly"` = friendly to
+ * the spell, 740.1.a — not to the permanent's controller).
+ *
+ * A string-shaped `chooses` ("self" / a card id) is left to `matchesPlayedCard`.
+ */
+function choosesDescriptorSatisfied(
+  chooses: unknown,
+  ctx: CostReductionContext,
+  playerId: string,
+  auraCardId: string,
+  playContext?: CostPlayContext,
+): boolean {
+  if (!chooses || typeof chooses !== "object") {
+    return true;
+  }
+  // Pre-target gate: targets aren't picked yet, so assume the play could
+  // choose a qualifying object; the move's condition re-checks for real.
+  if (playContext?.assumeChosen === true) {
+    return true;
+  }
+  const d = chooses as { controller?: string; location?: string; type?: string };
+  const chosen = playContext?.chosenTargetIds ?? [];
+  if (chosen.length === 0) {
+    return false;
+  }
+  const here =
+    d.location === "here"
+      ? new Set(
+          ctx.zones.getCardsInZone(`battlefield-${auraCardId}` as CoreZoneId) as readonly string[],
+        )
+      : undefined;
+  return chosen.some((id) => {
+    if (here && !here.has(id)) {
+      return false;
+    }
+    const ctrl =
+      ctx.cards.getCardController?.(id as CoreCardId) ??
+      ctx.cards.getCardOwner(id as CoreCardId);
+    if (d.controller === "friendly" && ctrl !== playerId) {
+      return false;
+    }
+    if (d.controller === "enemy" && ctrl === playerId) {
+      return false;
+    }
+    return true;
+  });
+}
+
 function matchesPlayedCard(
   target: unknown,
   playedCardType: string | undefined,
@@ -851,7 +926,9 @@ function matchesPlayedCard(
   // rule 355.8 (rule-id: sfd-141-221) — "spells that choose me": the play must
   // name the aura's own permanent among its chosen targets.
   const chooses = (t as { chooses?: string }).chooses;
-  if (chooses !== undefined) {
+  // A descriptor-shaped `chooses` (rule-id: ven-164-166) was already matched
+  // against the real chosen targets by `choosesDescriptorSatisfied`.
+  if (chooses !== undefined && typeof chooses !== "object") {
     if (playContext?.assumeChosen !== true) {
       const wanted = chooses === "self" ? auraCardId : chooses;
       if (!wanted || !(playContext?.chosenTargetIds ?? []).includes(wanted)) {
