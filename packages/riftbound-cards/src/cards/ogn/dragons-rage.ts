@@ -11,10 +11,18 @@ const abilities: Ability[] = [
   {
     effect: {
       target: { controller: "enemy", type: "unit" },
+      // rule 387 / 388.1 — "Then do this:" is a Reflexive Trigger: the fight is
+      // not carried out inline but queued as a new Pending Item once the move
+      // has happened, so its other enemy unit is chosen (from the units at the
+      // destination as they stand then) while that item is finalized, and every
+      // opponent gets Priority on it before it resolves.
       then: {
-        attacker: { controller: "enemy", type: "unit" },
-        defender: { controller: "enemy", excludeSelf: true, location: "same", type: "unit" },
-        type: "fight",
+        effect: {
+          attacker: { type: "pending-value" },
+          defender: { controller: "enemy", excludeSelf: true, location: "same", type: "unit" },
+          type: "fight",
+        },
+        type: "reflexive",
       },
       to: "choose",
       type: "move",

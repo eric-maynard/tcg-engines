@@ -801,6 +801,19 @@ function matchesFilter(cardId: string, filter: TargetFilter, ctx: TargetResolver
     return idIn.includes(cardId);
   }
 
+  // rule 387 (ogn-258-298) — a reflexive body anchored at the main
+  // instruction's result ("ANOTHER enemy unit at ITS destination") freezes that
+  // anchor when the item is queued: `idNotIn` drops the produced object itself,
+  // `zoneIn` pins the zone it ended up in so a later board scan can't wander.
+  const idNotIn = (filter as { idNotIn?: readonly string[] }).idNotIn;
+  if (Array.isArray(idNotIn) && idNotIn.includes(cardId)) {
+    return false;
+  }
+  const zoneIn = (filter as { zoneIn?: readonly string[] }).zoneIn;
+  if (Array.isArray(zoneIn) && !zoneIn.includes(ctx.zones.getCardZone(cardId as CoreCardId) ?? "")) {
+    return false;
+  }
+
   // rule 359.3.f.2 (unl-105-219 Imposing Challenger, unl-057-219 Alpha
   // Wildclaw) — "with less Might than me": compared against the SOURCE's Might
   // as it reads when the instruction executes; equal Might is not less.

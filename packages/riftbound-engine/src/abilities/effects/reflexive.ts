@@ -31,10 +31,18 @@ export function handle_reflexive(effect: ExecutableEffect, ctx: EffectContext, _
   if (!inner) {
     return;
   }
-  const pending = (ctx as { pendingSequenceValue?: readonly string[] }).pendingSequenceValue;
+  // rule 387 / 359.3.e.14 — the objects the MAIN instruction just produced are
+  // this body's referents: a sequence hands them over as `pendingSequenceValue`,
+  // a "move …, then do this" hands over the moved unit as the bound target.
+  const pending =
+    (ctx as { pendingSequenceValue?: readonly string[] }).pendingSequenceValue ?? ctx.boundTargets;
   // The effect node reaches here as part of a chain item (an immer draft) —
   // snapshot to plain data before it is stored on a new item.
-  const frozen = bindReferents(JSON.parse(JSON.stringify(inner)) as ExecutableEffect, pending);
+  const frozen = bindReferents(
+    JSON.parse(JSON.stringify(inner)) as ExecutableEffect,
+    pending,
+    ctx.sameZone,
+  );
   const times = Math.max(0, Math.floor(node.times ?? 1));
   const turnOrder = Object.keys(ctx.draft.players ?? {});
   const draft = ctx.draft as RiftboundGameState & {
@@ -82,7 +90,11 @@ function referencesPendingValue(effect: unknown): boolean {
  * produced ids (`filter.idIn`), keeping its quantity ("up to two of them").
  * With no pending value the link is empty, so the instruction finds nothing.
  */
-function bindReferents(effect: ExecutableEffect, pending: readonly string[] | undefined): ExecutableEffect {
+function bindReferents(
+  effect: ExecutableEffect,
+  pending: readonly string[] | undefined,
+  sameZone: string | undefined,
+): ExecutableEffect {
   const walk = (node: unknown): unknown => {
     if (!node || typeof node !== "object") {
       return node;
@@ -98,9 +110,61 @@ function bindReferents(effect: ExecutableEffect, pending: readonly string[] | un
         out.target = { ...rest, filter: { idIn: [...(pending ?? [])] }, type: "permanent" };
         continue;
       }
+      // rule-id: ogn-258-298 (rule 387) — "THEY deal damage to each other": the
+      // fight's attacker is the unit the main instruction moved, a fixed
+      // referent and never a choice, so it freezes to that bare id (leaving the
+      // defender as the item's only caster-chosen Game Object, rule 402.2).
+      if (key === "attacker" && (value as { type?: string } | undefined)?.type === "pending-value") {
+        const fixed = pending?.[0];
+        if (fixed !== undefined) {
+          out.attacker = fixed;
+          continue;
+        }
+      }
+      if (isFrozenDescriptor(value)) {
+        out[key] = freezeAnchor(value as Record<string, unknown>, pending, sameZone);
+        continue;
+      }
       out[key] = key === "effect" || key === "then" || key === "else" || key === "effects" ? walk(value) : value;
     }
     return out;
   };
-  return referencesPendingValue(effect) ? (walk(effect) as ExecutableEffect) : effect;
+  return referencesPendingValue(effect) || sameZone !== undefined
+    ? (walk(effect) as ExecutableEffect)
+    : effect;
+}
+
+/** A target descriptor whose wording is anchored on the main instruction's result. */
+function isFrozenDescriptor(value: unknown): boolean {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+  const d = value as { location?: unknown; excludeSelf?: unknown };
+  return d.location === "same" || d.excludeSelf === true;
+}
+
+/**
+ * rule 387 / 359.3.e.14 — "another enemy unit AT ITS DESTINATION" is read once,
+ * as the item is queued: pin the produced object's zone and exclude the object
+ * itself, so the choice offered at finalization is exactly the units that stood
+ * with it then.
+ */
+function freezeAnchor(
+  descriptor: Record<string, unknown>,
+  pending: readonly string[] | undefined,
+  sameZone: string | undefined,
+): Record<string, unknown> {
+  const extra: Record<string, unknown> = {};
+  if (descriptor.location === "same" && sameZone !== undefined) {
+    extra.zoneIn = [sameZone];
+  }
+  if (descriptor.excludeSelf === true && pending !== undefined && pending.length > 0) {
+    extra.idNotIn = [...pending];
+  }
+  if (Object.keys(extra).length === 0) {
+    return descriptor;
+  }
+  const existing = descriptor.filter;
+  const filters = existing === undefined ? [] : Array.isArray(existing) ? [...existing] : [existing];
+  return { ...descriptor, filter: [...filters, extra] };
 }
