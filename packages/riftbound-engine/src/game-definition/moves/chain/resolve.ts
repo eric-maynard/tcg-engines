@@ -819,8 +819,11 @@ export function executeResolvedItem(
     // (rule 404.2 — removed, NOT countered). The auto-bound single candidate
     // is charged here; a prompted multi-candidate pick carries `deflectTax` on
     // the prompt and is charged at pick time in `pending-choice.ts`.
+    // rule 809.1.c.1 — this also covers a SPELL that reached the chain without
+    // declared targets: it only gets here when nothing was bound at play time,
+    // so no surcharge was paid then and the resolution-time choice owes it.
     let deflectTax = false;
-    if (resolved.type !== "spell" && options.length > 0) {
+    if (options.length > 0) {
       const surchargeOf = (id: string): number =>
         getDeflectSurcharge(draft, resolved.controller, [id], baseCtx.cards);
       const available = totalPooledPower(draft, resolved.controller);
