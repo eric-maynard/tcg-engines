@@ -62,10 +62,15 @@ function board() {
     .hand(P2, POSSESSION, "possession");
 }
 
-/** Hostile Takeover cast on Peak Guardian and fully settled. */
+/**
+ * Hostile Takeover cast on Peak Guardian and fully settled. Unopposed the steal only contests A
+ * (190.3.a) — the Cleanup opens a Non-Combat Showdown there (344.2 / 323.12), which `settle` hands
+ * back once; settling again passes Focus through it and P1 conquers (348.2.a).
+ */
 async function taken(): Promise<G> {
   const game = await board().build();
   await game.p1.cast("takeover", { targets: "peak" });
+  await game.settle();
   await game.settle();
   return game;
 }
@@ -129,7 +134,8 @@ describe("Hostile Takeover × Peak Guardian × Rebuke / Possession — temporary
     const game = await board().gear(P1, CONQUER_DRAW_GEAR, "ledger").build();
     const hand0 = game.p1.hand().length; // includes takeover
     await game.p1.cast("takeover", { targets: "peak" });
-    await game.settle();
+    await game.settle(); // Non-Combat Showdown handed back once (344.2) …
+    await game.settle(); // … then Focus passes through and A is conquered
     expect(game.gameState.battlefields.bfA?.controller).toBe(P1);
     expect(game.gameState.scoredThisTurn[P1]).toEqual(["bfA"]);
     expect(game.p1.points()).toBe(1);

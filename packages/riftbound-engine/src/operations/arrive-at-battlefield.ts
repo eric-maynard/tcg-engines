@@ -136,9 +136,11 @@ export interface ArrivalArgs {
   readonly stagedBy?: string;
   /**
    * rule 190.3.a ("otherwise becomes present") — a control change makes the
-   * unit present for its NEW controller without moving. When nobody else is
-   * left there the Cleanup's presence-conquer (323.6) settles it, so only the
-   * opposed case is staged here.
+   * unit present for its NEW controller without moving, so it contests exactly
+   * like a Move does. Contested is applied whether or not anyone else is there:
+   * unopposed it is a Non-Combat Showdown that the Cleanup opens (344.2 /
+   * 323.12) with Focus to the contester (345), and only its close establishes
+   * control / Conquers (348.2.a). Control is never established inline.
    */
   readonly cause?: "move" | "play" | "control-change";
   /**
@@ -164,19 +166,9 @@ export function noteArrival(io: ArrivalIO, args: ArrivalArgs): { battlefieldId?:
     return { staged: false };
   }
   let staged = false;
-  const occupants = unitsAt(io, battlefieldId);
   for (const unitId of args.unitIds) {
     const controller = controllerOf(io, unitId) ?? args.stagedBy;
     if (controller === undefined) {
-      continue;
-    }
-    if (
-      args.cause === "control-change" &&
-      !occupants.some((id) => {
-        const c = controllerOf(io, id);
-        return c !== undefined && c !== controller;
-      })
-    ) {
       continue;
     }
     if (stageContested(draft, battlefieldId, controller, args.stagedBy, args.discretionary)) {

@@ -110,6 +110,10 @@ describe("Hostile Takeover (sfd-202-221)", () => {
     const game = await board().build();
     expect(game.state("victim").isExhausted).toBe(true);
     await game.p1.cast("ht", { targets: "victim" });
+    // 344.2 / 323.12 — unopposed, the steal contests bf1 and the Cleanup opens a Non-Combat Showdown
+    // (handed back once); only its close establishes control = Conquer (348.2.a).
+    await game.settle();
+    expect(game.decision()).toMatchObject({ context: "showdown", kind: "action", seat: P1 });
     await game.settle();
     expect(game.state("victim")).toMatchObject({ controller: P1, isReady: true, owner: P2, zone: "battlefield-bf1" });
     expect(game.p1.units("bf1")).toEqual(["victim"]);
@@ -138,7 +142,8 @@ describe("Hostile Takeover (sfd-202-221)", () => {
   test("'Ready it' is usable: the caster may Standard-Move the stolen unit to base this turn — and at end of turn it still goes home to its OWNER's base", async () => {
     const game = await board().build();
     await game.p1.cast("ht", { targets: "victim" });
-    await game.settle();
+    await game.settle(); // the auto-begun Non-Combat Showdown (344.2) is handed back once …
+    await game.settle(); // … Focus passes through it and P1 conquers bf1
     await game.p1.move("victim", "base");
     expect(game.state("victim")).toMatchObject({ controller: P1, isExhausted: true, zone: "base" });
     expect(game.p1.units("base").sort()).toEqual(["mine", "victim"]);
@@ -171,7 +176,8 @@ describe("Hostile Takeover (sfd-202-221)", () => {
       .hand(P1, CARD, "ht")
       .build();
     await game.p1.cast("ht", { targets: "victim" });
-    await game.settle();
+    await game.settle(); // the auto-begun Non-Combat Showdown (344.2) is handed back once …
+    await game.settle(); // … Focus passes through it and P1 conquers bf1
     await game.p1.move("victim", "bf2");
     await game.settle({ policy: "first" });
     expect(game.zoneOf("victim")).toBe("trash");

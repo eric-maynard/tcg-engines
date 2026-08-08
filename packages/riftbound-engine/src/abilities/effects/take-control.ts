@@ -11,10 +11,11 @@ export function handle_takeControl(effect: ExecutableEffect, ctx: EffectContext,
   // source so state-based cleanup can drop them (and fall back to the
   // next-latest effect, else the owner) once the source leaves the board.
   // rule 190.3.a: a stolen unit "otherwise becomes present" at a battlefield for its new
-  // controller. Standing among its former allies it contests that battlefield and the
-  // Cleanup after this resolution begins the Combat (323.9 / 323.13 — shared arrival helper);
-  // alone there, the Cleanup's presence-conquer settles it (so Possession's follow-up recall
-  // leaves nothing behind).
+  // controller, contesting it exactly as a Move would. Standing among its former allies the
+  // Cleanup after this resolution begins a Combat (323.9 / 323.13 — shared arrival helper);
+  // alone there it is a Non-Combat Showdown (344.2 / 323.12) whose close establishes control
+  // = Conquer (348.2.a) — control is never flipped inline. A recall later in the same
+  // resolution (Possession) leaves nobody contesting, so the Cleanup just drops the status.
   const targets = getTargetIds(effect, ctx);
   const untilLeaves = effect.duration === "until-leaves";
   for (const targetId of targets) {

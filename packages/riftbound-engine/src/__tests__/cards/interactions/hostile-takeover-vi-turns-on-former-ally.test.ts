@@ -146,15 +146,17 @@ describe("Hostile Takeover × Vi, Peacekeeper — the stolen unit attacks her fo
 
   // ---- NO: Vi alone ---------------------------------------------------------------------------------
 
-  // Expected: with no opposing units only a Showdown is staged (323.8, not 323.9); at the Neutral Open
-  // cleanup a Non-Combat Showdown begins with P1 (who applied Contested) holding Focus (323.12, 344.2,
-  // 345) — P2 would get a window for Action/Reaction plays before P1 conquers. Actual: the engine
-  // establishes control for P1 immediately as HT resolves; no showdown is ever opened.
-  test.failing("BUG: NO — after HT resolves a Non-Combat Showdown should open at bfA with P1's Focus BEFORE control is established (323.12, 344.2, 345)", async () => {
+  // With no opposing units only a Showdown is staged (323.8, not 323.9); at the Neutral Open cleanup a
+  // Non-Combat Showdown begins with P1 (who applied Contested) holding Focus (323.12, 344.2, 345), so P2
+  // gets a window for Action / Reaction plays before P1 conquers (348.2.a). In that same Cleanup step 4
+  // (323.6 / 190.4.c) runs BEFORE the Showdown begins, and P2 — whose only unit at bfA has just become
+  // P1's — has no unit there and no Showdown ongoing yet, so P2's control lapses first: bfA is
+  // uncontrolled while the Showdown runs and P1 establishes control at its close.
+  test("NO — after HT resolves a Non-Combat Showdown opens at bfA with P1's Focus BEFORE control is established (323.12, 344.2, 345)", async () => {
     const game = await resolved({ brute: false });
     expect(game.decision()).toMatchObject({ context: "showdown", kind: "action", seat: P1 });
     expect(game.gameState.battlefields.bfA?.contested).toBe(true);
-    expect(game.gameState.battlefields.bfA?.controller).toBe(P2);
+    expect(game.gameState.battlefields.bfA?.controller ?? null).not.toBe(P1); // 323.6 already took it from P2
     expect(game.p1.points()).toBe(0);
     await game.p1.passFocus();
     await game.p2.passFocus();
@@ -165,7 +167,8 @@ describe("Hostile Takeover × Vi, Peacekeeper — the stolen unit attacks her fo
   test("NO: there is no combat and Vi's attack trigger never fires; once all is settled P1 has established control of bfA = Conquer, +1 (348.2.a — 'Otherwise, conquer.')", async () => {
     const game = await resolved({ brute: false });
     expect(game.chain()).toEqual([]); // no 'When I attack' item
-    await game.settle();
+    await game.settle(); // hands back the auto-begun Non-Combat Showdown (344.2) once …
+    await game.settle(); // … then passes Focus through it and conquers
     expect(game.state("vi")).toMatchObject({ combatRole: null, controller: P1, damage: 0, isReady: true, isStunned: false, owner: P2, zone: "battlefield-bfA" });
     expect(game.gameState.battlefields.bfA?.controller).toBe(P1);
     expect(game.gameState.battlefields.bfA?.contested).toBe(false);

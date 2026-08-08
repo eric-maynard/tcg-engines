@@ -190,14 +190,27 @@ describe("Control change at a shared battlefield — the stolen unit 'otherwise 
     expect(game.p1.points()).toBe(1);
   });
 
-  test("stealing the ONLY unit there is not a combat: the Cleanup hands the battlefield to the new controller (presence conquer), +1 point", async () => {
+  // rule 190.3.a — "Moves or OTHERWISE BECOMES PRESENT": a control change contests exactly like the
+  // Standard Move above, so unopposed it opens a Non-Combat Showdown (344.2 / 323.12 / 345) and only
+  // its close establishes control = Conquer (348.2.a). Control is never handed over inline. In that
+  // same Cleanup step 4 (323.6 / 190.4.c) runs first, and P2 — with no unit left at bf2 and no
+  // Showdown ongoing yet — loses control before the Showdown begins.
+  test("stealing the ONLY unit there is not a combat: the Cleanup opens a Non-Combat Showdown with P1's Focus, and only its close conquers bf2 for +1", async () => {
     const game = await scenario()
       .battlefield("bf2", { controller: P2 })
       .unit(P2, "bf2", { might: 5, name: "Big" }, "big")
       .hand(P1, STEAL, "steal")
       .build();
     await game.p1.cast("steal", { targets: "big" });
-    await game.settle();
+    await resolveChain(game);
+    expect(game.gameState.battlefields.bf2).toMatchObject({ contested: true, contestedBy: P1 });
+    expect(game.gameState.battlefields.bf2?.controller ?? null).not.toBe(P1);
+    expect(topShowdown(game)).toMatchObject({ active: true, autoBegun: true, battlefieldId: "bf2", focusPlayer: P1, isCombatShowdown: false });
+    expect(game.state("big").combatRole).toBeFalsy();
+    expect(game.p1.points()).toBe(0);
+
+    await game.p1.passFocus();
+    await game.p2.passFocus();
     expect(game.gameState.battlefields.bf2).toMatchObject({ contested: false, controller: P1 });
     expect(game.p1.points()).toBe(1);
     expect(game.gameState.interaction?.showdownStack ?? []).toHaveLength(0);
