@@ -24,6 +24,16 @@ import {
   hasPlayFromTrashGrant,
 } from "./cost";
 import { legacyParamsFromSelection, withCostsParam } from "./cost-model";
+import { reactionWindowOpen } from "./reaction-window";
+
+/**
+ * rule 813.1 (unl-085-219 Sumpworks Map) — the gear prints [Reaction] (which
+ * `normalizeSpellTiming` files as its timing class) or carries it as a keyword.
+ */
+function gearHasReaction(cardId: string): boolean {
+  const registry = getGlobalCardRegistry();
+  return registry.getSpellTiming(cardId) === "reaction" || registry.hasKeyword(cardId, "Reaction");
+}
 
 type Defs = GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>;
 
@@ -104,6 +114,13 @@ export const playGear: Defs["playGear"] = {
     );
     if (quickDraw) {
       if (!isLegalTiming("reaction", getTurnState(interaction))) {
+        return false;
+      }
+    } else if (gearHasReaction(context.params.cardId as string)) {
+      // rule 813.1.c.1 (unl-085-219) — printed [Reaction] gear may be played in
+      // any window where its controller may act (priority on a chain, Focus in
+      // a showdown), not only in its own Neutral Open Main Phase.
+      if (!reactionWindowOpen(state, context.params.playerId as string)) {
         return false;
       }
     } else {
@@ -209,7 +226,13 @@ export const playGear: Defs["playGear"] = {
       }
       if (
         !openTurn &&
-        !hasKeyword(cardId as string, "Quick-Draw", (id) => context.cards.getCardMeta(id))
+        !hasKeyword(cardId as string, "Quick-Draw", (id) => context.cards.getCardMeta(id)) &&
+        // rule 813.1.c.1 (unl-085-219) — printed [Reaction] gear is offered
+        // wherever its controller may act.
+        !(
+          gearHasReaction(cardId as string) &&
+          reactionWindowOpen(state, context.playerId as string)
+        )
       ) {
         continue;
       }

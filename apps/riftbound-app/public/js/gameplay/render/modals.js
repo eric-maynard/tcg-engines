@@ -187,8 +187,24 @@ function renderPendingChoiceModal() {
   overlay.classList.add("visible");
 }
 
-/** Build a human label for one play-variant of a card. */
+/**
+ * Build a human label for one play-variant of a card. `describePlayVariantBase`
+ * describes the COST; the wrapper adds the destination, which for a card whose
+ * additional cost is mandatory (unl-166-219 Stalking Wolf) is the only thing
+ * telling two otherwise identical paid variants apart.
+ */
 function describePlayVariant(m, card) {
+  const out = describePlayVariantBase(m, card);
+  const loc = m.params?.location;
+  if (!loc || !m.params?.paidAdditionalCost) {
+    return out;
+  }
+  const where =
+    loc === "base" ? "to base" : `to ${getBattlefieldName(String(loc).replace(/^battlefield-/, ""))}`;
+  return { label: `${out.label} ${where}`, detail: `${out.detail} — played ${where}` };
+}
+
+function describePlayVariantBase(m, card) {
   const baseCost = card?.energyCost ?? 0;
   // Rule ogn-193-298: location-only variants (base vs open battlefield) must
   // name their destination or they render as identical buttons.

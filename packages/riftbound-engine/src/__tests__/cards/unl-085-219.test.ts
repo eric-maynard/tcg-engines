@@ -19,6 +19,25 @@ const CARD = "unl-085-219";
 const DENY_POINTS = { effect: { restriction: "opponents can't gain points.", type: "restriction" }, type: "static" } as const;
 
 describe("Sumpworks Map (unl-085-219)", () => {
+  test("[Reaction] (813.1.c.1): playable while the opponent holds a showdown open, but not in their Neutral Open State (316.5.b)", async () => {
+    const game = await scenario()
+      .active(P2)
+      .resources(P1, { energy: 4, power: { mind: 1 } })
+      .battlefield("bf1", { controller: P1 })
+      .unit(P1, "bf1", { might: 4, name: "Guard" }, "guard")
+      .unit(P2, "base", { might: 2, name: "Raider" }, "raider")
+      .hand(P1, CARD, "map")
+      .build();
+    expect(game.turnPlayer()).toBe(P2);
+    // Neutral Open on the opponent's turn: Reaction is no permission to act.
+    expect(game.p1.can("play", "map")).toBe(false);
+    await game.p2.move("raider", "bf1");
+    await game.p2.passFocus();
+    expect(game.p1.can("play", "map")).toBe(true);
+    await game.p1.play("map");
+    expect(game.zoneOf("map")).toBe("base");
+  });
+
   test("an opponent's Conquer is a Score → the Map's controller draws 1", async () => {
     const game = await scenario()
       .active(P2)

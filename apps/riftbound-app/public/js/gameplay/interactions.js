@@ -55,10 +55,13 @@ function onCardClick(cardId) {
     // committing to the base cost.
     // rule 356.2.b — likewise hold targeting open while an optional additional
     // cost (discard / sacrifice) can still be elected for this target set.
+    // rule 820.2.a (sfd-040-221 Thwonk!) — a Repeat may pick a DIFFERENT target,
+    // so the engine enumerates {targets:[A,B],repeatCount:n} with no base-cost
+    // twin. Hold targeting open on the strength of the paid variants alone;
+    // requiring a base-cost `move` here made that target set unreachable.
     if (
-      move &&
-      (repeatVariantsFor(interaction.pendingMoves, next).length > 0 ||
-        additionalCostVariantsFor(interaction.pendingMoves, next).length > 0)
+      repeatVariantsFor(interaction.pendingMoves, next).length > 0 ||
+      additionalCostVariantsFor(interaction.pendingMoves, next).length > 0
     ) {
       interaction.chosenTargets = next;
       interaction.validTargets = remainingTargetIds(
