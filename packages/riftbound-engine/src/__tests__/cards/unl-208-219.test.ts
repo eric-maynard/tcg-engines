@@ -44,7 +44,7 @@ describe("Black Flame Altar (unl-208-219)", () => {
   // BUG — expected: the static grants Shield only to units here WITH [Temporary] (a keyword filter on the target, cf.
   // Petal Pixie's `filter: { keyword: "Temporary" }`). Actual parse: `target: { type: "unit", location: "here" }` —
   // the Temporary restriction was dropped, so every unit on the Altar is granted Shield.
-  test.failing("BUG: registry payload should be a static Shield grant restricted to units here WITH [Temporary] (filter missing)", async () => {
+  test("registry payload should be a static Shield grant restricted to units here WITH [Temporary] (filter missing)", async () => {
     const def = (await loadDefaultCardPool()).get(CARD);
     expect(def).toMatchObject({ cardType: "battlefield", name: "Black Flame Altar" });
     expect(def?.abilities).toHaveLength(1);
@@ -90,7 +90,7 @@ describe("Black Flame Altar (unl-208-219)", () => {
 
   // BUG — expected: a unit WITHOUT [Temporary] gets no Shield from the Altar, so a plain 3 defending against a 3
   // trades (both to trash). Actual: the unfiltered grant makes it a 4-Might defender that survives.
-  test.failing("BUG: negative space — a NON-Temporary 3-Might unit on the Altar defends at 3: into a 3-Might attacker both die", async () => {
+  test("negative space — a NON-Temporary 3-Might unit on the Altar defends at 3: into a 3-Might attacker both die", async () => {
     const game = await siege({ might: 3, name: "Regular" }, 3).build();
     expect(game.state("def").keywords).not.toContain("Shield");
     await game.p2.move("atk", "altar");

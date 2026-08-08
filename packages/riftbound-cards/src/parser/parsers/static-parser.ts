@@ -319,6 +319,18 @@ function parseGrantTarget(text: string): Target {
     target.type = "gear";
   }
 
+  // rule 816.3 (rule-id: unl-208-219) — "units here with [Temporary]" gates the
+  // aura on a checkable keyword; without the clause every unit here is granted.
+  if (!foundTribe) {
+    const withKeyword = normalized.match(/\bwith\s+\[(\w+(?:-\w+)?)\]/);
+    if (withKeyword) {
+      const kw = withKeyword[1];
+      target.filter = { keyword: kw.charAt(0).toUpperCase() + kw.slice(1) } as unknown as {
+        tag: string;
+      };
+    }
+  }
+
   return target as Target;
 }
 
