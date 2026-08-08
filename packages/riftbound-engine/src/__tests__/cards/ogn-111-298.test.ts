@@ -103,6 +103,26 @@ describe("Heimerdinger, Inventor (ogn-111-298)", () => {
     expect(game.p1.can("activate", "seal")).toBe(true);
   });
 
+  // rule 740.1.a — "friendly" means same CONTROLLER. A permanent P1 owns but
+  // P2 controls is not friendly to P1 (and vice versa).
+  test("inheritance follows control, not ownership: a stolen Seal stops feeding its owner and starts feeding its controller", async () => {
+    const stolenAway = await scenario()
+      .resources(P1, { energy: 2 })
+      .unit(P1, "base", CARD, "heimer")
+      .card("seal", { controller: P2, def: SEAL_OF_INSIGHT, owner: P1, zone: "base" })
+      .build();
+    expect(heimerSources(stolenAway)).not.toContain("seal");
+    const r = await stolenAway.p1.try((p) => p.activate("heimer", 0, { source: "seal" }));
+    expect(r.ok).toBe(false);
+
+    const stolenTo = await scenario()
+      .resources(P1, { energy: 2 })
+      .unit(P1, "base", CARD, "heimer")
+      .card("seal", { controller: P1, def: SEAL_OF_INSIGHT, owner: P2, zone: "base" })
+      .build();
+    expect(heimerSources(stolenTo)).toContain("seal");
+  });
+
   // rule 108.3 — the champion zone is not the board; an unplayed Chosen
   // Champion is not a friendly unit in play, so Heimerdinger inherits nothing
   // from it.

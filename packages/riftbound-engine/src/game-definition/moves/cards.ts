@@ -7,6 +7,7 @@
 
 import type { GameMoveDefinitions } from "@tcg/core";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../types";
+import { withPostMoveCleanup } from "../../cleanup/post-move-cleanup";
 import { hideCard, revealHidden } from "./play/hide";
 import { playFromChampionZone } from "./play/play-champion";
 import { playGear } from "./play/play-gear";
@@ -27,6 +28,10 @@ export const cardPlayMoves: Partial<
   playGear,
   playSpell,
   hideCard,
-  revealHidden,
+  // rule 319.6 / 319.8 — a Cleanup happens once objects enter the board and
+  // once a play completes. Revealing a facedown gear puts it straight at the
+  // battlefield without a chain resolution, so nothing else would run state
+  // maintenance and the loose gear would linger there (rule 518 recall).
+  ...withPostMoveCleanup({ revealHidden }),
   playFromChampionZone,
 };

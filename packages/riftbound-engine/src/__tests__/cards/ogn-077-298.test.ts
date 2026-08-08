@@ -106,6 +106,21 @@ describe("Zhonya's Hourglass (ogn-077-298)", () => {
     expect(game.zoneOf("ally")).toBe("trash");
   });
 
+  // rule 319.6 / 319.8 + 518: revealing the gear at a battlefield completes a
+  // play, so the following Cleanup recalls the loose gear to base immediately —
+  // not only once some later move happens to run state maintenance.
+  test("a gear revealed from Hidden is recalled to base by the Cleanup that follows the reveal", async () => {
+    const game = await scenario()
+      .turn(3)
+      .battlefield("bf1", { controller: P1 })
+      .unit(P1, "bf1", { might: 2 }, "ally")
+      .facedown(P1, "bf1", CARD, "zh")
+      .build();
+    await game.p1.reveal("zh");
+    await game.settle();
+    expect(game.zoneOf("zh")).toBe("base");
+  });
+
   test("enemy units are not protected: an enemy unit taking lethal damage just dies and the Hourglass stays", async () => {
     const game = await board().build();
     await game.p1.cast("bolt1", { targets: "foe" });

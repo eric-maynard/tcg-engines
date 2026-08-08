@@ -669,7 +669,12 @@ describe("811.1.d.1.a / 152.2 / 457.1 / 458.1 / 323.7: a hidden gear played from
     expect(game.p1.trash()).not.toContain("G");
   });
 
-  test("immediately after being played from facedown the gear is located AT bf1, not placed in base directly (811.1.d.1.a, 152.2)", async () => {
+  // rule 319.6 / 319.8: a Cleanup happens as soon as objects enter the Board and
+  // the play completes, so the recall (457.1 / 518) is already done when the
+  // reveal move returns — the gear is never left sitting at bf1 for later moves
+  // to find. It still ENTERS at bf1 (811.1.d.1.a): it leaves facedown-bf1 and is
+  // recalled from there, rather than being placed into base directly.
+  test("immediately after being played from facedown the gear has already been recalled from bf1 to base by that Cleanup (811.1.d.1.a, 152.2, 319.6)", async () => {
     const game = await scenario()
       .turn(3)
       .active(P2)
@@ -681,7 +686,9 @@ describe("811.1.d.1.a / 152.2 / 457.1 / 458.1 / 323.7: a hidden gear played from
     await game.p2.cast("p2spell");
     await game.p2.passPriority();
     await game.p1.reveal("G");
-    expect(game.zoneOf("G")).toBe("battlefield-bf1");
+    expect(game.p1.facedown("bf1")).toEqual([]);
+    expect(game.zoneOf("G")).toBe("base");
+    expect(game.p1.trash()).not.toContain("G");
   });
 });
 

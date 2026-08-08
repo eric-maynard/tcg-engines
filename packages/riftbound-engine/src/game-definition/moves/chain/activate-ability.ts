@@ -507,24 +507,31 @@ export function collectFriendlyBoardCards(
     zones: {
       getCardsInZone: (zoneId: CoreZoneId, playerId?: CorePlayerId) => CoreCardId[];
     };
-    cards: { getCardOwner: (cardId: CoreCardId) => string | undefined };
+    cards: {
+      getCardOwner: (cardId: CoreCardId) => string | undefined;
+      getCardController?: (cardId: CoreCardId) => string | undefined;
+    };
     battlefields: Record<string, unknown>;
   },
 ): string[] {
   const collected: string[] = [];
+  // rule 740.1.a — "friendly" is same CONTROLLER, not same owner. Zone queries
+  // filter by owner, so scan each zone unfiltered and key on current control:
+  // a stolen permanent is friendly to its new controller only.
   const push = (cards: CoreCardId[]) => {
     for (const cardId of cards) {
-      if (ctx.cards.getCardOwner(cardId) === playerId) {
+      const controller = ctx.cards.getCardController?.(cardId) ?? ctx.cards.getCardOwner(cardId);
+      if (controller === playerId) {
         collected.push(cardId as string);
       }
     }
   };
-  push(ctx.zones.getCardsInZone("base" as CoreZoneId, playerId as CorePlayerId));
-  push(ctx.zones.getCardsInZone("legendZone" as CoreZoneId, playerId as CorePlayerId));
+  push(ctx.zones.getCardsInZone("base" as CoreZoneId));
+  push(ctx.zones.getCardsInZone("legendZone" as CoreZoneId));
   // rule 108.3 — the champion zone is not the board: a champion waiting there
   // has not been played, so its abilities are not on any friendly permanent.
   for (const bfId of Object.keys(ctx.battlefields)) {
-    push(ctx.zones.getCardsInZone(`battlefield-${bfId}` as CoreZoneId, playerId as CorePlayerId));
+    push(ctx.zones.getCardsInZone(`battlefield-${bfId}` as CoreZoneId));
   }
   return collected;
 }
