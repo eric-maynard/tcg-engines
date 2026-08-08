@@ -2,6 +2,7 @@
 import type { CardId as CoreCardId } from "@tcg/core";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
+import { consumeEntersReadyReplacement } from "../../game-definition/moves/play/cost";
 import { arriveByEffect } from "./move";
 import { buildConsumedKey, findAllReplacements } from "../replacement-effects";
 import { type EffectHelpers, resolveAmount, tokenEntersReadyFromStaticGrant } from "./_helpers";
@@ -292,6 +293,18 @@ export function handle_createToken(effect: ExecutableEffect, ctx: EffectContext,
         name: tokenDef.name,
         tags: tokenTags(tokenDef),
       });
+    }
+    // rule 350.2 / 185.2.a (unl-052-219) — playing a unit token IS "you play a
+    // unit", so a one-shot "the next unit you play enters ready and [Buff] it"
+    // replacement is consumed by the token exactly like a play from hand.
+    if (tokenDef.type !== "gear") {
+      const replacedReady = consumeEntersReadyReplacement(ctx.draft, ownerId, {
+        cardId: tokenId,
+        ctx,
+      });
+      if (replacedReady) {
+        ctx.counters.setFlag(tokenId as CoreCardId, "exhausted", false);
+      }
     }
     // Rule unl-058-219: creating a unit token is "playing a token unit" —
     // fire after registry registration so trigger effects can resolve it.
