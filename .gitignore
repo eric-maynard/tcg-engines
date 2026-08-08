@@ -71,3 +71,8 @@ do_not_commit/
 .claude/fix-queue/metrics.jsonl
 .claude/fix-queue/.land.lock
 .claude/fix-queue/g7-*.txt
+
+# Local secrets (Anthropic API key for the vs-Claude opponent)
+.env
+**/.env
+apps/riftbound-app/.env

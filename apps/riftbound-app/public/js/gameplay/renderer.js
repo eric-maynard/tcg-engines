@@ -26,6 +26,8 @@ function render() {
   renderZones();
   renderBattlefields();
   renderPlayerSwitcher();
+  // vs-Claude: "thinking…" pill in the opponent strip; hides the seat switcher.
+  if (typeof renderAiThinking === "function") renderAiThinking();
   renderLog();
   renderActions();
   renderChainOverlay();

@@ -14,10 +14,16 @@ import { gameLogger } from "./log";
 import { createGameFromDecks } from "./pregame";
 import { buildAvailableMoves, buildGameSnapshot, buildHistoryLog } from "./snapshot";
 import { type DeckConfig, type RouteCtx, type RouteResult, gameSessions } from "./state";
+import { aiStatus, attachOpponent, parseOpponentSpec, runOpponent } from "./ai-opponent";
 import { applySessionMove } from "./turn";
 
 export async function handleGameRoutes(req: Request, url: URL, _ctx: RouteCtx): RouteResult {
   const { pathname } = url;
+
+  // GET /api/ai/status — can a Claude seat be offered? (env key present, model list; never key material)
+  if (pathname === "/api/ai/status" && req.method === "GET") {
+    return json(aiStatus());
+  }
 
   // POST /api/game/create — create a game from deck configs
   if (pathname === "/api/game/create" && req.method === "POST") {
@@ -26,10 +32,19 @@ export async function handleGameRoutes(req: Request, url: URL, _ctx: RouteCtx): 
       deck1?: DeckConfig;
       deck2?: DeckConfig;
       sandbox?: boolean;
+      /** {kind:"goldfish"} | {kind:"claude", model, apiKey?} — the key is held in memory only. */
+      opponent?: unknown;
     };
 
     if (body.sandbox && !SANDBOX_ENABLED) {
       return json({ error: "Sandbox mode is disabled" }, 403);
+    }
+    const opponent = parseOpponentSpec(body.opponent);
+    if (!opponent.ok) {
+      return json({ error: opponent.error }, opponent.status);
+    }
+    if (opponent.spec.kind === "claude" && !(body.sandbox && SANDBOX_ENABLED)) {
+      return json({ error: "A Claude opponent needs a sandbox game" }, 400);
     }
 
     const deck1 = body.deck1 ?? buildDefaultDeck();
@@ -48,8 +63,10 @@ export async function handleGameRoutes(req: Request, url: URL, _ctx: RouteCtx): 
     }
     const gameId = crypto.randomUUID();
     const session = createGameFromDecks(deck1, deck2, body.seed, { gameMode: "duel", sandbox: (body.sandbox ?? false) && SANDBOX_ENABLED });
+    attachOpponent(session, opponent.spec, { gameId });
     gameSessions.set(gameId, session);
     gameLogger.logGameCreated(gameId, session.players, "duel", body.seed ?? "random", {
+      opponent: opponent.spec.kind === "claude" ? `claude:${opponent.spec.model}` : "goldfish",
       sandbox: body.sandbox ?? false,
       source: "api",
     });
@@ -145,7 +162,11 @@ export async function handleGameRoutes(req: Request, url: URL, _ctx: RouteCtx): 
         } catch { /* Disconnected */ }
       }
 
-      return json({ phaseChange, state: buildGameSnapshot(session, body.playerId), success: true });
+      const response = json({ phaseChange, state: buildGameSnapshot(session, body.playerId), success: true });
+      // A Claude seat answers REST-driven games too (the Goldfish historically
+      // does not act on this test surface — callers drive both seats).
+      runOpponent(session, { gameId, goldfish: false, humanSeat: body.playerId });
+      return response;
     }
 
     const moveError = result.error;

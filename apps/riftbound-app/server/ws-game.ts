@@ -11,7 +11,8 @@ import { gameLogger } from "./log";
 import { buildPregamePayload, handlePregameMessage } from "./pregame";
 import { buildAvailableMoves, buildGameSnapshot } from "./snapshot";
 import { type RouteCtx, type RouteResult, type WsData, broadcast, gameSessions } from "./state";
-import { applySessionMove, sandboxAutoPlay } from "./turn";
+import { runOpponent, scheduleOpponent } from "./ai-opponent";
+import { applySessionMove } from "./turn";
 
 // GET /ws/game/:id?player=X — upgrade to game WebSocket
 export async function handleGameUpgrade(req: Request, url: URL, ctx: RouteCtx): RouteResult {
@@ -159,13 +160,10 @@ export function gameWsMessage(ws: ServerWebSocket<WsData>, msg: Record<string, u
       } catch { /* Disconnected */ }
     }
 
-    // Sandbox auto-play: handle chain priority, showdown focus, and turn for Goldfish
+    // Sandbox opponent seat: the Goldfish policy or the Claude driver takes
+    // over whenever the cursor (turn / priority / focus / prompt) is theirs.
     if (session.sandbox) {
-      const humanPlayer = playerId;
-      const goldfish = session.players.find((p) => p !== humanPlayer);
-      if (goldfish) {
-        sandboxAutoPlay(session, goldfish);
-      }
+      runOpponent(session, { gameId, humanSeat: playerId });
     }
   }
 
@@ -218,6 +216,9 @@ export function gameWsMessage(ws: ServerWebSocket<WsData>, msg: Record<string, u
     // Detect and clear in-progress UI state on.
     session.log.push(makeLogEntry("Rewound their last action.", { rewindable: false }));
     session.seq++;
+    // A rewind can hand the cursor back to the AI seat; re-arm it after a
+    // debounce so several rewind clicks land first.
+    scheduleOpponent(session, { gameId, humanSeat: playerId });
     // Broadcast updated state to all clients
     for (const [, client] of session.clients) {
       const clientMoves = buildAvailableMoves(session, client.playerId);
@@ -242,6 +243,7 @@ export function gameWsMessage(ws: ServerWebSocket<WsData>, msg: Record<string, u
     }
     session.log.push(makeLogEntry("Move redone."));
     session.seq++;
+    scheduleOpponent(session, { gameId, humanSeat: playerId });
     for (const [, client] of session.clients) {
       const clientMoves = buildAvailableMoves(session, client.playerId);
       try {

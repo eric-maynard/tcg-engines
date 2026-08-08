@@ -11,10 +11,12 @@ function renderZones() {
     playerHand.map(c => renderCardElement(c, false, "hand")).join("") ||
     "";
 
-  // Opponent hand — face up in goldfish mode so player can control both sides
+  // Opponent hand — face up in goldfish mode so player can control both sides;
+  // a Claude seat is a real opponent (the server redacts its hand too).
   const opponentHand = zoneForPlayer("hand", opponent);
+  const showOppHand = isSandboxGame && !(typeof isVsAiGame === "function" && isVsAiGame());
   document.getElementById("opponent-hand").innerHTML =
-    opponentHand.map(c => isSandboxGame ? renderCardElement(c, false, "hand") : renderCardElement({}, true)).join("") ||
+    opponentHand.map(c => showOppHand ? renderCardElement(c, false, "hand") : renderCardElement({}, true)).join("") ||
     "";
 
   // Player base (drop target for hand cards, draggable for movement)
@@ -101,7 +103,7 @@ function renderBattlefields() {
     // sees the face (private info they already know); the opponent sees a back.
     const fdZoneId = `facedown-${bfId}`;
     const facedownAtBf = zones[fdZoneId] || [];
-    const renderFacedown = (c) => (c.owner === viewingPlayer || isSandboxGame)
+    const renderFacedown = (c) => (c.owner === viewingPlayer || (isSandboxGame && !(typeof isVsAiGame === "function" && isVsAiGame())))
       ? `<div class="bf-facedown" title="Hidden (facedown)">${renderCardElement(c, false, fdZoneId)}</div>`
       : renderCardElement({}, true);
     const opponentFacedownHtml = facedownAtBf.filter(c => c.owner === opponent).map(renderFacedown).join("");

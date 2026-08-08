@@ -12,6 +12,7 @@
     "@tcg/core": "workspace:*",
     "@tcg/riftbound": "workspace:*",
     "@tcg/riftbound-cards": "workspace:*",
+    "@tcg/riftbound-mcp": "workspace:*",
     "@tcg/riftbound-types": "workspace:*",
     "better-sqlite3": "^12.8.0",
     "websockify": "^0.7.1"

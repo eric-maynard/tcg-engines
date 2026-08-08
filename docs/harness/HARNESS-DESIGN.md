@@ -342,6 +342,13 @@ Errors map 1:1 to `HarnessError.code`. Per-move JSON Schemas generated from `Rif
 *resource* for typed clients, guarded by the contract test from `.ai_memory/riftbound-mcp-plan.md`
 (every enumerable move id must map to an `ActionOption.verb`).
 
+**AI seat in the web app.** `apps/riftbound-app/server/ai-opponent.ts` ("VS Claude") is a consumer of exactly this
+surface inside the Bun server: each step it renders `observe(engine, seat)` through the MCP `renderSeatView` text
+builder (so the model sees only what `view(seat)` shows — opponent hand as a count, facedown as a count), offers the
+seat's `deriveActionDecision` options as a numbered menu (or `deriveFromPendingChoice` as an `answer` prompt),
+validates the tool-use reply against the freshly re-derived list, and applies it with the TurnDriver's
+`applyMove` via the app's `applySessionMove` — the same path a human WebSocket move takes.
+
 ---
 
 ## 10. Engine prerequisites

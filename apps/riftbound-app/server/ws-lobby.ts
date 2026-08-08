@@ -151,6 +151,12 @@ export function lobbyWsMessage(ws: ServerWebSocket<WsData>, msg: Record<string, 
       },
       sandbox: lobby.sandbox,
     });
+    // Hand the solo opponent driver (Claude seat) over to the game session.
+    if (lobby.opponent) {
+      session.opponent = lobby.opponent;
+      (lobby.opponent as { gameId?: string }).gameId = gameId;
+      lobby.opponent = undefined;
+    }
     gameSessions.set(gameId, session);
     gameLogger.logGameCreated(gameId, session.players, lobby.gameMode, "random", {
       firstPlayer: chosen,
@@ -158,6 +164,7 @@ export function lobbyWsMessage(ws: ServerWebSocket<WsData>, msg: Record<string, 
       guestDeckId: lobby.guest?.deckId,
       hostDeckId: lobby.host.deckId,
       lobbyCode: lobby.code,
+      opponent: session.opponent ? `claude:${session.opponent.info.model ?? "?"}` : "goldfish",
       sandbox: lobby.sandbox,
       source: "lobby",
     });

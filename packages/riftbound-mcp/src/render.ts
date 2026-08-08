@@ -216,19 +216,65 @@ export interface DescribeOutput {
   json: Record<string, unknown>;
 }
 
+/**
+ * Inputs for {@link renderSeatView}: everything is derived from ONE seat's
+ * (already redacted) Observation, so any consumer holding a harness engine —
+ * the MCP server, the web app's AI seat — renders the same per-seat text
+ * without leaking what `observe(engine, seat, …)` hid.
+ */
+export interface SeatViewInput {
+  obs: Observation;
+  seat: Seat;
+  seats: readonly Seat[];
+  /** First line ("Game g1 (goldfish) seq 12 — …"); a neutral header is used when omitted. */
+  header?: string;
+  /** Recent log lines (already rendered). */
+  log?: readonly string[];
+  /** The seat's own decision when it differs from the cursor decision. */
+  myDecision?: Decision | null;
+  /** Extra text appended to each of the seat's OWN hand cards (e.g. rules text). */
+  handNote?: (card: CardState) => string | undefined;
+  /** Extra text appended to each visible board unit / gear. */
+  boardNote?: (card: CardState) => string | undefined;
+  detail?: Detail;
+}
+
 export function describeState(m: ManagedGame, seat: Seat, detail: Detail): DescribeOutput {
   const g = m.game;
   const obs: Observation = g.backend.view(seat);
-  const seats = g.seats();
+  const header = `Game ${m.id} (${m.mode}) seq ${obs.seq} — turn ${obs.turn.number}, ${obs.turn.activePlayer}'s ${obs.turn.phase} phase — status ${obs.status}${obs.winner ? ` (winner ${obs.winner})` : ""}. You are ${seat}.`;
+  const out = renderSeatView({
+    detail,
+    header,
+    log: recentLog(m, 6),
+    myDecision: g.backend.decisionFor(seat),
+    obs,
+    seat,
+    seats: g.seats(),
+  });
+  return out;
+}
+
+/** Per-seat board/hand/resources text + JSON from a redacted Observation. */
+export function renderSeatView(input: SeatViewInput): DescribeOutput {
+  const { obs, seat, seats } = input;
+  const detail = input.detail ?? "summary";
   const others = seats.filter((s) => s !== seat);
   const st = obs.state;
   const showdownStack = st.interaction?.showdownStack ?? [];
   const showdown = showdownStack[showdownStack.length - 1];
   const you = obs.resources[seat] ?? { energy: 0, power: {} };
+  const withNote = (c: CardState, note?: (card: CardState) => string | undefined): string => {
+    const line = cardLine(compactCard(c, { owner: true }));
+    const extra = note?.(c);
+    return extra ? `${line} — ${extra}` : line;
+  };
 
   const handViews = ownedBy(obs.zones.hand ?? [], seat);
-  const hand = visible(handViews).map((c) => compactCard(c));
+  const handStates = visible(handViews);
+  const hand = handStates.map((c) => compactCard(c));
   const base = visible(ownedBy(obs.zones.base ?? [], seat)).map((c) => compactCard(c));
+  const baseStates = visible(ownedBy(obs.zones.base ?? [], seat));
   const runes = visible(ownedBy(obs.zones.runePool ?? [], seat));
   const legend = visible(ownedBy(obs.zones.legendZone ?? [], seat))[0];
   const champion = visible(ownedBy(obs.zones.championZone ?? [], seat))[0];
@@ -237,6 +283,7 @@ export function describeState(m: ManagedGame, seat: Seat, detail: Detail): Descr
     const oRunes = visible(ownedBy(obs.zones.runePool ?? [], o));
     return {
       base: visible(ownedBy(obs.zones.base ?? [], o)).map((c) => compactCard(c)),
+      baseStates: visible(ownedBy(obs.zones.base ?? [], o)),
       champion: visible(ownedBy(obs.zones.championZone ?? [], o))[0]?.name,
       deckCount: ownedBy(obs.zones.mainDeck ?? [], o).length,
       handCount: ownedBy(obs.zones.hand ?? [], o).length,
@@ -256,6 +303,7 @@ export function describeState(m: ManagedGame, seat: Seat, detail: Detail): Descr
     facedown: bf.facedownCount,
     id: bf.id,
     name: bf.name,
+    unitStates: visible(bf.units),
     units: visible(bf.units).map((c) => compactCard(c, { owner: true })),
   }));
 
@@ -275,12 +323,13 @@ export function describeState(m: ManagedGame, seat: Seat, detail: Detail): Descr
         type: st.pendingChoice.type,
       }
     : null;
-  const log = recentLog(m, 6);
-  const myDecision = g.backend.decisionFor(seat);
+  const log = input.log ?? [];
+  const myDecision = input.myDecision ?? null;
 
   const lines: string[] = [];
   lines.push(
-    `Game ${m.id} (${m.mode}) seq ${obs.seq} — turn ${obs.turn.number}, ${obs.turn.activePlayer}'s ${obs.turn.phase} phase — status ${obs.status}${obs.winner ? ` (winner ${obs.winner})` : ""}. You are ${seat}.`,
+    input.header ??
+      `Turn ${obs.turn.number}, ${obs.turn.activePlayer}'s ${obs.turn.phase} phase — status ${obs.status}${obs.winner ? ` (winner ${obs.winner})` : ""}. You are ${seat}.`,
   );
   lines.push(
     `Points (to ${st.victoryScore}): ${seats.map((s) => `${s} ${obs.points[s] ?? 0}`).join(", ")}`,
@@ -300,17 +349,17 @@ export function describeState(m: ManagedGame, seat: Seat, detail: Detail): Descr
   }
   lines.push(`Battlefields:`);
   for (const bf of battlefields) {
-    const mine = bf.units.filter((u) => u.owner === seat).map(cardLine);
-    const theirs = bf.units.filter((u) => u.owner !== seat).map(cardLine);
+    const mine = bf.unitStates.filter((u) => u.owner === seat).map((u) => withNote(u, input.boardNote));
+    const theirs = bf.unitStates.filter((u) => u.owner !== seat).map((u) => withNote(u, input.boardNote));
     lines.push(
       `  ${bf.name} [${bf.id}] ctrl=${bf.controller ?? "none"}${bf.contested ? ` CONTESTED by ${bf.contestedBy}` : ""}${bf.facedown ? ` facedown=${bf.facedown}` : ""} — yours: ${mine.join("; ") || "-"} | theirs: ${theirs.join("; ") || "-"}`,
     );
   }
-  lines.push(`Your base: ${base.map(cardLine).join("; ") || "-"}`);
+  lines.push(`Your base: ${baseStates.map((c) => withNote(c, input.boardNote)).join("; ") || "-"}`);
   for (const o of opponents) {
-    lines.push(`${o.seat} base: ${o.base.map(cardLine).join("; ") || "-"}`);
+    lines.push(`${o.seat} base: ${o.baseStates.map((c) => withNote(c, input.boardNote)).join("; ") || "-"}`);
   }
-  lines.push(`Your hand (${handViews.length}): ${hand.map(cardLine).join("; ") || "-"}`);
+  lines.push(`Your hand (${handViews.length}): ${handStates.map((c) => withNote(c, input.handNote)).join("; ") || "-"}`);
   lines.push(
     `Chain: ${chain.length ? chain.map((c) => `${c.card} (${c.type}${c.triggered ? ", triggered" : ""}, ${c.controller})`).join(" → ") : "empty"}${st.interaction?.chain?.active ? ` — priority ${st.interaction.chain.activePlayer}` : ""}`,
   );
@@ -333,11 +382,11 @@ export function describeState(m: ManagedGame, seat: Seat, detail: Detail): Descr
   }
 
   const json: Record<string, unknown> = {
-    battlefields,
+    battlefields: battlefields.map(({ unitStates: _u, ...bf }) => bf),
     chain,
     decision: slimDecisionSummary(obs.decision),
-    log,
-    opponents,
+    log: [...log],
+    opponents: opponents.map(({ baseStates: _b, ...o }) => o),
     pendingChoice: pending,
     points: obs.points,
     showdown: showdown?.active

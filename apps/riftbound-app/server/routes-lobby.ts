@@ -3,6 +3,7 @@
  */
 
 import { getUserById } from "../src/db/user-repo";
+import { createOpponent, parseOpponentSpec } from "./ai-opponent";
 import { SANDBOX_ENABLED } from "./config";
 import { json } from "./http";
 import { getUserIdFromRequest } from "./routes-auth";
@@ -13,16 +14,24 @@ export async function handleLobbyRoutes(req: Request, url: URL, _ctx: RouteCtx):
 
   // POST /api/lobby/create — host creates a lobby
   if (pathname === "/api/lobby/create" && req.method === "POST") {
-    const body = (await req.json().catch(() => ({}))) as { name?: string; sandbox?: boolean };
+    const body = (await req.json().catch(() => ({}))) as { name?: string; sandbox?: boolean; opponent?: unknown };
 
     if (body.sandbox && !SANDBOX_ENABLED) {
       return json({ error: "Sandbox mode is disabled" }, 403);
     }
 
     const isSandbox = body.sandbox === true && SANDBOX_ENABLED;
+    // Solo opponent: Goldfish (default) or a Claude seat. A request-supplied
+    // API key stays inside the driver instance in memory; nothing here logs,
+    // persists or echoes it.
+    const parsed = isSandbox ? parseOpponentSpec(body.opponent) : ({ ok: true, spec: { kind: "goldfish" } } as const);
+    if (!parsed.ok) {
+      return json({ error: parsed.error }, parsed.status);
+    }
+    const opponent = createOpponent(parsed.spec);
     const lobbyId = crypto.randomUUID();
     const code = generateLobbyCode();
-    console.log(`[Lobby] create id=${lobbyId.slice(0,8)} sandbox=${isSandbox}`);
+    console.log(`[Lobby] create id=${lobbyId.slice(0,8)} sandbox=${isSandbox} opponent=${opponent ? `claude:${opponent.info.model}` : "goldfish"}`);
     const lobby: Lobby = {
       code,
       coinFlip: null,
@@ -30,12 +39,13 @@ export async function handleLobbyRoutes(req: Request, url: URL, _ctx: RouteCtx):
       gameId: null,
       gameMode: (body as Record<string, unknown>).gameMode === "match" ? "match" : "duel",
       guest: isSandbox
-        ? { connId: "", deckId: "default", name: "Goldfish", ready: true, ws: null }
+        ? { connId: "", deckId: "default", name: opponent?.info.label ?? "Goldfish", ready: true, ws: null }
         : null,
       // Never echo the client-supplied name (may be an email). Resolve the
       // authenticated user's stored displayName so opponents only ever see that.
       host: { connId: "", deckId: null, name: (getUserById(getUserIdFromRequest(req) ?? "")?.displayName) || (body.name?.split("@")[0]) || "Player 1", ready: false, ws: null },
       id: lobbyId,
+      opponent,
       sandbox: isSandbox,
       status: "waiting",
     };

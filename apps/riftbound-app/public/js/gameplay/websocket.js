@@ -85,6 +85,8 @@ function connectWs() {
     // The server has answered — release the executeMove() in-flight guard.
     if (typeof clearInFlightMove === "function") clearInFlightMove();
     else window.__rbInFlightMove = null;
+    // vs-Claude: opponent descriptor + "thinking" flag ride on state frames and ai_status.
+    if (typeof aiOnServerFrame === "function") aiOnServerFrame(msg);
 
     switch (msg.type) {
       case "sync":
@@ -185,6 +187,10 @@ function connectWs() {
         break;
 
       case "pong":
+        break;
+
+      case "ai_status":
+        // The AI seat started/stopped deciding — aiOnServerFrame already updated the pill.
         break;
 
       case "game_ping":

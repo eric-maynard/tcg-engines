@@ -374,19 +374,36 @@ function lobbyStartGame() {
 let _soloMode = "goldfish";
 let _soloAutoStart = false;
 
+// "VS Claude": the opponent picker / API-key settings / thinking pill live in
+// ai-opponent.js, loaded here so gameplay.html needs no extra tag. Every call
+// into it is typeof-guarded, so the lobby works before (or without) it.
+(function loadAiOpponentModule() {
+  if (document.querySelector('script[data-rb-ai]')) return;
+  const s = document.createElement("script");
+  s.src = "/js/gameplay/ai-opponent.js";
+  s.dataset.rbAi = "1";
+  document.head.appendChild(s);
+})();
+
 async function showSoloDeckPicker(mode) {
   _soloMode = mode;
   document.getElementById("lobbyMenu").classList.add("hidden");
   document.getElementById("soloDeckPicker").classList.remove("hidden");
+  // Opponent row (Goldfish · Claude Haiku/Sonnet/Opus) — ai-opponent.js.
+  if (typeof aiPreparePicker === "function") aiPreparePicker(mode);
   await loadSavedDecksInto(document.getElementById("soloDeckSelect"), document.getElementById("soloDeckStatus"));
 }
 
 async function startSoloGame() {
   const deckId = document.getElementById("soloDeckSelect").value || "default";
   const gameMode = document.querySelector('input[name="soloMode"]:checked')?.value || "duel";
-  const data = await api("/api/lobby/create", "POST", { gameMode, name: currentUsername || "Player 1", sandbox: true });
+  // The API key (if any) travels only in this request body; the server keeps it in memory for the game.
+  const opponent = typeof buildOpponentRequest === "function" ? buildOpponentRequest() : { kind: "goldfish" };
+  const data = await api("/api/lobby/create", "POST", { gameMode, name: currentUsername || "Player 1", opponent, sandbox: true });
   if (data.error) {
-    document.getElementById("soloDeckStatus").textContent = data.error;
+    const st = document.getElementById("soloDeckStatus");
+    st.textContent = data.error;
+    st.style.color = "#d04040";
     return;
   }
   lobbyId = data.lobbyId;

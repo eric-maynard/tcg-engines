@@ -347,8 +347,38 @@ export const REWINDABLE_MOVE_IDS = new Set([
  * Returns the last 80 entries (oldest to newest) as {@link LogEntry}
  * objects ready to be sent in the game snapshot.
  */
+/**
+ * Key for a session.log line that must read right after the move the engine
+ * just recorded (the AI seat's "🤖 …" rationale lines): buildHistoryLog
+ * splices `after-replay-<i>` entries in behind replay entry i instead of
+ * grouping them with the setup lines, and drops them if that move is rewound.
+ */
+export function anchorKeyAfterLastMove(session: GameSession, suffix = ""): string {
+  let index = -1;
+  try {
+    index = session.engine.getReplayHistory().length - 1;
+  } catch { /* History not available */ }
+  return `after-replay-${index}${suffix ? `-${suffix}` : ""}`;
+}
+
 export function buildHistoryLog(session: GameSession): LogEntry[] {
-  const entries: LogEntry[] = [...session.log]; // Keep manual entries (setup messages)
+  const anchored = new Map<number, LogEntry[]>();
+  const entries: LogEntry[] = []; // Manual entries (setup messages) first
+  for (const entry of session.log) {
+    const m = entry.key?.match(/^after-replay-(-?\d+)/);
+    if (!m) {
+      entries.push(entry);
+      continue;
+    }
+    const idx = Number(m[1]);
+    if (idx < 0) {
+      entries.push(entry);
+      continue;
+    }
+    const list = anchored.get(idx) ?? [];
+    list.push(entry);
+    anchored.set(idx, list);
+  }
   try {
     const history = session.engine.getReplayHistory();
     history.forEach((entry, index) => {
@@ -360,14 +390,18 @@ export function buildHistoryLog(session: GameSession): LogEntry[] {
         params,
         session.playerNames,
       );
-      if (!text) {return;}
-      entries.push(
-        makeLogEntry(text, {
-          key: `replay-${index}`,
-          rewindable: REWINDABLE_MOVE_IDS.has(entry.moveId),
-          timestampMs: entry.timestamp,
-        }),
-      );
+      if (text) {
+        entries.push(
+          makeLogEntry(text, {
+            key: `replay-${index}`,
+            rewindable: REWINDABLE_MOVE_IDS.has(entry.moveId),
+            timestampMs: entry.timestamp,
+          }),
+        );
+      }
+      for (const a of anchored.get(index) ?? []) {
+        entries.push(a);
+      }
     });
   } catch { /* History not available */ }
   // rule 424.1 — a reveal presents the card to ALL players. Reveals that park
@@ -423,6 +457,62 @@ function buildCostReductionContext(
   } as unknown as CostReductionContext;
 }
 
+/**
+ * rule 356 — the engine's own Total Cost for playing `cardId` from hand right
+ * now (energy after discounts/increases; power pips as domain names, any-domain
+ * and hybrid pips as "rainbow"). Undefined for non-hand cards / lookups that fail.
+ */
+export function handPlayCost(
+  session: GameSession,
+  cardId: string,
+): { energy: number; power: string[] } | undefined {
+  const state = session.engine.getState();
+  const internal = getInternalSnapshot(session.engine);
+  const inst = internal.cards[cardId];
+  if (!inst || inst.zone !== "hand") {return undefined;}
+  const def =
+    registry.get(inst.definitionId) ??
+    (getGlobalCardRegistry().get(inst.definitionId) as Card | undefined) ??
+    (getGlobalCardRegistry().get(cardId) as Card | undefined);
+  const costCtx = buildCostReductionContext(internal, state.battlefields);
+  return computeHandCost(state, internal, costCtx, cardId, inst.controller ?? inst.owner, def?.energyCost);
+}
+
+function computeHandCost(
+  state: ReturnType<GameSession["engine"]["getState"]>,
+  internal: ReturnType<typeof getInternalSnapshot>,
+  costCtx: CostReductionContext,
+  cardId: string,
+  controller: string,
+  printed?: number,
+): { energy: number; power: string[] } | undefined {
+  if (typeof printed !== "number" || !controller) {return undefined;}
+  try {
+    const cost = computePlayResourceCost(
+      state as never,
+      controller,
+      cardId,
+      { board: { cards: costCtx.cards, zones: costCtx.zones } } as never,
+      (id: string) => internal.cardMetas[id],
+      false,
+    );
+    const energy = cost.free || cost.ignoreEnergy ? 0 : cost.energy;
+    // rule 135.2.e.5 — pips the engine will actually require: named domains,
+    // then any-Domain/[rainbow] pips (Empowered surcharges, Deflect, X in
+    // Power) and hybrid pips, both shown as [rainbow].
+    const power: string[] = [];
+    if (!cost.free) {
+      for (const [domain, n] of Object.entries(cost.named)) {
+        for (let i = 0; i < (n ?? 0); i++) {power.push(domain);}
+      }
+      for (let i = 0; i < cost.any + (cost.hybrid?.n ?? 0); i++) {power.push("rainbow");}
+    }
+    return { energy, power };
+  } catch {
+    return undefined;
+  }
+}
+
 /** Build a renderable game snapshot for the UI */
 export function buildGameSnapshot(session: GameSession, viewingPlayer?: string) {
   const { engine } = session;
@@ -451,9 +541,12 @@ export function buildGameSnapshot(session: GameSession, viewingPlayer?: string) 
   // secret — outside sandbox (goldfish/hotseat) the viewing player must not
   // receive identities of the opponent's cards in these zones. Card instance
   // ids embed the definition id, so the id is replaced with an opaque one too.
-  const redactFor = !session.sandbox && viewingPlayer ? viewingPlayer : undefined;
+  // A Claude seat is a real opponent: its hand (and facedown cards) stay
+  // private to the human even though the session runs on sandbox plumbing.
+  const vsAi = session.opponent?.info.kind === "claude";
+  const redactFor = (!session.sandbox || vsAi) && viewingPlayer ? viewingPlayer : undefined;
   const isPrivateZone = (zoneId: string) =>
-    zoneId === "hand" || zoneId === "mainDeck" || zoneId === "runeDeck";
+    zoneId === "hand" || zoneId === "mainDeck" || zoneId === "runeDeck" || (vsAi && zoneId.startsWith("facedown-"));
 
   const costCtx = buildCostReductionContext(internal, state.battlefields);
   // rule 356 — only hand cards are ever priced by the UI's pay bar, and the
@@ -463,31 +556,8 @@ export function buildGameSnapshot(session: GameSession, viewingPlayer?: string) 
   // "if an enemy unit has died this turn, this costs [2] less", one-shot
   // discounts). `consume: false` keeps one-shot riders unspent.
   const effectiveCostFor = (zoneId: string, cardId: string, controller: string, printed?: number) => {
-    if (zoneId !== "hand" || typeof printed !== "number" || !controller) {return undefined;}
-    try {
-      const cost = computePlayResourceCost(
-        state as never,
-        controller,
-        cardId,
-        { board: { cards: costCtx.cards, zones: costCtx.zones } } as never,
-        (id: string) => internal.cardMetas[id],
-        false,
-      );
-      const energy = cost.free || cost.ignoreEnergy ? 0 : cost.energy;
-      // rule 135.2.e.5 — pips the engine will actually require: named domains,
-      // then any-Domain/[rainbow] pips (Empowered surcharges, Deflect, X in
-      // Power) and hybrid pips, both shown as [rainbow].
-      const power: string[] = [];
-      if (!cost.free) {
-        for (const [domain, n] of Object.entries(cost.named)) {
-          for (let i = 0; i < (n ?? 0); i++) {power.push(domain);}
-        }
-        for (let i = 0; i < cost.any + (cost.hybrid?.n ?? 0); i++) {power.push("rainbow");}
-      }
-      return { energy, power };
-    } catch {
-      return undefined;
-    }
+    if (zoneId !== "hand") {return undefined;}
+    return computeHandCost(state, internal, costCtx, cardId, controller, printed);
   };
 
   for (const [zoneId, zone] of Object.entries(internal.zones)) {
@@ -597,6 +667,11 @@ export function buildGameSnapshot(session: GameSession, viewingPlayer?: string) 
   }
 
   return {
+    // Solo opponent descriptor (kind/model/label + live "thinking" flag). The
+    // handle's API key is a #private field and toJSON() names only the info.
+    ai: session.opponent
+      ? { ...session.opponent.info, thinking: session.opponent.thinking }
+      : undefined,
     battlefields: state.battlefields,
     canUndo: session.engine.getReplayHistory().length > 0,
     gameId: state.gameId,

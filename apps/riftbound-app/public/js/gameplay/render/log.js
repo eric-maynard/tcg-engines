@@ -76,6 +76,11 @@ function normalizeLogEntry(entry) {
  */
 function renderLogEntryRow(entry) {
   const normalized = normalizeLogEntry(entry);
+  // vs-Claude: "🤖 Sonnet: Play Yasuo to Base — 'rationale'" carries MODEL-produced
+  // text. Build the row with DOM nodes / textContent only — never innerHTML.
+  if (typeof normalized.text === "string" && normalized.text.startsWith("\u{1F916}")) {
+    return renderAiLogEntryRow(normalized);
+  }
   let text = esc(formatLogEntry(normalized.text));
   text = text.replace(/\bP1\b/g, '<span class="log-player">P1</span>');
   text = text.replace(/\bP2\b/g, '<span class="log-player" style="color:#e09060">P2</span>');
@@ -88,6 +93,24 @@ function renderLogEntryRow(entry) {
     : "";
 
   return `<div class="log-entry">${timestamp}<span class="log-text">${text}</span>${rewindMark}</div>`;
+}
+
+/** Row for an AI-seat line: timestamp gutter + text, all via textContent. */
+function renderAiLogEntryRow(normalized) {
+  const row = document.createElement("div");
+  row.className = "log-entry log-ai";
+  if (normalized.timestamp) {
+    const ts = document.createElement("span");
+    ts.className = "log-timestamp";
+    ts.style.cssText = "opacity:0.55;font-size:0.8em;margin-right:6px;font-variant-numeric:tabular-nums";
+    ts.textContent = normalized.timestamp;
+    row.appendChild(ts);
+  }
+  const span = document.createElement("span");
+  span.className = "log-text";
+  span.textContent = normalized.text;
+  row.appendChild(span);
+  return row.outerHTML;
 }
 
 function renderLog() {

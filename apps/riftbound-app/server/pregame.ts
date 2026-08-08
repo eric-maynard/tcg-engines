@@ -9,6 +9,7 @@ import { RuleEngine } from "@tcg/core";
 import type { PlayerId } from "@tcg/core";
 import type { ServerWebSocket } from "bun";
 import { type LogEntry, actorName, makeLogEntry } from "../src/narrator";
+import { runOpponent } from "./ai-opponent";
 import { allCards, makeLookupPayload, registerCard, registry } from "./cards";
 import { MIN_MAIN_DECK_SIZE, findCopyLimitViolations } from "./decks";
 import { gameLogger } from "./log";
@@ -473,6 +474,11 @@ export function handlePregameMessage(
             type: "sync",
           }));
         } catch { /* Disconnected */ }
+      }
+      // The opponent seat may hold the first cursor (it was chosen to go
+      // first, or its beginning-step trigger wants an answer).
+      if (session.sandbox) {
+        runOpponent(session, { gameId, humanSeat: playerId });
       }
     } else {
       session.seq++;

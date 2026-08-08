@@ -48,6 +48,33 @@ export interface Lobby {
   /** D20 roll result: both rolls, who won, and who they chose to go first */
   coinFlip: { winner: string; firstPlayer: string; p1Roll: number; p2Roll: number } | null;
   createdAt: number;
+  /** Solo opponent for sandbox lobbies (Goldfish or a Claude seat). In-memory only; never broadcast. */
+  opponent?: OpponentHandle;
+}
+
+/** Public description of the solo opponent — safe to ship in snapshots (no key material). */
+export interface OpponentInfo {
+  kind: "goldfish" | "claude";
+  /** Model key (haiku | sonnet | opus) for a Claude seat. */
+  model?: string;
+  /** Display label ("Goldfish", "Claude Sonnet 5"). */
+  label: string;
+}
+
+/**
+ * The AI seat's driver (server/ai-opponent.ts ClaudeOpponent). Typed
+ * structurally here so state.ts stays import-free of the driver; the API key
+ * lives in a #private field of the implementation and is never reachable
+ * through this handle.
+ */
+export interface OpponentHandle {
+  readonly info: OpponentInfo;
+  /** True while an AI step loop is in flight for this game. */
+  readonly busy: boolean;
+  /** True while waiting on the model (drives the client's "thinking" pill). */
+  readonly thinking: boolean;
+  act(session: GameSession): Promise<void>;
+  toJSON(): OpponentInfo;
 }
 
 export const lobbies = new Map<string, Lobby>(); // Keyed by lobby ID
@@ -143,6 +170,11 @@ export interface GameSession {
   pregame?: PregameState;
   /** Whether this is a sandbox (goldfish) game */
   sandbox: boolean;
+  /**
+   * Solo opponent driver for sandbox games. Absent / kind "goldfish" → the
+   * passive Goldfish policy in turn.ts; kind "claude" → server/ai-opponent.ts.
+   */
+  opponent?: OpponentHandle;
 }
 
 /** Data attached to each WebSocket connection */
