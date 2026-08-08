@@ -216,14 +216,15 @@ describe("Rocket Barrage (sfd-077-221)", () => {
     expect(closed.p1.can("cast", "rb")).toBe(false);
   });
 
-  test("the opponent gets priority before it resolves; the Snax owner cannot cash the targeted gear in at that point (no Reaction) and loses it", async () => {
+  test("the opponent gets priority before it resolves — knowing the mode and target (355.3/355.5); the Snax owner cannot cash the targeted gear in at that point (no Reaction) and loses it", async () => {
     const game = await board().resources(P2, { energy: 1, power: { calm: 1 } }).build();
-    await game.p1.cast("rb");
+    await game.p1.cast("rb", { mode: KILL_GEAR, targets: "snax" });
+    expect(game.chain().at(-1)).toMatchObject({ cardId: "rb", mode: KILL_GEAR, targets: ["snax"] });
     await game.p1.passPriority();
     expect(game.actingSeat()).toBe(P2);
     expect((game.decision() as ActionDecision).context).toBe("chain");
     expect(game.p2.can("activate", "snax")).toBe(false);
-    await resolve(game, [KILL_GEAR, "snax"]);
+    await resolve(game, []);
     expect(game.zoneOf("snax")).toBe("trash");
   });
 

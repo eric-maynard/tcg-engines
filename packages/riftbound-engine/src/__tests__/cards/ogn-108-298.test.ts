@@ -25,24 +25,18 @@ function board(active = P1) {
     .hand(P1, MUTATION, "cm");
 }
 
-/** Cast and resolve, answering any target prompts as (chosen = small, reference = big). */
+/** rule 355.5 — both roles are named as it is played: targets [chosen = small, reference = big]; then it resolves. */
 async function castOnSmall(game: Awaited<ReturnType<ReturnType<typeof board>["build"]>>) {
-  const opt = game.p1.option("cast", "cm");
-  const hasTargets = opt?.fields.some((f) => f.arg === "targets");
-  await game.p1.cast("cm", hasTargets ? { targets: ["small", "big"] } : {});
+  await game.p1.cast("cm", { targets: ["small", "big"] });
+  expect(game.chain().at(-1)).toMatchObject({ cardId: "cm", targets: ["small", "big"] });
+  expect(game.decision()?.kind).toBe("action"); // nothing left to ask
   await game.settle();
-  for (const answer of ["small", "big"]) {
-    if (game.decision()?.kind === "pick" && game.decision()?.seat === P1) {
-      await game.p1.pick(answer);
-      await game.settle();
-    }
-  }
 }
 
 describe("Convergent Mutation (ogn-108-298)", () => {
   test("cost: 2 energy + 1 mind deducted; resolves to trash; unaffordable without the mind", async () => {
     const game = await board().build();
-    await game.p1.cast("cm");
+    await game.p1.cast("cm", { targets: ["small", "big"] });
     expect(game.p1.resources()).toEqual({ energy: 0, power: { mind: 0 } });
     expect(game.chain()).toEqual([expect.objectContaining({ cardId: "cm", controller: P1, triggered: false })]);
     await game.settle();
@@ -59,8 +53,20 @@ describe("Convergent Mutation (ogn-108-298)", () => {
     await game.p2.cast("spark", { targets: "big" });
     await game.p2.passPriority();
     expect(game.p1.can("cast", "cm")).toBe(true);
-    await game.p1.cast("cm");
+    await game.p1.cast("cm", { targets: ["small", "big"] });
     expect(game.chain().map((c) => c.cardId)).toEqual(["spark", "cm"]); // resolves before Final Spark
+  });
+
+  test("rule 355.5 — both role slots are chosen as it is played: one variant per ordered [raised, reference] pair of friendly units, and a play naming none is not legal", async () => {
+    const game = await board().build();
+    const offered = game.p1.option("cast", "cm")?.fields.find((f) => f.arg === "targets")?.options ?? [];
+    expect(offered).toEqual(expect.arrayContaining([["small", "big"], ["big", "small"]]));
+    expect(offered).toHaveLength(2); // never the enemy, never the same unit twice, never a lone unit
+    expect((await game.p1.try((p) => p.do("playSpell", { cardId: "cm", playerId: P1 }))).ok).toBe(false);
+    expect((await game.p1.try((p) => p.cast("cm", { targets: ["small", "foe"] }))).ok).toBe(false);
+    // "another friendly unit": with a single friendly unit there is no legal pair → not castable (355.8)
+    const lone = await scenario().resources(P1, { energy: 2, power: { mind: 1 } }).unit(P1, "base", { might: 2 }, "solo").unit(P2, "base", { might: 9 }, "foe").hand(P1, MUTATION, "cm").build();
+    expect(lone.p1.can("cast", "cm")).toBe(false);
   });
 
   test("the caster chooses the friendly unit (and the reference unit) — only friendly units are offered", async () => {

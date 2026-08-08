@@ -272,6 +272,19 @@ export interface RiftboundMoves {
     /** rule 356.2.b — hand card discarded to pay a "you may discard 1" / "[Repeat] — Discard 1" cost. */
     discardId?: CardId;
     costs?: PlayCosts;
+    /**
+     * rule 355.3 — the mode of a "Choose one —" spell, chosen as it is played
+     * (index into the printed bullet list). `targets` then names THAT mode's
+     * Game Objects (355.5). Omitted, the caster is asked for the mode (and its
+     * target) as the spell is played, before anyone receives Priority.
+     */
+    mode?: number;
+    /**
+     * rule 820.2.a — with [Repeat] paid, one mode per execution (length
+     * 1 + repeatCount, execution order); `targets` lists each single-slot mode's
+     * one Game Object in the same order.
+     */
+    modes?: readonly number[];
   };
 
   /** Place Hidden card facedown */

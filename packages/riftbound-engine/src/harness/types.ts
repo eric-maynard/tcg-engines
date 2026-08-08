@@ -220,6 +220,8 @@ export interface ActionField {
   readonly kind: ActionFieldKind;
   /** Distinct legal values across variants (JSON values; arrays for tuples). */
   readonly options?: readonly unknown[];
+  /** Display text per entry of `options` (rule 355.3 — a `mode` field names the printed bullets). */
+  readonly labels?: readonly string[];
   readonly min?: number;
   readonly max?: number;
   /** true when every variant sets this param (agent must supply or accept a follow-up). */
@@ -384,6 +386,18 @@ export interface DecisionSummary {
 /** The nested optional fields of the play/activate/move bundle (idiomatic names). */
 export interface PlayArgs {
   targets?: CardRef | readonly CardRef[];
+  /**
+   * rule 355.3 — the mode of a "Choose one —" spell (printed bullet index),
+   * chosen as it is cast; `targets` then names that mode's object(s). Left out,
+   * the spell is cast as printed and the engine asks mode → target right away
+   * (answer with `chooseMode()` / `pick()`), still before anyone gets priority.
+   */
+  mode?: number;
+  /**
+   * rule 820.2.a — with `repeat`, one mode per execution (length 1 + repeat) and
+   * `targets` in execution order; passed straight to the engine (not enumerated).
+   */
+  modes?: readonly number[];
   x?: number;
   repeat?: number;
   flow?: boolean;
@@ -479,7 +493,7 @@ export interface Observation {
   readonly points: Readonly<Record<Seat, number>>;
   readonly zones: Readonly<Record<string, readonly CardView[]>>;
   readonly battlefields: readonly BattlefieldView[];
-  readonly chain: readonly { id: string; cardId: CardRef; name: string; controller: Seat; type: string; triggered: boolean; countered: boolean }[];
+  readonly chain: readonly { id: string; cardId: CardRef; name: string; controller: Seat; type: string; triggered: boolean; countered: boolean; targets?: readonly CardRef[]; mode?: number }[];
   readonly decision: Decision | DecisionSummary | null;
 }
 

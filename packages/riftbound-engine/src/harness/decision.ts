@@ -15,6 +15,7 @@
  */
 
 import type { PlayerId } from "@tcg/core";
+import { modeOptionLabel, spellModeLabels } from "../game-definition/moves/play/play-time-modes";
 import { getGlobalCardRegistry } from "../operations/card-lookup";
 import type { PendingChoice, RiftboundGameState } from "../types/game-state";
 import { getActingSeat, getPendingChoiceChooser } from "../views/acting-seat";
@@ -166,6 +167,8 @@ const PARAM_ARG: Record<string, { arg: string; kind: ActionFieldKind }> = {
   discardId: { arg: "discard", kind: "card" },
   domain: { arg: "domain", kind: "enum" },
   location: { arg: "to", kind: "zone" },
+  // rule 355.3 — the mode of a "Choose one —" spell, chosen as it is cast.
+  mode: { arg: "mode", kind: "int" },
   paidAdditionalCost: { arg: "payOptional", kind: "bool" },
   // rule 416.5 — the controller picks which cards pay a "Recycle N" cost.
   recycleIds: { arg: "recycle", kind: "cards" },
@@ -180,10 +183,11 @@ const PARAM_ARG: Record<string, { arg: string; kind: ActionFieldKind }> = {
 };
 
 /** Params never surfaced as fields. additionalCostSpec / costs ride with the legacy cost params they mirror. */
-const HIDDEN_PARAMS = new Set(["playerId", "additionalCostSpec", "costs"]);
+const HIDDEN_PARAMS = new Set(["playerId", "additionalCostSpec", "costs", "modes"]);
 
 /** Follow-up priority: which still-varying field to ask about first. */
 const FOLLOW_UP_ORDER = [
+  "mode",
   "targets",
   "location",
   "destination",
@@ -296,9 +300,18 @@ function buildFields(ctx: DecisionContext, moveId: string, variants: FlatMove[],
       options.sort((a, b) => Number(a === true) - Number(b === true));
     }
     const ints = options.filter((o): o is number => typeof o === "number");
+    // rule 355.3 — a `mode` field names the printed bullets it indexes.
+    const modeLabels =
+      name === "mode" && typeof variants[0]?.params.cardId === "string"
+        ? spellModeLabels(getGlobalCardRegistry().getAbilities(variants[0]?.params.cardId as string))
+        : undefined;
+    if (name === "mode") {
+      options.sort((a, b) => Number(a) - Number(b));
+    }
     fields.push({
       arg: meta.arg,
       kind: meta.kind,
+      ...(modeLabels ? { labels: options.map((o) => modeLabels[Number(o)] ?? `Mode ${Number(o) + 1}`) } : {}),
       max: meta.kind === "int" && ints.length ? Math.max(...ints) : meta.kind === "cards" ? Math.max(...options.map((o) => (Array.isArray(o) ? o.length : 0))) : undefined,
       min: meta.kind === "int" && ints.length ? Math.min(0, ...ints) : meta.kind === "cards" ? Math.min(...options.map((o) => (Array.isArray(o) ? o.length : 0))) : undefined,
       name,
@@ -438,10 +451,8 @@ export function deriveActionDecision(ctx: DecisionContext, seat: Seat, cursor: b
 }
 
 function modeLabel(effect: unknown, idx: number): string {
-  const opts = (effect as { options?: { label?: string; text?: string; effect?: { type?: string } }[] } | undefined)
-    ?.options;
-  const o = opts?.[idx];
-  return o?.label ?? o?.text ?? (o?.effect?.type ? `${o.effect.type} (mode ${idx})` : `mode ${idx}`);
+  // rule 355.3 — the printed bullet, else a rendering of the mode's instruction.
+  return modeOptionLabel(effect, idx);
 }
 
 export function deriveFromPendingChoice(ctx: DecisionContext, pc: PendingChoice): Decision {
@@ -1195,6 +1206,10 @@ function constraintsFrom(option: ActionOption, args: PlayArgs): Constraint[] {
     const n = args.repeat;
     cs.push({ describe: n, param: "repeatCount", test: (v) => (Number(v ?? 0) || 0) === n });
   }
+  if (args.mode !== undefined) {
+    const m = args.mode;
+    cs.push({ describe: m, param: "mode", test: (v) => v !== undefined && Number(v) === m });
+  }
   if (args.flow !== undefined) {
     const f = args.flow;
     cs.push({ describe: f, param: "viaFlow", test: (v) => (v === true) === f });
@@ -1286,6 +1301,9 @@ function costsMatch(v: unknown, _params: Readonly<Record<string, unknown>>, want
 
 /** Preferences applied to UNSPECIFIED knobs, each only if it keeps ≥1 variant. */
 const DEFAULT_PREFS: { param: string; keep: (v: unknown) => boolean }[] = [
+  // rule 355.3 — no `mode` asked for: cast the spell as printed and let the
+  // engine ask mode → target as it is played (`chooseMode()` / `pick()`).
+  { keep: (v) => v === undefined, param: "mode" },
   { keep: (v) => v !== true, param: "paidAdditionalCost" },
   { keep: (v) => !v, param: "repeatCount" },
   { keep: (v) => v !== true, param: "viaFlow" },
@@ -1297,8 +1315,12 @@ const DEFAULT_PREFS: { param: string; keep: (v: unknown) => boolean }[] = [
   { keep: (v) => v === undefined, param: "chosenTargetId" },
 ];
 
-function choiceFor(ctx: DecisionContext, field: string, value: unknown): PickOption {
+function choiceFor(ctx: DecisionContext, field: string, value: unknown, card?: CardRef): PickOption {
   const kind = PARAM_ARG[field]?.kind ?? "enum";
+  if (field === "mode" && typeof value === "number") {
+    const labels = card ? spellModeLabels(getGlobalCardRegistry().getAbilities(card)) : [];
+    return { key: String(value), label: labels[value] ?? `Mode ${value + 1}`, mode: value, value };
+  }
   if (kind === "card" && typeof value === "string") {
     return { card: value, key: value, label: ctx.label(value), value };
   }
@@ -1317,6 +1339,27 @@ function choiceFor(ctx: DecisionContext, field: string, value: unknown): PickOpt
 }
 
 export function narrowVariants(ctx: DecisionContext, option: ActionOption, args: PlayArgs): NarrowResult {
+  // rule 820.2.a — `modes` (one per [Repeat] execution) is never enumerated:
+  // it rides straight onto the chosen variant together with its `targets`.
+  if (args.modes !== undefined) {
+    const { modes, targets, ...rest } = args;
+    const extra: Record<string, unknown> = { modes: [...modes] };
+    const list = asArray(targets);
+    if (list) {
+      extra.targets = [...list];
+    }
+    const inner = narrowVariants(ctx, option, rest);
+    if (inner.type === "one") {
+      return { move: { ...inner.move, params: { ...inner.move.params, ...extra } }, type: "one" };
+    }
+    if (inner.type === "needX") {
+      return { ...inner, variant: { ...inner.variant, params: { ...inner.variant.params, ...extra } } };
+    }
+    if (inner.type === "many") {
+      return { ...inner, variants: inner.variants.map((v) => ({ ...v, params: { ...v.params, ...extra } })) };
+    }
+    return inner;
+  }
   const constraints = constraintsFrom(option, args);
   let variants = option.variants.filter((v) => constraints.every((c) => c.test(v.params[c.param], v.params)));
   if (variants.length === 0) {
@@ -1379,7 +1422,7 @@ export function narrowVariants(ctx: DecisionContext, option: ActionOption, args:
     const field = ordered[0] ?? "params";
     const distinct = new Map<string, PickOption>();
     for (const v of variants) {
-      const c = choiceFor(ctx, field, v.params[field]);
+      const c = choiceFor(ctx, field, v.params[field], option.card);
       distinct.set(c.key, c);
     }
     return { choices: [...distinct.values()], field, type: "many", variants };
@@ -1435,7 +1478,7 @@ export function applyFollowUpPick(
   variants: readonly FlatMove[],
   key: string,
 ): FlatMove[] {
-  return variants.filter((v) => choiceFor(ctx, field, v.params[field]).key === key);
+  return variants.filter((v) => choiceFor(ctx, field, v.params[field], v.params.cardId as CardRef | undefined).key === key);
 }
 
 export function followUpPickDecision(

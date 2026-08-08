@@ -77,27 +77,12 @@ export function handle_increaseMightTo(
 
   const a = ctx.boundTargets?.[0];
   const b = ctx.boundTargets?.[1];
-  // rule 355.8 — BOTH units are chosen by the caster: the one whose Might
-  // rises and the one it is raised to. Prompt for them at resolution (the
-  // second pick is drawn from the same friendly pool minus the first).
-  if ((!a || !b) && !ctx.draft.pendingChoice) {
-    const pool = resolveTarget({ ...spec.target1, quantity: "all" } as TargetDescriptor, {
-      ...resolverCtx,
-    }) as string[];
-    if (pool.length < 2) {
-      return;
-    }
-    ctx.draft.pendingChoice = {
-      anyNumber: true,
-      effect,
-      maxPicks: 2,
-      options: pool,
-      playerId: ctx.playerId,
-      sourceCardId: ctx.sourceCardId,
-      type: "choose-target",
-    } as typeof ctx.draft.pendingChoice;
-    return;
-  }
+  // rule 355.5 (ogn-108-298) — BOTH roles (the unit whose Might rises = target1,
+  // the unit it is raised to = target2) were chosen as the spell was played and
+  // ride in as bound targets [target1, target2]. rule 359.3.e.5 — if either
+  // has since become an illegal target it was dropped before we got here, and
+  // "increase its Might to [that unit's]" can no longer be followed: nothing
+  // happens, and no other unit is substituted.
   if (!a || !b || a === b) {
     return;
   }

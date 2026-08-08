@@ -222,6 +222,9 @@ export function collectSequenceTargetSlots(
         if (!walk(sub.effects)) return false;
         continue;
       }
+      // rule 355.10.f (rule-id: ven-140-166) — resolution-chosen steps claim no
+      // play-time target slot.
+      if ((sub as { chooseAtResolution?: boolean })?.chooseAtResolution === true) continue;
       const t = sub?.target;
       if (t === undefined) continue;
       if (typeof t === "string") {
@@ -367,6 +370,95 @@ export function enumerateReferencePairs(
     ) as string[];
     for (const victim of victims) {
       if (victim !== refId) out.push([refId, victim]);
+    }
+  }
+  return out;
+}
+
+/**
+ * rule 355.3 — the "Choose one —" menu of a modal spell whose CASTER picks the
+ * mode (rule 355.10.e: "each other player chooses" / "unless its controller …"
+ * menus belong to that other player, at resolution). Returns the node and its
+ * options, or undefined for anything else.
+ */
+export function casterModeChoice(
+  effect: unknown,
+): { node: SpellEffectTargetShape; options: { effect?: SpellEffectTargetShape; label?: string }[] } | undefined {
+  const e = effect as SpellEffectTargetShape | undefined;
+  if (e?.type !== "choice" || !Array.isArray(e.options) || e.player !== undefined) {
+    return undefined;
+  }
+  return { node: e, options: e.options as { effect?: SpellEffectTargetShape; label?: string }[] };
+}
+
+/**
+ * rule 355.5 / 355.8 — an effect naming TWO caster-chosen Game Objects through
+ * role slots `target1` / `target2` (sfd-145-221 `swap-might`, unl-083-219
+ * `swap-locations`, ogn-108-298 `increase-might-to` "Choose a friendly unit …
+ * ANOTHER friendly unit"). A fixed first referent ("increase MY Might to its
+ * Might", ven-079-166) is a single choice, not a pair.
+ */
+export function pairEffectRoles(
+  effect: SpellEffectTargetShape | undefined,
+): { first: SlotDescriptor; second: SlotDescriptor; symmetric: boolean; differentZones: boolean } | undefined {
+  const t1 = effect?.target1;
+  const t2 = effect?.target2;
+  if (!t1 || typeof t1 === "string" || !t2 || typeof t2 === "string") return undefined;
+  if (t1.type === "self" || t2.type === "self" || t1.quantity === "all" || t2.quantity === "all") {
+    return undefined;
+  }
+  return {
+    // rule-id: unl-083-219 — a location swap needs two DIFFERENT locations.
+    differentZones: effect?.type === "swap-locations",
+    first: t1,
+    second: t2,
+    // rule 433.1 — Swap is symmetric, so [a,b] and [b,a] are the same play; a
+    // directional pair ("increase ITS Might to another unit's") keeps both orders.
+    symmetric: effect?.type === "swap-might" || effect?.type === "swap-locations",
+  };
+}
+
+/**
+ * rule 355.8 — every legal [target1, target2] pair for a role-slot effect: each
+ * member legal for its own descriptor, distinct ("another"), `location:"same"`
+ * on the second read against the first's zone.
+ */
+export function enumerateTargetPairs(
+  effect: SpellEffectTargetShape | undefined,
+  ctx: Parameters<typeof resolveTarget>[1],
+): [string, string][] | undefined {
+  const roles = pairEffectRoles(effect);
+  if (!roles) return undefined;
+  const firsts = resolveTarget(
+    { ...roles.first, quantity: "all" } as Parameters<typeof resolveTarget>[0],
+    ctx,
+  ) as string[];
+  const out: [string, string][] = [];
+  const seen = new Set<string>();
+  for (const a of firsts) {
+    const zone = ctx.zones.getCardZone(a as Parameters<typeof ctx.zones.getCardZone>[0]) as
+      | string
+      | undefined;
+    const seconds = resolveTarget(
+      { ...roles.second, quantity: "all" } as Parameters<typeof resolveTarget>[0],
+      (roles.second as { location?: string }).location === "same"
+        ? { ...ctx, sameZone: zone as string, sourceZone: zone as string }
+        : ctx,
+    ) as string[];
+    for (const b of seconds) {
+      if (b === a) continue;
+      if (
+        roles.differentZones &&
+        ctx.zones.getCardZone(b as Parameters<typeof ctx.zones.getCardZone>[0]) === zone
+      ) {
+        continue;
+      }
+      if (roles.symmetric) {
+        const key = [a, b].sort().join("|");
+        if (seen.has(key)) continue;
+        seen.add(key);
+      }
+      out.push([a, b]);
     }
   }
   return out;
@@ -547,17 +639,35 @@ export function spellEffectHasLegalTargets(
   }
   // Rule 355.8: modal spells — at least one option must have a valid target set.
   if (effect.type === "choice" && Array.isArray(effect.options)) {
-    // rule 809.1.b (rule-id: sfd-077-221) — a modal spell picks its mode (and
-    // its target) as it resolves, so no Deflect surcharge is quoted at cast
-    // time. A mode whose only candidates are Deflect objects the caster cannot
+    // rule 809.1.b (rule-id: sfd-077-221) — the whole menu is judged before a
+    // mode (and so a target) is named, so no Deflect surcharge is quoted yet.
+    // A mode whose only candidates are Deflect objects the caster cannot
     // pay for is therefore not a mode they can legally choose (355.8); when no
     // mode survives, the spell has no legal play at all.
     const modeAffordable = affordable ?? makeDeflectAffordable(ctx);
     return effect.options.some((opt) => spellEffectHasLegalTargets(opt?.effect, ctx, modeAffordable));
   }
+  // rule 355.5 / 355.8 (ogn-108-298) — "Choose a friendly unit … ANOTHER
+  // friendly unit": a role-slot pair needs a legal PAIR, not merely one
+  // candidate per descriptor (a lone friendly unit satisfies both slots alone).
+  {
+    const pairs = enumerateTargetPairs(effect, ctx);
+    if (pairs !== undefined) {
+      return affordable
+        ? pairs.some(([a, b]) => affordable(a) && affordable(b))
+        : pairs.length > 0;
+    }
+  }
   // Sequence effects: every sub-effect's targets must be satisfiable.
   if (effect.type === "sequence" && Array.isArray(effect.effects)) {
-    if (!effect.effects.every((sub) => spellEffectHasLegalTargets(sub, ctx, affordable))) {
+    if (
+      !effect.effects
+        // rule 355.10.f (rule-id: ven-140-166) — a step whose object is chosen
+        // as the instruction is carried out ("…, then move a friendly unit")
+        // is not a play-time target, so it never gates the play (355.8).
+        .filter((sub) => (sub as { chooseAtResolution?: boolean })?.chooseAtResolution !== true)
+        .every((sub) => spellEffectHasLegalTargets(sub, ctx, affordable))
+    ) {
       return false;
     }
     // rule 355.8 (rule-id: unl-198-219) — the sequence's OWN target: a
@@ -615,7 +725,11 @@ export function spellEffectHasLegalTargets(
   // the play is illegal (the counter would otherwise silently no-op).
   if (effect.type === "counter") {
     const items = ctx.draft.interaction?.chain?.items ?? [];
-    return items.some((item) => isLegalCounterTarget(effect, item, undefined, counterCtx(ctx)));
+    // rule 355.9.c — never the countering card itself (it may already sit on
+    // the chain when a mode is being chosen as it is played).
+    return items.some((item) =>
+      isLegalCounterTarget(effect, item, ctx.sourceCardId as string | undefined, counterCtx(ctx)),
+    );
   }
   // rule-id: ogn-080-298 (rule 355.6) — "Gain control of a spell" chooses a
   // spell on the chain; a spell exists as an object only there, so with no

@@ -1,5 +1,9 @@
 // Effect handler: "choice"
 import { getDeflectSurcharge } from "../../game-definition/moves/play/cost";
+import {
+  type SpellEffectTargetShape,
+  spellEffectHasLegalTargets,
+} from "../../game-definition/moves/play/targeting";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import type { TargetDescriptor } from "../target-resolver";
 import { resolveTarget } from "../target-resolver";
@@ -257,8 +261,26 @@ export function playTimeModeOptions(
   }
   const notChosen = (effect as { notChosenThisTurn?: boolean }).notChosenThisTurn === true;
   let indices = options.map((_unused, i) => i).filter((i) => !(notChosen && excluded.includes(i)));
-  const targetable = indices.filter((i) =>
-    modeHasLegalTarget(options[i] as { effect?: ExecutableEffect }, ctx),
+  // rule 355.8 (unl-044-219) — "Counter a spell" with no spell on the chain, a
+  // sequence whose mandatory step has nothing to choose …: judged with the same
+  // gate that decides whether a spell naming only that instruction could be played.
+  const gateCtx = {
+    cards: ctx.cards,
+    choosing: true,
+    draft: ctx.draft,
+    playerId: ctx.playerId,
+    sameZone: ctx.sameZone,
+    sourceCardId: ctx.sourceCardId,
+    sourceZone: ctx.sourceZone,
+    triggerSourceId: ctx.triggerSourceId,
+    zones: ctx.zones,
+  } as Parameters<typeof resolveTarget>[1];
+  const CHAIN_OR_COMPOUND = ["counter", "gain-control-of-spell", "conditional", "sequence"];
+  const targetable = indices.filter(
+    (i) =>
+      modeHasLegalTarget(options[i] as { effect?: ExecutableEffect }, ctx) &&
+      (!CHAIN_OR_COMPOUND.includes(String(options[i]?.effect?.type)) ||
+        spellEffectHasLegalTargets(options[i]?.effect as SpellEffectTargetShape | undefined, gateCtx)),
   );
   if (targetable.length > 0) {
     indices = targetable;

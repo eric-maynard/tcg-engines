@@ -100,13 +100,16 @@ export function parseEffects(text: string): Effect | undefined {
       .map((s) => s.trim())
       .filter((s) => s.length > 0);
     if (options.length >= 2) {
-      const parsedOptions: { effect: Effect }[] = [];
+      const parsedOptions: { effect: Effect; label: string }[] = [];
       for (const opt of options) {
         const eff = parseEffect(opt.trim());
+        // rule 355.3 — the printed bullet travels with its mode so a "Choose
+        // one" prompt can show the card's own words.
+        const label = printedModeLabel(opt);
         if (eff) {
-          parsedOptions.push({ effect: eff });
+          parsedOptions.push({ effect: eff, label });
         } else {
-          parsedOptions.push({ effect: { text: opt.trim(), type: "raw" } as unknown as Effect });
+          parsedOptions.push({ effect: { text: opt.trim(), type: "raw" } as unknown as Effect, label });
         }
       }
       if (parsedOptions.length >= 2) {
@@ -324,4 +327,21 @@ function parseSentenceSequence(cleaned: string, strict: boolean): Effect | undef
     return strict ? undefined : effects[0];
   }
   return buildSequenceWithPendingValue(effects);
+}
+
+/**
+ * rule 355.3 — a mode's printed bullet as display text: icon tokens back in
+ * their bracket form (`:rb_might:` → `[Might]`, `:rb_energy_2:` → `[2]`,
+ * `:rb_rune_fury:` → `[fury]`), no trailing period.
+ */
+function printedModeLabel(optionText: string): string {
+  return optionText
+    .trim()
+    .replace(/:rb_might:/g, "[Might]")
+    .replace(/:rb_exhaust:/g, "[Exhaust]")
+    .replace(/:rb_energy_(\d+):/g, "[$1]")
+    .replace(/:rb_rune_([a-z]+):/g, (_m, d: string) => `[${d}]`)
+    .replace(/\s{2,}/g, " ")
+    .replace(/\.\s*$/, "")
+    .trim();
 }

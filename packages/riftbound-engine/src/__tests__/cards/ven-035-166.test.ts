@@ -44,20 +44,20 @@ function board() {
 }
 
 /**
- * Pass priority around until Sanction resolves, answering its mode / target prompts in order; stops as
- * soon as the answers are used up (so items UNDER it on the chain are left alone). Returns what each
- * pick offered.
+ * Answer Sanction's mode / target prompts in order (rule 355.3 / 355.5: asked as it is PLAYED, before
+ * anyone gets priority), then pass priority around until Sanction itself has resolved — items UNDER it
+ * on the chain are left alone. Returns what each pick offered.
  */
 async function resolve(game: Game, answers: (string | number)[]): Promise<string[][]> {
   const offered: string[][] = [];
-  let picked = false;
+  const below = Math.max(0, game.chain().length - 1);
   for (let i = 0; i < 16; i++) {
     const d = game.decision();
     if (!d || (d.kind === "action" && (d.context === "main" || d.context === "showdown"))) {
       break;
     }
     if (d.kind === "action") {
-      if (picked && answers.length === 0) {
+      if (answers.length === 0 && game.chain().length <= below) {
         break;
       }
       await game.seat(d.seat).passPriority();
@@ -68,12 +68,15 @@ async function resolve(game: Game, answers: (string | number)[]): Promise<string
       const key = d.options.find((o) => o.key === String(want) || o.card === want)?.key;
       expect(key).toBeDefined();
       await game.seat(d.seat).answer({ keys: [key as string], kind: "pick" });
-      picked = true;
     } else {
       throw new Error(`unexpected ${d.kind} prompt: ${d.prompt}`);
     }
   }
   return offered;
+}
+
+function game_targets(game: Game): readonly string[] | undefined {
+  return game.chain().at(-1)?.targets;
 }
 
 describe("Sanction (ven-035-166)", () => {
@@ -172,9 +175,13 @@ describe("Sanction (ven-035-166)", () => {
   // Actual: mode 2 has no target descriptor at all (raw), so no Empowered-only target prompt exists.
   test("mode 2 offers ONLY Empowered units as targets", async () => {
     const game = await board().build();
+    // rule 355.3 / 355.5 — naming the mode up front: only "amped" is a legal object for it …
+    expect(await game.p1.try((p) => p.cast("sanction", { mode: DISEMPOWER, targets: "plain" }))).toMatchObject({ ok: false });
     await game.p1.cast("sanction");
-    const offered = await resolve(game, [DISEMPOWER, "amped"]);
-    expect(offered[1]).toEqual(["amped"]);
+    // … and through the prompt: the sole legal object is bound on the chain item without a further question (402.2).
+    await game.p1.chooseMode(DISEMPOWER);
+    expect(game.decision()?.kind).toBe("action");
+    expect(game.chain().at(-1)).toMatchObject({ cardId: "sanction", targets: ["amped"] });
   });
 
   // BUG — expected: with no Empowered unit anywhere, mode 2 is not selectable (a mode with no legal
@@ -200,7 +207,7 @@ describe("Sanction (ven-035-166)", () => {
   test("Deflect (809.1.c.1): with a spare power of ANY domain the enemy Deflect unit can be chosen, and that pip is spent on top of 3 + [calm]", async () => {
     const rich = await scenario().resources(P1, { energy: 3, power: { calm: 1, fury: 1 } }).unit(P2, "base", DEFLECTOR, "pp").unit(P1, "base", PORO, "plain").hand(P1, CARD, "sanction").build();
     await rich.p1.cast("sanction");
-    await resolve(rich, [EMPOWER, "pp"]);
+    await resolve(rich, ["pp"]); // no Empowered unit → mode 1 is forced; only its target is asked
     expect(rich.state("pp").isEmpowered).toBe(true);
     expect(rich.p1.resources()).toEqual({ energy: 0, power: { calm: 0, fury: 0 } });
   });
@@ -208,11 +215,13 @@ describe("Sanction (ven-035-166)", () => {
   // BUG — expected (809 / 356.2.a.2: Deflect is a MANDATORY additional cost): with exactly [calm] and no
   // spare power, the enemy Deflect unit is not a legal choice — only "plain" is offered. Actual: the
   // resolution-time target prompt lists the Pouty Poro too and picking it empowers it for free.
-  test("with no spare power the enemy [Deflect] unit is NOT offered at resolution", async () => {
+  test("with no spare power the enemy [Deflect] unit is NOT offered as a choice (asked as the spell is played)", async () => {
     const broke = await scenario().resources(P1, { energy: 3, power: { calm: 1 } }).unit(P2, "base", DEFLECTOR, "pp").unit(P1, "base", PORO, "plain").hand(P1, CARD, "sanction").build();
-    await broke.p1.cast("sanction");
-    const offered = await resolve(broke, [EMPOWER, "plain"]);
-    expect(offered[1]).toEqual(["plain"]);
+    await broke.p1.cast("sanction"); // mode 1 forced; "plain" is the only legal object → bound without asking
+    expect(game_targets(broke)).toEqual(["plain"]);
+    await resolve(broke, []);
+    expect(broke.state("pp").isEmpowered).toBe(false);
+    expect(broke.state("plain").isEmpowered).toBe(true);
   });
 
   test("parsed abilities: one reaction-timed spell ability whose effect is a 2-option choice; option 1 = empower a unit until end of turn (option 2 should be a disempower — currently raw)", async () => {

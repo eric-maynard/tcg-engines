@@ -16,8 +16,8 @@
  *  4. The tokens: exactly four, 1 Might, keyword Deflect, controlled by the caster, enter EXHAUSTED
  *     (185.2.d / 143.4), each placed at base or a battlefield the caster controls (439.2.b.1) —
  *     never at an enemy battlefield. Their Deflect is real: an enemy bolt at a Bird costs +1 power.
- *  5. Modes are chosen as the spell is played (355.3), before anyone can respond — the engine asks
- *     on resolution instead (flagged below).
+ *  5. Modes are chosen as the spell is played (355.3), before anyone can respond: `cast(c, {mode})`
+ *     names it up front, a bare `cast(c)` is asked mode → target at once (still before priority).
  *  6. Cost: 4 + two calm; one calm short or 3 energy → not castable.
  */
 
@@ -82,11 +82,12 @@ describe("Flurry of Feathers (unl-044-219)", () => {
   test("mode 'Counter a spell': the enemy bolt is countered — no damage, both spells in the trash, the bolt's energy is not refunded (425.1)", async () => {
     const game = await facing(bolt("Bolt"));
     await game.p1.cast("fof");
-    await game.settle();
+    // rule 355.3 — asked as it is played, labelled with the printed bullets.
     const mode = game.decision() as PickDecision;
     expect(mode).toMatchObject({ kind: "pick", seat: P1, semantics: "mode" });
-    expect(mode.options.map((o) => o.label)).toEqual(["counter (mode 0)", "create-token (mode 1)"]);
+    expect(mode.options.map((o) => o.label)).toEqual(["Counter a spell", "Play four 1 [Might] Bird unit tokens with [Deflect]"]);
     await game.p1.chooseMode(0);
+    expect(game.chain()[1]).toMatchObject({ cardId: "fof", mode: 0 });
     await game.settle(); // the only spell on the chain is the forced pick
     expect(game.chain()).toEqual([]);
     expect(game.zoneOf("spell")).toBe("trash");
@@ -98,9 +99,7 @@ describe("Flurry of Feathers (unl-044-219)", () => {
 
   test("no cost cap on the counter: a 9-energy, 3-power enemy spell is countered just the same", async () => {
     const game = await facing(bolt("Cataclysm", 9, ["fury", "fury", "fury"]), { energy: 9, power: { fury: 3 } });
-    await game.p1.cast("fof");
-    await game.settle();
-    await game.p1.chooseMode(0);
+    await game.p1.cast("fof", { mode: 0, targets: "spell" });
     await game.settle();
     expect(game.zoneOf("spell")).toBe("trash");
     expect(game.state("victim").damage).toBe(0);
@@ -108,9 +107,8 @@ describe("Flurry of Feathers (unl-044-219)", () => {
 
   test("mode 'Birds' in response does NOT stop the enemy spell: four Birds land first (LIFO), then the bolt still deals its 2", async () => {
     const game = await facing(bolt("Bolt"));
-    await game.p1.cast("fof");
-    await game.settle();
-    await game.p1.chooseMode(1);
+    await game.p1.cast("fof", { mode: 1 });
+    await game.settle(); // both pass → Flurry resolves first
     // Each Bird asks base | a battlefield P1 controls; put them all in the base.
     for (let i = 0; i < 4; i++) {
       const d = game.decision() as PickDecision;
@@ -132,9 +130,8 @@ describe("Flurry of Feathers (unl-044-219)", () => {
       .battlefield("bf2", { controller: P2 })
       .hand(P1, CARD, "fof")
       .build();
-    await game.p1.cast("fof"); // own turn, empty chain: legal because the Bird mode needs no target
+    await game.p1.cast("fof"); // own turn, empty chain: legal because the Bird mode needs no target (and is forced)
     await game.settle();
-    await game.p1.chooseMode(1);
     await game.p1.pick("base");
     await game.p1.pick("battlefield-bf1");
     await game.p1.pick("battlefield-bf1");
@@ -155,9 +152,8 @@ describe("Flurry of Feathers (unl-044-219)", () => {
 
   test("with no controlled battlefield the Birds simply enter the base — no destination prompt", async () => {
     const game = await scenario().resources(P1, { energy: 4, power: { calm: 2 } }).battlefield("bf2", { controller: P2 }).hand(P1, CARD, "fof").build();
-    await game.p1.cast("fof");
+    await game.p1.cast("fof"); // Bird mode forced (nothing to counter)
     await game.settle();
-    await game.p1.chooseMode(1);
     expect(game.decision()?.kind).toBe("action");
     expect(birdsOf(game, "base")).toHaveLength(4);
   });
@@ -171,7 +167,6 @@ describe("Flurry of Feathers (unl-044-219)", () => {
       .build();
     await game.p1.cast("fof");
     await game.settle();
-    await game.p1.chooseMode(1);
     const bird = birdsOf(game, "base")[0] as string;
     await game.advanceTurn(); // → P2's turn with an empty pool
     await game.p2.do("addResources", { energy: 1 });
@@ -199,10 +194,11 @@ describe("Flurry of Feathers (unl-044-219)", () => {
     expect(game.chain()).toEqual([expect.objectContaining({ cardId: "sol", triggered: true })]);
     await game.p2.passPriority();
     expect(game.p1.can("cast", "fof")).toBe(true); // still castable — the Bird mode keeps it legal
-    await game.p1.cast("fof");
-    await game.settle();
-    await game.p1.chooseMode(0);
-    await game.settle(); // nothing to counter; then the stun trigger resolves
+    // rule 355.8 — an ability is not "a spell": the counter mode is not offered at all.
+    expect(game.p1.option("cast", "fof")?.fields.find((f) => f.name === "mode")?.options).toEqual([1]);
+    expect((await game.p1.try((p) => p.cast("fof", { mode: 0 }))).ok).toBe(false);
+    await game.p1.cast("fof"); // Bird mode forced
+    await game.settle(); // Birds land; then the stun trigger resolves
     if (game.decision()?.kind === "pick") {
       await game.p2.pick("victim");
       await game.settle();
@@ -210,41 +206,43 @@ describe("Flurry of Feathers (unl-044-219)", () => {
     expect(game.zoneOf("fof")).toBe("trash");
     expect(game.zoneOf("sol")).toBe("base");
     expect(game.state("victim").isStunned).toBe(true);
+    expect(birdsOf(game, "base")).toHaveLength(4);
   });
 
-  test("cannot counter itself (355.9.c): alone on the chain, the counter mode fizzles and Flurry just goes to the trash", async () => {
+  test("cannot counter itself (355.9.c): alone on the chain the counter mode is not a legal choice at all — the forced Bird mode resolves instead", async () => {
     const game = await scenario().resources(P1, { energy: 4, power: { calm: 2 } }).hand(P1, CARD, "fof").build();
+    expect((await game.p1.try((p) => p.cast("fof", { mode: 0 }))).ok).toBe(false);
+    expect((await game.p1.try((p) => p.cast("fof", { mode: 0, targets: "fof" }))).ok).toBe(false);
     await game.p1.cast("fof");
-    await game.settle();
-    await game.p1.chooseMode(0);
     await game.settle();
     expect(game.chain()).toEqual([]);
     expect(game.zoneOf("fof")).toBe("trash");
-    expect(birdsOf(game)).toHaveLength(0);
+    expect(birdsOf(game)).toHaveLength(4);
     expect(game.decision()?.kind).toBe("action");
   });
 
-  // BUG — expected (355.3): "For Spells … with a bulleted list of modes to choose from, make the
-  // appropriate choices NOW", i.e. while playing, before the opponent receives priority (so they
-  // know whether a counter or four Birds is coming). Actual: the spell is finalized with no mode
-  // and the "Choose a mode" prompt only appears on resolution.
-  test.failing("BUG: the mode should be chosen as Flurry is played (355.3), before the opponent gets priority", async () => {
+  test("the mode is chosen as Flurry is played (355.3), before the opponent gets priority", async () => {
     const game = await facing(bolt("Bolt"));
     await game.p1.cast("fof");
     const d = game.decision();
     expect(d).toMatchObject({ kind: "pick", seat: P1, semantics: "mode" });
+    // …and naming it on the play needs no question: the counter's target rides on the chain item.
+    const named = await facing(bolt("Bolt"));
+    await named.p1.cast("fof", { mode: 0, targets: "spell" });
+    expect(named.chain()[1]).toMatchObject({ cardId: "fof", mode: 0, targets: ["spell"] });
+    expect(named.actingSeat()).toBe(P1);
+    await named.p1.passPriority();
+    expect(named.actingSeat()).toBe(P2); // P2 responds knowing a counter is coming
   });
 
-  // BUG — expected (355.3 + 355.8): a mode whose mandatory target does not exist ("Counter a spell"
-  // with no other spell on the chain) is not a legal choice, so only the Bird mode should be
-  // offered. Actual: both modes are offered and picking "counter" silently does nothing.
-  test.failing("BUG: with no spell to counter, only the Bird mode should be offered (355.8)", async () => {
+  test("with no spell to counter, only the Bird mode is offered (355.8) — and being forced, it is not even asked", async () => {
     const game = await scenario().resources(P1, { energy: 4, power: { calm: 2 } }).hand(P1, CARD, "fof").build();
+    const modeField = game.p1.option("cast", "fof")?.fields.find((f) => f.name === "mode");
+    expect(modeField?.options).toEqual([1]);
+    expect(modeField?.labels).toEqual(["Play four 1 [Might] Bird unit tokens with [Deflect]"]);
     await game.p1.cast("fof");
-    await game.settle();
-    const d = game.decision() as PickDecision;
-    expect(d.kind).toBe("pick");
-    expect(d.options.map((o) => o.mode)).toEqual([1]);
+    expect(game.chain()[0]).toMatchObject({ cardId: "fof", mode: 1 });
+    expect(game.decision()?.kind).toBe("action"); // no mode prompt: P1 keeps priority
   });
 
   test("registry payload matches the printed text: Reaction spell, 4 + calm×2, choice of [counter a spell | create 4× 1-Might Bird tokens with Deflect]", async () => {
@@ -255,8 +253,8 @@ describe("Flurry of Feathers (unl-044-219)", () => {
       {
         effect: {
           options: [
-            { effect: { type: "counter" } },
-            { effect: { amount: 4, token: { keywords: ["Deflect"], might: 1, name: "Bird", type: "unit" }, type: "create-token" } },
+            { effect: { type: "counter" }, label: "Counter a spell" },
+            { effect: { amount: 4, token: { keywords: ["Deflect"], might: 1, name: "Bird", type: "unit" }, type: "create-token" }, label: "Play four 1 [Might] Bird unit tokens with [Deflect]" },
           ],
           type: "choice",
         },

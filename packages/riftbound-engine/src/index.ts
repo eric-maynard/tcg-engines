@@ -62,6 +62,8 @@ export type {
 } from "./types/move-enumeration";
 // rule 194.3.a — the UI needs the same threshold the engine wins on.
 export { effectiveVictoryScore } from "./operations/points";
+// rule 355.3 — printed/derived labels for the modes of a "Choose one —" spell (UI prompts).
+export { modeOptionLabel, spellModeLabels, summarizeEffect } from "./game-definition/moves/play/play-time-modes";
 // Zone configuration exports
 export {
   createBattlefieldZone,

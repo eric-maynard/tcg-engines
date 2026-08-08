@@ -30,7 +30,7 @@ import { isLegalCounterTarget } from "../../../chain/counter-target";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
 import { removeFromBoard } from "../../../operations/leave-board";
 import { executeEffect } from "../../../abilities/effect-executor";
-import { raisePlayTimeModeChoice } from "./play-time-modes";
+import { collectChoiceNodes, raisePlayTimeModeChoice } from "./play-time-modes";
 import type { CostExtras } from "./cost";
 import {
   getOptionalPlayCost,
@@ -52,9 +52,11 @@ import {
   withCostsParam,
 } from "./cost-model";
 import {
+  casterModeChoice,
   chosenMoveDestinations,
   collectIndependentTargetSlots,
   collectSequenceTargetSlots,
+  enumerateTargetPairs,
   findAllAtOneBattlefieldTarget,
   enumerateReferencePairs,
   findAmountReferenceDamageTarget,
@@ -348,6 +350,78 @@ function getRepeatDiscardCount(
   return total;
 }
 
+/**
+ * rule 355.3 / 355.8 (sfd-049-221 / unl-182-219 "Choose one you haven't already
+ * chosen") — modes recorded on the source this turn are not legal choices
+ * (turn-stamped record, rule 517.2.b).
+ */
+function modesExcludedThisTurn(
+  state: RiftboundGameState,
+  node: { notChosenThisTurn?: boolean } | undefined,
+  meta: { modesChosenThisTurn?: readonly number[]; modesChosenTurn?: number } | undefined,
+): readonly number[] {
+  if (node?.notChosenThisTurn !== true || meta?.modesChosenTurn !== state.turn.number) {
+    return [];
+  }
+  return meta.modesChosenThisTurn ?? [];
+}
+
+/**
+ * rule 355.3 — "For Spells … with a bulleted list of modes to choose from, make
+ * the appropriate choices now": every hand spell is offered once as printed and,
+ * when its caster picks the mode, once more PER MODE so the enumerator can plan
+ * that mode's own targets (355.5) exactly as it plans a plain spell's. Modes with
+ * no legal target drop out at the 355.8 gate like any other effect.
+ */
+function expandSpellModes(
+  cards: readonly CoreCardId[],
+  state: RiftboundGameState,
+  getMeta: (cardId: CoreCardId) => unknown,
+): { cardId: CoreCardId; mode?: number; modeEffect?: SpellEffectTargetShape }[] {
+  const registry = getGlobalCardRegistry();
+  const out: { cardId: CoreCardId; mode?: number; modeEffect?: SpellEffectTargetShape }[] = [];
+  for (const cardId of cards) {
+    out.push({ cardId });
+    const spell = (registry.getAbilities(cardId as string) ?? []).find((a) => a.type === "spell");
+    const modal = casterModeChoice(spell?.effect);
+    if (!modal) {
+      continue;
+    }
+    const excluded = modesExcludedThisTurn(
+      state,
+      modal.node as { notChosenThisTurn?: boolean },
+      getMeta(cardId) as { modesChosenThisTurn?: readonly number[]; modesChosenTurn?: number } | undefined,
+    );
+    modal.options.forEach((opt, mode) => {
+      if (!excluded.includes(mode) && opt?.effect) {
+        out.push({ cardId, mode, modeEffect: opt.effect });
+      }
+    });
+  }
+  return out;
+}
+
+/**
+ * rule 355.5 — the single Game Object a mode's own instruction asks its caster to
+ * choose ("Deal 2 to a unit at a battlefield"), or undefined ("Draw 1", "Counter
+ * a spell" — a chain item, planned separately — or a mass/"up to" selection).
+ */
+function modeSingleSlot(effect: unknown): Record<string, unknown> | undefined {
+  const tgt = (effect as { target?: unknown } | undefined)?.target as
+    | { type?: unknown; quantity?: unknown }
+    | undefined;
+  if (!tgt || typeof tgt !== "object" || typeof tgt.type !== "string") {
+    return undefined;
+  }
+  if (["self", "trigger-source", "player", "battlefield", "pending-value"].includes(tgt.type)) {
+    return undefined;
+  }
+  if (tgt.quantity !== undefined && tgt.quantity !== 1) {
+    return undefined;
+  }
+  return tgt as Record<string, unknown>;
+}
+
 export const playSpell: Defs["playSpell"] = {
   condition: (state, rawContext) => {
     // rule 355.1 — a `costs` selection is the canonical cost param; expand it
@@ -591,7 +665,37 @@ export const playSpell: Defs["playSpell"] = {
 
     // Rule 355.8 / 419.2.a: gate on caster-chosen targets (including modal options).
     const abilities = registry.getAbilities(context.params.cardId) ?? [];
-    const spellAbility = abilities.find((a: { type: string }) => a.type === "spell");
+    const printedSpellAbility = abilities.find((a: { type: string }) => a.type === "spell");
+    // rule 355.3 — a mode named as the spell is played: it must be one the
+    // caster may choose (355.8: legal targets; "not chosen this turn"), and every
+    // target check below then reads THAT mode's instruction as the spell's text.
+    const modal = casterModeChoice(printedSpellAbility?.effect);
+    const chosenMode = context.params.mode as number | undefined;
+    const chosenModes = context.params.modes as readonly number[] | undefined;
+    if ((chosenMode !== undefined || chosenModes !== undefined) && !modal) {
+      return false;
+    }
+    if (modal && (chosenMode !== undefined || chosenModes !== undefined)) {
+      const excluded = modesExcludedThisTurn(
+        state,
+        modal.node as { notChosenThisTurn?: boolean },
+        context.cards.getCardMeta?.(context.params.cardId as CoreCardId) as never,
+      );
+      const list = chosenModes ?? [chosenMode as number];
+      if (
+        (chosenModes !== undefined && (chosenMode !== undefined || list.length !== 1 + reqRepeatCount)) ||
+        (chosenMode !== undefined && reqRepeatCount > 0) ||
+        !list.every((m) => Number.isInteger(m) && modal.options[m]?.effect !== undefined && !excluded.includes(m)) ||
+        ((modal.node as { notChosenThisTurn?: boolean }).notChosenThisTurn === true &&
+          new Set(list).size !== list.length)
+      ) {
+        return false;
+      }
+    }
+    const spellAbility =
+      modal && chosenMode !== undefined && printedSpellAbility
+        ? ({ ...printedSpellAbility, effect: modal.options[chosenMode]?.effect } as typeof printedSpellAbility)
+        : printedSpellAbility;
     const conditionResolverCtx = {
       cards: {
         // rule 740.1.a / 477.1.a: "friendly"/"enemy" track the CURRENT
@@ -627,6 +731,33 @@ export const playSpell: Defs["playSpell"] = {
       )
     ) {
       return false;
+    }
+    // rule 820.2.a / 355.5 — one mode per [Repeat] execution: each execution's
+    // mode must itself be choosable, and `targets` lists, in execution order,
+    // the one Game Object each single-slot mode names (slot-less modes take none).
+    if (modal && chosenModes !== undefined) {
+      const supplied = (context.params.targets ?? []) as string[];
+      let cursor = 0;
+      for (const m of chosenModes) {
+        const effect = modal.options[m]?.effect;
+        if (!spellEffectHasLegalTargets(effect, conditionResolverCtx)) {
+          return false;
+        }
+        const slot = modeSingleSlot(effect);
+        if (!slot) {
+          continue;
+        }
+        const pool = resolveTarget(
+          { ...slot, quantity: "all" } as Parameters<typeof resolveTarget>[0],
+          conditionResolverCtx,
+        ) as string[];
+        const picked = supplied[cursor];
+        if (picked === undefined ? pool.length > 0 : !pool.includes(picked)) {
+          return false;
+        }
+        cursor += picked === undefined ? 0 : 1;
+      }
+      return cursor === supplied.length;
     }
 
     // rule-id: ven-040-166 (rule 355.8) — an explicitly supplied single card
@@ -763,49 +894,31 @@ export const playSpell: Defs["playSpell"] = {
     // supplied set must be exactly two distinct cards, each legal for its own
     // descriptor, and `location:"same"` on the second means "same zone as the
     // first".
+    // rule-id: unl-083-219 — `swap-locations`: the two must stand at DIFFERENT
+    // locations. rule 355.5 (ogn-108-298) — `increase-might-to` "Choose a
+    // friendly unit … ANOTHER friendly unit" is the same two-role shape, and the
+    // roles are chosen as the spell is played: with a legal pair on the board a
+    // play naming none is not a finished play.
     {
-      const pairEffect = spellAbility?.effect as
-        | { type?: string; target1?: unknown; target2?: unknown }
-        | undefined;
-      // rule-id: unl-083-219 — `swap-locations` names the same two-target shape.
-      const isPairEffect =
-        pairEffect?.type === "swap-might" || pairEffect?.type === "swap-locations";
-      const t1 = isPairEffect ? pairEffect?.target1 : undefined;
-      const t2 = isPairEffect ? pairEffect?.target2 : undefined;
+      const legalPairs = enumerateTargetPairs(
+        spellAbility?.effect as SpellEffectTargetShape | undefined,
+        conditionResolverCtx,
+      );
       const supplied = (context.params.targets ?? []) as string[];
-      if (
-        typeof t1 === "object" &&
-        t1 !== null &&
-        typeof t2 === "object" &&
-        t2 !== null &&
-        supplied.length > 0
-      ) {
-        if (supplied.length !== 2 || supplied[0] === supplied[1]) {
+      if (legalPairs !== undefined) {
+        if (supplied.length === 0) {
           return false;
         }
-        const firstPool = resolveTarget(
-          { ...(t1 as object), quantity: "all" } as Parameters<typeof resolveTarget>[0],
-          conditionResolverCtx,
-        ) as string[];
-        if (!firstPool.includes(supplied[0] as string)) {
-          return false;
-        }
-        const zone = context.zones.getCardZone(supplied[0] as CoreCardId);
-        const secondPool = resolveTarget(
-          { ...(t2 as object), quantity: "all" } as Parameters<typeof resolveTarget>[0],
-          (t2 as { location?: string }).location === "same"
-            ? { ...conditionResolverCtx, sameZone: zone as string, sourceZone: zone as string }
-            : conditionResolverCtx,
-        ) as string[];
-        if (!secondPool.includes(supplied[1] as string)) {
-          return false;
-        }
-        // rule-id: unl-083-219 (rule 355.8) — "…and another unit you control
-        // at a DIFFERENT location": swapping locations is only a legal choice
-        // for two units that are not already in the same zone.
+        const symmetric =
+          (spellAbility?.effect as { type?: string } | undefined)?.type === "swap-might" ||
+          (spellAbility?.effect as { type?: string } | undefined)?.type === "swap-locations";
         if (
-          pairEffect?.type === "swap-locations" &&
-          context.zones.getCardZone(supplied[1] as CoreCardId) === zone
+          supplied.length !== 2 ||
+          !legalPairs.some(
+            ([a, b]) =>
+              (a === supplied[0] && b === supplied[1]) ||
+              (symmetric && a === supplied[1] && b === supplied[0]),
+          )
         ) {
           return false;
         }
@@ -1020,8 +1133,13 @@ export const playSpell: Defs["playSpell"] = {
       additionalCostSpec?: { energy?: number; power?: readonly string[] };
       sacrificeId?: string;
       discardId?: string;
+      mode?: number;
     }[] = [];
-    for (const cardId of handCards) {
+    // rule 355.3 — a modal spell is planned once as printed (the caster is then
+    // asked for the mode as it is played) and once per mode they may name up front.
+    for (const { cardId, mode, modeEffect } of expandSpellModes(handCards, state, (c) =>
+      context.cards.getCardMeta?.(c),
+    )) {
       const def = registry.get(cardId as string);
       if (!def || def.cardType !== "spell") {
         continue;
@@ -1091,7 +1209,9 @@ export const playSpell: Defs["playSpell"] = {
       // Rule 355.8 / 419.2.a: gate on caster-chosen targets (including modal options).
       const abilities = registry.getAbilities(cardId as string) ?? [];
       const spellAbility = abilities.find((a: { type: string }) => a.type === "spell");
-      const spellEffect = spellAbility?.effect as SpellEffectTargetShape | undefined;
+      // rule 355.3 / 355.5 — planning a named mode: its instruction stands in
+      // for the spell's text, so its own targets are enumerated like a plain spell's.
+      const spellEffect = (modeEffect ?? spellAbility?.effect) as SpellEffectTargetShape | undefined;
       const resolverCtx = {
         cards: {
           // rule 740.1.a / 477.1.a — friendliness follows current control.
@@ -1109,6 +1229,8 @@ export const playSpell: Defs["playSpell"] = {
           getCardsInZone: (z: CoreZoneId, p?: CorePlayerId) => context.zones.getCardsInZone(z, p),
         },
       };
+      // rule 355.8 — for a named mode this is exactly "a mode with no legal
+      // target may not be chosen": that mode is simply not offered.
       if (!spellEffectHasLegalTargets(spellEffect, resolverCtx)) {
         continue;
       }
@@ -1186,7 +1308,7 @@ export const playSpell: Defs["playSpell"] = {
         tgt.type !== "player" &&
         tgt.type !== "battlefield" &&
         tgt.quantity !== "all";
-      const baseVariants: { playerId: string; cardId: string; targets?: string[] }[] = [];
+      const baseVariants: { playerId: string; cardId: string; targets?: string[]; mode?: number }[] = [];
       // rule-id: ven-083-166 (Rampage) / rule 355.8 — "choose a friendly
       // unit and an enemy unit": a `fight` effect names TWO caster-chosen
       // targets (attacker + defender). Enumerate one Play per legal pair so
@@ -1200,22 +1322,15 @@ export const playSpell: Defs["playSpell"] = {
           ? spellEffect.defender
           : undefined;
       // rule-id: sfd-145-221 (rule 355.8 / 433) — "Swap the Might of two units
-      // at the same battlefield": a `swap-might` / `increase-might-to` effect
-      // names TWO caster-chosen targets through `target1`/`target2` (Swap only —
-      // `increase-might-to` picks programmatically). Enumerate
+      // at the same battlefield": a `swap-might` effect names TWO caster-chosen
+      // targets through the role slots `target1`/`target2`. Enumerate
       // one Play per legal pair so both are locked on the chain item.
       // rule-id: unl-083-219 — `swap-locations` (Smoke and Mirrors) uses the
       // same two-caster-chosen-target shape.
-      const isSwap =
-        spellEffect?.type === "swap-might" || spellEffect?.type === "swap-locations";
-      const pairFirst =
-        isSwap && typeof spellEffect?.target1 === "object" && spellEffect.target1 !== null
-          ? (spellEffect.target1 as { quantity?: unknown; location?: string })
-          : undefined;
-      const pairSecond =
-        isSwap && typeof spellEffect?.target2 === "object" && spellEffect.target2 !== null
-          ? (spellEffect.target2 as { quantity?: unknown; location?: string })
-          : undefined;
+      // rule 355.5 (ogn-108-298) — so does `increase-might-to` ("Choose a
+      // friendly unit … its Might becomes ANOTHER friendly unit's"): both roles
+      // are chosen as the spell is played, [target1 = raised, target2 = reference].
+      const targetPairs = enumerateTargetPairs(spellEffect, resolverCtx);
       // rule-id: sfd-011-221 (rule 355.8 / 434 / 435) — "Choose a unit and an
       // Equipment with the same controller": an `attach-or-detach` effect names
       // TWO caster-chosen targets, so enumerate one Play per same-controller
@@ -1386,48 +1501,13 @@ export const playSpell: Defs["playSpell"] = {
             });
           }
         }
-      } else if (
-        !isCardTarget &&
-        pairFirst &&
-        pairSecond &&
-        pairFirst.quantity !== "all" &&
-        pairSecond.quantity !== "all"
-      ) {
-        const firsts = resolveTarget(
-          { ...pairFirst, quantity: "all" } as Parameters<typeof resolveTarget>[0],
-          resolverCtx,
-        );
-        // rule 433.1 — Swap is symmetric, so [a,b] and [b,a] are the same
-        // play; a directional pair (increase-might-to) keeps both orders.
-        const symmetric =
-          spellEffect?.type === "swap-might" || spellEffect?.type === "swap-locations";
-        // rule-id: unl-083-219 — a location swap needs two DIFFERENT locations.
-        const needDifferentZones = spellEffect?.type === "swap-locations";
-        const seenPairs = new Set<string>();
-        for (const a of firsts) {
-          const zone = context.zones.getCardZone(a as CoreCardId);
-          const seconds = resolveTarget(
-            { ...pairSecond, quantity: "all" } as Parameters<typeof resolveTarget>[0],
-            pairSecond.location === "same"
-              ? { ...resolverCtx, sameZone: zone as string, sourceZone: zone as string }
-              : resolverCtx,
-          );
-          for (const b of seconds) {
-            if (b === a) continue;
-            if (needDifferentZones && context.zones.getCardZone(b as CoreCardId) === zone) {
-              continue;
-            }
-            if (symmetric) {
-              const key = [a as string, b as string].sort().join("|");
-              if (seenPairs.has(key)) continue;
-              seenPairs.add(key);
-            }
-            baseVariants.push({
-              cardId: cardId as string,
-              playerId: context.playerId as string,
-              targets: [a as string, b as string],
-            });
-          }
+      } else if (!isCardTarget && targetPairs) {
+        for (const [a, b] of targetPairs) {
+          baseVariants.push({
+            cardId: cardId as string,
+            playerId: context.playerId as string,
+            targets: [a, b],
+          });
         }
       } else if (
         !isCardTarget &&
@@ -1746,6 +1826,12 @@ export const playSpell: Defs["playSpell"] = {
           baseVariants.push(...expanded);
         }
       }
+      // rule 355.3 — the named mode rides on every variant planned from it.
+      if (mode !== undefined) {
+        for (let i = 0; i < baseVariants.length; i++) {
+          baseVariants[i] = { ...(baseVariants[i] as (typeof baseVariants)[number]), mode };
+        }
+      }
       results.push(...baseVariants);
 
       // rule-id: ven-083-166 / rule 560 — "you may pay [X] as an additional
@@ -1843,7 +1929,11 @@ export const playSpell: Defs["playSpell"] = {
         cardId as string,
         board,
       );
-      if (repeatCost && repeatCost.length > 0) {
+      // rule 820.2.a — every [Repeat] execution names its OWN mode, so the
+      // repeat tiers are offered on the printed play (each execution's mode is
+      // then asked as the spell is played, or supplied whole as `modes`), never
+      // as "this one mode, N more times".
+      if (repeatCost && repeatCost.length > 0 && mode === undefined) {
         const meta = createMetaAccessor(context.cards);
         // rule 820.2.a (sfd-151-221) — the two executions' target GROUPS are
         // offered once per unordered pair of groups (swapping them is the same
@@ -2517,14 +2607,44 @@ export const playSpell: Defs["playSpell"] = {
       );
     }
 
-    // rule 349 / 820.2 (unl-182-219 Curtain Call) — the modes of a modal spell
-    // are chosen during the Make Relevant Choices step of playing it, before
-    // anyone gets priority; every [Repeat] execution picks its own. The picks
-    // are locked onto the chain item's effect and consumed when it resolves.
-    if (!draft.pendingChoice && effectToStore && repeatN > 0) {
+    // rule 355.3 / 349 / 820.2 (unl-044-219 Flurry of Feathers, unl-182-219
+    // Curtain Call) — the modes of a modal spell are chosen during the Make
+    // Relevant Choices step of playing it, before anyone gets priority; every
+    // [Repeat] execution picks its own. A mode named on the play (`mode`, or one
+    // per execution as `modes`) is locked onto the chain item's effect now — its
+    // targets already ride on the item — and anything still unnamed is ASKED now
+    // (bound to the item), never as the spell resolves.
+    if (effectToStore && casterModeChoice(spellEffect) !== undefined) {
       const items = draft.interaction?.chain?.items ?? [];
       const item = [...items].reverse().find((it) => it?.cardId === cardId);
-      if (item?.id !== undefined) {
+      const nodes = item ? collectChoiceNodes(item.effect) : [];
+      const namedModes =
+        (context.params.modes as readonly number[] | undefined) ??
+        (context.params.mode !== undefined ? [context.params.mode as number] : undefined);
+      if (item && namedModes !== undefined) {
+        let cursor = 0;
+        nodes.forEach((node, i) => {
+          const picked = namedModes[i];
+          if (picked === undefined) {
+            return;
+          }
+          node._chosenIndex = picked;
+          // rule 820.2.a — with several executions each single-slot mode owns the
+          // next supplied target; a lone execution reads the item's `targets`.
+          if (nodes.length > 1) {
+            const slot = modeSingleSlot(
+              (node.options as { effect?: unknown }[] | undefined)?.[picked]?.effect,
+            );
+            if (slot && targets?.[cursor] !== undefined) {
+              node._chosenTargets = [targets[cursor] as string];
+              cursor += 1;
+            } else {
+              node._chosenTargets = slot ? [] : undefined;
+            }
+          }
+        });
+      }
+      if (item?.id !== undefined && !draft.pendingChoice) {
         raisePlayTimeModeChoice(
           draft,
           item.id as string,
@@ -2535,6 +2655,13 @@ export const playSpell: Defs["playSpell"] = {
             cards: context.cards,
             counters: context.counters,
             draft,
+            fireTriggers: (event: unknown) =>
+              fireTriggers(event as Parameters<typeof fireTriggers>[0], {
+                cards: context.cards,
+                counters: context.counters,
+                draft,
+                zones: context.zones,
+              }),
             playerId,
             sourceCardId: cardId,
             zones: context.zones,

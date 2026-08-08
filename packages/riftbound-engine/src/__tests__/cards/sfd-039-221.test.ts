@@ -68,7 +68,7 @@ describe("Royal Entourage (sfd-039-221)", () => {
     await game.settle();
     const mode = game.decision() as PickDecision;
     expect(mode.kind).toBe("pick");
-    expect(mode.options.map((o) => o.label)).toEqual(["ready (mode 0)", "exhaust (mode 1)"]);
+    expect(mode.options.map((o) => o.label)).toEqual(["Ready a legend", "Exhaust a legend"]); // no printed bullets → rendered from the mode's instruction
     await game.p1.chooseMode(1);
     const target = game.decision() as PickDecision;
     expect(target.seat).toBe(P1);

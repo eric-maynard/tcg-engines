@@ -67,24 +67,15 @@ async function resolveChoosing(game: Game, target?: string): Promise<string[] | 
   return offered;
 }
 
-/** P1 casts Sanction (mode 0) on `target`; returns right after the target is chosen (Sanction resolved, nothing else drained). */
+/** P1 casts Sanction naming mode 0 (Empower) on `target` (rule 355.3/355.5: chosen as it is played) and passes priority around until Sanction itself has resolved — nothing else is drained. */
 async function sanctionEmpower(game: Game, target: string): Promise<void> {
-  await game.p1.cast("sanction");
+  await game.p1.cast("sanction", { mode: 0, targets: target });
   for (let i = 0; i < 10; i++) {
-    await game.settle();
     const d = game.decision();
-    if (d?.kind !== "pick") {
+    if (d?.kind !== "action" || d.context === "main" || !game.chain().some((it) => it.cardId === "sanction")) {
       return;
     }
-    const opt = d.options.find((o) => o.card === target);
-    if (opt) {
-      await game.p1.answer({ keys: [opt.key], kind: "pick" });
-      return;
-    }
-    if (d.options.some((o) => o.card !== undefined)) {
-      return; // a card pick that does not offer `target` — leave it to the caller
-    }
-    await game.p1.chooseMode(0);
+    await game.seat(d.seat).passPriority();
   }
 }
 

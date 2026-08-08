@@ -203,15 +203,23 @@ export function observe(
     points[pid] = state.players[pid]?.victoryPoints ?? 0;
   }
 
-  const chain = (state.interaction?.chain?.items ?? []).map((it) => ({
-    cardId: it.cardId,
-    controller: it.controller,
-    countered: it.countered === true,
-    id: it.id,
-    name: registry.get(it.cardId)?.name ?? it.cardId,
-    triggered: it.triggered === true,
-    type: it.type,
-  }));
+  const chain = (state.interaction?.chain?.items ?? []).map((it) => {
+    // rule 355.3 — a "Choose one —" item whose mode was chosen as it was played / finalized.
+    const menu = it.effect as { type?: string; _chosenIndex?: unknown } | undefined;
+    const mode = menu?.type === "choice" && typeof menu._chosenIndex === "number" ? menu._chosenIndex : undefined;
+    return {
+      cardId: it.cardId,
+      controller: it.controller,
+      countered: it.countered === true,
+      id: it.id,
+      ...(mode !== undefined ? { mode } : {}),
+      name: registry.get(it.cardId)?.name ?? it.cardId,
+      // rule 355.5 — the Game Objects chosen for it as it was played (public).
+      ...(it.targets ? { targets: [...it.targets] } : {}),
+      triggered: it.triggered === true,
+      type: it.type,
+    };
+  });
 
   const visibleDecision =
     decision && (viewer === SPECTATOR || decision.seat === viewer) ? decision : summarizeDecision(decision);

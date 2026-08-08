@@ -182,6 +182,23 @@ export function handle_recycle(effect: ExecutableEffect, ctx: EffectContext, _h:
     if (n <= 0) {
       return;
     }
+    // rule 355.5 / 355.10.a (unl-103-219) — "Choose up to 3 cards from
+    // opponents' trashes": a trash is public, so cards its own `target` names
+    // there were CHOSEN already (at play, or through the target prompt) and
+    // arrive bound — recycle exactly those (none, if none were named).
+    if (
+      ctx.boundTargets &&
+      (targetSpec as { location?: string } | undefined)?.location === from
+    ) {
+      const chosen = ctx.boundTargets.filter((id) => pool.includes(id)).slice(0, want);
+      for (const id of chosen) {
+        recycleToDeckBottom(id, ctx);
+      }
+      if (chosen.length > 0) {
+        ctx.fireTriggers?.({ cardIds: chosen, playerId: ctx.playerId, type: "recycle" });
+      }
+      return;
+    }
     // rule 416.1.a / rule-id: sfd-169-221 — "put a card from your hand on the
     // top or bottom of your Main Deck": the owner picks the end as well.
     const ownerChoice = (effect as { position?: string }).position === "owner-choice";

@@ -493,6 +493,47 @@ export function executeResolvedItem(
     effect = resolvePlayedFromHandGates(effect, false);
   }
 
+  // rule 355.3 (unl-044-219 / ven-052-166) — a spell whose mode was chosen as
+  // it was played resolves as if the chosen bullet were its whole text: the
+  // mode's instruction takes the spell's place here, so its target (bound on
+  // the item at play time) is re-checked and followed like any spell's.
+  if (!finalizeOnly && resolved.type === "spell") {
+    const menu = effect as unknown as {
+      type?: string;
+      player?: unknown;
+      options?: { effect?: ExecutableEffect }[];
+      notChosenThisTurn?: boolean;
+      _chosenIndex?: unknown;
+    };
+    const pickedMode =
+      menu.type === "choice" && menu.player === undefined && typeof menu._chosenIndex === "number"
+        ? menu.options?.[menu._chosenIndex]?.effect
+        : undefined;
+    // A multi-pick mode ("up to 3 cards from opponents' trashes") that bound
+    // nothing at play keeps its handler's own resolution-time picker.
+    const pickedQty = (pickedMode?.target as { quantity?: unknown } | undefined)?.quantity;
+    const multiPickUnbound =
+      resolved.targets === undefined &&
+      (pickedQty === "any" || (typeof pickedQty === "object" && pickedQty !== null));
+    const picked = multiPickUnbound ? undefined : pickedMode;
+    if (picked) {
+      if (menu.notChosenThisTurn === true) {
+        // rule 517.2.b — "one you haven't already chosen this turn": turn-stamped record.
+        const sourceId = resolved.cardId as CoreCardId;
+        const currentTurn = draft.turn?.number ?? 0;
+        const meta = context.cards.getCardMeta(sourceId) as
+          | { modesChosenThisTurn?: number[]; modesChosenTurn?: number }
+          | undefined;
+        const prior = meta?.modesChosenTurn === currentTurn ? (meta.modesChosenThisTurn ?? []) : [];
+        context.cards.updateCardMeta(sourceId, {
+          modesChosenThisTurn: [...prior, menu._chosenIndex as number],
+          modesChosenTurn: currentTurn,
+        } as Partial<RiftboundCardMeta>);
+      }
+      effect = picked;
+    }
+  }
+
   // Rule 355.10: for a resolved effect that targets a caster-chosen single
   // card ("give a unit X"), the controller picks which card. When targets
   // were not bound at chain-placement time and more than one legal option
