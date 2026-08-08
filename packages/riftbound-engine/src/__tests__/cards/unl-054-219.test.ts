@@ -160,8 +160,7 @@ describe("Tricksy Tentacles (unl-054-219)", () => {
     expect(sets).toContain("plain");
   });
 
-  test.failing("BUG: emptying a battlefield P2 held alone — moving its only unit away leaves bf1 uncontrolled (466.5.b/323.6) and P2's unit contests bf2", async () => {
-    // Expected: lone defender relocated; bf1 controller → null at cleanup; bf2 contested by P2. Actual: cast rejected.
+  test("emptying a battlefield P2 held alone — moving its only unit away leaves bf1 uncontrolled (466.5.b/323.6) and P2's unit contests bf2 (190.3.a) → the Cleanup begins that Combat with P2 attacking (323.13); Lone(3) then dies to Holder(6)", async () => {
     const game = await scenario()
       .resources(P1, { energy: 4, power: { calm: 1 } })
       .battlefield("bf1", { controller: P2 })
@@ -170,10 +169,17 @@ describe("Tricksy Tentacles (unl-054-219)", () => {
       .unit(P1, "bf2", { might: 6, name: "Holder" }, "holder")
       .hand(P1, CARD, "tt")
       .build();
-    await castTo(game, ["lone"], "bf2");
+    await game.p1.cast("tt", { targets: ["lone"] });
+    const r = await game.settle(); // resolves up to the destination prompt
+    expect(r.decision).toMatchObject({ kind: "pick", seat: P1 });
+    await game.p1.pick("battlefield-bf2"); // the tail of the resolution; its Cleanup follows at once
     expect(game.locationOf("lone")).toBe("bf2");
     expect(game.gameState.battlefields.bf1?.controller).toBeNull();
-    expect(game.gameState.battlefields.bf2?.contested).toBe(true);
+    expect(game.gameState.battlefields.bf2).toMatchObject({ contested: true, contestedBy: P2, controller: P1 });
+    expect(game.gameState.interaction?.showdownStack?.at(-1)).toMatchObject({ attackingPlayer: P2, battlefieldId: "bf2", isCombatShowdown: true });
+    await game.settle();
+    expect(game.zoneOf("lone")).toBe("trash");
+    expect(game.gameState.battlefields.bf2).toMatchObject({ contested: false, controller: P1 });
   });
 
   test("(3 players) 'same controller' — P2's and P3's units are each offered alone but never mixed in one set", async () => {

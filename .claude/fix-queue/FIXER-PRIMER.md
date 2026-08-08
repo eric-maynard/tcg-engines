@@ -168,6 +168,17 @@ effect and thread it through `reveal-and-pick.then`. If B needs A's object use `
 - Parser: `C/parser/impl/trigger-patterns.ts TRIGGER_PATTERNS` (regex → `{event, on, restrictions}`), `impl/triggers.ts
   parseTriggeredAbility` (leading/trailing "if" → `condition` via `parsers/condition-parser.ts`), `impl/keywords.ts
   KEYWORD_TRIGGER_EVENTS` (Deathknell→`die`, Vision→`play-self`) + `expandHuntKeywords`.
+- REFLEXIVE triggers (387/388, "<main>. Then [you may] do this[ N times]: <body>"): parser `C/parser/impl/effects-reflexive.ts`
+  (hooked in `impl/effects.ts parseEffects` before the single-effect attempt; comma-joined conditioned forms — "If this
+  kills it, do this:", "for each … this kills, do this:" — and the Look→play "Empower it" idiom keep their own shapes)
+  emits `{type:"reflexive", effect, times?, optional?}` sequenced after <main> (a body pronoun "it"/"of them" →
+  `target:{type:"pending-value"}` + `pendingValue.source`). Engine `E/abilities/effects/reflexive.ts handle_reflexive`
+  does NOT run the body: it appends `times` Pending triggered chain items (source = the card, controller = resolving
+  player, `optional` → opt-in at finalization) which G7 finalization then targets; a `pending-value` target is frozen
+  to `{type:"permanent", filter:{idIn:[…]}, quantity}` (`target-resolver.ts matchesFilter idIn`; `resolve.ts` prompts an
+  id-linked "up to N" even with one option so zero stays choosable). "When you play a spell" triggers fire on the
+  spell's RESOLUTION (419.4.a / 359.3.e.10 — `resolve.ts firePlayedCardTriggers`), never at chain-add.
+  Tests: `core-rules/reflexive-triggers.test.ts`, parser `__tests__/effects/reflexive.test.ts`.
 Recipe — trigger never fires: 1) dump abilities: need `{type:"triggered", trigger:{event,on}, effect}`; else parser/explicit.
 2) Is `event` emitted (list above)? If not: add `fireTriggers` at the site and the shape to `GameEvent`/`EVENT_MAP`.
 3) Does `on` hit a handled branch AND does the event carry the owner/actor field that branch reads (`owner`, `playerId`,
@@ -296,13 +307,30 @@ Recipe — wrong total: assert `computeTotalCost(...).resources` in a unit test 
 `[rainbow]` in tests: `.resources(P1,{power:{rainbow:1}})` (any domain also pays a rainbow pip).
 
 ## 8. Combat / movement / scoring
-- Movement: `moves/movement/standard-move.ts standardMove` (exhausts, moves, `move` event, sets `bf.contested/contestedBy`,
-  opens the showdown via `chain-state.ts startShowdown`, stamps `combatRole` + `attack`/`defend` events),
-  `ganking-move.ts`, `recall-unit.ts` (no move event), `helpers.ts`. Effect-driven: `effects/move.ts handle_move /
-  moveCardWithEvent / markContestedOnArrival` (may prompt `choose-destination`), `effects/recall.ts`.
+- Movement: `moves/movement/standard-move.ts standardMove` (exhausts, moves, `move` event), `ganking-move.ts`,
+  `recall-unit.ts` (no move event), `helpers.ts`. Effect-driven: `effects/move.ts handle_move / moveCardWithEvent`
+  (may prompt `choose-destination`; 449.2 two-other-players → recall), `effects/recall.ts`.
+- ARRIVALS — ONE helper, `E/operations/arrive-at-battlefield.ts`: every path that makes a unit present at a battlefield
+  calls `noteArrival(io, {at, unitIds, stagedBy, cause})` (Standard/Ganking move reducers, `contest-arrival.ts
+  contestBattlefieldOnArrival` for play-unit/play-champion/pending-choice destinations, `effects/move.ts arriveByEffect`
+  for effect moves/swaps, `effects/play.ts enterUnitFromEffect`, `create-token.ts`, `take-control.ts` cause
+  `"control-change"`). It applies Contested for the unit's CONTROLLER (190.3.a/450: `bf.contested/contestedBy`,
+  `showdownComplete=false`, `stagedBy` = whose action did it) and joins a showdown already running there (344.1
+  non-combat→combat upgrade, 464.2.c.3.a roles + attack/defend events for newcomers only). It never BEGINS anything:
+  `beginStagedShowdowns(io)` (= `chain/showdown.ts openPendingContestedShowdown`, run when the turn is back in Neutral
+  Open: after the chain empties in `resolve.ts`, `pending-choice.ts postChoiceCleanup`, showdown close, full combat)
+  does 323.11 (un-contest a battlefield whose contesting player has no unit left) → 323.12 (showdown-only first) →
+  323.13 (staged Combat whose attacker OR `stagedBy` is the turn player; an off-turn Reaction arrival waits for the
+  turn player's `startShowdown` step). `beginShowdownAt(io, bfId, {autoBegun})` is the single opener (focus =
+  contestedBy per 345, `startShowdownState`, `showdown-begin`, roles + become-mighty + `attack`/`defend` with
+  batchIndex) used by that Cleanup, by the `startShowdown` move, and inline by Standard/Ganking moves (their own
+  Cleanup IS Neutral Open; not `autoBegun`, so harness `settle()` does not hand it back). A control steal of the ONLY
+  unit at a battlefield is left to `performCleanup` step 6 `conquerByPresence`. Tests: `core-rules/effect-move-staging.test.ts`.
 - Showdown / Focus: `E/chain/chain-state.ts startShowdown, passFocus, endShowdown, resetShowdownPasses, getActiveShowdown`;
   moves `moves/chain/showdown.ts passShowdownFocus` (all passed ⇒ close; non-combat close auto-conquers for a sole occupant
-  + `conquer` event; combat close sets `bf.showdownComplete`), `startShowdown`, `endShowdown`.
+  + `conquer` event; combat close sets `bf.showdownComplete`), `startShowdown` (reducer = `beginShowdownAt`), `endShowdown`.
+  HARNESS: an effect-staged combat now BEGINS in the Cleanup after the chain empties and `settle()` fights it through —
+  to inspect the staged/begun state resolve the chain with `passPriority()`/`game.acting().pass()` instead of `settle()`.
 - Combat damage: `moves/combat/resolve-full-combat.ts resolveFullCombat` (legal when `bf.contested && bf.showdownComplete`
   in neutral-open; harness `settle()` auto-runs it) → build `CombatUnit`s → `combat-resolver.ts resolveCombat` → write
   `meta.damage`, heal survivors, mark `result.killed` lethal → `cleanupAndFireDeaths` (SBA deaths, Deathknell, die

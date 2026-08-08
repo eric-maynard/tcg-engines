@@ -137,7 +137,7 @@ describe("Bone Skewer (unl-139-219)", () => {
     await skewer(game);
     await game.p1.pick("skulker");
     expect(game.gameState.battlefields.bf1).toMatchObject({ contested: true, contestedBy: P2, controller: P1 });
-    await game.settle();
+    // 323.13 — the Cleanup after the resolution begins the staged Combat (P1's own spell staged it).
     if (game.p1.can("startShowdown")) {
       await game.p1.choose("startShowdown:bf1");
     }

@@ -43,11 +43,14 @@ describe("Shadow Dash (ven-148-166)", () => {
       .build();
 
     await game.p1.cast("dash", { targets: "foe" });
-    await game.settle();
+    await game.p1.passPriority();
+    await game.p2.passPriority(); // Shadow Dash resolves
 
     expect(game.locationOf("foe")).toBe("bf2");
     expect(game.state("ally1").might).toBe(3);
     expect(game.state("ally2").might).toBe(5);
+    // 190.3.a / 323.13 — the dragged-in enemy contests bf2 and the Cleanup begins the Combat with it attacking.
+    expect(game.gameState.interaction?.showdownStack?.at(-1)).toMatchObject({ attackingPlayer: P2, battlefieldId: "bf2", isCombatShowdown: true });
   });
 
   // rule 355.8 — a spell with no legal destination for its move effect may not

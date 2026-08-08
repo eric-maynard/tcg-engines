@@ -9,7 +9,8 @@ import { createCardId } from "@tcg/riftbound-types/cards";
  *  Then do this: Ready up to two of them."
  *
  * Modeled as a sequence: for-each friendly equipment create one Sand Soldier
- * token, then ready up to 2 Sand Soldiers.
+ * token, then (rule 387 — "Then do this:" is a reflexive trigger) a separate
+ * triggered chain item readies up to 2 of the tokens this spell played.
  */
 const abilities: Ability[] = [
   {
@@ -27,11 +28,14 @@ const abilities: Ability[] = [
           // rule 359.3.e.14 — "them" is linked to the tokens THIS spell
           // played, so the ready step reads the sequence's pending value
           // instead of scanning the board for Sand Soldiers.
-          target: {
-            quantity: { upTo: 2 },
-            type: "pending-value",
+          effect: {
+            target: {
+              quantity: { upTo: 2 },
+              type: "pending-value",
+            },
+            type: "ready",
           },
-          type: "ready",
+          type: "reflexive",
         },
       ],
       pendingValue: { source: 0 },

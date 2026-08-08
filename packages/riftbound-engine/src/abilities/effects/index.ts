@@ -54,6 +54,7 @@ import { handle_eachPlayerMay } from "./each-player-may";
 import { handle_forEach } from "./for-each";
 import { handle_choosePerLocation } from "./choose-per-location";
 import { handle_doTimes } from "./do-times";
+import { handle_reflexive } from "./reflexive";
 import { handle_fight } from "./fight";
 import { handle_play } from "./play";
 import { handle_look } from "./look";
@@ -145,6 +146,7 @@ export const EFFECT_HANDLERS: Record<string, EffectHandler> = {
   "for-each": handle_forEach,
   "choose-per-location": handle_choosePerLocation,
   "do-times": handle_doTimes,
+  reflexive: handle_reflexive,
   "fight": handle_fight,
   "play": handle_play,
   "look": handle_look,

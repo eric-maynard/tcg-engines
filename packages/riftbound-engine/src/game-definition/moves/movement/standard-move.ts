@@ -8,11 +8,12 @@ import type {
   ZoneId as CoreZoneId,
   GameMoveDefinitions,
 } from "@tcg/core";
+import { createInteractionState, getTurnState } from "../../../chain";
 import {
-  createInteractionState,
-  getTurnState,
-  startShowdown as startShowdownState,
-} from "../../../chain";
+  type ArrivalIO,
+  beginShowdownAt,
+  noteArrival,
+} from "../../../operations/arrive-at-battlefield";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../../types";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
 import { fireTriggers } from "../../../abilities/trigger-runner";
@@ -20,15 +21,11 @@ import {
   battlefieldAcceptsMoveFromAnywhere,
   getMoveEscalationSurcharge,
   hasKeyword,
-  isAloneAtLocation,
   isBlockedByTwoOtherPlayers,
   payMoveEscalationSurcharge,
   relocateAttachedEquipment,
   totalPowerAvailable,
 } from "./helpers";
-import { getCardEffectiveMight } from "../play/cost";
-
-const MIGHTY_THRESHOLD = 5;
 
 /**
  * rule 350.1 / ogn-203-298 (Possession): moves are made by the unit's CURRENT
@@ -400,120 +397,14 @@ export const standardMove: Defs["standardMove"] = {
     draft.unitsMovedThisTurn[playerId] =
       (draft.unitsMovedThisTurn[playerId] ?? 0) + unitIds.length;
 
-    // Rule 548.2: When units arrive at an uncontrolled battlefield,
-    // Start a non-combat showdown to give the opponent a window to respond
-    const bf = toBase ? undefined : draft.battlefields[destination];
-    if (bf && bf.controller !== playerId) {
-      // Check if there are only friendly units (no opposing units)
-      const bfZoneId = `battlefield-${destination}` as CoreZoneId;
-      const allUnits = zones.getCardsInZone(bfZoneId);
-      // rule 127.1 — "opposing" follows the CURRENT controller, not the owner:
-      // a unit stolen by the mover is friendly, and a unit stolen FROM the mover
-      // is hostile even though they still own it.
-      const hasOpponentUnit = allUnits.some((cardId) => {
-        const owner = controllerOf(context.cards, cardId);
-        return owner !== undefined && owner !== playerId;
-      });
-
-      // Rule 450: the destination becomes Contested when it is an
-      // Uncontested Battlefield not controlled by the mover — always,
-      // whether or not opposing units are present (190.3.a).
-      if (!bf.contested) {
-        bf.contested = true;
-        bf.contestedBy = playerId;
-        bf.showdownComplete = false;
-      }
-
-      // Rules 319.8 → 323.13 / 344: Cleanup after the Move initiates the
-      // Showdown mandatorily — no other discretionary action may intervene
-      // (320.1). Open it here so the neutral-open guards on every other
-      // move enforce that.
-      const playerIds = Object.keys(draft.players);
-      const defender = bf.controller ?? playerIds.find((p) => p !== playerId) ?? playerId;
-      const interaction = draft.interaction ?? createInteractionState();
-      draft.interaction = startShowdownState(
-        interaction,
-        destination,
-        playerId,
-        hasOpponentUnit ? [...new Set([playerId, defender])] : playerIds,
-        hasOpponentUnit, // combat showdown iff opposing units present
-        playerId,
-        defender,
-      );
-
-      // rule-id: unl-079-219 (Rule 340 / 548.2): "When a showdown begins
-      // here" fires for BOTH combat and non-combat showdowns.
-      fireTriggers(
-        { battlefieldId: destination, isCombat: hasOpponentUnit, playerId, type: "showdown-begin" },
-        { cards: context.cards, counters, draft, zones },
-      );
-
-      // Rule 625.1.c.1 / 625.1.c.2 (sfd-177-221): opening a Combat
-      // Showdown assigns combat roles and fires "attack" / "defend" so
-      // "When I attack/defend" triggers land on the initial chain.
-      if (hasOpponentUnit) {
-        const triggerCtx = { cards: context.cards, counters, draft, zones };
-        // rule 740.2.a — "alone" is judged against the battlefield's occupancy.
-        const ownerOf = (id: string) => controllerOf(context.cards, id as CoreCardId);
-        const occupants = allUnits as unknown as string[];
-        const metaOf = (id: string) =>
-          context.cards.getCardMeta?.(id as CoreCardId) as Partial<RiftboundCardMeta> | undefined;
-        // rule 709/710 (rule-id: sfd-180-221, cf. 476.3): combat-only keywords are
-        // part of current Might, so an Assault/Shield unit whose Might crosses
-        // < 5 → >= 5 the moment its combat role is stamped BECOMES Mighty.
-        const fireIfBecameMighty = (id: string, before: number, owner: string) => {
-          if (before >= MIGHTY_THRESHOLD) {
-            return;
-          }
-          if (getCardEffectiveMight(id, metaOf) >= MIGHTY_THRESHOLD) {
-            fireTriggers({ cardId: id, owner, type: "become-mighty" }, triggerCtx);
-          }
-        };
-        for (const unitId of unitIds) {
-          const mightBefore = getCardEffectiveMight(unitId, metaOf);
-          context.cards.updateCardMeta(
-            unitId as CoreCardId,
-            { combatRole: "attacker" } as Partial<RiftboundCardMeta>,
-          );
-          fireIfBecameMighty(unitId, mightBefore, playerId);
-          fireTriggers(
-            {
-              alone: isAloneAtLocation(unitId, playerId, occupants, ownerOf),
-              battlefieldId: destination,
-              cardId: unitId,
-              owner: playerId,
-              type: "attack",
-            },
-            triggerCtx,
-          );
-        }
-        // rule 383.4.f.2.a — index each player's defenders so "when YOU
-        // defend" fires once per combat while "when I defend" still fires per unit.
-        const defendCount = new Map<string, number>();
-        for (const cardId of allUnits) {
-          const owner = controllerOf(context.cards, cardId);
-          if (owner !== undefined && owner !== playerId) {
-            const mightBefore = getCardEffectiveMight(cardId as string, metaOf);
-            context.cards.updateCardMeta(
-              cardId,
-              { combatRole: "defender" } as Partial<RiftboundCardMeta>,
-            );
-            fireIfBecameMighty(cardId as string, mightBefore, owner as string);
-            const batchIndex = defendCount.get(owner as string) ?? 0;
-            defendCount.set(owner as string, batchIndex + 1);
-            fireTriggers(
-              {
-                alone: isAloneAtLocation(cardId as string, owner as string, occupants, ownerOf),
-                batchIndex,
-                battlefieldId: destination,
-                cardId: cardId as string,
-                owner: owner as string,
-                type: "defend",
-              },
-              triggerCtx,
-            );
-          }
-        }
+    // rule 190.3.a / 450 → 319.8 / 323.12–13 / 344: arriving where the mover
+    // has no control applies Contested, and the Move's own Cleanup (a Neutral
+    // Open one — 320.1, nothing may intervene) begins the Showdown / Combat.
+    // One helper for every kind of arrival: operations/arrive-at-battlefield.ts.
+    if (!toBase) {
+      const io = { cards: context.cards, counters, draft, zones } as unknown as ArrivalIO;
+      if (noteArrival(io, { at: destination, cause: "move", stagedBy: playerId, unitIds }).staged) {
+        beginShowdownAt(io, destination);
       }
     }
   },

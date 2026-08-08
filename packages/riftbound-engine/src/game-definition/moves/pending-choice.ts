@@ -2444,6 +2444,10 @@ export const pendingChoiceMoves: Partial<
                 ...buildEffectContext(draft, choice.playerId, choice.sourceCardId, context),
                 ...declineZoneCarry,
               });
+            }
+            // rule 319 / 323.12–13 — declining was the last word of this
+            // resolution: its Cleanup (and any Showdown it staged) follows.
+            if (!draft.pendingChoice) {
               postChoiceCleanup(draft, context);
             }
             return;
@@ -2645,6 +2649,7 @@ export const pendingChoiceMoves: Partial<
         // rule-id: sfd-079-221 (rule 449) — "move any number of your units to an
         // open battlefield" is ONE move of a group: every other unit in the
         // group travels to the destination its controller just picked.
+        const movedGroup: string[] = [choice.cardId as string];
         for (const extraId of ((choice as { alsoMoveCardIds?: readonly string[] })
           .alsoMoveCardIds ?? []) as readonly string[]) {
           if (context.zones.getCardZone?.(extraId as CoreCardId) === targetZoneId) {
@@ -2654,7 +2659,7 @@ export const pendingChoiceMoves: Partial<
             cardId: extraId as CoreCardId,
             targetZoneId: targetZoneId as CoreZoneId,
           });
-          markContestedOnArrival(draft, targetZoneId, choice.playerId);
+          movedGroup.push(extraId);
         }
         draft.pendingChoice = undefined;
         // rule-id: ogs-015-024 (rule 439.2.a/.b.1) — a created token is placed,
@@ -2712,7 +2717,7 @@ export const pendingChoiceMoves: Partial<
           getGlobalCardRegistry().get(choice.cardId as string)?.cardType === "unit"
         ) {
           contestBattlefieldOnArrival({
-            arrivingUnitIds: [choice.cardId as string],
+            arrivingUnitIds: movedGroup,
             // rule 344.2 — this Showdown is begun by the Cleanup that follows the
             // resolution, not by a player choosing to start it.
             autoBegun: true,
@@ -2727,7 +2732,7 @@ export const pendingChoiceMoves: Partial<
             zones: context.zones,
           });
         } else {
-          markContestedOnArrival(draft, targetZoneId, arrivingController);
+          markContestedOnArrival(draft, targetZoneId, arrivingController, choice.playerId as string);
         }
         draft.pendingChoice = undefined;
         // rule-id: ogn-258-298 (rule 387) — "Move an enemy unit. Then do this:
@@ -3073,7 +3078,20 @@ export const pendingChoiceMoves: Partial<
         // rule 190.3.a.1 (unl-139-219) — a unit ARRIVING at a battlefield its
         // controller does not control applies Contested by itself, however it
         // got there; the Cleanup after this resolution opens the showdown.
-        markContestedOnArrival(draft, choice.playTo as string, playedOwner);
+        if ((choice.playTo as string).startsWith("battlefield-")) {
+          contestBattlefieldOnArrival({
+            arrivingUnitIds: [pickedCardId as string],
+            autoBegun: true,
+            battlefieldId: (choice.playTo as string).slice("battlefield-".length),
+            cards: context.cards,
+            counters: context.counters,
+            deferToCleanup: true,
+            draft,
+            playerId: playedOwner,
+            stagedBy: choice.prompter ?? choice.revealer,
+            zones: context.zones,
+          });
+        }
         if (choice.playStun === true) {
           context.counters.setFlag(pickedCardId as CoreCardId, "stunned", true);
           context.cards.updateCardMeta(pickedCardId as CoreCardId, {

@@ -2,6 +2,7 @@
 import type { CardId as CoreCardId } from "@tcg/core";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
+import { arriveByEffect } from "./move";
 import { buildConsumedKey, findAllReplacements } from "../replacement-effects";
 import { type EffectHelpers, resolveAmount, tokenEntersReadyFromStaticGrant } from "./_helpers";
 
@@ -297,6 +298,12 @@ export function handle_createToken(effect: ExecutableEffect, ctx: EffectContext,
     if (tokenDef.type !== "gear") {
       ctx.fireTriggers?.({ cardId: tokenId, playerId: ownerId, type: "play-token-unit" });
     }
+  }
+  // rule 190.3.a.1 — unit tokens played to a battlefield their controller does
+  // not control ("play a Recruit here" while attacking) contest it / join the
+  // combat there like any other arrival.
+  if (tokenDef.type !== "gear") {
+    arriveByEffect(ctx, createdIds, targetZone, "play");
   }
   // rule-id: ogs-015-024 (rule 439.2.b.1) — with no zone specified, a unit
   // token may enter at base or any battlefield its controller controls. The

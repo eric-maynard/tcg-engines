@@ -68,6 +68,23 @@ function isOptionalCostPrompt(d: Decision | null): boolean {
   return !!d && d.seat === P2 && (d.kind === "yes-no" || (d.kind === "pick" && d.allowDecline));
 }
 
+/**
+ * Answer scripted/forced prompts and pass priority until the chain is empty — but stop before the
+ * Combat the pulled unit stages at bf1 (190.3.a / 323.13) is fought, so the board can be inspected.
+ */
+async function resolveChain(game: Game): Promise<void> {
+  for (let i = 0; i < 12; i++) {
+    const d = game.decision();
+    if (!d) return;
+    if (d.kind === "action") {
+      if (d.context !== "chain") return;
+      await game.acting().pass();
+    } else {
+      await game.settle({ maxSteps: 1 });
+    }
+  }
+}
+
 describe("Ruling 4559826960eee691 — Bone Skewer × Nami, Headstrong: optional additional cost under 'ignoring any and all costs'", () => {
   // Expected: Skewer resolves → P2's hand is revealed → P1 picks Nami → P2 plays Nami to bf1 and is asked
   // whether to pay the optional [calm]; P2 says yes; the total cost (incl. that [calm]) is set to 0 so P2's
@@ -95,7 +112,7 @@ describe("Ruling 4559826960eee691 — Bone Skewer × Nami, Headstrong: optional 
     expect(game.p2.resources()).toEqual({ energy: 0, power: { calm: 1 } });
     // Nami is on the chosen battlefield.
     game.script(P2, ["soldier"]); // Nami's stun target if asked
-    await game.settle();
+    await resolveChain(game);
     expect(game.locationOf("nami")).toBe("bf1");
     expect(game.state("nami").controller).toBe(P2);
     // "When they do, Stun it."
@@ -103,6 +120,8 @@ describe("Ruling 4559826960eee691 — Bone Skewer × Nami, Headstrong: optional 
     // The condition "if you paid the additional cost" is satisfied by the decision to pay (356.4.f.1).
     expect(game.state("soldier").isStunned).toBe(true);
     expect(game.zoneOf("skewer")).toBe("trash");
+    // 190.3.a / 323.13 — Nami contests bf1: the Cleanup began the Combat with P2 attacking.
+    expect(game.gameState.interaction?.showdownStack?.at(-1)).toMatchObject({ attackingPlayer: P2, battlefieldId: "bf1", isCombatShowdown: true });
   });
 
   // Contrast. Expected: if P2 declines the optional cost, Nami is still played free and stunned by Skewer,
@@ -122,7 +141,7 @@ describe("Ruling 4559826960eee691 — Bone Skewer × Nami, Headstrong: optional 
     } else {
       await game.p2.decline();
     }
-    await game.settle();
+    await resolveChain(game);
     expect(game.p2.resources()).toEqual({ energy: 0, power: { calm: 1 } });
     expect(game.locationOf("nami")).toBe("bf1");
     expect(game.state("nami").isStunned).toBe(true);

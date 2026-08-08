@@ -17,6 +17,7 @@ import {
   parseIfYouDoEffect,
 } from "./effects-conditional";
 import { parseSelfControlEffect } from "./effects-control";
+import { parseReflexiveClause } from "./effects-reflexive";
 import { parseReturnToHandEffect } from "./effects-return";
 import { buildSequenceWithPendingValue, parseAndCompoundEffect } from "./effects-sequence";
 import { normalizeTokens, stripReminders } from "./normalize";
@@ -196,6 +197,14 @@ export function parseEffects(text: string): Effect | undefined {
   const commaChainEffect = parseCommaPronounChain(cleaned);
   if (commaChainEffect) {
     return commaChainEffect;
+  }
+
+  // rule 387 — "<main>. Then [you may] do this[ N times]: <body>" is a REFLEXIVE
+  // trigger: <body> becomes its own triggered chain item when <main> resolves.
+  // Must run before the single-effect attempt (leaf parsers swallow the tail).
+  const reflexive = parseReflexiveClause(cleaned, parseEffects);
+  if (reflexive) {
+    return reflexive;
   }
 
   // Multi-sentence bodies ("Deal 4 to a unit at a battlefield. Draw 1.") must be

@@ -1,18 +1,18 @@
 /**
  * Contesting a battlefield on arrival (shared by Standard Move and by playing
  * a unit straight to a battlefield, e.g. "You may play me to an open
- * battlefield").
+ * battlefield"). Thin adapter over `operations/arrive-at-battlefield.ts`, the
+ * one helper every arrival path goes through.
  */
 
-import type { CardId as CoreCardId, ZoneId as CoreZoneId } from "@tcg/core";
+import { createInteractionState } from "../../../chain";
+import type { RiftboundGameState } from "../../../types";
+import type { fireTriggers } from "../../../abilities/trigger-runner";
 import {
-  createInteractionState,
-  getTurnState,
-  startShowdown as startShowdownState,
-} from "../../../chain";
-import type { RiftboundCardMeta, RiftboundGameState } from "../../../types";
-import { fireTriggers } from "../../../abilities/trigger-runner";
-import { isAloneAtLocation } from "./helpers";
+  type ArrivalIO,
+  beginShowdownAt,
+  noteArrival,
+} from "../../../operations/arrive-at-battlefield";
 
 type TriggerCtx = Parameters<typeof fireTriggers>[1];
 
@@ -50,144 +50,26 @@ export function contestBattlefieldOnArrival(args: {
   zones: TriggerCtx["zones"];
 }): void {
   const { arrivingUnitIds, autoBegun, battlefieldId, cards, counters, deferToCleanup, draft, playerId, stagedBy, zones } = args;
-  const bf = draft.battlefields?.[battlefieldId];
-  if (!bf || bf.controller === playerId) {
-    return;
-  }
-
-  const bfZoneId = `battlefield-${battlefieldId}` as CoreZoneId;
-  const allUnits = zones.getCardsInZone(bfZoneId) as unknown as string[];
-  const ownerOf = (id: string) =>
-    (cards.getCardController?.(id as CoreCardId) ??
-      cards.getCardOwner(id as CoreCardId)) as string | undefined;
-  const hasOpponentUnit = allUnits.some((cardId) => {
-    const owner = ownerOf(cardId);
-    return owner !== undefined && owner !== playerId;
-  });
-
-  if (!bf.contested) {
-    bf.contested = true;
-    bf.contestedBy = playerId;
-    bf.showdownComplete = false;
-  }
-  // rule 323.13 — remember whose action staged this, so a Combat the turn
-  // player's own effect set up is not mistaken for an off-turn Reaction move.
-  bf.stagedBy = (stagedBy ?? playerId) as typeof bf.stagedBy;
-
-  const playerIds = Object.keys(draft.players);
-  const defender = bf.controller ?? playerIds.find((p) => p !== playerId) ?? playerId;
+  const io = { cards, counters, draft, zones } as unknown as ArrivalIO;
   const interaction = draft.interaction ?? createInteractionState();
-  // rule 344.1 — one battlefield holds at most one showdown: a unit arriving
-  // while a showdown is already in progress here JOINS it (rule 464.2.c.3.a)
-  // instead of opening a second, duplicate one.
-  const existing = interaction.showdownStack.find(
+  const hadShowdownHere = interaction.showdownStack.some(
     (sd) => sd.active && sd.battlefieldId === battlefieldId,
   );
-  // rule 323.12 / 323.13 — a Showdown staged part-way through a resolution
-  // does not begin here: the Cleanup that follows opens it, and only in the
-  // mandated order (showdown-only battlefields before staged Combats).
-  if (
-    deferToCleanup &&
-    !existing &&
-    (draft.pendingChoice || getTurnState(interaction) !== "neutral-open")
-  ) {
+  const { staged } = noteArrival(io, {
+    at: battlefieldId,
+    cause: "play",
+    stagedBy: stagedBy ?? playerId,
+    unitIds: arrivingUnitIds,
+  });
+  if (!staged || hadShowdownHere) {
     return;
   }
-  let started = interaction;
-  let showdownBegan = !existing;
-  if (existing) {
-    if (hasOpponentUnit && !existing.isCombatShowdown) {
-      // The arrival turned a non-combat showdown into a combat one (344.3):
-      // re-seat the players and reopen the Focus round rather than stacking.
-      showdownBegan = true;
-      started = {
-        ...interaction,
-        showdownStack: interaction.showdownStack.map((sd) =>
-          sd === existing
-            ? {
-                ...sd,
-                attackingPlayer: playerId,
-                defendingPlayer: defender,
-                focusPlayer: playerId,
-                isCombatShowdown: true,
-                passedPlayers: [],
-                relevantPlayers: [...new Set([playerId, defender])],
-              }
-            : sd,
-        ),
-      };
-    }
-  } else {
-    started = startShowdownState(
-      interaction,
-      battlefieldId,
-      playerId,
-      hasOpponentUnit ? [...new Set([playerId, defender])] : playerIds,
-      hasOpponentUnit,
-      playerId,
-      defender,
-    );
-  }
-  draft.interaction =
-    autoBegun && !existing
-      ? {
-          ...started,
-          showdownStack: started.showdownStack.map((sd, i) =>
-            i === started.showdownStack.length - 1 ? { ...sd, autoBegun: true } : sd,
-          ),
-        }
-      : started;
-
-  const triggerCtx = { cards, counters, draft, zones } as TriggerCtx;
-  // rule 340 / 548.2: "When a showdown begins here" fires for combat and
-  // non-combat showdowns alike.
-  if (showdownBegan) {
-    fireTriggers(
-      { battlefieldId, isCombat: hasOpponentUnit, playerId, type: "showdown-begin" },
-      triggerCtx,
-    );
-  }
-
-  if (!hasOpponentUnit) {
+  // rule 323.6 → 323.12 / 323.13 — a Showdown staged part-way through a
+  // resolution does not begin here: the Cleanup that follows first drops
+  // control of emptied battlefields, then opens it in the mandated order
+  // (showdown-only battlefields before staged Combats).
+  if (deferToCleanup) {
     return;
   }
-
-  // rule 625.1.c.1 / 625.1.c.2: opening a combat showdown assigns roles and
-  // fires "attack" / "defend".
-  for (const unitId of arrivingUnitIds) {
-    cards.updateCardMeta?.(
-      unitId as CoreCardId,
-      { combatRole: "attacker" } as Partial<RiftboundCardMeta>,
-    );
-    fireTriggers(
-      {
-        alone: isAloneAtLocation(unitId, playerId, allUnits, ownerOf),
-        battlefieldId,
-        cardId: unitId,
-        owner: playerId,
-        type: "attack",
-      },
-      triggerCtx,
-    );
-  }
-  for (const cardId of allUnits) {
-    const owner = ownerOf(cardId);
-    if (owner === undefined || owner === playerId) {
-      continue;
-    }
-    cards.updateCardMeta?.(
-      cardId as CoreCardId,
-      { combatRole: "defender" } as Partial<RiftboundCardMeta>,
-    );
-    fireTriggers(
-      {
-        alone: isAloneAtLocation(cardId, owner, allUnits, ownerOf),
-        battlefieldId,
-        cardId,
-        owner,
-        type: "defend",
-      },
-      triggerCtx,
-    );
-  }
+  beginShowdownAt(io, battlefieldId, { autoBegun });
 }

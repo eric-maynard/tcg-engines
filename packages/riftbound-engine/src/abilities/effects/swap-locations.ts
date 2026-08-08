@@ -5,7 +5,7 @@ import { resolveTarget } from "../target-resolver";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import type { EffectHelpers } from "./_helpers";
 import { hasKeyword } from "../../game-definition/moves/movement/helpers";
-import { markContestedOnArrival, moveCardWithEvent, stageCombatOnArrival } from "./move";
+import { arriveByEffect, moveCardWithEvent } from "./move";
 
 /**
  * rule-id: unl-083-219 (Smoke and Mirrors) — rule 355.8 / 433: "Choose a unit
@@ -60,19 +60,13 @@ export function handle_swapLocations(
     (a !== undefined && hasKeyword(a, keyword, getMeta)) ||
     (b !== undefined && hasKeyword(b, keyword, getMeta));
 
-  // rule 450: Contested is attributed to the CONTROLLER of the arriving unit.
-  const controllerOf = (id: string) =>
-    ctx.cards.getCardController?.(id as CoreCardId) ??
-    ctx.cards.getCardOwner(id as CoreCardId) ??
-    ctx.playerId;
-
+  // rule 450: Contested is attributed to the CONTROLLER of the arriving unit
+  // (the shared arrival helper reads it); both land before either is staged.
   if (a && b && zoneA && zoneB && zoneA !== zoneB && gateMet) {
     const aLanded = moveCardWithEvent(ctx, a, zoneB);
-    markContestedOnArrival(ctx.draft, aLanded, controllerOf(a));
-    stageCombatOnArrival(ctx, aLanded);
     const bLanded = moveCardWithEvent(ctx, b, zoneA);
-    markContestedOnArrival(ctx.draft, bLanded, controllerOf(b));
-    stageCombatOnArrival(ctx, bLanded);
+    arriveByEffect(ctx, [a], aLanded);
+    arriveByEffect(ctx, [b], bLanded);
   }
 
   if (spec.then) {

@@ -6,28 +6,23 @@ import { resolveTarget } from "../target-resolver";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import { type EffectHelpers, getTargetIds, getEffectiveMight } from "./_helpers";
 import { isBlockedByTwoOtherPlayers } from "../../game-definition/moves/movement/helpers";
+import { noteArrival, stageContested, toBattlefieldId } from "../../operations/arrive-at-battlefield";
 
 /**
- * rule-id: unl-144-219 — Rule 450 / 190.3.a: a unit arriving (by any means,
- * including an ability's move effect) at a battlefield its controller does
- * not control applies Contested. Cleanup (323.13) then stages the showdown /
- * combat via the `startShowdown` move once the chain closes.
+ * rule 190.3.a / 450 — pure-data Contested mark for callers that only hold the
+ * draft (the arriving unit's CONTROLLER applies it). Full arrivals go through
+ * `arriveByEffect` / `operations/arrive-at-battlefield.ts noteArrival`.
  */
 export function markContestedOnArrival(
   draft: RiftboundGameState,
   targetZoneId: string,
   playerId: string,
+  stagedBy?: string,
 ): void {
-  if (!targetZoneId.startsWith("battlefield-")) {
-    return;
+  const bfId = toBattlefieldId(targetZoneId);
+  if (bfId !== undefined && targetZoneId.startsWith("battlefield-")) {
+    stageContested(draft, bfId, playerId, stagedBy);
   }
-  const bf = draft.battlefields[targetZoneId.slice("battlefield-".length)];
-  if (!bf || bf.controller === playerId || bf.contested) {
-    return;
-  }
-  bf.contested = true;
-  bf.contestedBy = playerId;
-  bf.showdownComplete = false;
 }
 
 /**
@@ -43,109 +38,31 @@ function arrivingController(ctx: EffectContext, cardId: string): string {
 }
 
 /**
- * rule-id: unl-112-219 (Irresistible Faefolk) — rules 319.8 / 323.9 / 464.2.c:
- * cleanup after an effect-driven move stages combat when opposing units now
- * share a contested battlefield. The attacker is the player whose unit applied
- * Contested (464.2.c.1), not whoever moved the unit; every other occupant
- * defends (464.2.c.2). Idempotent — re-running on an already-staged combat is
- * a no-op.
+ * rules 190.3.a / 323.8–323.13 / 449 — units an effect made present at
+ * `landedZone` (a move, a play, a token): the shared arrival helper applies
+ * Contested for their controller, records the effect's controller as the one
+ * who staged it, and joins a Showdown already running there; the Cleanup after
+ * the resolution begins the staged Showdown / Combat (never inline mid-chain).
  */
-export function stageCombatOnArrival(ctx: EffectContext, targetZoneId: string): void {
-  if (!targetZoneId.startsWith("battlefield-")) {
+export function arriveByEffect(
+  ctx: EffectContext,
+  unitIds: readonly string[],
+  landedZone: string,
+  cause: "move" | "play" | "control-change" = "move",
+): void {
+  if (!landedZone.startsWith("battlefield-") || unitIds.length === 0) {
     return;
   }
-  const bfId = targetZoneId.slice("battlefield-".length);
-  const bf = ctx.draft.battlefields?.[bfId];
-  const attackingPlayer = bf?.contested === true ? bf.contestedBy : undefined;
-  if (!bf || typeof attackingPlayer !== "string") {
-    return;
-  }
-  const occupants = ctx.zones.getCardsInZone(targetZoneId as CoreZoneId).map((id) => id as string);
-  const ownerOf = (id: string): string | undefined =>
-    (ctx.cards.getCardController?.(id as CoreCardId) ??
-      ctx.cards.getCardOwner(id as CoreCardId)) as string | undefined;
-  const attackers = occupants.filter((id) => ownerOf(id) === attackingPlayer);
-  const defenders = occupants.filter((id) => {
-    const owner = ownerOf(id);
-    return owner !== undefined && owner !== attackingPlayer;
-  });
-  if (attackers.length === 0 || defenders.length === 0) {
-    return;
-  }
-  // rule 464.2.c.3.a — a unit already carrying the Defender designation keeps
-  // it; only newly-present units gain it (and fire "when I defend") here.
-  const wasDefender = new Map<string, boolean>(
-    defenders.map((id) => [
-      id,
-      (ctx.cards.getCardMeta?.(id as CoreCardId) as { combatRole?: string } | undefined)?.combatRole === "defender",
-    ]),
+  noteArrival(
+    {
+      cards: ctx.cards,
+      counters: ctx.counters,
+      draft: ctx.draft,
+      fire: ctx.fireTriggers ?? (() => {}),
+      zones: ctx.zones,
+    },
+    { at: landedZone, cause, stagedBy: ctx.playerId, unitIds },
   );
-  const alreadyStaged = defenders.every((id) => wasDefender.get(id) === true);
-  const defendingPlayer = ownerOf(defenders[0] as string) as string;
-  bf.showdownComplete = false;
-  for (const id of attackers) {
-    ctx.cards.updateCardMeta?.(id as CoreCardId, { combatRole: "attacker" });
-  }
-  for (const id of defenders) {
-    ctx.cards.updateCardMeta?.(id as CoreCardId, { combatRole: "defender" });
-  }
-  // Reopen the battlefield's showdown as a combat showdown with the attacker
-  // holding Focus (rule 625.1.c). An in-flight showdown here is upgraded in
-  // place rather than stacked.
-  const interaction = ctx.draft.interaction;
-  const stack = interaction?.showdownStack;
-  if (stack && stack.length > 0) {
-    const top = stack[stack.length - 1] as {
-      battlefieldId?: string;
-      isCombatShowdown?: boolean;
-      attackingPlayer?: string;
-      defendingPlayer?: string;
-      focusPlayer?: string;
-      passedPlayers?: string[];
-      relevantPlayers?: string[];
-      active?: boolean;
-    };
-    if (top.battlefieldId === bfId) {
-      top.active = true;
-      top.isCombatShowdown = true;
-      top.attackingPlayer = attackingPlayer;
-      top.defendingPlayer = defendingPlayer;
-      top.relevantPlayers = [...new Set([attackingPlayer, defendingPlayer])];
-      if (!alreadyStaged) {
-        top.focusPlayer = attackingPlayer;
-        top.passedPlayers = [];
-      }
-    }
-  }
-  if (alreadyStaged) {
-    return;
-  }
-  for (const id of attackers) {
-    ctx.fireTriggers?.({ battlefieldId: bfId, cardId: id, owner: attackingPlayer, type: "attack" });
-  }
-  // rule 383.4.f.2.a (sfd-126-221) — a player who already holds the Defender
-  // designation in this combat does not "defend" a second time when another of
-  // their units joins, so those later events carry a non-zero `batchIndex` and
-  // only unit-scoped ("when I defend") triggers see them.
-  const priorDefendingPlayers = new Set(
-    defenders.filter((id) => wasDefender.get(id) === true).map((id) => ownerOf(id) as string),
-  );
-  const defendCount = new Map<string, number>();
-  for (const id of defenders) {
-    if (wasDefender.get(id) === true) {
-      continue;
-    }
-    const owner = ownerOf(id) as string;
-    const seen = defendCount.get(owner) ?? 0;
-    defendCount.set(owner, seen + 1);
-    ctx.fireTriggers?.({
-      batchIndex: seen + (priorDefendingPlayers.has(owner) ? 1 : 0),
-      battlefieldId: bfId,
-      cardId: id,
-      owner,
-      type: "defend",
-    });
-  }
 }
 
 /**
@@ -270,9 +187,9 @@ function handleSwapLocations(effect: ExecutableEffect, ctx: EffectContext): void
     return;
   }
   const selfLanded = moveCardWithEvent(ctx, selfId, partnerZone);
-  markContestedOnArrival(ctx.draft, selfLanded, arrivingController(ctx, selfId));
   const partnerLanded = moveCardWithEvent(ctx, partner, selfZone);
-  markContestedOnArrival(ctx.draft, partnerLanded, arrivingController(ctx, partner));
+  arriveByEffect(ctx, [selfId], selfLanded);
+  arriveByEffect(ctx, [partner], partnerLanded);
 
   // rule-id: sfd-050-221 (rule 716) — "If it's equipped, you may attach one of
   // its Equipment to me": only the swap knows which unit was chosen, so the
@@ -325,9 +242,7 @@ export function handle_move(effect: ExecutableEffect, ctx: EffectContext, h: Eff
       if (chosen === undefined || ctx.zones.getCardZone(chosen as CoreCardId) === destZone) {
         return;
       }
-      const landed = moveCardWithEvent(ctx, chosen, destZone);
-      markContestedOnArrival(ctx.draft, landed, arrivingController(ctx, chosen));
-      stageCombatOnArrival(ctx, landed);
+      arriveByEffect(ctx, [chosen], moveCardWithEvent(ctx, chosen, destZone));
       return;
     }
     const pool = resolveTarget({ ...(effect.target as TargetDescriptor), quantity: "all" }, {
@@ -351,9 +266,7 @@ export function handle_move(effect: ExecutableEffect, ctx: EffectContext, h: Eff
     const theirs = pool.filter((id) => arrivingController(ctx, id) === chooser);
     if (theirs.length === 1) {
       const mover = theirs[0] as string;
-      const landed = moveCardWithEvent(ctx, mover, destZone);
-      markContestedOnArrival(ctx.draft, landed, arrivingController(ctx, mover));
-      stageCombatOnArrival(ctx, landed);
+      arriveByEffect(ctx, [mover], moveCardWithEvent(ctx, mover, destZone));
       return;
     }
     ctx.draft.pendingChoice = {
@@ -403,9 +316,7 @@ export function handle_move(effect: ExecutableEffect, ctx: EffectContext, h: Eff
       return;
     }
     const destZone = `battlefield-${bfKey}`;
-    const landed = moveCardWithEvent(ctx, unitId, destZone);
-    markContestedOnArrival(ctx.draft, landed, arrivingController(ctx, unitId));
-    stageCombatOnArrival(ctx, landed);
+    arriveByEffect(ctx, [unitId], moveCardWithEvent(ctx, unitId, destZone));
     return;
   }
   // rule-id: unl-045-219 (Forgotten Signpost) — rules 204.1.b / 355.10.c.1 /
@@ -458,9 +369,7 @@ export function handle_move(effect: ExecutableEffect, ctx: EffectContext, h: Eff
     if (destZone === undefined || ctx.zones.getCardZone(moverId as CoreCardId) === destZone) {
       return;
     }
-    const landed = moveCardWithEvent(ctx, moverId, destZone);
-    markContestedOnArrival(ctx.draft, landed, arrivingController(ctx, moverId));
-    stageCombatOnArrival(ctx, landed);
+    arriveByEffect(ctx, [moverId], moveCardWithEvent(ctx, moverId, destZone));
     return;
   }
 
@@ -531,6 +440,33 @@ export function handle_move(effect: ExecutableEffect, ctx: EffectContext, h: Eff
     for (const id of victims) {
       moveCardWithEvent(ctx, id, "base");
     }
+    return;
+  }
+
+  // rule 355.10.f / 355.4 (rule-id: ven-140-166) — "…, then move a friendly
+  // unit": the mover is chosen as the instruction is carried out, so the
+  // controller is prompted here (never bound at play time) even when only one
+  // unit qualifies; the destination prompt follows below.
+  if ((effect as unknown as { chooseAtResolution?: boolean }).chooseAtResolution === true) {
+    const pool = resolveTarget({ ...(effect.target as TargetDescriptor), quantity: "all" }, {
+      cards: ctx.cards,
+      draft: ctx.draft,
+      playerId: ctx.playerId,
+      sourceCardId: ctx.sourceCardId,
+      sourceZone: ctx.sourceZone,
+      zones: ctx.zones,
+    });
+    if (pool.length === 0) {
+      return;
+    }
+    ctx.draft.pendingChoice = {
+      effect: { ...(effect as object), chooseAtResolution: false },
+      options: pool,
+      playerId: ctx.playerId,
+      remaining: 1,
+      sourceCardId: ctx.sourceCardId,
+      type: "choose-target",
+    } as RiftboundGameState["pendingChoice"];
     return;
   }
 
@@ -661,7 +597,7 @@ export function handle_move(effect: ExecutableEffect, ctx: EffectContext, h: Eff
         const landed = moveCardWithEvent(ctx, cardId, options[0] as string);
         // rule-id: unl-144-219 — Rule 450: arriving at a non-controlled
         // battlefield applies Contested so combat is staged.
-        markContestedOnArrival(ctx.draft, landed, arrivingController(ctx, cardId));
+        arriveByEffect(ctx, [cardId], landed);
         runThenAt(cardId, landed);
         continue;
       }
@@ -865,14 +801,16 @@ export function handle_move(effect: ExecutableEffect, ctx: EffectContext, h: Eff
       return;
     }
     const landing = open[0] as string;
+    const arrivedOpen: string[] = [];
     for (const cardId of moveTargets) {
       if (ctx.zones.getCardZone(cardId as CoreCardId) === landing) {
         continue;
       }
-      const landed = moveCardWithEvent(ctx, cardId, landing);
-      markContestedOnArrival(ctx.draft, landed, arrivingController(ctx, cardId));
+      if (moveCardWithEvent(ctx, cardId, landing) === landing) {
+        arrivedOpen.push(cardId);
+      }
     }
-    stageCombatOnArrival(ctx, landing);
+    arriveByEffect(ctx, arrivedOpen, landing);
     return;
   }
 
@@ -905,16 +843,16 @@ export function handle_move(effect: ExecutableEffect, ctx: EffectContext, h: Eff
       return;
     }
     const landing = options[0] as string;
+    const arrivedTogether: string[] = [];
     for (const cardId of moveTargets) {
       if (ctx.zones.getCardZone(cardId as CoreCardId) === landing) {
         continue;
       }
-      const landed = moveCardWithEvent(ctx, cardId, landing);
-      markContestedOnArrival(ctx.draft, landed, arrivingController(ctx, cardId));
+      if (moveCardWithEvent(ctx, cardId, landing) === landing) {
+        arrivedTogether.push(cardId);
+      }
     }
-    if (landing.startsWith("battlefield-")) {
-      stageCombatOnArrival(ctx, landing);
-    }
+    arriveByEffect(ctx, arrivedTogether, landing);
     return;
   }
 
@@ -950,18 +888,21 @@ export function handle_move(effect: ExecutableEffect, ctx: EffectContext, h: Eff
     targetZone = "base";
   }
   const origins: string[] = [];
+  const arrived: string[] = [];
   for (const targetId of moveTargets) {
     const from = ctx.zones.getCardZone(targetId as CoreCardId);
     if (from) {
       origins.push(from);
     }
-    const landed = moveCardWithEvent(ctx, targetId, targetZone);
-    // rule 450: a unit arriving at a battlefield its own controller does not
-    // control applies Contested — including when an effect drags an ENEMY unit
-    // onto the source's battlefield (unl-141-219 Evelynn, `to: "here"`).
-    markContestedOnArrival(ctx.draft, landed, arrivingController(ctx, targetId));
+    if (moveCardWithEvent(ctx, targetId, targetZone) === targetZone && from !== targetZone) {
+      arrived.push(targetId);
+    }
   }
-  stageCombatOnArrival(ctx, targetZone);
+  // rule 190.3.a / 450: a unit arriving at a battlefield its own controller
+  // does not control applies Contested — including when an effect drags an
+  // ENEMY unit onto the source's battlefield (unl-141-219 Evelynn, `to: "here"`);
+  // the Cleanup after this resolution begins the staged Combat (323.13).
+  arriveByEffect(ctx, arrived, targetZone);
 
   // rule-id: unl-124-219 (Isolate) — "Then, if there's an enemy unit alone at
   // that battlefield, …": "that battlefield" is the moved unit's origin, which

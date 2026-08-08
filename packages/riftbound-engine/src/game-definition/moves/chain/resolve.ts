@@ -845,7 +845,10 @@ export function executeResolvedItem(
       typeof quantity === "object" && quantity !== null && typeof (quantity as { upTo?: unknown }).upTo === "number"
         ? ((quantity as { upTo: number }).upTo as number)
         : undefined;
-    if (upTo !== undefined && upTo > 1 && options.length >= 2) {
+    // rule 355.13 / 387 — a reflexive "… up to two of THEM" is a real choice
+    // (zero is legal) even when only one linked object is left.
+    const idLinked = Array.isArray((target as { filter?: { idIn?: unknown } }).filter?.idIn);
+    if (upTo !== undefined && upTo > 1 && (options.length >= 2 || (idLinked && options.length === 1))) {
       // Multi-pick shapes ("up to N" / "any number of") keep their
       // accumulate-until-declined prompt at resolution for now.
       if (finalizeOnly) {

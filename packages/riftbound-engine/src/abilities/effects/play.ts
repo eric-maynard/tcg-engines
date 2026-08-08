@@ -16,6 +16,7 @@ import { battlefieldForbidsUnitPlays } from "../play-restrictions";
 import { spellEffectHasLegalTargets, type SpellEffectTargetShape } from "../../game-definition/moves/play/targeting";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import { type EffectHelpers, getTargetIds } from "./_helpers";
+import { arriveByEffect } from "./move";
 
 /**
  * rule 358.3.a (rule-id: ogn-026-298 Brynhir Thundersong) — a "player can't play
@@ -1124,6 +1125,9 @@ export function enterUnitFromEffect(cardId: string, zoneId: string, ctx: EffectC
   const owner = ctx.cards.getCardOwner(cardId as CoreCardId) ?? ctx.playerId;
   ctx.fireTriggers?.({ cardId, paidAdditionalCost: false, playerId: owner, type: "play-self" });
   ctx.fireTriggers?.({ cardId, cardType: "unit", playerId: owner, type: "play-card" });
+  // rule 190.3.a.1 — played to a battlefield its controller does not control:
+  // Contested + staged like any other arrival (Cleanup begins the showdown).
+  arriveByEffect(ctx, [cardId], zoneId, "play");
   // rule 821.1.c / 356.1.b (rule-id: sfd-127-221) — an effect-instructed play is
   // still a play, so Weaponmaster offers its Equip here exactly as from hand.
   offerWeaponmasterEquip(

@@ -77,11 +77,22 @@ describe("Ruling adc5174843bc420d — Faefolk's 'that battlefield' is fixed at t
   test("ruling adc5174843bc420d — control: with no response, P1 chooses Foe and it moves to bf1", async () => {
     const game = await board().build();
     await game.p1.move("fae", "bf1");
-    await chooseFoe(game);
-    await game.settle();
+    if (game.decision()?.kind === "yes-no" && game.decision()?.seat === P1) {
+      await game.p1.yes();
+    }
+    if (game.decision()?.kind === "pick" && game.decision()?.seat === P1) {
+      await game.p1.pick("foe");
+    }
+    while (game.chain().length > 0) {
+      await game.acting().pass();
+    }
     expect(game.zoneOf("fae")).toBe("battlefield-bf1");
     expect(game.zoneOf("foe")).toBe("battlefield-bf1");
     expect(game.p2.units("bf2")).toEqual([]);
+    // 190.3.a / 323.13 — Foe now contests bf1 and must attack (2 into Guard 2 + Faefolk): it dies there.
+    await game.settle();
+    expect(game.zoneOf("foe")).toBe("trash");
+    expect(game.gameState.battlefields.bf1?.controller).toBe(P1);
   });
 
   // Expected (359.3.f.3): P2 Gusts Faefolk in response (1 might, at a battlefield → legal); Gust resolves
@@ -110,11 +121,15 @@ describe("Ruling adc5174843bc420d — Faefolk's 'that battlefield' is fixed at t
     expect(game.zoneOf("fae")).toBe("hand");
     expect(game.zoneOf("gust")).toBe("trash");
     // The Faefolk trigger is still pending and now resolves.
-    await chooseFoe(game);
-    await game.settle();
+    while (game.chain().length > 0) {
+      await game.acting().pass();
+    }
     expect(game.zoneOf("fae")).toBe("hand"); // Faefolk is gone from bf1 …
     expect(game.zoneOf("foe")).toBe("battlefield-bf1"); // … yet Foe moved to "that battlefield"
     expect(game.p2.units("bf2")).toEqual([]);
     expect(game.chain()).toEqual([]);
+    // 190.3.a / 323.13 — and it contests bf1: the staged Combat (Foe 2 into Guard 2) trades both.
+    await chooseFoe(game);
+    expect(game.zoneOf("foe")).toBe("trash");
   });
 });

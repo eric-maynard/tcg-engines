@@ -176,10 +176,7 @@ describe("Arise! (sfd-198-221)", () => {
     expect(game.state(made[0] as string).isReady).toBe(true);
   });
 
-  test.failing("BUG: 387 — 'Then do this:' is a reflexive trigger: after the spell resolves a separate triggered chain item readies the tokens (P2 gets a response window)", async () => {
-    // Expected: spell resolves (token on board, exhausted, Arise! in trash) and a triggered item
-    // controlled by P1 now sits on the chain; only when THAT resolves does the token ready.
-    // Actual: the ready happens inline during the spell's resolution — no second chain item.
+  test("387 — 'Then do this:' is a reflexive trigger: after the spell resolves a separate triggered chain item readies the tokens (P2 gets a response window)", async () => {
     const game = await board(1, 0).build();
     await game.p1.cast("arise");
     await game.p1.passPriority();
@@ -224,7 +221,7 @@ describe("Arise! (sfd-198-221)", () => {
     expect(game.state(made[0] as string).isReady).toBe(true);
   });
 
-  test("registry payload: 6-cost Calm/Order spell with one hybrid pip and standard timing; effect = [for-each friendly Equipment → Sand Soldier 2] then [ready up to 2]", async () => {
+  test("registry payload: 6-cost Calm/Order spell with one hybrid pip and standard timing; effect = [for-each friendly Equipment → Sand Soldier 2] then reflexive [ready up to 2 of them] (387)", async () => {
     const def = (await loadDefaultCardPool()).get(CARD);
     expect(def).toMatchObject({ cardType: "spell", energyCost: 6, name: "Arise!", timing: "standard" });
     expect(def?.domain).toEqual(["calm", "order"]);
@@ -237,7 +234,7 @@ describe("Arise! (sfd-198-221)", () => {
     const [make, ready] = a.effect.effects as [Record<string, any>, Record<string, any>];
     expect(make).toMatchObject({ target: { controller: "friendly", type: "equipment" }, type: "for-each" });
     expect(make.effect).toMatchObject({ token: { might: 2, name: "Sand Soldier", type: "unit" }, type: "create-token" });
-    expect(ready).toMatchObject({ type: "ready" });
-    expect(ready.target?.quantity).toEqual({ upTo: 2 });
+    expect(ready).toMatchObject({ effect: { type: "ready" }, type: "reflexive" });
+    expect(ready.effect?.target).toEqual({ quantity: { upTo: 2 }, type: "pending-value" });
   });
 });

@@ -794,6 +794,13 @@ function matchesFilter(cardId: string, filter: TargetFilter, ctx: TargetResolver
     return true;
   }
 
+  // rule 387 / 359.3.e.14 — a reflexive "… of THEM" is linked to the objects the
+  // main instruction produced; the queued item names them by id.
+  const idIn = (filter as { idIn?: readonly string[] }).idIn;
+  if (Array.isArray(idIn)) {
+    return idIn.includes(cardId);
+  }
+
   // rule 359.3.f.2 (unl-105-219 Imposing Challenger, unl-057-219 Alpha
   // Wildclaw) — "with less Might than me": compared against the SOURCE's Might
   // as it reads when the instruction executes; equal Might is not less.

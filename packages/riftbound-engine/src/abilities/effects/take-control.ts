@@ -3,6 +3,7 @@ import type { CardId as CoreCardId, PlayerId as CorePlayerId } from "@tcg/core";
 import type { RiftboundCardMeta } from "../../types";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import { type EffectHelpers, getTargetIds } from "./_helpers";
+import { arriveByEffect } from "./move";
 
 export function handle_takeControl(effect: ExecutableEffect, ctx: EffectContext, _h: EffectHelpers): void {
   // rule-id: sfd-109-221 (Akshan) — record a layered control-changing
@@ -10,8 +11,10 @@ export function handle_takeControl(effect: ExecutableEffect, ctx: EffectContext,
   // source so state-based cleanup can drop them (and fall back to the
   // next-latest effect, else the owner) once the source leaves the board.
   // rule 190.3.a: a stolen unit "otherwise becomes present" at a battlefield for its new
-  // controller — the Contested / conquer consequence is settled by state-based cleanup once
-  // the ability has finished (so Possession's follow-up recall leaves nothing behind).
+  // controller. Standing among its former allies it contests that battlefield and the
+  // Cleanup after this resolution begins the Combat (323.9 / 323.13 — shared arrival helper);
+  // alone there, the Cleanup's presence-conquer settles it (so Possession's follow-up recall
+  // leaves nothing behind).
   const targets = getTargetIds(effect, ctx);
   const untilLeaves = effect.duration === "until-leaves";
   for (const targetId of targets) {
@@ -27,5 +30,6 @@ export function handle_takeControl(effect: ExecutableEffect, ctx: EffectContext,
       { controlEffects: [...existing, entry] } as unknown as Record<string, unknown>,
     );
     ctx.cards.setCardController?.(targetId as CoreCardId, ctx.playerId as CorePlayerId);
+    arriveByEffect(ctx, [targetId], ctx.zones.getCardZone(targetId as CoreCardId) ?? "", "control-change");
   }
 }

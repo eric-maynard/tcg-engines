@@ -18,10 +18,11 @@ function board() {
   return scenario()
     .resources(P1, { energy: 8, power: { chaos: 3 } })
     .battlefield("bf1", { controller: P2 })
+    .battlefield("bf2", { controller: P1 }) // P1's unit stands where P1 has control — a friendly unit sharing bf1 would (190.3.a) contest it
     .unit(P2, "bf1", { might: 4, name: "Victim" }, "victim")
     .unit(P2, "bf1", { might: 1, name: "Bystander" }, "bystander")
     .unit(P2, "base", { might: 2, name: "Homebody" }, "home")
-    .unit(P1, "bf1", { might: 2, name: "Mine" }, "mine")
+    .unit(P1, "bf2", { might: 2, name: "Mine" }, "mine")
     .hand(P1, CARD, "pos");
 }
 

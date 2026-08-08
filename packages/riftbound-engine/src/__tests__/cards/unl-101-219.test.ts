@@ -179,7 +179,7 @@ describe("Call to Battle (unl-101-219)", () => {
   // up at bf2 next to Guard, bf2 becomes contested and a combat is staged with P2 attacking on P1's
   // turn. Actual: the parsed ability carries only the first (friendly) move; the opponent is never
   // asked and Brute stays home.
-  test("the chosen opponent must move one of their units to the same battlefield (forced single unit → Brute joins Guard at bf2, combat staged)", async () => {
+  test("the chosen opponent must move one of their units to the same battlefield (forced single unit → Brute joins Guard at bf2; 190.3.a/323.13 the staged combat begins in that Cleanup with Brute ATTACKING: Guard(3) dies to Brute(4), P2 conquers bf2)", async () => {
     const game = await scenario()
       .resources(P1, { energy: 3 })
       .battlefield("bf1", { controller: P1 })
@@ -189,9 +189,10 @@ describe("Call to Battle (unl-101-219)", () => {
       .hand(P1, CARD, "ctb")
       .build();
     await game.p1.cast("ctb", { targets: "guard" });
-    await game.settle({ policy: "first" }); // take any forced/first picks for both seats
-    expect(game.locationOf("guard")).toBe("bf2");
+    await game.settle({ policy: "first" }); // take any forced/first picks for both seats, pass the combat showdown
+    expect(game.zoneOf("guard")).toBe("trash");
     expect(game.locationOf("brute")).toBe("bf2");
+    expect(game.gameState.battlefields.bf2?.controller).toBe(P2);
   });
 
   // BUG — expected: with two enemy units (Brute in base, Sentry at bf3) the OPPONENT — not the caster —

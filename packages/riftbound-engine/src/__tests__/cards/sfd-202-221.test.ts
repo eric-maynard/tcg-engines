@@ -148,10 +148,7 @@ describe("Hostile Takeover (sfd-202-221)", () => {
     expect(game.p1.units("base")).toEqual(["mine"]);
   });
 
-  test.failing("BUG: other enemies still there → a combat starts (190.3.a, 323.13): stolen Big(5) attacks Small(2), kills it, and conquers bf2", async () => {
-    // Expected: Big under P1 at P2's bf2 applies Contested → combat; 5 ≥ 2 kills Small, 2 < 5 Big lives;
-    // P1 wins, gains control of bf2 and 1 point. Actual: no Contested/combat is generated — Big and
-    // Small just coexist at a P2-controlled bf2 and nothing is scored.
+  test("other enemies still there → a combat starts (190.3.a, 323.13): stolen Big(5) attacks Small(2), kills it, and conquers bf2", async () => {
     const game = await board().build();
     await game.p1.cast("ht", { targets: "big" });
     await game.settle({ policy: "first" });

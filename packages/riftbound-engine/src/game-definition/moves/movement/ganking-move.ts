@@ -3,14 +3,15 @@
  */
 
 import type { CardId as CoreCardId, ZoneId as CoreZoneId, GameMoveDefinitions } from "@tcg/core";
-import {
-  createInteractionState,
-  getTurnState,
-  startShowdown as startShowdownState,
-} from "../../../chain";
+import { createInteractionState, getTurnState } from "../../../chain";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../../types";
 import { fireTriggers } from "../../../abilities/trigger-runner";
-import { hasKeyword, isAloneAtLocation, relocateAttachedEquipment } from "./helpers";
+import {
+  type ArrivalIO,
+  beginShowdownAt,
+  noteArrival,
+} from "../../../operations/arrive-at-battlefield";
+import { hasKeyword, relocateAttachedEquipment } from "./helpers";
 
 type Defs = GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>;
 
@@ -188,94 +189,11 @@ export const gankingMove: Defs["gankingMove"] = {
 
     // Rule 450 / 548.2 (unl-022-219): a Ganking move arriving at a
     // battlefield the mover does not control applies Contested and opens
-    // a Showdown, exactly as a Standard Move does.
+    // a Showdown, exactly as a Standard Move does (same helper).
     const playerId = context.params.playerId as string;
-    const bf = draft.battlefields?.[toBattlefield];
-    if (bf && bf.controller !== playerId) {
-      const allUnits = zones.getCardsInZone(toZone as CoreZoneId);
-      // rule 127.1 — "opposing" is decided by current CONTROL, not ownership.
-      const hasOpponentUnit = allUnits.some((cardId) => {
-        const controller = controllerOf(context.cards, cardId);
-        return controller !== undefined && controller !== playerId;
-      });
-
-      if (!bf.contested) {
-        bf.contested = true;
-        bf.contestedBy = playerId;
-        bf.showdownComplete = false;
-      }
-
-      const playerIds = Object.keys(draft.players);
-      const defender = bf.controller ?? playerIds.find((p) => p !== playerId) ?? playerId;
-      const interaction = draft.interaction ?? createInteractionState();
-      draft.interaction = startShowdownState(
-        interaction,
-        toBattlefield,
-        playerId,
-        hasOpponentUnit ? [...new Set([playerId, defender])] : playerIds,
-        hasOpponentUnit,
-        playerId,
-        defender,
-      );
-
-      // rule-id: unl-079-219 (Rule 340 / 548.2): "When a showdown begins
-      // here" fires for BOTH combat and non-combat showdowns.
-      fireTriggers(
-        {
-          battlefieldId: toBattlefield,
-          isCombat: hasOpponentUnit,
-          playerId,
-          type: "showdown-begin",
-        },
-        { cards: context.cards, counters, draft, zones },
-      );
-
-      // Rule 625.1.c.1 / 625.1.c.2: combat showdown assigns roles and fires
-      // attack/defend triggers.
-      if (hasOpponentUnit) {
-        const triggerCtx = { cards: context.cards, counters, draft, zones };
-        // rule 740.2.a — "alone" = no other unit of the same controller here.
-        const ownerOf = (id: string) => controllerOf(context.cards, id as CoreCardId);
-        const occupants = allUnits as unknown as string[];
-        context.cards.updateCardMeta(
-          unitId as CoreCardId,
-          { combatRole: "attacker" } as Partial<RiftboundCardMeta>,
-        );
-        fireTriggers(
-          {
-            alone: isAloneAtLocation(unitId, playerId, occupants, ownerOf),
-            battlefieldId: toBattlefield,
-            cardId: unitId,
-            owner: playerId,
-            type: "attack",
-          },
-          triggerCtx,
-        );
-        // rule 383.4.f.2.a — one "you defend" per player per combat.
-        const defendCount = new Map<string, number>();
-        for (const cardId of allUnits) {
-          const owner = controllerOf(context.cards, cardId);
-          if (owner !== undefined && owner !== playerId) {
-            context.cards.updateCardMeta(
-              cardId,
-              { combatRole: "defender" } as Partial<RiftboundCardMeta>,
-            );
-            const batchIndex = defendCount.get(owner as string) ?? 0;
-            defendCount.set(owner as string, batchIndex + 1);
-            fireTriggers(
-              {
-                alone: isAloneAtLocation(cardId as string, owner as string, occupants, ownerOf),
-                batchIndex,
-                battlefieldId: toBattlefield,
-                cardId: cardId as string,
-                owner: owner as string,
-                type: "defend",
-              },
-              triggerCtx,
-            );
-          }
-        }
-      }
+    const io = { cards: context.cards, counters, draft, zones } as unknown as ArrivalIO;
+    if (noteArrival(io, { at: toBattlefield, cause: "move", stagedBy: playerId, unitIds: [unitId] }).staged) {
+      beginShowdownAt(io, toBattlefield);
     }
   },
 };

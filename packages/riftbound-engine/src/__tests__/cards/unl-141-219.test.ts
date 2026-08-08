@@ -46,18 +46,20 @@ describe("Evelynn, Entrancing (unl-141-219)", () => {
       .build();
 
     await game.p1.reveal("eve");
-    await game.settle();
-    if (game.decision()?.kind === "yes-no") {
-      await game.p1.yes();
-      await game.settle();
-    }
-    if (game.decision()?.kind === "pick") {
-      await game.p1.pick("foe");
-      await game.settle();
-    }
+    expect(game.decision()?.kind).toBe("yes-no"); // FIN: "you may" asked as the trigger is finalized; Mech is the only target
+    await game.p1.yes();
+    await game.p1.passPriority();
+    await game.p2.passPriority(); // the trigger resolves: Mech is pulled onto bf1
     expect(game.locationOf("foe")).toBe("bf1");
-    // rule 450: the ARRIVING unit's controller (P2) applies Contested, not the mover.
+    // rule 450: the ARRIVING unit's controller (P2) applies Contested, not the mover;
+    // 323.13: the Cleanup after the trigger resolves begins the Combat with P2 attacking.
     expect(game.gameState.battlefields.bf1).toMatchObject({ contested: true, contestedBy: P2 });
+    expect(game.gameState.interaction?.showdownStack?.at(-1)).toMatchObject({ attackingPlayer: P2, battlefieldId: "bf1", defendingPlayer: P1, isCombatShowdown: true });
+    expect(game.state("foe").combatRole).toBe("attacker");
+    expect(game.state("eve").combatRole).toBe("defender");
+    await game.settle(); // Mech(3) into Evelynn(2): Evelynn dies, P2 conquers bf1
+    expect(game.zoneOf("eve")).toBe("trash");
+    expect(game.gameState.battlefields.bf1).toMatchObject({ contested: false, controller: P2 });
   });
 
   test("has Backline and Hidden", async () => {

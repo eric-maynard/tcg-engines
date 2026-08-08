@@ -90,7 +90,7 @@ describe("Ruling e67d700de3299ca6 — Bone Skewer may choose an 'untargetable' u
     const game = await board().build();
     await skewerAtBf1(game);
     await game.p1.pick("runner");
-    await game.settle({ policy: "first" }); // any forced follow-ups for P2's cost-free play
+    // (190.3.a / 323.13 — the Runner contests bf1 and the Cleanup begins its Combat; inspect before it is fought)
     expect(game.zoneOf("runner")).toBe("battlefield-bf1");
     expect(game.state("runner").controller).toBe(P2);
     expect(game.state("runner").isStunned).toBe(true);

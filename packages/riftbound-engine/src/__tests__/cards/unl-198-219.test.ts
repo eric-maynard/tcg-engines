@@ -134,9 +134,7 @@ describe("Moonfall (unl-198-219)", () => {
     expect(game.p1.can("cast", "moon")).toBe(false);
   });
 
-  test.failing("BUG: signature line on P1's turn — pull Brute(4) from P2's base onto bf1: it arrives a 2, contests bf1 and must ATTACK Guard(3) at once (464.2.c.1); Brute dies, Guard lives, bf1 stays P1's; Bystander and Far Post untouched", async () => {
-    // Expected per 190.3.a/323.13: moved enemy → Contested → Combat with P2 attacking at 2 Might.
-    // Actual: the engine asks for an enemy unit, then neither moves it nor debuffs anything.
+  test("signature line on P1's turn — pull Brute(4) from P2's base onto bf1: it arrives a 2, contests bf1 and must ATTACK Guard(3) at once (190.3.a / 323.13 / 464.2.c.1); Brute dies, Guard lives, bf1 stays P1's; Bystander and Far Post untouched", async () => {
     const game = await myTurnBoard().build();
     await castMoonfall(game, P1, { battlefield: "bf1", pull: "brute" });
     expect(game.locationOf("brute") === "bf1" || game.zoneOf("brute") === "trash").toBe(true);
@@ -151,7 +149,7 @@ describe("Moonfall (unl-198-219)", () => {
     expect(game.zoneOf("moon")).toBe("trash");
   });
 
-  test.failing("BUG: the pulled unit may come from ANOTHER battlefield — Far Post(4) leaves bf2 (a move, not a conquest: bf2 never becomes P1's) and lands on bf1 as a 2, then loses the forced attack into Guard(3)", async () => {
+  test("the pulled unit may come from ANOTHER battlefield — Far Post(4) leaves bf2 (a move, not a conquest: bf2 never becomes P1's) and lands on bf1 as a 2, then loses the forced attack into Guard(3)", async () => {
     const game = await myTurnBoard().build();
     await castMoonfall(game, P1, { battlefield: "bf1", pull: "far" });
     expect(game.p2.units("bf2")).toEqual([]);
@@ -217,7 +215,7 @@ describe("Moonfall (unl-198-219)", () => {
     expect(game.p1.points()).toBe(1);
   });
 
-  test.failing("BUG: floors & expiry (143.2.a/b) with Galio as the wall — Tiny(2) pulled onto Galio's battlefield reads 0, nobody deals combat damage, Tiny is recalled ALIVE at 0 Might and is a 2 again next turn", async () => {
+  test("floors & expiry (143.2.a/b) with Galio as the wall — Tiny(2) pulled onto Galio's battlefield reads 0, nobody deals combat damage, Tiny is recalled ALIVE at 0 Might and is a 2 again next turn", async () => {
     const game = await scenario()
       .resources(P1, { energy: 3, power: { mind: 1 } })
       .battlefield("bf1", { controller: P1 })

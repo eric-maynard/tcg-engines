@@ -13,8 +13,9 @@
  *    Declining leaves the Cask ready and makes nothing.
  *  - The Gold token (187.5) enters P1's base EXHAUSTED: it cannot be cashed the turn it arrives; it
  *    readies at P1's next Awaken and then sacrifices for [rainbow].
- *  - Timing (359.3.b/c, 206.1 "will trigger when … is played"): the trigger is created when the
- *    spell is PLAYED, i.e. it sits above the spell and is answered before the spell resolves.
+ *  - Timing (419.4.a / 359.3.e.10): "when you play a spell" triggers when the act of playing is
+ *    completed by the spell's RESOLUTION (a countered spell never triggers it, 419.4.a.1); the
+ *    trigger then sits above whatever is left of that chain and is answered before it continues.
  *  - Cost: 1 energy, gear enters ready (359.2.d).
  */
 
@@ -225,20 +226,25 @@ describe("Chemtech Cask (sfd-063-221)", () => {
     expect(game.gameState.battlefields.bf1?.controller).toBe(P1);
   });
 
-  test.failing("BUG: the trigger must be created when the spell is PLAYED (359.3.b, 206.1) — the Cask prompt/Gold should come before Premonition resolves", async () => {
-    // Expected: after P1 finalizes Premonition, the Cask trigger is pending above it; P1 is asked to
-    // exhaust (and the Gold appears) while Premonition is still on the chain and no cards were drawn.
-    // Actual: the engine fires play-spell triggers only after the spell has resolved (hand already +3).
+  test("419.4.a / 359.3.e.10 — 'When you play a spell' triggers when the act of playing is COMPLETED BY THE SPELL'S RESOLUTION: no Cask prompt while Premonition sits on the chain; it appears once Premonition has resolved (hand +3), still inside P2's chain (Slow Draw underneath)", async () => {
+    // (An earlier reading — trigger created as the spell is put on the chain, citing 359.3.b / 206.1 —
+    // is contradicted by 419.4.a, 419.4.a.1 "countered → will not trigger" and the 359.3.e.10 example
+    // "the unit's ability still triggers as the spell resolves".)
     const game = await oppTurn().build();
     await game.p2.cast("slow");
     await game.p2.passPriority();
     await game.p1.cast("premo");
-    // Drain passes until either the prompt shows up or Premonition has left the chain.
-    for (let i = 0; i < 8 && game.decision()?.kind !== "yes-no" && game.zoneOf("premo") === "chain"; i++) {
-      await game.acting().pass();
-    }
+    expect(game.chain().map((c) => c.cardId)).toEqual(["slow", "premo"]);
+    expect(game.decision()?.kind).toBe("action"); // no trigger yet — nothing to finalize
+    await game.p1.passPriority();
+    await game.p2.passPriority(); // Premonition resolves → NOW the Cask trigger is created and finalized (its "you may exhaust")
+    expect(game.zoneOf("premo")).toBe("trash");
+    expect(game.p1.hand().sort()).toHaveLength(1 + 3);
     expect(game.decision()).toMatchObject({ kind: "yes-no", seat: P1 });
-    expect(game.zoneOf("premo")).toBe("chain");
-    expect(game.p1.hand()).toEqual(["premo2"]);
+    expect(game.zoneOf("slow")).toBe("chain"); // still P2's chain: the Gold arrives before Slow Draw resolves
+    await game.p1.yes();
+    expect(game.state("cask").isExhausted).toBe(true);
+    await game.settle();
+    expect(golds(game)).toHaveLength(1);
   });
 });

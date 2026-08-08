@@ -696,6 +696,22 @@ export interface DoTimesEffect {
   readonly effect: Effect;
 }
 
+/**
+ * rule 387 / 388 — Reflexive Trigger: "[Then] [you may] do this[ N times]: …".
+ * When the instruction it follows resolves, `effect` is not executed inline:
+ * a separate triggered Chain Item carrying it is created (N of them for
+ * "N times", 387.1.a) — finalized like any trigger, and opponents receive
+ * Priority before it resolves.
+ */
+export interface ReflexiveEffect {
+  readonly type: "reflexive";
+  readonly effect: Effect;
+  /** 387.1.a — "do this N times" (default 1). */
+  readonly times?: number;
+  /** "you MAY do this" — the item's controller opts in when it is finalized (402.1). */
+  readonly optional?: boolean;
+}
+
 // ============================================================================
 // Special Effects
 // ============================================================================
@@ -1033,6 +1049,7 @@ export type Effect =
   | ForEachEffect
   | RepeatEffect
   | DoTimesEffect
+  | ReflexiveEffect
 
   // Special
   | ScoreEffect
@@ -1087,7 +1104,8 @@ export function isControlFlowEffect(
   | OptionalEffect
   | ForEachEffect
   | RepeatEffect
-  | DoTimesEffect {
+  | DoTimesEffect
+  | ReflexiveEffect {
   return (
     effect.type === "sequence" ||
     effect.type === "choice" ||
@@ -1095,7 +1113,8 @@ export function isControlFlowEffect(
     effect.type === "optional" ||
     effect.type === "for-each" ||
     effect.type === "repeat" ||
-    effect.type === "do-times"
+    effect.type === "do-times" ||
+    effect.type === "reflexive"
   );
 }
 
