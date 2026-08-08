@@ -868,7 +868,15 @@
       color: #8a80a0;
       font-weight: 600;
       flex-shrink: 0;
+      min-width: 22px;
+      text-align: right;
     }
+    .rune-row .rune-actions {
+      display: flex;
+      gap: 2px;
+      flex-shrink: 0;
+    }
+    .dcr-btn:disabled { opacity: 0.3; cursor: default; pointer-events: none; }
     .rune-empty {
       font-size: 11px;
       color: #3a3460;
@@ -1634,24 +1642,54 @@ Runes:
       return;
     }
 
-    // Group runes by name/domain for a compact display
+    // One row per identity domain (even at x0, so it can be raised again).
     const grouped = new Map();
+    for (const d of (legendDomains || [])) grouped.set(d, { rune: { domain: d }, count: 0 });
     for (const r of runes) {
-      const key = r.name || r.domain || r.id;
+      const key = r.domain || r.name || r.id;
       if (!grouped.has(key)) {
         grouped.set(key, { rune: r, count: 0 });
       }
-      grouped.get(key).count++;
+      const g = grouped.get(key);
+      g.rune = r;
+      g.count++;
     }
+    const adjustable = grouped.size > 1;
 
-    runeList.innerHTML = [...grouped.values()].map(({ rune, count }) => {
+    runeList.innerHTML = [...grouped.entries()].map(([key, { rune, count }]) => {
       const domain = rune.domain || 'colorless';
+      const label = domain.charAt(0).toUpperCase() + domain.slice(1);
       return `<div class="rune-row">
         <span class="rune-domain-badge domain-${domain}">${esc(domain)}</span>
-        <span class="rune-name">${esc(rune.name || domain + ' Rune')}</span>
+        <span class="rune-name">${esc(rune.name || label + ' Rune')}</span>
         <span class="rune-count">x${count}</span>
+        ${adjustable ? `<span class="rune-actions">
+          <button class="dcr-btn dcr-minus" ${count <= 0 ? 'disabled' : ''} onclick="adjustRunes('${esc(domain)}', -1, event)" title="One fewer ${esc(label)} rune">−</button>
+          <button class="dcr-btn dcr-plus" ${count >= 12 ? 'disabled' : ''} onclick="adjustRunes('${esc(domain)}', 1, event)" title="One more ${esc(label)} rune">+</button>
+        </span>` : ''}
       </div>`;
     }).join('');
+  }
+
+  async function adjustRunes(domain, delta, evt) {
+    if (evt) evt.stopPropagation();
+    try {
+      const res = await fetch(API + `/api/deck/${sessionId}/runes/adjust`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ domain, delta })
+      });
+      if (!res.ok) throw new Error('Failed to adjust runes');
+      const data = await res.json();
+      deckState = data.state;
+      deckStats = data.stats;
+      updateRuneDisplay();
+      if (data.result && !data.result.success) {
+        showToast('Runes', data.result.error?.message || 'Cannot adjust runes', 'error');
+      }
+    } catch (err) {
+      console.error('Adjust runes error:', err);
+    }
   }
 
   // ========================================
@@ -1778,7 +1816,26 @@ Runes:
         deckStats = stateData.stats;
       }
 
+      // Restore the saved rune mix (falls back to autofill for older decks
+      // saved without runes).
+      const runeIds = [];
+      for (const entry of (savedDeck.cards || []).filter(c => c.zone === 'rune')) {
+        for (let i = 0; i < entry.quantity; i++) runeIds.push(entry.cardId);
+      }
+      if (runeIds.length > 0) {
+        const runeRes = await fetch(API + `/api/deck/${sessionId}/runes/set`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ cardIds: runeIds })
+        });
+        if (runeRes.ok) {
+          const runeData = await runeRes.json();
+          deckState = runeData.state;
+          deckStats = runeData.stats;
+        }
+      }
       await silentAutoFillRunes();
+      if (savedDeck.name && typeof setDeckName === 'function') setDeckName(savedDeck.name);
 
       // Show the builder
       document.getElementById('legendOverlay').classList.add('hidden');
@@ -1798,6 +1855,9 @@ Runes:
   // Runes & Validation
   // ========================================
   async function silentAutoFillRunes() {
+    // Only fill an incomplete rune deck — a full one may carry a hand-tuned
+    // mix (7/5 etc.) that autofill would reset to an even split.
+    if ((deckState?.runeDeck || []).length >= 12) return;
     try {
       const res = await fetch(API + `/api/deck/${sessionId}/runes/autofill`, { method: 'POST' });
       if (!res.ok) return;

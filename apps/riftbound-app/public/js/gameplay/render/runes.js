@@ -282,7 +282,7 @@ function renderRuneStacks(runes, opts = {}) {
     // holds more runes than fit — every rune stays rendered and individually
     // clickable (rule 133.5.a.1), and the pile never pokes out of (or gets cut
     // off by) its clipped grid.
-    const RUNE_CARD_H = compact ? 98 : 154, FAN_STEP = compact ? 16 : 26, LABEL_H = 18, MIN_STEP = 8;
+    const RUNE_CARD_H = compact ? 98 : 154, FAN_STEP = compact ? 16 : 26, LABEL_H = 18, MIN_STEP = 6;
     const FAN_SPAN = 3 * FAN_STEP;
     const room = typeof opts.maxHeight === "number" && opts.maxHeight > 0 ? opts.maxHeight - LABEL_H - RUNE_CARD_H : FAN_SPAN;
     const span = Math.max(0, Math.min(FAN_SPAN, room));

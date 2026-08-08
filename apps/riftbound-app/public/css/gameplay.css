@@ -36,8 +36,9 @@
       top: 50%;
       left: 50%;
       transform-origin: center center;
-      /* Initial transform: translate(-50%, -50%) — layout.js appends scale */
-      transform: translate(-50%, -50%);
+      /* --game-scale is seeded by an inline <head> script (first paint) and
+         kept current by layout.js on resize. */
+      transform: translate(-50%, -50%) scale(var(--game-scale, 1));
       display: flex;
     }
 
@@ -116,10 +117,13 @@
       border-top: 1px solid #3a1525;
       border-bottom: 1px solid #3a1525;
       flex: 2;
-      /* [rule:ui-bf-unit-not-clipped] two stacked unit rows + header need more
-         than 180px; the player hand/rune row absorbs the deficit (see
+      /* [rule:ui-bf-unit-not-clipped] header + two stacked unit rows of whole
+         (uncropped) cards. At 240px each row got ~70px and a 126px unit showed
+         only its art strip behind a scrollbar; 320px gives ~115px rows, and
+         .bf-units cards size themselves to the row (see .bf-units .card). The
+         player status/hand rows absorb the deficit (see
          [rule:ui-player-base-row-no-collapse]). */
-      min-height: 240px;
+      min-height: 320px;
       position: relative;
     }
 
@@ -138,7 +142,7 @@
       flex-direction: column;
       min-height: 0;
       padding: 4px 12px;
-      padding-bottom: 10px;
+      padding-bottom: 6px;
       margin-top: auto;
       gap: 2px;
     }
@@ -168,8 +172,16 @@
       align-items: stretch;
       padding: 2px 0;
       min-height: 0;
-      flex: 0 1 264px;
+      flex: 0 1 240px;
     }
+    /* Player info (avatar/name/VP) + resource bar on one line. */
+    .player-status-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-shrink: 0;
+    }
+    .player-status-row .resource-bar { flex: 1; min-width: 0; }
 
     /* ============================================
        Player Info Bar
@@ -178,7 +190,7 @@
       display: flex;
       align-items: center;
       gap: 12px;
-      padding: 6px 0;
+      padding: 2px 0;
       font-size: 12px;
     }
 
@@ -495,11 +507,12 @@
     }
     .hand-zone .card .card-name { font-size: 10px; padding: 3px 6px; }
     /* [rule:ui-rune-pool-fits-row] The opponent's hand is reference-only
-       (backs, or faces in sandbox): 80% size hands ~36px of the over-subscribed
-       1080px board back to the player's own hand/rune row (hover still enlarges). */
+       (backs, or faces in sandbox): ~2/3 size hands ~60px of the over-subscribed
+       1080px board to the battlefield row and the player's own hand/rune row
+       (hover still enlarges). */
     #opponent-hand.hand-zone .card {
-      width: 104px;
-      height: 146px;
+      width: 86px;
+      height: 120px;
     }
     #opponent-hand.hand-zone .card.facedown {
       width: 64px;
@@ -508,21 +521,18 @@
     }
 
     /* Battlefield unit cards — large enough to read art/text */
-    /* [rule:ui-bf-unit-not-clipped] The 1080px logical board is over-subscribed,
-       so a wrapped .bf-units row can be handed far less than 126px. Without a
-       cap the card kept its full height and only a ~20px sliver stayed on
-       screen (unreadable, hard to click). Cap it at the row's own height so a
-       squeezed row shows shorter — but whole — cards instead. */
+    /* [rule:ui-bf-unit-not-clipped] .bf-units is a size container, so the card
+       height tracks the row's actual height (a percentage max-height never
+       resolved against the flexed row and the 126px card scrolled inside a
+       ~70px row, showing only its art strip). Width follows via aspect-ratio
+       so the whole face stays visible instead of letterboxing. */
     .bf-units .card {
-      width: 90px;
-      min-width: 90px;
-      height: 126px;
-      max-height: 100%;
+      height: min(126px, calc(100cqb - 6px));
+      width: auto;
+      min-width: 0;
+      aspect-ratio: 90 / 126;
+      flex-shrink: 0;
     }
-    /* [rule:ui-bf-unit-not-clipped] A height-capped card with object-fit:cover
-       crops the art top/bottom, which is where the printed card name lives —
-       the unit stays on screen but is unidentifiable. Letterbox instead so the
-       whole card face survives the squeeze. */
     .bf-units .card .card-img {
       object-fit: contain;
       background: #1a1730;
@@ -552,7 +562,9 @@
     }
     .rune-stack {
       position: relative;
-      width: 112px;
+      /* Wide enough for a full-size rune rotated 90° (154px) — exhausted runes
+         tap without shrinking. */
+      width: 156px;
       min-height: 172px;  /* fallback so absolutely-positioned cards inside are always visible */
       max-height: 100%;
       flex-shrink: 0;
@@ -571,7 +583,7 @@
       width: 110px;
       min-width: 110px;
       height: 154px;
-      left: 1px;
+      left: 23px;
       transition: transform 0.15s;
       cursor: pointer;
     }
@@ -585,19 +597,18 @@
     }
     /* Exhausted runes rotate 90° (tabletop tap convention) in addition to the
        overlay dim from .card--exhausted::before.
-       [rule:ui-rune-exhausted-overlay] A 110x154 card rotated about its center is
-       154px wide inside a 112px stack and spills ~21px past the left edge (clipped
-       off-screen when the rune grid hugs the viewport). Scale to 110/154 so the
-       rotated footprint stays inside the stack. */
+       [rule:ui-rune-exhausted-overlay] The card keeps its full size when tapped;
+       the stack is 156px wide so the rotated 154px footprint (centered on the
+       card) stays inside it instead of spilling past the clipped grid edge. */
     .rune-stack .card.card--exhausted,
     .rune-stack .card.exhausted {
-      transform: rotate(90deg) scale(0.714);
+      transform: rotate(90deg);
       transform-origin: center;
     }
     .rune-stack .card.exhausted:hover,
     .rune-stack .card.card--exhausted:hover {
       z-index: 20 !important;
-      transform: translateY(-4px) rotate(90deg) scale(0.75) !important;
+      transform: translateY(-4px) rotate(90deg) !important;
     }
     .rune-stack .card .card-name {
       display: none;
@@ -606,13 +617,14 @@
        compact (70x98, 16px fan) so the opponent row stops claiming a full 250px
        and the player's own interactive pile gets the height instead. */
     .rune-stack.rune-stack--compact {
-      width: 72px;
+      width: 100px;
       min-height: 116px;
     }
     .rune-stack.rune-stack--compact .card {
       width: 70px;
       min-width: 70px;
       height: 98px;
+      left: 15px;
     }
     .rune-stack.rune-stack--compact .rune-stack-label {
       font-size: 9px;
@@ -1193,12 +1205,18 @@
       gap: 4px;
     }
 
+    /* Single line (name · control) so the unit rows get the height. */
     .bf-header {
+      display: flex;
+      justify-content: center;
+      align-items: baseline;
+      flex-wrap: wrap;
+      gap: 0 8px;
       text-align: center;
       font-size: 11px;
       font-weight: 600;
       color: #8a82a6;
-      padding: 4px 0;
+      padding: 2px 0 3px;
       border-bottom: 1px solid #2a2448;
       position: relative;
       z-index: 1;
@@ -1213,7 +1231,6 @@
     .bf-control {
       font-size: 10px;
       color: #6a6288;
-      margin-top: 2px;
     }
 
     .bf-units {
@@ -1232,6 +1249,8 @@
       align-content: safe center;
       position: relative;
       z-index: 1;
+      /* Cards inside size to the row via cqb (see .bf-units .card). */
+      container-type: size;
     }
 
     /* Battlefield side tints */
@@ -1630,6 +1649,93 @@
       transform: none;
       box-shadow: none;
     }
+
+    /* Rich deck picker layered over the native <select> (which stays in the
+       DOM as the source of truth — see renderDeckDropdown in lobby.js). */
+    select.deck-dd-native { display: none !important; }
+    .deck-dd {
+      position: relative;
+      width: 100%;
+      min-width: 280px;
+      margin-top: 4px;
+      text-align: left;
+      font-size: 13px;
+    }
+    .deck-dd-btn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      padding: 8px 12px;
+      background: #1e1b30;
+      border: 2px solid #3a3560;
+      border-radius: 8px;
+      color: #e0dced;
+      cursor: pointer;
+      text-align: left;
+      font: inherit;
+    }
+    .deck-dd-btn:hover, .deck-dd-btn:focus-visible { border-color: #6a5faa; outline: none; }
+    .deck-dd-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+    .deck-dd-name {
+      font-weight: 600;
+      color: #e0dced;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .deck-dd-sub {
+      font-size: 11px;
+      color: #8a82a6;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .deck-dd-pips { display: flex; gap: 3px; flex-shrink: 0; }
+    .deck-dd-pip {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      font-size: 9px;
+      font-weight: 700;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .deck-dd-caret { color: #8a82a6; flex-shrink: 0; font-size: 11px; }
+    .deck-dd-menu {
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      right: 0;
+      max-height: 320px;
+      overflow-y: auto;
+      background: #16142a;
+      border: 1px solid #3a3560;
+      border-radius: 8px;
+      box-shadow: 0 12px 32px rgba(0,0,0,0.55);
+      z-index: 200;
+      padding: 4px;
+    }
+    .deck-dd-menu.hidden { display: none; }
+    .deck-dd-group {
+      padding: 8px 10px 4px;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #6a6288;
+    }
+    .deck-dd-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .deck-dd-item:hover { background: #24203c; }
+    .deck-dd-item.selected { background: #2a2450; }
 
     .mode-grid {
       display: grid;

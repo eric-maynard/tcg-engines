@@ -6,6 +6,12 @@
   <title>Riftbound — Play</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚔</text></svg>">
   <link rel="stylesheet" href="/css/gameplay.css">
+  <!-- Compute the board scale before first paint so the lobby doesn't render
+       at 1920x1080 and then snap to fit once layout.js loads. Mirrors
+       applyScale() in layout.js. -->
+  <script>
+    (function(){var s=Math.min(window.innerWidth/1920,Math.max(0,window.innerHeight-40)/1080);document.documentElement.style.setProperty("--game-scale",String(s));})();
+  </script>
 </head>
 <body>
 
@@ -164,13 +170,18 @@
         <div id="player-legendChampion" class="legend-champion-zone"></div>
         <div class="zone-row" id="player-base" data-drop-zone="player-base" style="justify-content:center;"></div>
       </div>
-      <div class="resource-bar" id="resourceBar"></div>
+      <!-- Player info shares the resource-bar row: a dedicated 48px info row
+           under the hand starved the battlefield row (units there rendered
+           as a cropped, scrolling sliver). -->
+      <div class="player-status-row">
+        <div class="player-info" id="playerInfo" style="flex-shrink:0;"></div>
+        <div class="resource-bar" id="resourceBar"></div>
+      </div>
       <div class="player-hand-row">
         <div class="rune-pool-grid" id="player-runePool"></div>
         <div class="zone-row hand-zone" id="player-hand" style="justify-content:center;flex:1;"></div>
         <div id="player-decks" style="display:flex; gap:4px; align-items:center; flex-shrink:0;"></div>
       </div>
-      <div class="player-info" id="playerInfo" style="flex-shrink:0;"></div>
     </div>
 
     <!-- Opponent Disconnect Banner -->

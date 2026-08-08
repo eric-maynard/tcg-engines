@@ -152,26 +152,9 @@ window.saveDeck = async function() {
     showToast('Incomplete', 'Select legend and champion first', 'error'); return;
   }
 
-  // Auto-generate name from champion if not set
+  // Auto-generate name from champion if not set. The server renames to
+  // "Name (1)", "Name (2)", … if the name is already taken.
   let name = getDeckName();
-
-  // Check for duplicate names and auto-increment
-  if (window.authToken) {
-    try {
-      const res = await fetch('/api/saved-decks', { headers: { 'Authorization': 'Bearer ' + window.authToken } });
-      if (res.ok) {
-        const existingDecks = await res.json();
-        const existingNames = existingDecks.map(d => d.name);
-        let baseName = name;
-        let counter = 2;
-        while (existingNames.includes(name)) {
-          name = baseName + ' (' + counter + ')';
-          counter++;
-        }
-        if (name !== baseName) setDeckName(name);
-      }
-    } catch {}
-  }
 
   // Get validation
   let validation = { valid: true, errors: [] };
@@ -215,6 +198,11 @@ window.saveDeck = async function() {
       body: JSON.stringify({ name, legendId: selectedLegendData.id, championId: selectedChampionData.id, gameVersion: window.gameVersion || 'standard', isPublic: false, cards })
     });
     if (res.ok) {
+      const saved = await res.json().catch(() => null);
+      if (saved && saved.name && saved.name !== name) {
+        name = saved.name;
+        setDeckName(name);
+      }
       if (!validation.valid) {
         showToast('Saved with warnings', 'Deck "' + name + '" saved. Issues: ' + validation.errors.map(e => e.message).join('; '), 'error');
       } else {

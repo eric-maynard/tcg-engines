@@ -462,21 +462,39 @@
     } catch {}
   }
 
+  /** "just now" / "5 minutes ago" / "3 hours ago" / "2 days ago" / date. */
+  function timeAgo(iso) {
+    const t = new Date(iso).getTime();
+    if (!iso || isNaN(t)) return '';
+    const s = Math.max(0, Math.round((Date.now() - t) / 1000));
+    if (s < 60) return 'just now';
+    const m = Math.round(s / 60);
+    if (m < 60) return m + (m === 1 ? ' minute ago' : ' minutes ago');
+    const h = Math.round(m / 60);
+    if (h < 24) return h + (h === 1 ? ' hour ago' : ' hours ago');
+    const d = Math.round(h / 24);
+    if (d < 30) return d + (d === 1 ? ' day ago' : ' days ago');
+    return new Date(t).toLocaleDateString();
+  }
+
   function renderDecks(decks, containerId, isPublic) {
     const grid = document.getElementById(containerId);
     grid.innerHTML = decks.map(d => {
-      const date = new Date(d.updatedAt || d.createdAt).toLocaleDateString();
+      const updated = timeAgo(d.updatedAt || d.createdAt);
       const ver = d.gameVersion || 'standard';
       const verClass = ver === 'preview' ? 'dc-version-preview' : 'dc-version-standard';
+      const who = [d.legendName, d.championName].filter(Boolean).map(esc).join(' · ');
+      const domains = (d.domains || []).map(dm => `<span class="domain-badge domain-${esc(dm)}">${esc(dm)}</span>`).join('');
       return `<div class="deck-card" onclick="openDeck('${d.id}')">
         <div class="dc-name">${esc(d.name)}</div>
         <div class="dc-meta">
           <span>${d.format || 'duel'}</span>
           <span class="dc-version ${verClass}">${ver}</span>
+          ${domains}
         </div>
-        <div class="dc-legend">${esc(d.legendId)}</div>
+        ${who ? `<div class="dc-legend">${who}</div>` : ''}
         <div class="dc-footer">
-          <span class="dc-date">${date}</span>
+          <span class="dc-date" title="${esc(new Date(d.updatedAt || d.createdAt).toLocaleString())}">${updated ? 'Updated ' + updated : ''}</span>
           ${!isPublic ? '<span class="dc-delete" onclick="event.stopPropagation(); deleteDeck(\'' + d.id + '\')">Delete</span>' : ''}
         </div>
       </div>`;

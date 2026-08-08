@@ -9,8 +9,8 @@ import { Database } from "bun:sqlite";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-const DB_DIR = path.join(import.meta.dir, "../../data");
-const DB_PATH = path.join(DB_DIR, "riftbound.db");
+const DB_PATH = process.env.RIFTBOUND_DB_PATH ?? path.join(import.meta.dir, "../../data/riftbound.db");
+const DB_DIR = path.dirname(DB_PATH);
 
 let _db: Database | null = null;
 

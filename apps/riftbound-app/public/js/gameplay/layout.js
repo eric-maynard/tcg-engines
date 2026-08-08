@@ -42,10 +42,10 @@
     if (banner) banner.classList.add("hidden");
     wrapper.style.visibility = "visible";
 
-    // The wrapper is absolute-positioned with translate(-50%, -50%) for
-    // centering. Preserve that translate and append the scale so the
-    // board stays centered inside .app while scaling from its center.
-    wrapper.style.transform = "translate(-50%, -50%) scale(" + scale + ")";
+    // The wrapper's stylesheet transform is translate(-50%, -50%)
+    // scale(var(--game-scale)); the inline <head> script seeds the var
+    // before first paint and we keep it current here.
+    document.documentElement.style.setProperty("--game-scale", String(scale));
   }
 
   function init() {

@@ -293,72 +293,156 @@ function setGameMode(mode) {
   }
 }
 
-/** Fetch saved decks and populate the dropdown */
-async function loadSavedDecksInto(select, statusEl) {
-  if (!select) return;
-  select.querySelectorAll("optgroup").forEach(g => g.remove());
-  try {
-    const decks = await api("/api/saved-decks");
-    if (Array.isArray(decks) && decks.length > 0) {
-      const group = document.createElement("optgroup");
-      group.label = "Your Saved Decks";
-      for (const d of decks) {
-        const o = document.createElement("option"); o.value = d.id; o.textContent = d.name; group.appendChild(o);
-      }
-      select.appendChild(group);
-      if (statusEl) statusEl.textContent = decks.length + " saved deck" + (decks.length === 1 ? "" : "s");
-    }
-  } catch {}
+/** "just now" / "5 minutes ago" / "3 hours ago" / "2 days ago" / date. */
+function timeAgo(iso) {
+  const t = new Date(iso).getTime();
+  if (!iso || isNaN(t)) return "";
+  const s = Math.max(0, Math.round((Date.now() - t) / 1000));
+  if (s < 60) return "just now";
+  const m = Math.round(s / 60);
+  if (m < 60) return m + (m === 1 ? " minute ago" : " minutes ago");
+  const h = Math.round(m / 60);
+  if (h < 24) return h + (h === 1 ? " hour ago" : " hours ago");
+  const d = Math.round(h / 24);
+  if (d < 30) return d + (d === 1 ? " day ago" : " days ago");
+  return new Date(t).toLocaleDateString();
 }
 
-async function loadSavedDecks() {
-  const select = document.getElementById("deckSelect");
-  const statusEl = document.getElementById("deckLoadStatus");
-  if (!select) return;
-
-  // Remove previously loaded options (keep "" empty and "default")
-  for (const opt of [...select.options]) {
-    if (opt.value && opt.value !== "default" && !opt.parentElement?.tagName?.match(/optgroup/i)) continue;
-    if (opt.parentElement?.tagName === "OPTGROUP") continue;
+/** Append an <optgroup> of saved decks, stashing display metadata on each option. */
+function appendDeckGroup(select, label, decks) {
+  const group = document.createElement("optgroup");
+  group.label = label;
+  for (const d of decks) {
+    const o = document.createElement("option");
+    o.value = d.id;
+    o.textContent = d.name;
+    o.dataset.legend = d.legendName || "";
+    o.dataset.champion = d.championName || "";
+    o.dataset.domains = (d.domains || []).join(",");
+    o.dataset.updated = d.updatedAt || d.createdAt || "";
+    group.appendChild(o);
   }
-  select.querySelectorAll("optgroup").forEach(g => g.remove());
+  select.appendChild(group);
+}
 
+/**
+ * Fetch saved (+ optionally public) decks into `select`. The native <select>
+ * stays the source of truth (harnesses drive it directly); renderDeckDropdown
+ * layers the rich picker over it.
+ */
+async function loadSavedDecksInto(select, statusEl, opts = {}) {
+  if (!select) return;
+  select.querySelectorAll("optgroup").forEach(g => g.remove());
   try {
     const decks = await api("/api/saved-decks");
     if (Array.isArray(decks) && decks.length > 0) {
-      const group = document.createElement("optgroup");
-      group.label = "Your Saved Decks";
-      for (const deck of decks) {
-        const opt = document.createElement("option");
-        opt.value = deck.id;
-        opt.textContent = deck.name;
-        group.appendChild(opt);
-      }
-      select.appendChild(group);
-      if (statusEl) statusEl.textContent = decks.length + " saved deck" + (decks.length === 1 ? "" : "s") + " found";
-    } else {
+      appendDeckGroup(select, "Your Saved Decks", decks);
+      if (statusEl) statusEl.textContent = decks.length + " saved deck" + (decks.length === 1 ? "" : "s");
+    } else if (statusEl) {
       // Dropdown always includes the starter deck, so don't claim "No saved decks".
-      if (statusEl) statusEl.textContent = "";
+      statusEl.textContent = "";
     }
   } catch {
     if (statusEl) statusEl.textContent = "";
   }
-
-  try {
-    const publicDecks = await api("/api/saved-decks/public");
-    if (Array.isArray(publicDecks) && publicDecks.length > 0) {
-      const group = document.createElement("optgroup");
-      group.label = "Public Decks";
-      for (const deck of publicDecks) {
-        const opt = document.createElement("option");
-        opt.value = deck.id;
-        opt.textContent = deck.name;
-        group.appendChild(opt);
-      }
-      select.appendChild(group);
-    }
-  } catch { /* no public decks */ }
+  if (opts.includePublic) {
+    try {
+      const publicDecks = await api("/api/saved-decks/public");
+      if (Array.isArray(publicDecks) && publicDecks.length > 0) appendDeckGroup(select, "Public Decks", publicDecks);
+    } catch { /* no public decks */ }
+  }
+  renderDeckDropdown(select);
 }
+
+async function loadSavedDecks() {
+  await loadSavedDecksInto(document.getElementById("deckSelect"), document.getElementById("deckLoadStatus"), { includePublic: true });
+}
+
+const DECK_DD_DOMAIN_LABELS = { fury: "F", calm: "C", mind: "M", body: "B", chaos: "X", order: "O" };
+
+/** Secondary line for a deck option: "Legend · Champion — Updated 2 hours ago". */
+function deckOptionSubtitle(opt) {
+  if (!opt || !opt.value) return "";
+  if (opt.value === "default") return "Starter deck";
+  const who = [opt.dataset.legend, opt.dataset.champion].filter(Boolean).join(" · ");
+  const when = timeAgo(opt.dataset.updated);
+  return [who, when && "Updated " + when].filter(Boolean).join(" — ");
+}
+
+function deckOptionDomainsHtml(opt) {
+  const domains = (opt?.dataset?.domains || "").split(",").filter(Boolean);
+  return domains.map(d => `<span class="deck-dd-pip pip-${esc(d)}" title="${esc(d)}">${esc(DECK_DD_DOMAIN_LABELS[d] || d[0].toUpperCase())}</span>`).join("");
+}
+
+function deckOptionHtml(opt) {
+  const sub = deckOptionSubtitle(opt);
+  return `<span class="deck-dd-text">
+      <span class="deck-dd-name">${esc(opt ? opt.textContent : "-- Choose a deck --")}</span>
+      ${sub ? `<span class="deck-dd-sub">${esc(sub)}</span>` : ""}
+    </span>
+    <span class="deck-dd-pips">${deckOptionDomainsHtml(opt)}</span>`;
+}
+
+/**
+ * Build (or refresh) the rich deck picker layered over a native <select>.
+ * Picking an item sets select.value and dispatches "change", so existing
+ * onchange handlers and anything driving the <select> directly keep working.
+ */
+function renderDeckDropdown(select) {
+  if (!select) return;
+  let dd = select.nextElementSibling?.classList?.contains("deck-dd") ? select.nextElementSibling : null;
+  if (!dd) {
+    dd = document.createElement("div");
+    dd.className = "deck-dd";
+    dd.innerHTML = `<button type="button" class="deck-dd-btn" aria-haspopup="listbox"></button><div class="deck-dd-menu hidden" role="listbox"></div>`;
+    select.insertAdjacentElement("afterend", dd);
+    select.classList.add("deck-dd-native");
+    const btn = dd.querySelector(".deck-dd-btn");
+    const menu = dd.querySelector(".deck-dd-menu");
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      document.querySelectorAll(".deck-dd-menu").forEach(m => { if (m !== menu) m.classList.add("hidden"); });
+      menu.classList.toggle("hidden");
+      menu.querySelector(".deck-dd-item.selected")?.scrollIntoView({ block: "nearest" });
+    });
+    menu.addEventListener("click", (e) => {
+      const item = e.target.closest(".deck-dd-item");
+      if (!item) return;
+      e.stopPropagation();
+      select.value = item.dataset.value;
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+      menu.classList.add("hidden");
+    });
+    select.addEventListener("change", () => renderDeckDropdown(select));
+    document.addEventListener("click", () => menu.classList.add("hidden"));
+  }
+
+  const btn = dd.querySelector(".deck-dd-btn");
+  const menu = dd.querySelector(".deck-dd-menu");
+  const selected = select.options[select.selectedIndex];
+  btn.innerHTML = deckOptionHtml(selected && selected.value ? selected : null) + `<span class="deck-dd-caret">▾</span>`;
+
+  let html = "";
+  const renderItem = (opt) => {
+    if (!opt.value) return "";
+    const sel = opt.value === select.value ? " selected" : "";
+    return `<div class="deck-dd-item${sel}" role="option" data-value="${esc(opt.value)}">${deckOptionHtml(opt)}</div>`;
+  };
+  for (const child of select.children) {
+    if (child.tagName === "OPTGROUP") {
+      html += `<div class="deck-dd-group">${esc(child.label)}</div>`;
+      for (const opt of child.children) html += renderItem(opt);
+    } else {
+      html += renderItem(child);
+    }
+  }
+  menu.innerHTML = html;
+}
+
+// Dress both pickers immediately (starter deck only) so the lobby never
+// flashes a bare <select> before the saved decks arrive.
+renderDeckDropdown(document.getElementById("deckSelect"));
+renderDeckDropdown(document.getElementById("soloDeckSelect"));
 
 function lobbyStartGame() {
   if (!lobbyWs || lobbyWs.readyState !== WebSocket.OPEN) return;

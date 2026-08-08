@@ -49,14 +49,44 @@ export interface UpdateDeckInput {
   cards?: DeckCardEntry[];
 }
 
+/**
+ * SQLite `datetime('now')` yields "YYYY-MM-DD HH:MM:SS" in UTC with no zone
+ * marker, which browsers parse as local time. Normalize to ISO-8601 UTC.
+ */
+function toIsoUtc(ts: string): string {
+  if (!ts || ts.includes("T")) {return ts;}
+  return `${ts.replace(" ", "T")}Z`;
+}
+
+function normalizeDeckRow<T extends SavedDeck>(row: T): T {
+  return { ...row, createdAt: toIsoUtc(row.createdAt), isPublic: Boolean(row.isPublic), updatedAt: toIsoUtc(row.updatedAt) };
+}
+
+/**
+ * Returns `name` if the user has no other deck with that name, otherwise the
+ * first free "name (1)", "name (2)", … variant.
+ */
+export function uniqueDeckName(userId: string, name: string, excludeDeckId?: string): string {
+  const db = getDb();
+  const rows = db.query("SELECT id, name FROM decks WHERE user_id = ?").all(userId) as { id: string; name: string }[];
+  const taken = new Set(rows.filter((r) => r.id !== excludeDeckId).map((r) => r.name));
+  if (!taken.has(name)) {return name;}
+  const base = name.replace(/ \(\d+\)$/, "");
+  for (let n = 1; ; n++) {
+    const candidate = `${base} (${n})`;
+    if (!taken.has(candidate)) {return candidate;}
+  }
+}
+
 export function createDeck(input: CreateDeckInput): FullDeck {
   const db = getDb();
   const id = crypto.randomUUID();
+  const name = uniqueDeckName(input.userId, input.name);
 
   db.run(
     `INSERT INTO decks (id, user_id, name, description, format, game_version, legend_id, champion_id, is_public)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [id, input.userId, input.name, input.description ?? "", input.format ?? "duel",
+    [id, input.userId, name, input.description ?? "", input.format ?? "duel",
      input.gameVersion ?? "standard", input.legendId, input.championId, input.isPublic ? 1 : 0],
   );
 
@@ -86,27 +116,27 @@ export function getDeck(deckId: string): FullDeck | null {
     `SELECT card_id as cardId, quantity, zone FROM deck_cards WHERE deck_id = ?`,
   ).all(deckId) as DeckCardEntry[];
 
-  return { ...row, cards, isPublic: Boolean(row.isPublic) };
+  return { ...normalizeDeckRow(row), cards };
 }
 
 export function listDecks(userId: string): SavedDeck[] {
   const db = getDb();
-  return db.query(
+  return (db.query(
     `SELECT id, user_id as userId, name, description, format,
             game_version as gameVersion, legend_id as legendId, champion_id as championId,
             is_public as isPublic, created_at as createdAt, updated_at as updatedAt
      FROM decks WHERE user_id = ? ORDER BY updated_at DESC`,
-  ).all(userId) as SavedDeck[];
+  ).all(userId) as SavedDeck[]).map(normalizeDeckRow);
 }
 
 export function listPublicDecks(limit = 50): SavedDeck[] {
   const db = getDb();
-  return db.query(
+  return (db.query(
     `SELECT id, user_id as userId, name, description, format,
             game_version as gameVersion, legend_id as legendId, champion_id as championId,
             is_public as isPublic, created_at as createdAt, updated_at as updatedAt
      FROM decks WHERE is_public = 1 ORDER BY updated_at DESC LIMIT ?`,
-  ).all(limit) as SavedDeck[];
+  ).all(limit) as SavedDeck[]).map(normalizeDeckRow);
 }
 
 export function updateDeck(deckId: string, userId: string, input: UpdateDeckInput): FullDeck | null {
@@ -115,7 +145,8 @@ export function updateDeck(deckId: string, userId: string, input: UpdateDeckInpu
   if (!existing || existing.user_id !== userId) {return null;}
 
   if (input.name !== undefined) {
-    db.run("UPDATE decks SET name = ?, updated_at = datetime('now') WHERE id = ?", [input.name, deckId]);
+    const name = uniqueDeckName(userId, input.name, deckId);
+    db.run("UPDATE decks SET name = ?, updated_at = datetime('now') WHERE id = ?", [name, deckId]);
   }
 
   if (input.gameVersion !== undefined) {
@@ -128,6 +159,7 @@ export function updateDeck(deckId: string, userId: string, input: UpdateDeckInpu
     for (const card of input.cards) {
       insert.run(deckId, card.cardId, card.quantity, card.zone);
     }
+    db.run("UPDATE decks SET updated_at = datetime('now') WHERE id = ?", [deckId]);
   }
 
   return getDeck(deckId);

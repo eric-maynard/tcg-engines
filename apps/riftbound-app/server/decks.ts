@@ -21,6 +21,47 @@ export function getOrCreateSession(sessionId: string): DeckBuilder {
   return sessions.get(sessionId)!;
 }
 
+export type RuneAdjustResult =
+  | { success: true }
+  | { success: false; error: { code: string; message: string } };
+
+/**
+ * Shift the rune mix one step toward (`delta` = +1) or away from (-1)
+ * `domain` while keeping the rune deck size fixed. The swapped rune comes
+ * from / goes to the other available domain holding the most / fewest runes.
+ * The deck is filled first if it isn't full yet.
+ */
+export function adjustRuneMix(builder: DeckBuilder, domain: string, delta: 1 | -1): RuneAdjustResult {
+  const runeDomain = (r: { domain?: string | readonly string[] }) => (typeof r.domain === "string" ? r.domain : "");
+  const byDomain = new Map<string, import("@tcg/riftbound-types/cards").RuneCard>();
+  for (const rune of builder.getAvailableRunes()) {
+    if (!byDomain.has(runeDomain(rune))) {byDomain.set(runeDomain(rune), rune);}
+  }
+  if (!byDomain.has(domain)) {
+    return { error: { code: "RUNE_DOMAIN", message: `No ${domain || "such"} rune available for this deck` }, success: false };
+  }
+  if (byDomain.size < 2) {
+    return { error: { code: "RUNE_SINGLE_DOMAIN", message: "Only one rune domain is available" }, success: false };
+  }
+  const current = builder.getState().runeDeck;
+  if (current.length < 12 || current.some((r) => !byDomain.has(runeDomain(r)))) {builder.autoFillRuneDeck();}
+
+  const runes = builder.getState().runeDeck;
+  const counts = new Map<string, number>([...byDomain.keys()].map((d) => [d, 0]));
+  for (const r of runes) {counts.set(runeDomain(r), (counts.get(runeDomain(r)) ?? 0) + 1);}
+  const others = [...counts.entries()].filter(([d]) => d !== domain);
+
+  const [takeFrom, giveTo] = delta === 1
+    ? [others.toSorted((a, b) => b[1] - a[1])[0][0], domain]
+    : [domain, others.toSorted((a, b) => a[1] - b[1])[0][0]];
+  const idx = runes.findIndex((r) => runeDomain(r) === takeFrom);
+  if (idx < 0) {
+    return { error: { code: "RUNE_NONE_LEFT", message: `No ${takeFrom} runes left to remove` }, success: false };
+  }
+  builder.removeFromRuneDeck(idx);
+  return builder.addToRuneDeck(byDomain.get(giveTo)!);
+}
+
 /** Rule 103.2: a Main Deck has at least 40 cards (Chosen Champion included). */
 export const MIN_MAIN_DECK_SIZE = 40;
 
@@ -390,6 +431,34 @@ export async function handleDeckBuilderRoutes(req: Request, url: URL, _ctx: Rout
     const sessionId = pathname.split("/")[3];
     const builder = getOrCreateSession(sessionId);
     builder.autoFillRuneDeck();
+    return json({ state: builder.getState(), stats: builder.getStats() });
+  }
+
+  // POST /api/deck/:session/runes/adjust {domain, delta} — shift one rune
+  // toward (+1) or away from (-1) `domain`, keeping the deck at 12: the
+  // counterpart comes from / goes to the other identity domain with the
+  // most / fewest runes.
+  if (pathname.match(/^\/api\/deck\/[^/]+\/runes\/adjust$/) && req.method === "POST") {
+    const sessionId = pathname.split("/")[3];
+    const body = (await req.json()) as { domain?: string; delta?: number };
+    const builder = getOrCreateSession(sessionId);
+    const result = adjustRuneMix(builder, body.domain ?? "", body.delta === -1 ? -1 : 1);
+    return json({ result, state: builder.getState(), stats: builder.getStats() });
+  }
+
+  // POST /api/deck/:session/runes/set {cardIds} — replace the rune deck
+  // (used when loading a saved deck so its rune mix survives).
+  if (pathname.match(/^\/api\/deck\/[^/]+\/runes\/set$/) && req.method === "POST") {
+    const sessionId = pathname.split("/")[3];
+    const body = (await req.json()) as { cardIds?: string[] };
+    const builder = getOrCreateSession(sessionId);
+    const runes = (body.cardIds ?? []).map((id) => registry.get(id)).filter((c) => c?.cardType === "rune");
+    if (runes.length > 0) {
+      while (builder.getState().runeDeck.length > 0) {builder.removeFromRuneDeck(0);}
+      for (const rune of runes) {
+        builder.addToRuneDeck(rune as import("@tcg/riftbound-types/cards").RuneCard);
+      }
+    }
     return json({ state: builder.getState(), stats: builder.getStats() });
   }
 
