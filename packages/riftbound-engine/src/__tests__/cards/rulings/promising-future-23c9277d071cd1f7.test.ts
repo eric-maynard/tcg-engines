@@ -87,36 +87,35 @@ describe("Ruling 23c9277d071cd1f7 — a counterspell banished with Promising Fut
     expect(game.p2.deck().slice(-4).sort()).toEqual(["b3", "b4", "b5", "bUnit"]);
   });
 
-  // Expected: second pass starts with the NEXT player: P2's Stupefy is queued/finalized first (P2 chooses the
-  // Wall, pays no Energy), then P1's Wind Wall is finalized — its target is chosen NOW (355.5) and Stupefy is a
-  // legal one. Wind Wall (P1 pays only [calm][calm]) is newer → resolves first (340.1) and counters Stupefy:
+  // Second pass starts with the NEXT player: P2's Stupefy is queued/finalized first (it takes the Wall, pays no
+  // Energy), then P1's Wind Wall is finalized — its target is chosen NOW (355.5) and Stupefy is a legal one.
+  // Wind Wall (P1 pays only [calm][calm]) is the newer chain item → resolves first (340.1) and counters Stupefy:
   // the Wall keeps 9 Might, P2 draws nothing; both spells end in their owners' trash, banishments empty.
-  // Actual: none of this exists in the engine.
-  test.failing("BUG: ruling 23c9277d071cd1f7 — P2's Stupefy finalizes first, then P1's Wind Wall targets and COUNTERS it (Wall stays 9, P2 draws 0); engine does not implement the play pass", async () => {
+  test("ruling 23c9277d071cd1f7 — P2's Stupefy finalizes first, then P1's Wind Wall targets and COUNTERS it (Wall stays 9, P2 draws 0)", async () => {
     const game = await board().build();
     const p2Hand = game.p2.hand().length;
     await castToFirstPass(game);
     await game.p1.pick("windwall");
     await game.p2.pick("stupefy");
-    // Drive the play pass: answer target prompts as they come — P2 first (Stupefy → wall), then P1 (Wind Wall → stupefy).
-    let sawP2First = false;
-    for (let i = 0; i < 6; i++) {
-      const stop = await game.settle();
-      if (stop.reason !== "unanswered") {
+    // prompt order not observable under passivePolicy (single-option picks auto-answer); ruling verified via chain order + end state
+    // Until each banished card is actually played the chain carries a pending play item still reporting the
+    // banished card id, so the ruling's ordering is asserted at the first moment BOTH are on the chain as spells.
+    let bothPlayed: ReturnType<typeof game.chain> | null = null;
+    for (let i = 0; i < 40; i++) {
+      const stop = await game.settle({ maxSteps: 1 });
+      const chain = game.chain();
+      if (chain.length === 2 && chain.every((c) => c.type === "spell")) {
+        bothPlayed = chain;
         break;
       }
-      const d = game.decision() as Decision;
-      if (d.seat === P2) {
-        expect(sawP2First || !game.chain().some((c) => c.cardId === "windwall")).toBe(true);
-        sawP2First = true;
-        await game.p2.answer(keysOf(d).includes("wall") ? "wall" : (keysOf(d)[0] as string));
-      } else {
-        expect(sawP2First).toBe(true); // the turn player's counterspell finalizes AFTER the opponent's card (337.1.b)
-        expect(keysOf(d)).toContain("stupefy"); // a legal target exists at finalization (355.5/355.8)
-        await game.p1.answer("stupefy");
+      if (stop.reason !== "max-steps") {
+        break;
       }
     }
-    expect(sawP2First).toBe(true);
+    // 337.1.b — the opponent's card is finalized first (older, lower); the turn player's counterspell is newer (top).
+    expect((bothPlayed ?? []).map((c) => c.cardId)).toEqual(["stupefy", "windwall"]);
+    expect((bothPlayed ?? []).map((c) => c.controller)).toEqual([P2, P1]);
+    await game.settle();
     expect(game.chain()).toEqual([]);
     // Costs: Energy ignored, Power still paid.
     expect(game.p1.power("calm")).toBe(0);
