@@ -134,7 +134,7 @@ describe("Black Flame Altar (unl-208-219)", () => {
   // BUG — expected (814.2): printed Shield + the Altar's Shield = Shield 2, so the veteran DEFENDS AS A 5: it deals 5
   // (kills a 5-Might attacker) and dies to the 5 back — an exact trade. Actual: `state().might` says 5, but combat deals
   // and checks with 4 (one Shield instance): the 5-Might attacker survives on 4 damage.
-  test.failing("BUG: 814.2 — Shield sums: a Temporary unit with its own [Shield] is a 5-Might defender on the Altar (3 + 1 + 1); a 5-Might attacker trades with it exactly", async () => {
+  test("814.2 — Shield sums: a Temporary unit with its own [Shield] is a 5-Might defender on the Altar (3 + 1 + 1); a 5-Might attacker trades with it exactly", async () => {
     const five = await siege({ keywords: ["Shield", "Temporary"], might: 3, name: "Masked Veteran" }, 5).build();
     await five.p2.move("atk", "altar");
     expect(five.state("def")).toMatchObject({ combatRole: "defender", might: 5 });
@@ -146,7 +146,7 @@ describe("Black Flame Altar (unl-208-219)", () => {
   // BUG — expected (814.2 + 465): the summed Shield is real Might in combat, so 4 damage into the 5-Might defender is
   // not lethal — the 4-Might attacker dies (takes 5) and the veteran survives. Actual: the card view reports Might 5
   // but combat resolution kills the defender on 4 damage (only one Shield instance is counted when checking lethal).
-  test.failing("BUG: 814.2 in combat — the doubly-shielded 5-Might defender must SURVIVE a 4-Might attacker (4 < 5) while killing it", async () => {
+  test("814.2 in combat — the doubly-shielded 5-Might defender must SURVIVE a 4-Might attacker (4 < 5) while killing it", async () => {
     const four = await siege({ keywords: ["Shield", "Temporary"], might: 3, name: "Masked Veteran" }, 4).build();
     await four.p2.move("atk", "altar");
     expect(four.state("def")).toMatchObject({ combatRole: "defender", might: 5 });

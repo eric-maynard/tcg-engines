@@ -331,6 +331,19 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
           }
         }
       }
+      // rule 814.2 / 719.1 (unl-208-219) — Shield (and Assault) from several
+      // sources SUM. A printed keyword listed in the flat `keywords[]` array
+      // carries no explicit value, so it must still contribute its +1 to the
+      // values map; otherwise a granted copy would overwrite the printed one
+      // (`getKeywordValue` prefers the map over counting occurrences) and a
+      // unit with printed Shield standing where Shield is granted would defend
+      // at +1 instead of +2. `abilities[{type:"keyword"}]` is the same printing
+      // in another shape — never count a keyword from both.
+      for (const keyword of defKeywords) {
+        if (!abilityKeywords.includes(keyword)) {
+          keywordValues[keyword] = (keywordValues[keyword] ?? 0) + 1;
+        }
+      }
       for (const gk of grantedKeywords) {
         keywordValues[gk.keyword] = (keywordValues[gk.keyword] ?? 0) + (gk.value ?? 1);
       }

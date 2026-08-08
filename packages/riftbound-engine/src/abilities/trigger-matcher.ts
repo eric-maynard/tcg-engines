@@ -127,6 +127,11 @@ export interface TriggerableAbility {
   readonly trigger: {
     readonly event: string;
     readonly on?: string;
+    /**
+     * rule 471.2.b (ogn-280-298) — "…HERE": the event must have happened at
+     * THIS card's own battlefield.
+     */
+    readonly location?: "here" | "from-here" | "battlefield" | "other-battlefield";
     readonly restrictions?: readonly TriggerRestriction[];
     /**
      * rule-id: sfd-075-221 — card type the acting source must have ("an
@@ -214,6 +219,8 @@ const EVENT_MAP: Record<string, string> = {
   "win-combat": "win-combat",
   // rule 466.7.b — "When a combat that I was in ends".
   "combat-end": "combat-end",
+  // rule 464.2.b (rule-id: ven-166-166) — "When combat starts here".
+  "combat-start": "combat-start",
 };
 
 /**
@@ -398,10 +405,20 @@ function triggerMatchesEvent(
         ? "start-of-turn"
         : e === "recycle-cards-to-deck"
           ? "recycle"
-          : e === "move-to-battlefield" || e === "move-from-battlefield"
+          : e === "move-to-battlefield" || e === "move-from-battlefield" || e === "move-from-here"
             ? "move"
             : e,
     );
+  // rule 446.1 / 190.6.a (ogn-277-298) — a battlefield's "When a unit moves
+  // from here" is the engine `move` event narrowed by ORIGIN to THIS
+  // battlefield: a retreat to base and a Ganking hop to another battlefield
+  // both qualify, leaving any other battlefield never does. Recalls emit no
+  // `move` event (rule 456.1), so they can't reach here.
+  if (event.type === "move" && trigger.event.split("-or-").includes("move-from-here")) {
+    if (card.zone !== "battlefieldRow" || String(event.from) !== `battlefield-${card.id}`) {
+      return false;
+    }
+  }
   if (
     event.type === "move" &&
     trigger.event.split("-or-").includes("move-to-battlefield") &&
@@ -454,6 +471,21 @@ function triggerMatchesEvent(
     return false;
   }
 
+  // rule 471.2.a — a trigger printed with "here" ("When you conquer here") is
+  // anchored to the battlefield this card occupies: its controller conquering
+  // or holding some OTHER battlefield never fires it. Events naming no
+  // battlefield can't be judged here and fall through to the `on` branches.
+  if (trigger.location === "here") {
+    const eventBattlefield = (event as { battlefieldId?: string }).battlefieldId;
+    if (typeof eventBattlefield === "string") {
+      const cardBattlefield =
+        card.zone === "battlefieldRow" ? card.id : card.zone.replace(/^battlefield-/, "");
+      if (eventBattlefield !== cardBattlefield) {
+        return false;
+      }
+    }
+  }
+
   // rule-id: ven-177-166 — a Might threshold trigger carries its bound as a
   // `might-threshold` restriction; without one the event can't be judged.
   if (
@@ -461,6 +493,29 @@ function triggerMatchesEvent(
     !(trigger.restrictions ?? []).some((r) => r.type === "might-threshold")
   ) {
     return false;
+  }
+
+  // rule 471.2.b (ogn-280-298) — a trigger printed "… HERE" is scoped to the
+  // battlefield the printing card sits at (or IS): only an event that happened
+  // there fires it. Holding a second battlefield the same turn never fires the
+  // Grove twice, and an uncontrolled Grove never fires off another
+  // battlefield's hold (190.6.d — its "you" refers to no one).
+  if (trigger.location === "here") {
+    const own =
+      card.zone === "battlefieldRow"
+        ? card.id
+        : card.zone.startsWith("battlefield-")
+          ? card.zone.slice("battlefield-".length)
+          : undefined;
+    const where =
+      "battlefieldId" in event && typeof event.battlefieldId === "string"
+        ? event.battlefieldId
+        : "to" in event && typeof event.to === "string" && event.to.startsWith("battlefield-")
+          ? event.to.slice("battlefield-".length)
+          : undefined;
+    if (where !== undefined && own !== where) {
+      return false;
+    }
   }
 
   // Check "on" subject

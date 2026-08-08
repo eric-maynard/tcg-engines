@@ -49,7 +49,7 @@ describe("Back-Alley Bar (ogn-277-298)", () => {
     });
   });
 
-  test.failing("BUG: standard move Bar → base puts the Bar's trigger on the chain and the mover ends at 3 Might; the bonus expires next turn (144.4.b, 446.1)", async () => {
+  test("standard move Bar → base puts the Bar's trigger on the chain and the mover ends at 3 Might; the bonus expires next turn (144.4.b, 446.1)", async () => {
     // Expected: after the retreat a triggered item sourced from "bar" sits on the chain; once it resolves
     // Walker is 3 (base 2); after the turn passes it is 2 again. Actual: `move-from-here` never matches
     // the engine's move event — no chain item, Walker stays 2.
@@ -64,7 +64,7 @@ describe("Back-Alley Bar (ogn-277-298)", () => {
     expect(game.state("walker").might).toBe(2);
   });
 
-  test.failing("BUG: a two-unit standard move off the Bar pumps EACH mover (+1 / +1) (144.3)", async () => {
+  test("a two-unit standard move off the Bar pumps EACH mover (+1 / +1) (144.3)", async () => {
     // Expected: both Walker and Ganker read 3 in base. Actual: both stay 2 (trigger never fires).
     const game = await board().build();
     await game.p1.move(["walker", "ganker"], "base");
@@ -87,7 +87,7 @@ describe("Back-Alley Bar (ogn-277-298)", () => {
     expect(game.p1.points()).toBe(1);
   });
 
-  test.failing("BUG: 'a unit' is any unit — P2's own unit retreating from a P2-held Bar on P2's turn gets +1 (190.6.a)", async () => {
+  test("'a unit' is any unit — P2's own unit retreating from a P2-held Bar on P2's turn gets +1 (190.6.a)", async () => {
     // Expected: Raider is 4 in P2's base after the retreat resolves. Actual: stays 3.
     const game = await scenario()
       .active(P2)
@@ -100,7 +100,7 @@ describe("Back-Alley Bar (ogn-277-298)", () => {
     expect(game.state("raider")).toMatchObject({ baseMight: 3, might: 4 });
   });
 
-  test.failing("BUG: an EFFECT move counts — The Syren pulling Walker from the Bar to base gives it +1 (449, 446.1)", async () => {
+  test("an EFFECT move counts — The Syren pulling Walker from the Bar to base gives it +1 (449, 446.1)", async () => {
     // Expected: Syren resolves (1 energy paid, Syren exhausted), Walker lands in base, Bar triggers → Walker 3.
     // Actual: Walker arrives at 2 and no trigger is queued.
     const game = await board().resources(P1, { energy: 1 }).gear(P1, THE_SYREN, "syren").build();
