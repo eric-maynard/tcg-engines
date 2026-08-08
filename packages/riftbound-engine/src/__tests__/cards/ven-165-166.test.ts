@@ -130,7 +130,7 @@ describe("Shadow Temple (ven-165-166)", () => {
   // BUG — expected (190.6.d: an uncontrolled battlefield's "you" is no one; 471.2.b: only the HELD
   // battlefield's hold abilities trigger): P1 holds bf2 only → 1 point, nothing burned, no item. Actual: a
   // "Shadow Temple" item controlled by P1 (the card's owner) goes on the chain and P1 burns 3.
-  test.failing("BUG: an UNCONTROLLED Temple owned by the turn player triggers when that player holds a DIFFERENT battlefield (190.6.d / 471.2.b)", async () => {
+  test("an UNCONTROLLED Temple owned by the turn player triggers when that player holds a DIFFERENT battlefield (190.6.d / 471.2.b)", async () => {
     const uncontrolled = await scenario()
       .turn(2)
       .active(P2)
@@ -165,7 +165,7 @@ describe("Shadow Temple (ven-165-166)", () => {
   // BUG — expected (471.2.b/c: hold abilities trigger at the battlefield that was Held, once): holding the
   // Temple AND a plain bf2 = 2 points and ONE Temple item → exactly 3 cards burned. Actual: two "Shadow
   // Temple" items go on the chain (one per battlefield held) and 6 cards are burned.
-  test.failing("BUG: 'When you hold HERE' fires once per battlefield held — Temple + another battlefield burns 6 instead of 3 (471.2.b)", async () => {
+  test("'When you hold HERE' fires once per battlefield held — Temple + another battlefield burns 6 instead of 3 (471.2.b)", async () => {
     const game = await aboutToHold().battlefield("bf2", { controller: P1 }).unit(P1, "bf2", { might: 2, name: "Other" }, "other").build();
     await game.p2.endTurn();
     expect(game.chain().filter((i) => i.cardId === "temple")).toHaveLength(1);

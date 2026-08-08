@@ -148,7 +148,7 @@ describe("Reaver's Row (ogn-285-298)", () => {
   // BUG — expected (383.4.f + "here"): the Defend Trigger is conditioned on a combat AT Reaver's Row;
   // being attacked at bf2 must not put a Reaver's Row item on the chain. Actual: the `on:"controller"`
   // matcher ignores the trigger's `location:"here"` for battlefield cards, so it fires for any defence.
-  test.failing("BUG: 'When you defend HERE' fires when its controller defends at a DIFFERENT battlefield (383.4.f, trigger location 'here')", async () => {
+  test("'When you defend HERE' fires when its controller defends at a DIFFERENT battlefield (383.4.f, trigger location 'here')", async () => {
     const game = await siege().unit(P1, "bf2", { might: 2, name: "Outpost" }, "outpost").build();
     await game.p2.move("raider", "bf2");
     expect(rowItems(game)).toBe(0);

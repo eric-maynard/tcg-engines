@@ -124,7 +124,7 @@ describe("Grove of the God-Willow (ogn-280-298)", () => {
     expect(game.p1.hand()).toHaveLength(1);
   });
 
-  test.failing("BUG: 'When you hold HERE' fires once per battlefield held — holding the Grove plus a plain battlefield draws 2 instead of 1 (471.2.b)", async () => {
+  test("'When you hold HERE' fires once per battlefield held — holding the Grove plus a plain battlefield draws 2 instead of 1 (471.2.b)", async () => {
     // Expected: 2 points, ONE Grove trigger → hand 2 (trigger + draw phase).
     // Actual: two "Grove of the God-Willow" items go on the chain (one per hold) → hand 3.
     const game = await aboutToHold().battlefield("bf2", { controller: P1 }).unit(P1, "bf2", { might: 2 }, "other").build();
@@ -135,7 +135,7 @@ describe("Grove of the God-Willow (ogn-280-298)", () => {
     expect(game.p1.hand()).toHaveLength(2);
   });
 
-  test.failing("BUG: an UNCONTROLLED Grove triggers when the turn player holds a different battlefield (190.6.d — 'you' refers to no one; 471.2.b — only the held battlefield's abilities trigger)", async () => {
+  test("an UNCONTROLLED Grove triggers when the turn player holds a different battlefield (190.6.d — 'you' refers to no one; 471.2.b — only the held battlefield's abilities trigger)", async () => {
     // Expected: P1 holds bf2 only → 1 point, hand 1 (draw phase). Actual: a Grove item goes on the chain and P1 draws → hand 2.
     const game = await scenario()
       .turn(2)

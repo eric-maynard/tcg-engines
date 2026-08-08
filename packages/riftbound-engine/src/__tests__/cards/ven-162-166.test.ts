@@ -194,7 +194,7 @@ describe("Protective Sands (ven-162-166)", () => {
     expect(game.p1.hand()).toHaveLength(hand0 + 1); // draw step only
   });
 
-  test.failing("BUG: only HERE — conquering a DIFFERENT battlefield while you control the Sands (2 runes) asks nothing (engine drops `location: \"here\"` and prompts)", async () => {
+  test("only HERE — conquering a DIFFERENT battlefield while you control the Sands (2 runes) asks nothing (engine drops `location: \"here\"` and prompts)", async () => {
     // Expected: bf2's conquer is not "here" → straight to main phase. Actual: a Protective Sands yes/no appears.
     const game = await scenario()
       .resources(P1, { energy: 1 })

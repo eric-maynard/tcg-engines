@@ -210,6 +210,13 @@ export function toTriggerableAbilities(cardId: string): TriggerableAbility[] {
           controllerFromEvent: (a.trigger as { controllerFromEvent?: boolean })
             .controllerFromEvent,
           event: a.trigger.event,
+          // rule 471.2.b (ogn-280-298) — keep the "HERE" scope; dropping it
+          // fires "when you hold here" off every battlefield you hold.
+          location: (
+            a.trigger as {
+              location?: "here" | "from-here" | "battlefield" | "other-battlefield";
+            }
+          ).location,
           on: a.trigger.on,
           restrictions: (a.trigger as { restrictions?: readonly { type: string; count?: number }[] })
             .restrictions,
@@ -1395,6 +1402,22 @@ function expandKeywordDoubling(
 /** The finalization dialog lives in `trigger-finalization.ts`; re-exported for move code. */
 export { finalizePendingItems, removeUnfinalizedItem } from "./trigger-finalization";
 
+/**
+ * rule 359.2 (rule-id: ogn-292-298) — the battlefield a card currently stands
+ * at, or `undefined` when it is not at one (base, hand, chain, …).
+ */
+function battlefieldOfCard(ctx: TriggerRunnerContext, cardId: string): string | undefined {
+  for (const bfId of Object.keys(ctx.draft.battlefields)) {
+    const cards = ctx.zones.getCardsInZone(`battlefield-${bfId}` as CoreZoneId) as unknown as
+      | string[]
+      | undefined;
+    if (cards?.some((id) => (id as string) === cardId)) {
+      return bfId;
+    }
+  }
+  return undefined;
+}
+
 export function fireTriggers(rawEvent: GameEvent, ctx: TriggerRunnerContext): number {
   // rule 359.2 / rule-id: sfd-195-221 — a `choose` event names the chooser but
   // not the chosen card's side; stamp the subject's CURRENT controller here so
@@ -1403,6 +1426,9 @@ export function fireTriggers(rawEvent: GameEvent, ctx: TriggerRunnerContext): nu
     rawEvent.type === "choose" && rawEvent.owner === undefined
       ? {
           ...rawEvent,
+          // rule 359.2 (rule-id: ogn-292-298) — "…a unit HERE" needs to know
+          // where the chosen card stands, so stamp its battlefield too.
+          battlefieldId: rawEvent.battlefieldId ?? battlefieldOfCard(ctx, rawEvent.cardId),
           owner:
             ctx.cards.getCardController?.(rawEvent.cardId as CoreCardId) ??
             (ctx.cards.getCardOwner(rawEvent.cardId as CoreCardId) as string | undefined),

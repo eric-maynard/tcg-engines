@@ -165,7 +165,7 @@ describe("Targon's Peak (ogn-289-298)", () => {
 
   // BUG — expected (471.2.a): only conquering HERE triggers the Peak. Actual: conquering the other battlefield also
   // fires it (the `location: "here"` restriction is not honoured) and the unit-target prompt opens at once.
-  test.failing("BUG: negative space — 'here': conquering a DIFFERENT battlefield while the Peak is in play schedules nothing; my tapped runes stay tapped all through P2's turn", async () => {
+  test("negative space — 'here': conquering a DIFFERENT battlefield while the Peak is in play schedules nothing; my tapped runes stay tapped all through P2's turn", async () => {
     const game = await board(3).build();
     await conquer(game, P1, "raider", "plain");
     expect(game.p1.points()).toBe(1);

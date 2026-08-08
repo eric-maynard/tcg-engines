@@ -138,7 +138,7 @@ describe("Seat of Power (sfd-217-221)", () => {
     expect(game.decision()).toMatchObject({ context: "main", kind: "action", seat: P2 });
   });
 
-  test.failing("BUG: only HERE — conquering a DIFFERENT battlefield while you already control Seat of Power draws nothing (471.2.a; engine fires the Seat on any conquer by its controller)", async () => {
+  test("only HERE — conquering a DIFFERENT battlefield while you already control Seat of Power draws nothing (471.2.a; engine fires the Seat on any conquer by its controller)", async () => {
     // Expected: bf2 was conquered, not the Seat → no Seat trigger, hand unchanged. Actual: the trigger's
     // `location: "here"` is dropped when abilities are loaded, so P1 draws 2 (Seat + bf2 counted).
     const game = await scenario()
@@ -157,7 +157,7 @@ describe("Seat of Power (sfd-217-221)", () => {
     expect(game.chain()).toEqual([]);
   });
 
-  test.failing("BUG: only HERE (uncontrolled Seat) — P1 merely OWNS an uncontrolled Seat of Power card and conquers ANOTHER battlefield: nothing is drawn and no Seat item hits the chain (engine falls back to the card owner and fires it)", async () => {
+  test("only HERE (uncontrolled Seat) — P1 merely OWNS an uncontrolled Seat of Power card and conquers ANOTHER battlefield: nothing is drawn and no Seat item hits the chain (engine falls back to the card owner and fires it)", async () => {
     // Expected: a battlefield card belongs to no side (471.2.a) and this conquer is not "here" → silence.
     // Actual: with controller null the trigger scan attributes the Seat to its deck owner (P1) and, with
     // "here" dropped, P1's conquer of bf2 puts a Seat of Power item on the chain.

@@ -135,7 +135,7 @@ describe("Monastery of Hirana (ogn-282-298)", () => {
     expect(game.state("monk").isBuffed).toBe(true);
   });
 
-  test.failing("BUG: 'When you conquer HERE' must not trigger when the Monastery's controller conquers a DIFFERENT battlefield (471.2.a)", async () => {
+  test("'When you conquer HERE' must not trigger when the Monastery's controller conquers a DIFFERENT battlefield (471.2.a)", async () => {
     // Expected: conquering "other" while holding the Monastery → straight back to the main phase,
     // buff kept, no draw. Actual: the Monastery's spend-a-buff offer appears for the conquer elsewhere
     // (the `on: "controller"` matcher ignores the trigger's `location: "here"`).

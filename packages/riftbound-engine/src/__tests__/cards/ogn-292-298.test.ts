@@ -76,7 +76,7 @@ async function passAll(game: Game): Promise<void> {
 }
 
 describe("The Dreaming Tree (ogn-292-298)", () => {
-  test.failing("BUG: registry payload — a spell-targeting trigger on a friendly unit HERE, first time each turn, whose draw goes to the CHOOSING player (parser: unknown event + draw for 'opponent')", async () => {
+  test("registry payload — a spell-targeting trigger on a friendly unit HERE, first time each turn, whose draw goes to the CHOOSING player (parser: unknown event + draw for 'opponent')", async () => {
     // Expected: an engine-known choose/target event scoped to spells + here, restriction first-time-each-turn,
     // effect draw 1 for the triggering player. Actual: event "choose-unit-with-spell", effect.player "opponent".
     await scenario().build();
@@ -90,7 +90,7 @@ describe("The Dreaming Tree (ogn-292-298)", () => {
     expect((ability?.trigger as { event?: string } | undefined)?.event).not.toBe("choose-unit-with-spell");
   });
 
-  test.failing("BUG: P1 targets their own Dreamer HERE with a spell → on finalization a Dreaming Tree item sits ABOVE the spell under P1; it resolves first: P1 draws 1 before Spark deals its damage (383.4.b.2)", async () => {
+  test("P1 targets their own Dreamer HERE with a spell → on finalization a Dreaming Tree item sits ABOVE the spell under P1; it resolves first: P1 draws 1 before Spark deals its damage (383.4.b.2)", async () => {
     // Expected: chain = [Spark A, The Dreaming Tree]; after two passes P1 has +1 card and Dreamer is still undamaged.
     // Actual: no Tree item is ever created.
     const game = await board().build();
@@ -107,7 +107,7 @@ describe("The Dreaming Tree (ogn-292-298)", () => {
     expect(game.p1.hand()).toHaveLength(hand0 + 1);
   });
 
-  test.failing("BUG: 'first time each turn' — the first spell at the Dreamer draws 1, the SECOND one the same turn draws nothing (chain holds only the spell)", async () => {
+  test("'first time each turn' — the first spell at the Dreamer draws 1, the SECOND one the same turn draws nothing (chain holds only the spell)", async () => {
     const game = await board().build();
     await game.p1.cast("sparkA", { targets: "dreamer" });
     await passAll(game);
@@ -120,7 +120,7 @@ describe("The Dreaming Tree (ogn-292-298)", () => {
     expect(game.state("dreamer").damage).toBe(2);
   });
 
-  test.failing("BUG: per-turn reset, cleanly: turn N draw, then on P1's NEXT turn targeting the Dreamer again draws again", async () => {
+  test("per-turn reset, cleanly: turn N draw, then on P1's NEXT turn targeting the Dreamer again draws again", async () => {
     const game = await board().build();
     await game.p1.cast("sparkA", { targets: "dreamer" });
     await passAll(game);
@@ -138,7 +138,7 @@ describe("The Dreaming Tree (ogn-292-298)", () => {
     expect(game.p1.hand()).toHaveLength(h2 - 1 + 1); // sparkB spent, Tree drew 1
   });
 
-  test.failing("BUG: symmetric 'a player' — P2 ATTACKING into P1's Tree targets P2's own attacker here during the showdown → P2 (not P1) draws 1", async () => {
+  test("symmetric 'a player' — P2 ATTACKING into P1's Tree targets P2's own attacker here during the showdown → P2 (not P1) draws 1", async () => {
     // Expected: the raider is a unit friendly to P2 located at the Tree → P2's first such choice this turn → P2 +1 card.
     const game = await scenario()
       .active(P2)
@@ -206,7 +206,7 @@ describe("The Dreaming Tree (ogn-292-298)", () => {
     expect(game.chain()).toEqual([]);
   });
 
-  test.failing("BUG: the draw survives a counter — P2 Wind Walls Spark A after the Tree item resolved: Dreamer undamaged, but P1 keeps the drawn card (383.4.b.2 vs 419.4.a.1)", async () => {
+  test("the draw survives a counter — P2 Wind Walls Spark A after the Tree item resolved: Dreamer undamaged, but P1 keeps the drawn card (383.4.b.2 vs 419.4.a.1)", async () => {
     const game = await board().hand(P2, WIND_WALL, "ww").build();
     await game.p1.cast("sparkA", { targets: "dreamer" });
     const hand0 = game.p1.hand().length;
@@ -222,7 +222,7 @@ describe("The Dreaming Tree (ogn-292-298)", () => {
     expect(game.p1.hand()).toHaveLength(hand0 + 1);
   });
 
-  test.failing("BUG: control of the Tree is irrelevant — the Tree is UNCONTROLLED, P1's lone attacker walks in and, holding Focus in the showdown, Sparks itself → P1 draws", async () => {
+  test("control of the Tree is irrelevant — the Tree is UNCONTROLLED, P1's lone attacker walks in and, holding Focus in the showdown, Sparks itself → P1 draws", async () => {
     const game = await scenario()
       .resources(P1, { energy: 3, power: { calm: 1 } })
       .battlefield("tree", { controller: null, def: CARD, inert: false, owner: P2 })

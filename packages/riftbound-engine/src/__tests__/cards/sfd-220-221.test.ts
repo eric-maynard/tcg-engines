@@ -184,7 +184,7 @@ describe("Treasure Hoard (sfd-220-221)", () => {
   // plain battlefield while merely controlling the Hoard raises nothing. Actual: a "Treasure Hoard" item
   // goes on the chain and P1 is asked to pay [1] — the trigger's `location: "here"` is not enforced for
   // the controller's conquers elsewhere.
-  test.failing("BUG: 'When you conquer HERE' also fires when the Hoard's controller conquers a DIFFERENT battlefield (471.2.a)", async () => {
+  test("'When you conquer HERE' does not fire when the Hoard's controller conquers a DIFFERENT battlefield (471.2.a)", async () => {
     const game = await scenario()
       .resources(P1, { energy: 2 })
       .battlefield("hoard", { controller: P1, def: CARD, inert: false, owner: P1 })

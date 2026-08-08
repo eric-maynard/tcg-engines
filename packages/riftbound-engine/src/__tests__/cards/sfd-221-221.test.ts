@@ -147,7 +147,7 @@ describe("Veiled Temple (sfd-221-221)", () => {
   // accepting unlinks it (435.1): Raider drops to 4 Might, the Blade is unattached and ends in P1's base
   // (435.4.a — a gear at a battlefield is recalled at the next Cleanup). Actual: the parsed ability stops at
   // "ready a friendly gear" — no detach offer ever appears, the Blade stays on the Raider.
-  test.failing("BUG: 'If it's an Equipment, you may detach it' — choosing the attached Blade should offer a detach that strips +2 and sends it to base (435)", async () => {
+  test("'If it's an Equipment, you may detach it' — choosing the attached Blade should offer a detach that strips +2 and sends it to base (435)", async () => {
     const game = await board().build();
     await equipBlade(game);
     await game.p1.move("raider", "bf1");
@@ -227,7 +227,7 @@ describe("Veiled Temple (sfd-221-221)", () => {
   // BUG — expected (471.2.a): while I already control the Temple (bf1), conquering bf2 must not fire the
   // Temple. Actual: the `on:"controller"` matcher ignores the trigger's `location:"here"` for battlefield
   // cards and only checks that the conqueror controls the Temple, so the offer appears.
-  test.failing("BUG: 'When you conquer HERE' fires for the Temple's controller conquering a DIFFERENT battlefield (471.2.a)", async () => {
+  test("'When you conquer HERE' fires for the Temple's controller conquering a DIFFERENT battlefield (471.2.a)", async () => {
     const game = await scenario()
       .battlefield("bf1", { controller: P1, def: CARD, inert: false, owner: P2 })
       .battlefield("bf2", { controller: P2 })
@@ -286,7 +286,7 @@ describe("Veiled Temple (sfd-221-221)", () => {
   // BUG (parse) — expected: the ability also encodes the conditional follow-up "If it's an Equipment, you may
   // detach it" (a detach instruction gated on the chosen gear being an Equipment). Actual: the payload is
   // just `{type:"ready", target:{type:"gear", controller:"friendly"}}` — the second sentence was dropped.
-  test.failing("BUG: registry payload must carry the 'If it's an Equipment, you may detach it' follow-up", async () => {
+  test("registry payload must carry the 'If it's an Equipment, you may detach it' follow-up", async () => {
     const def = (await loadDefaultCardPool()).get(CARD);
     const all = JSON.stringify(def?.abilities ?? []);
     expect(all).toContain('"type":"ready"');

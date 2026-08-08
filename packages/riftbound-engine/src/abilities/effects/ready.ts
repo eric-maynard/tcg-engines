@@ -2,6 +2,7 @@
 import type { CardId as CoreCardId } from "@tcg/core";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
+import { attachedUnitOf, isEquipmentCard } from "./_attachment";
 import { type EffectHelpers, getTargetIds } from "./_helpers";
 
 export function handle_ready(effect: ExecutableEffect, ctx: EffectContext, _h: EffectHelpers): void {
@@ -47,6 +48,40 @@ export function handle_ready(effect: ExecutableEffect, ctx: EffectContext, _h: E
       type: "ready",
     });
   }
+  offerFollowUpDetach(effect, ctx, readied);
+}
+
+/**
+ * rule 435 (sfd-221-221 Veiled Temple) — "ready a friendly gear. If it's an
+ * Equipment, you may detach it." The follow-up is a separate optional
+ * instruction gated on the gear chosen for the ready (rule 415.1.b: an
+ * already-ready Equipment is still a legal choice, so the offer does not depend
+ * on the ready having done anything). Only an Equipment currently attached to a
+ * unit can be detached.
+ */
+function offerFollowUpDetach(
+  effect: ExecutableEffect,
+  ctx: EffectContext,
+  readied: readonly string[],
+): void {
+  const followUp = (effect as unknown as { mayDetachEquipment?: unknown }).mayDetachEquipment;
+  if (!followUp || ctx.draft.pendingChoice) {
+    return;
+  }
+  const candidate = readied.find(
+    (id) => isEquipmentCard(id) && attachedUnitOf(ctx, id) !== undefined,
+  );
+  if (!candidate) {
+    return;
+  }
+  ctx.draft.pendingChoice = {
+    boundTargets: [candidate],
+    effect: followUp,
+    playerId: ctx.playerId,
+    prompt: "Detach it?",
+    sourceCardId: ctx.sourceCardId,
+    type: "confirm",
+  } as typeof ctx.draft.pendingChoice;
 }
 
 /**

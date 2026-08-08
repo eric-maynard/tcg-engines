@@ -146,7 +146,7 @@ describe("Power Nexus (sfd-214-221)", () => {
   // BUG — expected (471.2.b): hold abilities trigger only at the battlefield that was held. Actual: the trigger's
   // `location: "here"` is not honoured — P1 (who brought the Nexus) holding the OTHER battlefield still gets the
   // Power Nexus pay prompt on the chain.
-  test.failing("BUG: 'here' — holding a DIFFERENT battlefield while the Nexus lies uncontrolled asks nothing", async () => {
+  test("'here' — holding a DIFFERENT battlefield while the Nexus lies uncontrolled asks nothing", async () => {
     const game = await scenario()
       .turn(2)
       .active(P2)

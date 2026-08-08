@@ -169,7 +169,7 @@ describe("The Papertree (sfd-219-221)", () => {
   // Beginning Phase is not "holding here" — exactly one Papertree item, each player +1 rune (P1 ends on
   // 3, P2 on 1). Actual: the controller-scoped hold trigger ignores `location: "here"` and fires once per
   // battlefield held — two items, P1 ends on 4 runes and P2 on 2.
-  test.failing("BUG: 'When you hold HERE' — holding another battlefield too must not fire the Papertree a second time", async () => {
+  test("'When you hold HERE' — holding another battlefield too must not fire the Papertree a second time", async () => {
     const game = await aboutToHold().battlefield("bf2", { controller: P1 }).unit(P1, "bf2", { might: 2, name: "Other" }, "other").build();
     await game.p2.endTurn();
     expect(game.p1.points()).toBe(2);

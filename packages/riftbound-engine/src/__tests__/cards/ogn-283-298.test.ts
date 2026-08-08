@@ -73,7 +73,7 @@ describe("Navori Fighting Pit (ogn-283-298)", () => {
   // Phase is not "holding here", so exactly one Pit trigger goes on the chain and the unit at the other
   // battlefield is never a candidate. Actual: the battlefield's controller-scoped hold trigger ignores
   // its `location: "here"` and fires once per battlefield P1 holds (two Pit items on the chain).
-  test.failing("BUG: 'When you hold HERE' — also holding another battlefield must not fire the Pit a second time; units there are never offered", async () => {
+  test("'When you hold HERE' — also holding another battlefield must not fire the Pit a second time; units there are never offered", async () => {
     const game = await aboutToHold([
       { alias: "a", might: 2 },
       { alias: "b", might: 3 },

@@ -170,7 +170,7 @@ describe("Hall of Legends (sfd-210-221)", () => {
   // BUG — expected (383.4.c.2.b / 471.2.a): "conquer HERE" — while I already control the Hall (bf1),
   // conquering bf2 must not offer the Hall's pay-to-ready. Actual: the `on:"controller"` matcher only
   // compares the conquering player with the Hall's controller and ignores `location:"here"`, so it fires.
-  test.failing("BUG: 'When you conquer HERE' fires for the Hall's controller conquering a DIFFERENT battlefield (471.2.a)", async () => {
+  test("'When you conquer HERE' fires for the Hall's controller conquering a DIFFERENT battlefield (471.2.a)", async () => {
     const game = await scenario()
       .resources(P1, { energy: 3 })
       .battlefield("bf1", { controller: P1, def: CARD, inert: false, owner: P2 })
