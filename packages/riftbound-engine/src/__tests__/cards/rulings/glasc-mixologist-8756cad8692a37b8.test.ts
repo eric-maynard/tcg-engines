@@ -59,7 +59,8 @@ describe("Ruling 8756cad8692a37b8 — Glasc Mixologist's Deathknell may play the
     const game = await glascDies();
     // The Deathknell is a chain item now; nobody has an open main phase.
     expect(game.chain().map((c) => c.cardId)).toEqual(["glasc"]);
-    expect(game.decision()).toMatchObject({ context: "chain", kind: "action" });
+    // rule 402.1 — the leading "You may" is answered while the item is FINALIZED, before Priority.
+    expect(game.decision()).toMatchObject({ kind: "yes-no", seat: P1 });
     expect(game.cardsAt("bf1")).toEqual([]);
     expect(game.gameState.battlefields.bf1?.controller).toBe(P1);
   });

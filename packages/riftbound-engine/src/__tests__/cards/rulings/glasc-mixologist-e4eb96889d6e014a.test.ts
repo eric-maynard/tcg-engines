@@ -52,6 +52,10 @@ async function resolveSpell(game: Game, alias: string): Promise<void> {
 async function resolveDeathknellChoosingSkulker(game: Game): Promise<void> {
   expect(game.chain()).toEqual([expect.objectContaining({ cardId: "glasc", controller: P1, triggered: true })]);
   // Either the choice is asked at finalization (now) or — engine convention — on resolution after passes.
+  // rule 402.1 — a leading "You may" is answered while the item is FINALIZED, before Priority.
+  if (game.decision()?.kind === "yes-no") {
+    await game.p1.yes();
+  }
   if (game.decision()?.kind !== "pick") {
     await game.p1.passPriority();
     await game.p2.passPriority();
@@ -115,6 +119,9 @@ describe("Ruling e4eb96889d6e014a — Glasc Mixologist's Deathknell may pick a u
   test("ruling e4eb96889d6e014a — one kill instruction: the Deathknell offers Skulker (not the enemy unit) and plays it free", async () => {
     const game = await ruinationBoard().build();
     await resolveSpell(game, "ruin");
+    if (game.decision()?.kind === "yes-no") {
+      await game.p1.yes();
+    }
     if (game.decision()?.kind !== "pick") {
       await game.p1.passPriority();
       await game.p2.passPriority();
@@ -146,6 +153,11 @@ describe("Ruling e4eb96889d6e014a — Glasc Mixologist's Deathknell may pick a u
       .build();
     await resolveSpell(game, "flurry");
     expect(game.zoneOf("glasc")).toBe("trash");
+    // rule 402.1 / 419.3.c — the "You may" is asked as the item is finalized; with nothing
+    // eligible in the trash accepting it simply does nothing.
+    if (game.decision()?.kind === "yes-no") {
+      await game.p1.yes();
+    }
     await game.settle();
     expect(game.chain()).toEqual([]);
     expect(game.decision()).toMatchObject({ kind: "action", seat: P1, context: "main" });

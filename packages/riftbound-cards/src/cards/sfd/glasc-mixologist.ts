@@ -30,7 +30,9 @@ const playFromTrash: Ability["effect"] = {
 
 const abilities: Ability[] = [
   { effect: playFromTrash, keyword: "Deathknell", type: "keyword" },
-  { effect: playFromTrash, trigger: { event: "die", on: "self" }, type: "triggered" },
+  // rule 402.1 / 383.3.a: the leading "You may" is answered while the trigger is
+  // FINALIZED — before anyone gets Priority — not when it resolves.
+  { effect: playFromTrash, optional: true, trigger: { event: "die", on: "self" }, type: "triggered" },
 ];
 
 export const glascMixologist: UnitCard = {

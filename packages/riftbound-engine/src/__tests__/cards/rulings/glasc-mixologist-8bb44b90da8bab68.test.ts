@@ -59,9 +59,18 @@ async function resolveDeathknellToBf1(game: Game): Promise<void> {
   }
   let pickedCard = false;
   let pickedWhere = false;
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < 12; i++) {
     const d = game.decision();
-    if (!d || d.kind === "action") {
+    if (!d) {
+      break;
+    }
+    // rule 402.1 / 337.4 — the opt-in is answered at FINALIZATION, so the Priority
+    // window on the finalized item still has to be passed before it resolves.
+    if (d.kind === "action") {
+      if (d.context === "chain" && d.passKey) {
+        await game.seat(d.seat).pass();
+        continue;
+      }
       break;
     }
     expect(d.seat).toBe(P2);
