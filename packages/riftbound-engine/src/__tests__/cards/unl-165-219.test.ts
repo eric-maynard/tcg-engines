@@ -201,9 +201,10 @@ describe("Shadow's Call (unl-165-219)", () => {
     expect(game.p1.hand()).toHaveLength(3); // 2 + the draw phase card
   });
 
-  test.failing("BUG: Temporary is a TRIGGERED ability (816.1) — at the start of P1's turn the kill should sit on the chain in the Beginning Phase (respondable) before it resolves; the engine kills with no window", async () => {
-    // Expected: after P2 ends the turn, phase = "beginning", chain = [Temporary trigger of ally], ally still in base;
-    // after both pass it dies. Actual: ally is already in the trash and the phase is "main" with an empty chain.
+  test("Temporary is a TRIGGERED ability (816.1) — at the start of P1's turn the kill sits on the chain in the Beginning Phase (respondable) before it resolves", async () => {
+    // rule 816.1.b: every Temporary permanent carries its own "kill this" trigger, so P1's board
+    // (Ally just granted it + the printed-[Temporary] Sprite token) puts TWO items on the chain;
+    // 816.2 only makes duplicate instances on ONE permanent redundant.
     const game = await board().build();
     await game.p1.cast("sc", { targets: "ally" });
     await game.settle();
@@ -212,9 +213,13 @@ describe("Shadow's Call (unl-165-219)", () => {
     expect(game.turnPlayer()).toBe(P1);
     expect(game.phase()).toBe("beginning");
     expect(game.zoneOf("ally")).toBe("base");
-    expect(game.chain()).toEqual([expect.objectContaining({ cardId: "ally", triggered: true })]);
+    expect(game.chain()).toEqual([
+      expect.objectContaining({ cardId: "ally", triggered: true }),
+      expect.objectContaining({ cardId: "token-sprite", triggered: true }),
+    ]);
     await game.settle();
     expect(game.zoneOf("ally")).toBe("trash");
+    expect(game.p1.units("base")).toEqual([]); // rule 186.1: the Sprite token ceases to exist rather than resting in the trash
     expect(game.phase()).toBe("main");
   });
 
