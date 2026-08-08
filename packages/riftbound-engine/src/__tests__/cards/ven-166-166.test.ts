@@ -62,7 +62,7 @@ describe("Threshold of the Gray (ven-166-166)", () => {
 
   // BUG — expected (464.2.b + 429.2): the moment the combat opens here both the attacker (P1) and the
   // defender (P2) have 1 Energy, nothing lingers on the chain, and P1 holds Focus. Actual: 0 / 0.
-  test.failing("BUG: when combat starts here the attacker AND the defender each get +1 energy immediately (empty chain, attacker on Focus)", async () => {
+  test("when combat starts here the attacker AND the defender each get +1 energy immediately (empty chain, attacker on Focus)", async () => {
     const game = await board().build();
     expect(game.p1.energy()).toBe(0);
     expect(game.p2.energy()).toBe(0);
@@ -74,7 +74,7 @@ describe("Threshold of the Gray (ven-166-166)", () => {
   });
 
   // BUG — expected: exactly +1 on top of what each player already had (3 → 4, 5 → 6), power untouched. Actual: unchanged.
-  test.failing("BUG: it ADDS exactly 1 to each pool — existing energy and power are kept (P1 3→4, P2 5→6, fury stays 1)", async () => {
+  test("it ADDS exactly 1 to each pool — existing energy and power are kept (P1 3→4, P2 5→6, fury stays 1)", async () => {
     const game = await board().resources(P1, { energy: 3, power: { fury: 1 } }).resources(P2, { energy: 5 }).build();
     await game.p1.move("scout", "bf1");
     expect(game.p1.resources()).toEqual({ energy: 4, power: { fury: 1 } });
@@ -84,7 +84,7 @@ describe("Threshold of the Gray (ven-166-166)", () => {
   // BUG — expected: the marquee line — a broke attacker moves in, the Threshold pays for Cleave (1) inside the
   // showdown: Scout becomes 2+3 = 5 as an attacker, kills the 3-Might Guard and conquers. Actual: Cleave is
   // unaffordable (0 energy), Scout dies.
-  test.failing("BUG: the attacker can spend the added [1] on a combat trick in this very showdown (Cleave → Scout 5 kills Guard 3, P1 conquers)", async () => {
+  test("the attacker can spend the added [1] on a combat trick in this very showdown (Cleave → Scout 5 kills Guard 3, P1 conquers)", async () => {
     const game = await board().hand(P1, CLEAVE, "cleave").build();
     await game.p1.move("scout", "bf1");
     expect(game.p1.can("cast", "cleave")).toBe(true);
@@ -100,7 +100,7 @@ describe("Threshold of the Gray (ven-166-166)", () => {
   // BUG — expected: the DEFENDER is funded too, on the attacker's turn — P2 answers with Stupefy (1, Reaction)
   // on my 3-Might Bruiser: 3 → 2 < Guard 3, so the Guard survives (2 damage, healed at cleanup) and the
   // Bruiser dies; P2 drew 1. Actual: P2 has 0 energy and cannot cast.
-  test.failing("BUG: the defender can spend its added [1] on a Reaction during my attack (Stupefy shrinks my attacker, Guard holds)", async () => {
+  test("the defender can spend its added [1] on a Reaction during my attack (Stupefy shrinks my attacker, Guard holds)", async () => {
     const game = await board().hand(P2, STUPEFY, "stupefy").unit(P1, "base", { might: 3, name: "Bruiser" }, "bruiser").build();
     const p2Hand = game.p2.hand().length;
     await game.p1.move("bruiser", "bf1");
@@ -158,7 +158,7 @@ describe("Threshold of the Gray (ven-166-166)", () => {
   });
 
   // BUG — expected: two of my units moving in TOGETHER start ONE combat → exactly +1 each (not +2). Actual: 0.
-  test.failing("BUG: one combat = one trigger — two attackers arriving in a single move give each player exactly 1", async () => {
+  test("one combat = one trigger — two attackers arriving in a single move give each player exactly 1", async () => {
     const game = await board().build();
     await game.p1.move(["scout", "second"], "bf1");
     expect(game.state("scout").combatRole).toBe("attacker");
@@ -170,7 +170,7 @@ describe("Threshold of the Gray (ven-166-166)", () => {
   // BUG — expected: "When combat starts here" has no per-turn cap — after combat #1 here ends (Scout dies),
   // Second attacking here later this turn starts a NEW combat: +1 each again → P2 (who spent nothing) sits
   // on 2. Actual: 0.
-  test.failing("BUG: a second, separate combat here in the same turn adds again (P2 unspent: 1 → 2)", async () => {
+  test("a second, separate combat here in the same turn adds again (P2 unspent: 1 → 2)", async () => {
     const game = await board().build();
     await game.p1.move("scout", "bf1");
     expect(game.p2.energy()).toBe(1);
@@ -184,7 +184,7 @@ describe("Threshold of the Gray (ven-166-166)", () => {
 
   // BUG — expected (167 / 317.2.d): the point is real energy this turn and is LOST when the turn ends — after
   // the combat P1 still has 1 during its main phase, and 0 once P2's turn has begun. Actual: never gained.
-  test.failing("BUG: the added energy lasts for the rest of the turn and empties at end of turn", async () => {
+  test("the added energy lasts for the rest of the turn and empties at end of turn", async () => {
     const game = await board().fillDecks({ main: 10, runes: 0 }).build();
     await game.p1.move("scout", "bf1");
     await game.settle();
@@ -209,7 +209,7 @@ describe("Threshold of the Gray (ven-166-166)", () => {
   // BUG (parse) — expected: a structured effect adding 1 Energy to BOTH the attacker and the defender (e.g. an
   // `add-resource` with energy 1 for each combatant player) and no "optional" (there is no "may"). Actual:
   // `{ type: "raw", text: "the attacker and defender each [Add] :rb_energy_1:." }`.
-  test.failing("BUG: registry payload — the effect must be a structured [Add] [1] for attacker and defender, not raw text", async () => {
+  test("registry payload — the effect must be a structured [Add] [1] for attacker and defender, not raw text", async () => {
     const a = (await loadDefaultCardPool()).get(CARD)?.abilities?.[0] as { effect: { type: string }; optional?: boolean };
     expect(a.optional).not.toBe(true);
     expect(a.effect.type).not.toBe("raw");

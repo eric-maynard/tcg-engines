@@ -35,6 +35,8 @@ export type TriggerEvent =
   // rule 466.7.b — "When a combat that I was in ends"; fires at the end of the
   // Resolution Step, after damage, kills, recalls and control are settled.
   | "combat-end"
+  // rule 464.2.b — a Combat Showdown opens ("When combat starts here").
+  | "combat-start"
   | "conquer" // When conquering a battlefield
   | "hold" // When holding a battlefield (scoring)
   | "showdown-begin" // rule-id: unl-079-219 — When a showdown (combat or non-combat) begins

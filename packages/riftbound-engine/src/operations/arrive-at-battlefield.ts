@@ -349,6 +349,15 @@ export function beginShowdownAt(io: ArrivalIO, battlefieldId: string, opts: Begi
   emit(io, { battlefieldId, isCombat, playerId: attacker, type: "showdown-begin" } as GameEvent);
   if (isCombat) {
     assignCombatRoles(io, battlefieldId, attacker, attackers, defenders);
+    // rule 464.2.b — start-of-combat effects happen once the Combat has opened
+    // and roles are set, before the attacker's first Focus action.
+    emit(io, {
+      attacker,
+      battlefieldId,
+      defender,
+      playerId: attacker,
+      type: "combat-start",
+    } as GameEvent);
   }
   return true;
 }

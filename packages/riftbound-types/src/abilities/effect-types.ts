@@ -508,6 +508,13 @@ export interface ChannelEffect {
 export interface ReadyEffect {
   readonly type: "ready";
   readonly target: AnyTarget;
+  /**
+   * rule 435 (sfd-221-221 Veiled Temple) — "ready a friendly gear. If it's an
+   * Equipment, you may detach it." Only this step knows which gear was chosen,
+   * so the conditional follow-up rides on the ready effect: it is offered as a
+   * yes/no once the chosen gear turns out to be an attached Equipment.
+   */
+  readonly mayDetachEquipment?: DetachEffect;
 }
 
 /**

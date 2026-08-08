@@ -606,10 +606,15 @@ function triggerMatchesEvent(
     }
   } else if (on === "any-unit" || on === "any" || on === "any-player") {
     // Match any subject — except a battlefield's "When a player plays a unit
-    // HERE": play-card carries no location, so deny rather than fire for
-    // plays anywhere (rule 383.4.d).
+    // HERE" whose location cannot be judged: deny rather than fire for plays
+    // anywhere (rule 383.4.d). rule 359.2.c — when the play names its entry
+    // zone the `here` check above has already confirmed it is THIS
+    // battlefield, so the trigger is allowed to fire (unl-218-219).
     if (event.type === "play-card" && card.zone === "battlefieldRow") {
-      return false;
+      const to = (event as { to?: string }).to;
+      if (trigger.location !== "here" || typeof to !== "string" || !to.startsWith("battlefield-")) {
+        return false;
+      }
     }
   } else if (on === "enemy-units") {
     if ("owner" in event && event.owner === card.owner) {
@@ -649,7 +654,7 @@ function triggerMatchesEvent(
     // Object-shape descriptor: {controller?, cardType?/type?, location?, excludeSelf?, tag?, filter?}.
     // Rule 383.4.d: match only when the event subject satisfies every field.
     const desc = on as {
-      controller?: "friendly" | "enemy" | "any";
+      controller?: "friendly" | "enemy" | "any" | "actor";
       cardType?: string;
       type?: string;
       location?: "here" | "from-here" | "battlefield" | "other-battlefield";
@@ -728,6 +733,21 @@ function triggerMatchesEvent(
     }
     if (desc.controller === "enemy" && subjectOwner !== undefined && subjectOwner === card.owner) {
       return false;
+    }
+    // rule 740.1.a (rule-id: ogn-292-298) — "when A PLAYER chooses A FRIENDLY
+    // unit here": on a symmetric ability, "friendly" is judged from the ACTING
+    // player, not from the printing card's controller, so either player fires
+    // it by choosing their own unit and neither fires it off an enemy unit.
+    if (desc.controller === "actor") {
+      const actingId =
+        "chooserId" in event
+          ? event.chooserId
+          : "playerId" in event
+            ? event.playerId
+            : undefined;
+      if (actingId === undefined || subjectOwner === undefined || subjectOwner !== actingId) {
+        return false;
+      }
     }
     // rule-id: unl-133-219 — "When YOU move an enemy unit": the actor (the
     // player whose action/effect caused the event) must be this card's

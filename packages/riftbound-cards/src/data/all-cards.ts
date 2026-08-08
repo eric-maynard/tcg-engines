@@ -1777,6 +1777,19 @@ const JSON_CARD_ENGINE_FLAGS: Record<string, Record<string, unknown>> = {
       },
     ],
   },
+  // rule 464.2.b / 429.1 (rule-id: ven-166-166) — Threshold of the Gray:
+  // "When combat starts here, the attacker and defender each [Add] [1]." The
+  // instruction names both combatants (190.6.a), which no rules-text pattern
+  // expresses, so the ability is declared here.
+  "ven-166-166": {
+    abilities: [
+      {
+        effect: { energy: 1, players: ["attacker", "defender"], type: "add-resource" },
+        trigger: { event: "combat-start", location: "here", on: { location: "here" } },
+        type: "triggered",
+      },
+    ],
+  },
   // rule-id: ven-115-166 — printed DRAGON tag, missing from the set data (the
   // generator emits `tags: []` for every non-champion VEN unit). Ocean Drake's
   // "return a non-Dragon unit" reads the tag, so the drakes themselves — and

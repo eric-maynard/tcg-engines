@@ -20,8 +20,24 @@ export type GameEvent =
        * chosen from that battlefield only.
        */
       fromHiddenAt?: string;
+      /** rule 419 — how the play was performed (`moves/play/play-pipeline.ts PlayVia`). */
+      via?: string;
+      /** rule 419.1 — the zone the card was played from (hand, trash, banishment, championZone, facedown-…). */
+      from?: string;
     }
-  | { type: "play-card"; cardId: string; playerId: string; cardType: string }
+  | {
+      type: "play-card";
+      cardId: string;
+      playerId: string;
+      cardType: string;
+      via?: string;
+      from?: string;
+      /**
+       * rule 359.2.c — the zone the card entered (`battlefield-<id>` / `base`),
+       * so a battlefield's "When a player plays a unit HERE" can be judged.
+       */
+      to?: string;
+    }
   | { type: "play-token-unit"; cardId: string; playerId: string }
   // rule-id: ogn-167-298 — rule 811.1.c.3: playing a card from facedown IS
   // playing a card; cards that key off it specifically ("When you play a card
@@ -141,6 +157,16 @@ export type GameEvent =
   // rule-id: unl-079-219 — fired whenever a showdown (combat OR non-combat)
   // opens at a battlefield ("When a showdown begins here").
   | { type: "showdown-begin"; battlefieldId: string; playerId: string; isCombat: boolean }
+  // rule 464.2.b (rule-id: ven-166-166) — "When combat starts here": fired only
+  // for a COMBAT showdown, after roles are assigned and before the attacker's
+  // first Focus action. `playerId` is the attacker (464.2.c.1).
+  | {
+      type: "combat-start";
+      battlefieldId: string;
+      playerId: string;
+      attacker: string;
+      defender: string;
+    }
   // rule-id: sfd-142-221 — `sourceType` distinguishes "choose me with a
   // spell" from ability-sourced choices (gear/unit activated or triggered).
   // rule-id: sfd-195-221 — `owner` is the CHOSEN card's current controller, so
@@ -151,6 +177,9 @@ export type GameEvent =
       cardId: string;
       chooserId: string;
       owner?: string;
+      // rule-id: ogn-292-298 — where the chosen card stands, for "…here"
+      // triggers. Stamped centrally in `fireTriggers`.
+      battlefieldId?: string;
       sourceType?: "spell" | "ability";
     }
   | { type: "ready"; cardId: string; playerId: string }
