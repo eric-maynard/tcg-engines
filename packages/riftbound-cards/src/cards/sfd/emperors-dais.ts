@@ -32,7 +32,9 @@ const abilities: Ability[] = [
       type: "create-token",
     },
     optional: true,
-    trigger: { event: "conquer", on: "controller" },
+    // rule 471.2.a — "When you conquer HERE" is anchored to this battlefield:
+    // the same player conquering elsewhere never offers the option.
+    trigger: { event: "conquer", location: "here", on: "controller" },
     type: "triggered",
   },
 ];

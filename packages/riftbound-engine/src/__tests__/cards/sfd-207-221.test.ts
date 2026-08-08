@@ -62,7 +62,7 @@ async function acceptReturning(game: Game, seat: "p1" | "p2", ret: string): Prom
 }
 
 describe("Emperor's Dais (sfd-207-221)", () => {
-  test.failing("BUG: registry payload should scope the conquer trigger to HERE (printed 'When you conquer here'); the hand-authored trigger carries no location at all", async () => {
+  test("registry payload should scope the conquer trigger to HERE (printed 'When you conquer here'); the hand-authored trigger carries no location at all", async () => {
     // Expected: trigger mentions "here" (either `location: "here"` or `on: {…, location: "here"}`).
     // Actual: `{ event: "conquer", on: "controller" }` — fires for a conquer anywhere.
     const def = (await loadDefaultCardPool()).get(CARD);
@@ -197,7 +197,7 @@ describe("Emperor's Dais (sfd-207-221)", () => {
     expect(game.p1.energy()).toBe(0);
   });
 
-  test.failing("BUG: 471.2.a 'here' — conquering a DIFFERENT battlefield while you control the Dais must offer nothing; the engine offers the Dais option anyway", async () => {
+  test("471.2.a 'here' — conquering a DIFFERENT battlefield while you control the Dais must offer nothing; the engine offers the Dais option anyway", async () => {
     // Expected: straight back to the main phase after conquering "other". Actual: the pay-[1] yes/no appears.
     const game = await scenario()
       .resources(P1, { energy: 2 })
