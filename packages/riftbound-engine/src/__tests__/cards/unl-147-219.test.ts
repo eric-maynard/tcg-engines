@@ -230,6 +230,16 @@ describe("Baron Nashor (unl-147-219)", () => {
     expect(game.zoneOf("wounded")).toBe("trash");
   });
 
+  test("the aura only reaches the BOARD (355.9.a.1): P1's Chosen Champion waiting in the Champion Zone gets nothing, while the ally in base gets +2", async () => {
+    const game = await scenario()
+      .unit(P1, "base", CARD, "baron")
+      .unit(P1, "base", { might: 2, name: "Minion" }, "minion")
+      .champion(P1, { cardType: "unit", might: 4, name: "Chosen" }, "chosen")
+      .build();
+    expect(game.state("minion")).toMatchObject({ might: 4, staticMightBonus: 2 });
+    expect(game.state("chosen")).toMatchObject({ might: 4, staticMightBonus: 0 });
+  });
+
   test("'friendly' follows CONTROL (108.2): a Baron P1 owns but P2 controls pumps P2's unit (+2) and leaves P1's Minion at 2", async () => {
     const game = await scenario()
       .card("baron", { controller: P2, def: CARD, owner: P1, zone: "base" })

@@ -134,8 +134,12 @@ function getOffBoardGrantCards(ctx: StaticAbilityContext): BoardCard[] {
   return cards;
 }
 
+// rule 143.1 / 355.9.a.1 — the Board is bases, battlefields and the
+// battlefield row: a card waiting in the Champion Zone (or in hand) is not a
+// unit on the board, so an aura like "Other friendly units have +2 [Might]"
+// never reaches it. Only a `location:"anywhere"` static addresses those.
 function isBoardZone(zone: string): boolean {
-  return zone !== "hand";
+  return zone !== "hand" && zone !== "championZone";
 }
 
 /**

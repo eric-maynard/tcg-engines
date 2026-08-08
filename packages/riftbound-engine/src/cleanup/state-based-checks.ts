@@ -331,9 +331,14 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
     }
     const units = cardsInZone.filter((id) => registry.getCardType(id as string) === "unit");
     const attackerSide = bf.contestedBy;
+    // rules 181/182 / 323.2.b / 464.2 — a unit fights for its CONTROLLER: a
+    // stolen unit joins the thief's side even while standing among the units
+    // of the player who still owns it.
+    const sideOf = (id: CoreCardId): string | undefined =>
+      ctx.cards.getCardController?.(id) ?? ctx.cards.getCardOwner(id);
     const bothSidesPresent =
-      units.some((id) => ctx.cards.getCardOwner(id) === attackerSide) &&
-      units.some((id) => ctx.cards.getCardOwner(id) !== attackerSide);
+      units.some((id) => sideOf(id) === attackerSide) &&
+      units.some((id) => sideOf(id) !== attackerSide);
     if (!bothSidesPresent) {
       continue;
     }
@@ -342,7 +347,7 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
       if (meta?.combatRole) {
         continue;
       }
-      const side = ctx.cards.getCardOwner(cardId);
+      const side = sideOf(cardId);
       const role = side === attackerSide ? "attacker" : "defender";
       ctx.cards.updateCardMeta(cardId, {
         combatRole: role,
@@ -353,7 +358,7 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
       // the Combat Showdown opens.
       fireTriggers(
         {
-          alone: units.filter((id) => ctx.cards.getCardOwner(id) === side).length === 1,
+          alone: units.filter((id) => sideOf(id) === side).length === 1,
           battlefieldId: bfId,
           cardId,
           owner: side,
@@ -628,15 +633,19 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
       continue;
     }
 
-    const owners = new Set<string>();
+    // rules 181/182 / 323.2.b — two SIDES make a battlefield contested, and a
+    // side is a controller: a stolen unit standing among its owner's units is
+    // the thief's presence there.
+    const sides = new Set<string>();
     for (const unitId of unitsAtBf) {
-      const owner = ctx.cards.getCardOwner(unitId) ?? "";
-      if (owner) {
-        owners.add(owner);
+      const side =
+        (ctx.cards.getCardController?.(unitId) ?? ctx.cards.getCardOwner(unitId)) ?? "";
+      if (side) {
+        sides.add(side);
       }
     }
 
-    if (owners.size >= 2 && !bf.contested) {
+    if (sides.size >= 2 && !bf.contested) {
       combatPending.push(bfId);
       stateChanged = true;
     }

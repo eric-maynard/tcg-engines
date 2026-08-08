@@ -267,7 +267,10 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
     const anyDamageLethalPlayers = collectAnyDamageLethalPlayers({ cards, draft, zones });
 
     for (const cardId of unitIds) {
-      const owner = cards.getCardOwner(cardId) ?? "";
+      // rules 181/182 — CombatUnit.owner is the SIDE this body fights for, so
+      // a stolen unit is read as the thief's (its real owner still gets the
+      // card back when it dies, which is handled off the CombatUnit).
+      const owner = sideOf(cardId);
       const meta = cards.getCardMeta(cardId) as Partial<RiftboundCardMeta> | undefined;
       const def = registry.get(cardId as string);
 
