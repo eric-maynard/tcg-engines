@@ -33,6 +33,7 @@ import {
   getPotentialRuneEnergy,
   deductCost,
 } from "./cost";
+import { legacyParamsFromSelection, withCostsParam } from "./cost-model";
 
 type Defs = GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>;
 
@@ -138,7 +139,18 @@ function ambushDestinationOk(
  * Play Chosen Champion from Champion Zone (rule 107.2.c)
  */
 export const playFromChampionZone: Defs["playFromChampionZone"] = {
-  condition: (state, context) => {
+  condition: (state, rawContext) => {
+    // rule 355.1 — `costs` is canonical; expand onto the legacy params (the
+    // played card is whatever sits in this player's Champion Zone).
+    const context = rawContext.params.costs
+      ? {
+          ...rawContext,
+          params: legacyParamsFromSelection(
+            (rawContext.zones.getCardsInZone("championZone" as never, rawContext.params.playerId as never)[0] as string | undefined) ?? "",
+            rawContext.params,
+          ),
+        }
+      : rawContext;
     if (state.status !== "playing") {
       return false;
     }
@@ -370,9 +382,21 @@ export const playFromChampionZone: Defs["playFromChampionZone"] = {
         });
       }
     }
-    return results;
+    {
+      const championId = championZoneCards[0] as string | undefined;
+      return championId ? results.map((r) => withCostsParam(r, championId)) : results;
+    }
   },
-  reducer: (draft, context) => {
+  reducer: (draft, rawContext) => {
+    const context = rawContext.params.costs
+      ? {
+          ...rawContext,
+          params: legacyParamsFromSelection(
+            (rawContext.zones.getCardsInZone("championZone" as never, rawContext.params.playerId as never)[0] as string | undefined) ?? "",
+            rawContext.params,
+          ),
+        }
+      : rawContext;
     const { playerId, location, paidAdditionalCost, discardId } = context.params;
     const { zones, counters } = context;
 

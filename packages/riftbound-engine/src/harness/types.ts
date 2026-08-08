@@ -398,6 +398,17 @@ export interface PlayArgs {
   costTarget?: CardRef;
   abilityIndex?: number;
   source?: CardRef;
+  /**
+   * rule 355.1 / 356 — the cost bundle in one field (mirrors the engine's
+   * `costs` param): which alternative (`"flow" | "alt" | "hidden" | …`) and which
+   * additional costs are paid — `true`, the paying card, or the paying cards.
+   * e.g. `{ paid: { accelerate: true } }`, `{ paid: { kill: "pawn" } }`,
+   * `{ paid: { "kill-any": ["a", "b"] } }`, `{ alternativeId: "flow" }`.
+   */
+  costs?: {
+    readonly alternativeId?: string;
+    readonly paid?: Readonly<Record<string, true | false | CardRef | readonly CardRef[] | { readonly objects?: readonly CardRef[] }>>;
+  };
   /** Raw engine-param constraints for anything not covered above. */
   params?: Readonly<Record<string, unknown>>;
 }

@@ -708,8 +708,22 @@ function lockRevealedSpellTarget(
  * means we add a chain item (same as playSpell). For unit/gear cards
  * we move them to the appropriate zone (battlefield / base).
  */
+/** rule 355.1 — `costs.paid["accelerate-granted"]` is the canonical spelling of the granted-Accelerate election. */
+function expandRevealCosts<P extends { costs?: { paid?: Readonly<Record<string, unknown>> }; paidAdditionalCost?: boolean }>(params: P): P {
+  if (!params.costs || params.paidAdditionalCost !== undefined) {
+    return params;
+  }
+  const paid = params.costs.paid ?? {};
+  return paid["accelerate-granted"] !== undefined || paid.accelerate !== undefined
+    ? { ...params, paidAdditionalCost: true }
+    : params;
+}
+
 export const revealHidden: Defs["revealHidden"] = {
-  condition: (state, context) => {
+  condition: (state, rawContext) => {
+    const context = rawContext.params.costs
+      ? { ...rawContext, params: expandRevealCosts(rawContext.params) }
+      : rawContext;
     if (state.status !== "playing") {
       return false;
     }
@@ -858,13 +872,21 @@ export const revealHidden: Defs["revealHidden"] = {
         // rule-id: sfd-029-221 (rule 805.1.a) — offer the granted Accelerate as a
         // second variant so the reveal can enter ready.
         if (grantedAccelerateForReveal(state, playerId, hid as string, context)) {
-          results.push({ cardId: hid as string, paidAdditionalCost: true, playerId });
+          results.push({
+            cardId: hid as string,
+            costs: { alternativeId: "hidden", paid: { "accelerate-granted": true } },
+            paidAdditionalCost: true,
+            playerId,
+          } as (typeof results)[number]);
         }
       }
     }
     return results;
   },
-  reducer: (draft, context) => {
+  reducer: (draft, rawContext) => {
+    const context = rawContext.params.costs
+      ? { ...rawContext, params: expandRevealCosts(rawContext.params) }
+      : rawContext;
     const { cardId, playerId } = context.params;
     const { zones, counters, cards } = context;
 

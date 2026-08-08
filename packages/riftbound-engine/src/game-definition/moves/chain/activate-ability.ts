@@ -27,6 +27,7 @@ import { getGlobalCardRegistry } from "../../../operations/card-lookup";
 import { removeFromBoard } from "../../../operations/leave-board";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../../types";
 import { getDeflectSurcharge } from "../play/cost";
+import type { PlayCostSelection } from "@tcg/riftbound-types";
 import type { SpellEffectTargetShape } from "../play/targeting";
 import {
   findConditionalBranchTarget,
@@ -887,8 +888,46 @@ export function deductAbilityCost(
  * Player chooses a card + ability index, pays the cost,
  * and the ability goes on the chain.
  */
+
+/**
+ * rule 357.2 — an activation's object costs in ONE `costs` param
+ * (`paid.kill` / `paid.discard` / `paid.recycle` → objects), expanded onto the
+ * legacy `sacrificeId` / `discardId` / `recycleIds` the body still reads.
+ */
+function expandAbilityCosts<P extends { costs?: PlayCostSelection; sacrificeId?: unknown; discardId?: unknown; recycleIds?: unknown }>(params: P): P {
+  const sel = params.costs;
+  if (!sel?.paid) {
+    return params;
+  }
+  const objectsOf = (id: string): string[] | undefined => {
+    const v = sel.paid?.[id];
+    return v === undefined || v === true ? undefined : [...(v.objects ?? [])];
+  };
+  return {
+    ...params,
+    ...(params.sacrificeId === undefined && objectsOf("kill")?.[0] ? { sacrificeId: objectsOf("kill")?.[0] } : {}),
+    ...(params.discardId === undefined && objectsOf("discard")?.[0] ? { discardId: objectsOf("discard")?.[0] } : {}),
+    ...(params.recycleIds === undefined && objectsOf("recycle") ? { recycleIds: objectsOf("recycle") } : {}),
+  };
+}
+
+/** Enumerator twin: attach the `costs` selection equivalent to a variant's object-cost params. */
+function withAbilityCosts<P extends { costs?: PlayCostSelection; sacrificeId?: string; discardId?: string; recycleIds?: string[] }>(v: P): P {
+  if (v.costs || (v.sacrificeId === undefined && v.discardId === undefined && v.recycleIds === undefined)) {
+    return v;
+  }
+  const paid: Record<string, { objects: string[] }> = {};
+  if (v.sacrificeId !== undefined) paid.kill = { objects: [v.sacrificeId] };
+  if (v.discardId !== undefined) paid.discard = { objects: [v.discardId] };
+  if (v.recycleIds !== undefined) paid.recycle = { objects: [...v.recycleIds] };
+  return { ...v, costs: { paid } };
+}
+
 export const activateAbility: Defs["activateAbility"] = {
-  condition: (state, context) => {
+  condition: (state, rawContext) => {
+    const context = rawContext.params.costs
+      ? { ...rawContext, params: expandAbilityCosts(rawContext.params) }
+      : rawContext;
     if (state.status !== "playing") {
       return false;
     }
@@ -1762,9 +1801,12 @@ export const activateAbility: Defs["activateAbility"] = {
         }
       }
     }
-    return results;
+    return results.map((r) => withAbilityCosts(r));
   },
-  reducer: (draft, context) => {
+  reducer: (draft, rawContext) => {
+    const context = rawContext.params.costs
+      ? { ...rawContext, params: expandAbilityCosts(rawContext.params) }
+      : rawContext;
     const { playerId, cardId, abilityIndex, sourceCardId, sacrificeId, discardId } =
       context.params;
 

@@ -300,6 +300,52 @@ describe("paying object costs and trigger costs (357.2, 357.2.a, 404.2)", () => 
     expect(game.p1.energy()).toBe(0);
   });
 
+  test("356.2.b — Kraken Hunter pays BOTH optional costs on one play via `costs`: Accelerate ([1][body]) and one spent buff (−[body]) → 4 energy + 2 body, enters READY, the ally loses its buff, ledger names both ids", async () => {
+    const game = await scenario()
+      .resources(P1, { energy: 4, power: { body: 2 } })
+      .unit(P1, "base", { might: 2 }, "ally", { buffed: true })
+      .hand(P1, "ogn-150-298", "kh")
+      .build();
+    await game.p1.play("kh", { costs: { paid: { accelerate: true, "spend-buff-any": ["ally"] } }, to: "base" });
+    await game.settle();
+    expect(game.zoneOf("kh")).toBe("base");
+    expect(game.state("kh").isExhausted).toBe(false);
+    expect(game.state("ally").isBuffed).toBe(false);
+    expect(game.p1.resources()).toEqual({ energy: 0, power: { body: 0 } });
+    expect([...(game.gameState.additionalCostsPaid?.kh as string[])].sort()).toEqual(["accelerate", "spend-buff-any"]);
+    // Spending the buff alone must NOT silently also pay Accelerate out of a pool that could cover it.
+    const solo = await scenario()
+      .resources(P1, { energy: 4, power: { body: 2 } })
+      .unit(P1, "base", { might: 2 }, "ally", { buffed: true })
+      .hand(P1, "ogn-150-298", "kh")
+      .build();
+    await solo.p1.play("kh", { costs: { paid: { "spend-buff-any": ["ally"] } }, to: "base" });
+    expect(solo.state("kh").isExhausted).toBe(true);
+    expect(solo.p1.resources()).toEqual({ energy: 1, power: { body: 1 } });
+  });
+
+  test("the `costs` param drives every play move: Cruel Patron `{paid:{kill:'pawn'}}`, Dredge Up `{alternativeId:'flow'}`, Brazen Buccaneer `{paid:{discard:'fodder'}}` (−[2])", async () => {
+    const patron = await scenario().resources(P1, { energy: 4 }).unit(P1, "base", { might: 1 }, "pawn").hand(P1, "ogn-208-298", "patron").build();
+    await patron.p1.play("patron", { costs: { paid: { kill: "pawn" } }, to: "base" });
+    expect(patron.zoneOf("pawn")).toBe("trash");
+    expect(patron.zoneOf("patron")).toBe("base");
+    expect(patron.gameState.additionalCostsPaid?.patron).toEqual(["kill"]);
+
+    const flow = await scenario().resources(P1, { energy: 2 }).trash(P1, "ven-049-166", "dredge").fillDecks({ main: 5, runes: 0 }).build();
+    await flow.p1.cast("dredge", { costs: { alternativeId: "flow" } });
+    await flow.settle();
+    expect(flow.zoneOf("dredge")).toBe("banishment");
+    expect(flow.p1.energy()).toBe(0);
+
+    const bucc = await scenario().resources(P1, { energy: 4 }).hand(P1, "ogn-002-298", "bucc").hand(P1, fillerUnit(1), "fodder").build();
+    expect(bucc.p1.can("play", "bucc")).toBe(true); // only via the discard variant (6 − 2 = 4)
+    await bucc.p1.play("bucc", { costs: { paid: { discard: "fodder" } }, to: "base" });
+    expect(bucc.zoneOf("fodder")).toBe("trash");
+    expect(bucc.zoneOf("bucc")).toBe("base");
+    expect(bucc.p1.energy()).toBe(0);
+    expect(bucc.gameState.additionalCostsPaid?.bucc).toEqual(["discard"]);
+  });
+
   test("404.2 — a triggered 'you may pay [1]: draw 1' whose cost is DECLINED at finalization is removed from the chain; nothing is paid or drawn", async () => {
     const PAYER = fillerUnit(1, [], {
       abilities: [{ condition: { cost: { energy: 1 }, type: "pay-cost" }, effect: { amount: 1, type: "draw" }, optional: true, trigger: { event: "attack", on: "self" }, type: "triggered" }],

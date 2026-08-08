@@ -179,8 +179,8 @@ const PARAM_ARG: Record<string, { arg: string; kind: ActionFieldKind }> = {
   xAmount: { arg: "x", kind: "int" },
 };
 
-/** Params never surfaced as fields. additionalCostSpec rides with paidAdditionalCost. */
-const HIDDEN_PARAMS = new Set(["playerId", "additionalCostSpec"]);
+/** Params never surfaced as fields. additionalCostSpec / costs ride with the legacy cost params they mirror. */
+const HIDDEN_PARAMS = new Set(["playerId", "additionalCostSpec", "costs"]);
 
 /** Follow-up priority: which still-varying field to ask about first. */
 const FOLLOW_UP_ORDER = [
@@ -1239,11 +1239,49 @@ function constraintsFrom(option: ActionOption, args: PlayArgs): Constraint[] {
             : "location";
     cs.push({ describe: args.to, param: locParam, test: (v) => normLoc(v) === want });
   }
+  if (args.costs !== undefined) {
+    const want = args.costs;
+    cs.push({ describe: want, param: "costs", test: (v, params) => costsMatch(v, params, want) });
+  }
   for (const [k, val] of Object.entries(args.params ?? {})) {
     const want = canonicalJson(val);
     cs.push({ describe: val, param: k, test: (v) => canonicalJson(v) === want });
   }
   return cs;
+}
+
+/**
+ * rule 355.1 — does a variant satisfy the `costs` the caller asked for? The
+ * variant's own `costs` param (attached by the enumerators) must name the same
+ * alternative and EXACTLY the requested paid ids; each requested id's objects
+ * (a card or list) must equal the variant's; `true` accepts any objects.
+ * A variant without `costs` matches only an empty request.
+ */
+function costsMatch(v: unknown, _params: Readonly<Record<string, unknown>>, want: NonNullable<PlayArgs["costs"]>): boolean {
+  const have = (v ?? {}) as { alternativeId?: string; paid?: Record<string, true | { objects?: readonly string[] }> };
+  if ((want.alternativeId ?? undefined) !== (have.alternativeId ?? undefined)) {
+    return false;
+  }
+  const wantPaid = want.paid ?? {};
+  const havePaid = have.paid ?? {};
+  const wantIds = Object.keys(wantPaid).filter((k) => wantPaid[k] !== false).sort();
+  const haveIds = Object.keys(havePaid).sort();
+  if (wantIds.length !== haveIds.length || wantIds.some((id, i) => id !== haveIds[i])) {
+    return false;
+  }
+  for (const id of wantIds) {
+    const w = wantPaid[id];
+    if (w === true || w === undefined) {
+      continue;
+    }
+    const wantObjects = (Array.isArray(w) ? w : typeof w === "string" ? [w] : [...((w as { objects?: readonly string[] }).objects ?? [])]).map(String);
+    const h = havePaid[id];
+    const haveObjects = h === true || h === undefined ? [] : [...(h.objects ?? [])].map(String);
+    if (!sameSet(haveObjects, wantObjects)) {
+      return false;
+    }
+  }
+  return true;
 }
 
 /** Preferences applied to UNSPECIFIED knobs, each only if it keeps ≥1 variant. */

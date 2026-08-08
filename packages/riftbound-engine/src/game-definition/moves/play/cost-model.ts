@@ -625,7 +625,16 @@ export function selectionFromLegacyParams(cardId: string, params: LegacyCostPara
     } else if (id === ADDITIONAL_COST_IDS.exhaust) {
       paid[id] = params.targets?.[0] ? { objects: [params.targets[0]] } : true;
     } else if (id === ADDITIONAL_COST_IDS.pay || id === ADDITIONAL_COST_IDS.accelerate) {
-      paid[id] = params.additionalCostSpec ? { spec: params.additionalCostSpec } : true;
+      // On a play that also names an object cost the bare flag means THAT cost;
+      // the resource cost is elected only by an explicit spec (see playUnit).
+      const objectCostNamed =
+        (params.spentBuffIds && params.spentBuffIds.length > 0) ||
+        (params.sacrificeIds && params.sacrificeIds.length > 0);
+      if (params.additionalCostSpec) {
+        paid[id] = { spec: params.additionalCostSpec };
+      } else if (!objectCostNamed) {
+        paid[id] = true;
+      }
     } else {
       paid[id] = true;
     }
@@ -680,14 +689,29 @@ export function legacyParamsFromSelection<P extends LegacyCostParams>(cardId: st
       case ADDITIONAL_COST_IDS.accelerateGranted:
       case ADDITIONAL_COST_IDS.pay: {
         out.paidAdditionalCost = true;
-        if (spec) {
-          out.additionalCostSpec ??= spec;
+        // The spec doubles as the "resource cost elected" signal when an object
+        // cost is paid on the same play; default to the printed shape (the move
+        // re-prices it and falls back to the legal discounted shape).
+        const printed = id === ADDITIONAL_COST_IDS.accelerateGranted ? undefined : getOptionalPlayCost(cardId)?.cost;
+        const fallback = printed ? { energy: printed.energy ?? 0, power: printed.power ?? [], ...(printed.xp ? { xp: printed.xp } : {}) } : undefined;
+        if (spec ?? fallback) {
+          out.additionalCostSpec ??= spec ?? fallback;
         }
         break;
       }
       case ADDITIONAL_COST_IDS.kill:
       case ADDITIONAL_COST_IDS.returnToHand: {
-        out.paidAdditionalCost = true;
+        // playSpell names a MANDATORY kill by `sacrificeId` alone; every other
+        // legacy path also raises `paidAdditionalCost`.
+        if (
+          !(
+            id === ADDITIONAL_COST_IDS.kill &&
+            getGlobalCardRegistry().getCardType(cardId) === "spell" &&
+            getOptionalPlayCost(cardId)?.mandatory === true
+          )
+        ) {
+          out.paidAdditionalCost = true;
+        }
         if (objects[0]) {
           out.sacrificeId ??= objects[0];
         }
@@ -731,6 +755,30 @@ export function legacyParamsFromSelection<P extends LegacyCostParams>(cardId: st
     }
   }
   return out as P;
+}
+
+
+/**
+ * Enumerator helper: attach the equivalent `costs` selection to a legacy-param
+ * variant (only when something is selected, so plain variants stay unchanged).
+ */
+export function withCostsParam<P extends LegacyCostParams & { cardId?: string }>(variant: P, cardId = variant.cardId): P {
+  if (variant.costs || !cardId) {
+    return variant;
+  }
+  const sel = selectionFromLegacyParams(cardId, variant);
+  if (sel.alternativeId === undefined && sel.paid === undefined) {
+    return variant;
+  }
+  return { ...variant, costs: sel };
+}
+
+/**
+ * The additional-cost ids a legacy-param play actually paid, for the
+ * `additionalCostsPaid` ledger and `play-self.paidAdditionalCostIds`.
+ */
+export function paidIdsFromLegacyParams(cardId: string, params: LegacyCostParams): string[] {
+  return Object.keys(selectionFromLegacyParams(cardId, { ...params, costs: undefined }).paid ?? {});
 }
 
 export { additionalCostWasPaid, recordAdditionalCostsPaid } from "../../../operations/additional-costs-paid";

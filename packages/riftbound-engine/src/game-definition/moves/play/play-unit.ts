@@ -69,6 +69,12 @@ import {
 
 } from "./cost";
 import { getSelfTrashPlayCost } from "./self-trash-play";
+import {
+  legacyParamsFromSelection,
+  paidIdsFromLegacyParams,
+  recordAdditionalCostsPaid,
+  withCostsParam,
+} from "./cost-model";
 import { computeOptionalAdditionalCostFlexReduction } from "../../../operations/static-cost-reduction";
 import type { CostExtras } from "./cost";
 
@@ -498,7 +504,12 @@ function buffSpendSubsets(ids: readonly string[]): string[][] {
  * Play a unit to Base (rule 554)
  */
 export const playUnit: Defs["playUnit"] = {
-  condition: (state, context) => {
+  condition: (state, rawContext) => {
+    // rule 355.1 — a `costs` selection is the canonical cost param; expand it
+    // onto the legacy per-kind params the body below still reads.
+    const context = rawContext.params.costs
+      ? { ...rawContext, params: legacyParamsFromSelection(rawContext.params.cardId as string, rawContext.params) }
+      : rawContext;
     if (state.status !== "playing") {
       return false;
     }
@@ -857,7 +868,15 @@ export const playUnit: Defs["playUnit"] = {
         state,
         context.params.playerId,
         context.params.cardId,
-        { board, waivePower: { [killCost.domain]: sacrificeIds.length } },
+        {
+          board,
+          waivePower: { [killCost.domain]: sacrificeIds.length },
+          // rule 356.2.b — a second, independent optional cost (Accelerate) elected on the
+          // same play; the legacy flag alone means "this object cost", so only an explicit spec counts.
+          ...(payable && declaredSpec !== undefined
+            ? { additionalCost: { energy: payable.energy, power: payable.power } }
+            : {}),
+        },
         createMetaAccessor(context.cards),
         getPotentialRuneEnergy(context.zones, context.counters, context.params.playerId),
       );
@@ -886,7 +905,15 @@ export const playUnit: Defs["playUnit"] = {
         state,
         context.params.playerId,
         context.params.cardId,
-        { board, waivePower: { [buffCost.domain]: spentBuffIds.length } },
+        {
+          board,
+          waivePower: { [buffCost.domain]: spentBuffIds.length },
+          // rule 356.2.b (ogn-150-298 Kraken Hunter) — Accelerate AND spent buffs on one
+          // play; the legacy flag alone means "this object cost", so only an explicit spec counts.
+          ...(payable && declaredSpec !== undefined
+            ? { additionalCost: { energy: payable.energy, power: payable.power } }
+            : {}),
+        },
         createMetaAccessor(context.cards),
         getPotentialRuneEnergy(context.zones, context.counters, context.params.playerId),
       );
@@ -1212,6 +1239,50 @@ export const playUnit: Defs["playUnit"] = {
         } satisfies RiftboundMoves["playUnit"]);
       }
       const paidVariant = paidVariants[0];
+      // rule 356.2.b — several optional costs on one card are independent
+      // (Kraken Hunter: [Accelerate] AND "spend any number of buffs"): offer
+      // each affordable combination of a payable variant with an object-cost
+      // variant, so both can be elected on the same play.
+      const comboVariants: RiftboundMoves["playUnit"][] = [];
+      for (const option of buffVariants.length + killAnyVariants.length > 0
+        ? payableOptionalCostVariants(state, context.playerId as string, cardId as string, board)
+        : []) {
+        const pv: RiftboundMoves["playUnit"] = {
+          additionalCostSpec: {
+            energy: option.energy,
+            power: option.power,
+            ...(option.xp > 0 ? { xp: option.xp } : {}),
+          },
+          cardId: cardId as string,
+          location: "base",
+          paidAdditionalCost: true,
+          playerId: context.playerId as string,
+        };
+        const spec = pv.additionalCostSpec as { energy?: number; power?: readonly string[] } | undefined;
+        for (const ov of [...buffVariants, ...killAnyVariants]) {
+          const waive =
+            ov.spentBuffIds && buffCost
+              ? { [buffCost.domain]: ov.spentBuffIds.length }
+              : ov.sacrificeIds && killAnyCost
+                ? { [killAnyCost.domain]: ov.sacrificeIds.length }
+                : undefined;
+          if (
+            waive &&
+            canAffordCard(
+              state,
+              context.playerId as string,
+              cardId as string,
+              { additionalCost: { energy: spec?.energy ?? 0, power: spec?.power ?? [] }, board, waivePower: waive },
+              metaForAfford,
+              potential,
+            )
+          ) {
+            comboVariants.push({ ...ov, ...pv, location: ov.location });
+          }
+        }
+      }
+      buffVariants.push(...comboVariants.filter((v) => v.spentBuffIds !== undefined));
+      killAnyVariants.push(...comboVariants.filter((v) => v.sacrificeIds !== undefined));
 
       // rule 356.1 (unl-089-219) — "If you've spent [4] or more to play a
       // spell this turn, you may play me for [mind]": an alternate play cost
@@ -1563,17 +1634,22 @@ export const playUnit: Defs["playUnit"] = {
     // rule 355.2 (ogn-070-298): while an enemy Mageseeker Warden is at a
     // battlefield, this player may only play units to their base.
     if (opponentsRestrictedToBase(state, context.zones, context.playerId as string)) {
-      return results.filter((r) => !isBattlefieldZone(r.location));
+      return results.filter((r) => !isBattlefieldZone(r.location)).map((r) => withCostsParam(r));
     }
     // rule 355.2 (sfd-216-221): drop destinations whose battlefield forbids
     // unit plays ("Units can't be played here").
-    return results.filter(
-      (r) =>
-        !isBattlefieldZone(r.location) ||
-        !battlefieldForbidsUnitPlay(extractBattlefieldId(r.location) ?? ""),
-    );
+    return results
+      .filter(
+        (r) =>
+          !isBattlefieldZone(r.location) ||
+          !battlefieldForbidsUnitPlay(extractBattlefieldId(r.location) ?? ""),
+      )
+      .map((r) => withCostsParam(r));
   },
-  reducer: (draft, context) => {
+  reducer: (draft, rawContext) => {
+    const context = rawContext.params.costs
+      ? { ...rawContext, params: legacyParamsFromSelection(rawContext.params.cardId as string, rawContext.params) }
+      : rawContext;
     const { cardId, playerId, location, paidAdditionalCost, additionalCostSpec, sacrificeId, sacrificeIds, discardId, spentBuffIds, altCost } =
       context.params;
     const { zones, counters } = context;
@@ -1750,7 +1826,13 @@ export const playUnit: Defs["playUnit"] = {
     let paidAdditionalCostActual = discardPaid || sacrificed.length > 0;
     if (paidAdditionalCost) {
       const pool = draft.runePools[playerId];
-      if ((optional?.kind === "accelerate" || optional?.kind === "pay") && pool) {
+      // rule 356.2.b — on a play that paid an OBJECT cost (buffs / kills /
+      // discard) the bare legacy flag names that cost; the resource cost
+      // (Accelerate / "you may pay") is a second election made only by an
+      // explicit `additionalCostSpec`.
+      const objectCostOnly =
+        additionalCostSpec === undefined && (spentBuffs.length > 0 || sacrificed.length > 0 || discardPaid);
+      if ((optional?.kind === "accelerate" || optional?.kind === "pay") && pool && !objectCostOnly) {
         // rule 356.4.c (sfd-149-221): pay the cost as discounted by friendly
         // "optional additional costs you pay cost [1] or [rainbow] less" statics.
         // rule 356.4.c.1 (sfd-149-221): the payer may name which half of the
@@ -1907,6 +1989,12 @@ export const playUnit: Defs["playUnit"] = {
     // Rule-724 counter, so a Legion trigger on this card itself cannot
     // Satisfy its own condition — it must observe the count of cards
     // That were played EARLIER in this turn.
+    // rule 356.2 / 356.4.f.1 — record WHICH additional costs this play paid.
+    recordAdditionalCostsPaid(
+      draft,
+      cardId,
+      paidAdditionalCostActual ? paidIdsFromLegacyParams(cardId, context.params) : [],
+    );
     fireTriggers(
       { cardId, paidAdditionalCost: paidAdditionalCostActual, playerId, type: "play-self" },
       { cards: context.cards, counters, draft, zones },

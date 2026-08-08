@@ -23,6 +23,7 @@ import {
   deductCost,
   hasPlayFromTrashGrant,
 } from "./cost";
+import { legacyParamsFromSelection, withCostsParam } from "./cost-model";
 
 type Defs = GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>;
 
@@ -77,7 +78,12 @@ function findEnergyWaiver(state: RiftboundGameState, playerId: string, cardId: s
  * Play gear to Base (rule 143.1.a.1)
  */
 export const playGear: Defs["playGear"] = {
-  condition: (state, context) => {
+  condition: (state, rawContext) => {
+    // rule 355.1 — `costs` is the canonical cost param (gear has no printed
+    // additional costs today; the shim keeps the six play moves uniform).
+    const context = rawContext.params.costs
+      ? { ...rawContext, params: legacyParamsFromSelection(rawContext.params.cardId as string, rawContext.params) }
+      : rawContext;
     if (state.status !== "playing") {
       return false;
     }
@@ -234,9 +240,12 @@ export const playGear: Defs["playGear"] = {
         playerId: context.playerId as string,
       });
     }
-    return results;
+    return results.map((r) => withCostsParam(r));
   },
-  reducer: (draft, context) => {
+  reducer: (draft, rawContext) => {
+    const context = rawContext.params.costs
+      ? { ...rawContext, params: legacyParamsFromSelection(rawContext.params.cardId as string, rawContext.params) }
+      : rawContext;
     const { cardId, playerId, chosenTargetId } = context.params;
     const { zones } = context;
 

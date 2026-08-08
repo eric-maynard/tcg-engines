@@ -94,7 +94,8 @@ describe("ven-083-166 Rampage optional additional cost", () => {
     });
     expect(r.success).toBe(true);
     expect(engine.getState().runePools[P1]!.power.body ?? 0).toBe(0);
-    expect(engine.getState().additionalCostsPaid?.[spell]).toBe(true);
+    // rule 356.2 — the ledger names WHICH additional cost was paid (the optional "pay" one).
+    expect(engine.getState().additionalCostsPaid?.[spell]).toEqual(["pay"]);
     drainChain(engine);
 
     // Friendly (Might 5 → 7) survives 2 return damage with the +2 rider applied.

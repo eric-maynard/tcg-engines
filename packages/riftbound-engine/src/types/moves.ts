@@ -6,10 +6,21 @@
  * without rule validation (players enforce rules themselves).
  */
 
+import type { PlayCostSelection } from "@tcg/riftbound-types";
+
 /**
  * Player identifier type
  */
 export type PlayerId = string;
+
+/**
+ * rule 355.1 / 356 — the cost choices of a play in ONE param (see
+ * `moves/play/cost-model.ts`): which alternative cost, and which additional
+ * costs are paid with which objects. Supersedes the per-kind legacy params
+ * (`paidAdditionalCost`, `additionalCostSpec`, `sacrificeId(s)`, `discardId`,
+ * `spentBuffIds`, `altCost`, `viaFlow`), which remain accepted as shims.
+ */
+export type PlayCosts = PlayCostSelection;
 
 /**
  * Card identifier type
@@ -200,6 +211,7 @@ export interface RiftboundMoves {
      * turn, you may play me for [mind]"), which replaces the printed cost.
      */
     altCost?: boolean;
+    costs?: PlayCosts;
   };
 
   /**
@@ -209,7 +221,7 @@ export interface RiftboundMoves {
    * interactively by the Might of a chosen target (e.g., Hextech
    * Gauntlets). Ignored for equipment without `interactiveCostReduction`.
    */
-  playGear: { playerId: PlayerId; cardId: CardId; chosenTargetId?: CardId };
+  playGear: { playerId: PlayerId; cardId: CardId; chosenTargetId?: CardId; paidAdditionalCost?: boolean; costs?: PlayCosts };
 
   /**
    * Play spell (goes to trash after).
@@ -257,13 +269,16 @@ export interface RiftboundMoves {
      * this, kill a …" cost. Required whenever the spell declares one.
      */
     sacrificeId?: CardId;
+    /** rule 356.2.b — hand card discarded to pay a "you may discard 1" / "[Repeat] — Discard 1" cost. */
+    discardId?: CardId;
+    costs?: PlayCosts;
   };
 
   /** Place Hidden card facedown */
   hideCard: { playerId: PlayerId; cardId: CardId; battlefieldId: CardId };
 
   /** Reveal and play hidden card */
-  revealHidden: { playerId: PlayerId; cardId: CardId; paidAdditionalCost?: boolean };
+  revealHidden: { playerId: PlayerId; cardId: CardId; paidAdditionalCost?: boolean; costs?: PlayCosts };
 
   /** Play Chosen Champion from Champion Zone */
   /**
@@ -277,6 +292,7 @@ export interface RiftboundMoves {
     paidAdditionalCost?: boolean;
     /** rule 356.2.b (ven-023a-166) — card discarded to pay a "you may discard N" additional cost. */
     discardId?: CardId;
+    costs?: PlayCosts;
   };
 
   // ============================================
@@ -462,6 +478,8 @@ export interface RiftboundMoves {
      * ability is finalized on the chain (not at resolution).
      */
     targets?: CardId[];
+    /** Object costs by kind id (`kill` / `discard` / `recycle`) — shim over `sacrificeId` / `discardId` / `recycleIds`. */
+    costs?: PlayCosts;
   };
 
   // ============================================

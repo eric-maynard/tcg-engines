@@ -46,6 +46,12 @@ import {
 } from "./cost";
 import type { SpellEffectTargetShape } from "./targeting";
 import {
+  ADDITIONAL_COST_IDS,
+  legacyParamsFromSelection,
+  recordAdditionalCostsPaid,
+  withCostsParam,
+} from "./cost-model";
+import {
   chosenMoveDestinations,
   collectIndependentTargetSlots,
   collectSequenceTargetSlots,
@@ -317,7 +323,12 @@ function getRepeatDiscardCount(
 }
 
 export const playSpell: Defs["playSpell"] = {
-  condition: (state, context) => {
+  condition: (state, rawContext) => {
+    // rule 355.1 — a `costs` selection is the canonical cost param; expand it
+    // onto the legacy per-kind params the body below still reads.
+    const context = rawContext.params.costs
+      ? { ...rawContext, params: legacyParamsFromSelection(rawContext.params.cardId as string, rawContext.params) }
+      : rawContext;
     if (state.status !== "playing") {
       return false;
     }
@@ -2054,9 +2065,12 @@ export const playSpell: Defs["playSpell"] = {
         });
       }
     }
-    return results;
+    return results.map((r) => withCostsParam(r));
   },
-  reducer: (draft, context) => {
+  reducer: (draft, rawContext) => {
+    const context = rawContext.params.costs
+      ? { ...rawContext, params: legacyParamsFromSelection(rawContext.params.cardId as string, rawContext.params) }
+      : rawContext;
     const { cardId, playerId, xAmount, repeatCount, viaFlow, paidAdditionalCost, sacrificeId } =
       context.params;
     const discardId = context.params.discardId as string | undefined;
@@ -2139,10 +2153,23 @@ export const playSpell: Defs["playSpell"] = {
         }
       }
     }
-    if (!draft.additionalCostsPaid) {
-      draft.additionalCostsPaid = {};
+    // rule 356.2 / 356.4.f.1 — record WHICH additional costs this play paid
+    // (the optional cost's id when its resource/object payment went through,
+    // plus a mandatory kill named by `sacrificeId`).
+    {
+      const paidIds: string[] = [];
+      const optionalKind = paidAdditionalCost ? getOptionalPlayCost(cardId)?.kind : undefined;
+      if ((spellAdditionalCost !== undefined || exhaustCostPaid) && optionalKind) {
+        paidIds.push(optionalKind === "accelerate" ? ADDITIONAL_COST_IDS.accelerate : optionalKind);
+      }
+      if (sacrificeId && mandatoryKillCost(cardId)) {
+        paidIds.push(ADDITIONAL_COST_IDS.kill);
+      }
+      recordAdditionalCostsPaid(draft, cardId, paidIds);
+      if (paidIds.length === 0 && (spellAdditionalCost !== undefined || exhaustCostPaid)) {
+        (draft.additionalCostsPaid as Record<string, boolean | readonly string[]>)[cardId] = true;
+      }
     }
-    draft.additionalCostsPaid[cardId] = spellAdditionalCost !== undefined || exhaustCostPaid;
 
     const repeatN = Math.max(0, repeatCount ?? 0);
     // rule 135.2 (rule-id: unl-005-219) — "When you play a spell, if you spent

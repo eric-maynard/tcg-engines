@@ -669,9 +669,9 @@ export interface VerbOptions {
   readonly answers?: readonly ScriptedAnswer[];
 }
 
-export type PlayOptions = VerbOptions & Pick<PlayArgs, "to" | "accelerate" | "payOptional" | "sacrifice" | "targets" | "x" | "repeat" | "params">;
-export type CastOptions = VerbOptions & Pick<PlayArgs, "targets" | "x" | "repeat" | "flow" | "payOptional" | "params">;
-export type ActivateOptions = VerbOptions & Pick<PlayArgs, "sacrifice" | "discard" | "source" | "targets" | "params">;
+export type PlayOptions = VerbOptions & Pick<PlayArgs, "to" | "accelerate" | "payOptional" | "sacrifice" | "discard" | "targets" | "x" | "repeat" | "costs" | "params">;
+export type CastOptions = VerbOptions & Pick<PlayArgs, "targets" | "x" | "repeat" | "flow" | "payOptional" | "sacrifice" | "discard" | "costs" | "params">;
+export type ActivateOptions = VerbOptions & Pick<PlayArgs, "sacrifice" | "discard" | "source" | "targets" | "costs" | "params">;
 
 export class SeatHandle {
   readonly game: Game;
