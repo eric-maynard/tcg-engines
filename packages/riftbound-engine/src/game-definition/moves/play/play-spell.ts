@@ -74,6 +74,7 @@ import {
   offBoardPlayZone,
   spellEffectHasLegalTargets,
 } from "./targeting";
+import { notePlayThisTurn } from "../../../operations/plays-this-turn";
 
 type Defs = GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>;
 
@@ -2606,6 +2607,8 @@ export const playSpell: Defs["playSpell"] = {
     if (draft.cardsPlayedThisTurn) {
       draft.cardsPlayedThisTurn[playerId] = (draft.cardsPlayedThisTurn[playerId] ?? 0) + 1;
     }
+    // rule 356.4 — identity ledger for shape-scoped per-turn cost modifiers.
+    notePlayThisTurn(draft, playerId, cardId as string);
 
     // rule-id: unl-007-219 — the spell card physically sits on the chain
     // while pending; chain-moves places it in `resolveTo` when it leaves

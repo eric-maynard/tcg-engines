@@ -697,6 +697,12 @@ export interface RevealAndPickChoice {
    * answer several at once. Omitted = exactly one pick.
    */
   readonly remaining?: number;
+  /**
+   * rule 355.13 (ogn-291-298 "you may recycle one or both of them"): `remaining`
+   * is a CEILING, not a quota — any number of picks from 0 up to it answers the
+   * prompt, which ends after that single answer instead of re-parking.
+   */
+  readonly upTo?: boolean;
   /** Picks already taken for this prompt (batchIndex for "one or more" triggers). */
   readonly taken?: number;
   /**
@@ -1294,6 +1300,15 @@ export interface RiftboundGameState {
    * ("If you couldn't channel 2 runes this way, draw 1").
    */
   readonly lastChanneledCount?: Record<string, number>;
+
+  /**
+   * rule 356.4 (rule-id: ven-161-166) — the turn number on which each player
+   * last played a GEAR activated ability. "The first friendly gear activated
+   * ability played each turn" reads it: a discount applies only while the
+   * player's entry differs from the current turn number, and a costless
+   * activation still consumes the "first".
+   */
+  gearAbilityTurn?: Record<string, number>;
 
   /** Turn state */
   readonly turn: TurnState;

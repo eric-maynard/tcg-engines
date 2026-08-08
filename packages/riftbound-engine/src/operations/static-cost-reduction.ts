@@ -596,9 +596,13 @@ function scanFriendlyCostReductionEffects(
       if (seen.has(permId as string)) {
         continue;
       }
-      const controller =
-        ctx.cards.getCardController?.(permId as CoreCardId) ??
-        ctx.cards.getCardOwner(permId as CoreCardId);
+      // rule 190.6.d — on a battlefield card "you" is the battlefield's
+      // CONTROLLER (which moves with conquest), not the card's owner.
+      const asBattlefield = ctx.draft.battlefields?.[permId as string];
+      const controller = asBattlefield
+        ? asBattlefield.controller ?? null
+        : ctx.cards.getCardController?.(permId as CoreCardId) ??
+          ctx.cards.getCardOwner(permId as CoreCardId);
       if (controller !== playerId) {
         continue;
       }

@@ -114,7 +114,7 @@ describe("Marai Spire (sfd-211-221)", () => {
   // BUG — expected: the condition is "you control THIS battlefield"; with the Spire uncontrolled, holding
   // bf2 is irrelevant → 2 + 2 = 4 paid, 4 left. Actual: the parsed `control-battlefield` condition is
   // satisfied by controlling ANY battlefield, so the discount applies (5 left).
-  test.failing("BUG: Marai Spire discounts Repeat costs when its card's player controls ANY battlefield, not specifically the Spire (uncontrolled Spire + held bf2 → should be full price)", async () => {
+  test("'this battlefield': an uncontrolled Spire gives nothing even while holding another battlefield (full price 4)", async () => {
     const game = await scenario()
       .resources(P1, { energy: 8 })
       .battlefield("spire", { controller: null, def: CARD, inert: false, owner: P1 })
@@ -129,7 +129,7 @@ describe("Marai Spire (sfd-211-221)", () => {
   // BUG — expected: control is game state (469.1.b) — once P1's Climber conquers the (opponent-contributed)
   // Spire, P1 controls it and Downstage+Repeat costs 3 → 5 left. Actual: the static is keyed to the
   // battlefield CARD's seeded controller/owner (P2), which a conquer never updates, so P1 pays 4.
-  test.failing("BUG: conquering Marai Spire (an opponent's battlefield card) does not start discounting the conqueror's Repeat costs", async () => {
+  test("conquering Marai Spire (an opponent's battlefield card) starts discounting the conqueror's Repeat costs", async () => {
     const game2 = await scenario()
       .resources(P1, { energy: 8 })
       .battlefield("spire", { controller: null, def: CARD, inert: false, owner: P2 })
@@ -149,7 +149,7 @@ describe("Marai Spire (sfd-211-221)", () => {
   // BUG — expected: P2's 6-Might Raider kills the Keeper and takes the Spire; on P1's next turn P1 (holding
   // only bf2) pays 2 + 2 for Downstage+Repeat → 4 left. Actual: the Spire card is still "P1's" and P1
   // controls A battlefield (bf2), so the discount keeps applying (5 left). Energy is topped up to 8 first.
-  test.failing("BUG: after losing Marai Spire to the opponent, its former controller keeps the Repeat discount while holding any other battlefield", async () => {
+  test("after losing Marai Spire to the opponent, its former controller loses the Repeat discount", async () => {
     const game = await scenario()
       .turn(2)
       .active(P2)
