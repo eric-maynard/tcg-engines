@@ -38,7 +38,10 @@ function humanizeEffect(e) {
     case "create-token": {
       const k = e.token ?? {};
       const c = n ?? 1;
-      return `Play ${c === 1 ? "a" : c} ${k.might != null ? `${k.might} Might ` : ""}${k.name ?? "token"} ${k.type ?? "unit"} token${c === 1 ? "" : "s"}${k.keywords?.length ? ` with ${k.keywords.join(", ")}` : ""}`;
+      // Tokens created with ready:false (or exhausted:true) enter exhausted —
+      // say so, otherwise the chain overlay misstates the effect.
+      const exhausted = e.ready === false || e.exhausted === true ? " exhausted" : "";
+      return `Play ${c === 1 ? "a" : c} ${k.might != null ? `${k.might} Might ` : ""}${k.name ?? "token"} ${k.type ?? "unit"} token${c === 1 ? "" : "s"}${k.keywords?.length ? ` with ${k.keywords.join(", ")}` : ""}${exhausted}`;
     }
     case "kill": return `Kill ${noun || "a unit"}`;
     case "buff": return `Buff ${noun || "a unit"}`;

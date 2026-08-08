@@ -278,9 +278,19 @@ function renderDeckStack(zoneCards, label, options = {}) {
   `;
 }
 
-/** Filter zone cards by owner */
+// Zones whose membership follows control, not ownership: a card whose control
+// changed (take-control effects keep `owner`, only `controller` moves) sits in
+// its controller's base, so it must render on that player's row.
+const CONTROLLER_SCOPED_ZONES = new Set(["base"]);
+
+/** Filter zone cards by owner (by controller for control-scoped zones) */
 function zoneForPlayer(zoneName, pid) {
   const zones = gameState.zones || {};
   const all = zones[zoneName] || [];
+  if (CONTROLLER_SCOPED_ZONES.has(zoneName)) {
+    // snapshot emits controller: "" when the instance has no explicit
+    // controller — fall back to owner so the card still renders.
+    return all.filter(c => (c.controller || c.owner) === pid);
+  }
   return all.filter(c => c.owner === pid);
 }
