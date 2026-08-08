@@ -80,6 +80,19 @@ export interface ReturnToHandEffect {
 }
 
 /**
+ * rule 103.2.a.3 / 419.1.a (ogn-281-298 Hallowed Tomb) — return the player's
+ * Chosen Champion from their trash to their (empty) Champion Zone. The
+ * champion is identified by the Legend's `championTag`; a non-empty Champion
+ * Zone makes this a no-op.
+ */
+export interface ReturnToChampionZoneEffect {
+  readonly type: "return-to-champion-zone";
+  readonly from?: "trash";
+  /** "if it is empty" — defaults to true; the zone gate is always applied. */
+  readonly ifZoneEmpty?: boolean;
+}
+
+/**
  * Play a card effect
  */
 export interface PlayEffect {
@@ -470,6 +483,13 @@ export interface AddResourceEffect {
    * 1; "[Add] that much [rainbow]" passes a `{ variable: "x" }` expression.
    */
   readonly amount?: number | { readonly variable: string };
+  /**
+   * rule 190.6.a — whose Rune Pools receive the resources. Absent, the
+   * ability's controller does ("[Add] [1]"). Text that names other players
+   * ("the attacker and defender each [Add] [1]") lists those roles here; they
+   * are resolved against the showdown running as the effect resolves.
+   */
+  readonly players?: readonly ("controller" | "attacker" | "defender" | "opponent")[];
 }
 
 /**
@@ -568,6 +588,21 @@ export interface GrantKeywordEffect {
    * nothing stacks on top of the printed one.
    */
   readonly ifMissing?: boolean;
+}
+
+/**
+ * Grant an activated ability (rule 135.4.b — granted text is real text).
+ *
+ * The text lives on the GRANTING card at `abilityIndex`; each target gains it
+ * as its own (the target pays the cost and is `self` for the effect).
+ * `duration: "static"` is a continuous grant, recomputed on every static
+ * recalculation (unl-213-219 "Units here have …").
+ */
+export interface GrantAbilityEffect {
+  readonly type: "grant-ability";
+  readonly abilityIndex: number;
+  readonly target: AnyTarget;
+  readonly duration?: "turn" | "permanent" | "static";
 }
 
 /**
@@ -1000,6 +1035,7 @@ export type Effect =
   | DiscardEffect
   | RecycleEffect
   | ReturnToHandEffect
+  | ReturnToChampionZoneEffect
   | PlayEffect
   | BanishEffect
   | LookEffect
@@ -1040,6 +1076,7 @@ export type Effect =
   // Keywords
   | GrantKeywordEffect
   | GrantKeywordsEffect
+  | GrantAbilityEffect
 
   // Control flow
   | SequenceEffect
@@ -1081,6 +1118,7 @@ export type StaticEffect =
   | ModifyMightEffect
   | GrantKeywordEffect
   | GrantKeywordsEffect
+  | GrantAbilityEffect
   | IncreaseVictoryScoreEffect
   | IncreaseHiddenCapacityEffect
   | PreventScoreEffect

@@ -8,19 +8,17 @@ import { createCardId } from "@tcg/riftbound-types/cards";
  * "When you hold here, you may return your Chosen Champion from your trash
  *  to your Champion Zone if it is empty."
  *
- * Modeled as an optional triggered ability on hold that returns your chosen
- * champion to hand (closest primitive — champion-zone isn't a return-to-hand
- * location).
+ * Optional hold trigger: the holder's Chosen Champion (rule 103.2.a.3 — the
+ * champion unit tagged for their Legend, never the Legend itself) goes from
+ * their trash back to their Champion Zone, from where it may be played again
+ * (rule 419.1.a). "If it is empty" gates the whole effect.
  */
 const abilities: Ability[] = [
   {
     effect: {
-      target: {
-        controller: "friendly",
-        location: "trash",
-        type: "legend",
-      },
-      type: "return-to-hand",
+      from: "trash",
+      ifZoneEmpty: true,
+      type: "return-to-champion-zone",
     },
     optional: true,
     trigger: { event: "hold", on: "self" },

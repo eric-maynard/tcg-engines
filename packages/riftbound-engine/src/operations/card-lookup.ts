@@ -27,6 +27,8 @@ export interface CardDefinitionLookup {
   readonly tags?: readonly string[];
   readonly timing?: string;
   readonly isChampion?: boolean;
+  /** Legend only — the champion tag naming this legend's Chosen Champion (rule 103.2.a.3). */
+  readonly championTag?: string;
   /**
    * rule 186 — a Token (printed token card such as Recruit / Sprite / Gold, or
    * one minted by an effect). Tokens exist only on the board or the chain:

@@ -59,7 +59,7 @@ async function intoHold(game: Game): Promise<void> {
 }
 
 describe("Hallowed Tomb (ogn-281-298)", () => {
-  test.failing("BUG: registry payload — an optional HOLD-here trigger that returns your CHOSEN CHAMPION from TRASH to the CHAMPION ZONE if empty (engine: return-to-hand of a legend)", async () => {
+  test("registry payload — an optional HOLD-here trigger that returns your CHOSEN CHAMPION from TRASH to the CHAMPION ZONE if empty (engine: return-to-hand of a legend)", async () => {
     // Expected: effect moves a champion unit trash → championZone, gated on the zone being empty.
     // Actual: `{ type: "return-to-hand", target: { type: "legend", location: "trash", controller: "friendly" } }`.
     await scenario().build();
@@ -100,10 +100,11 @@ describe("Hallowed Tomb (ogn-281-298)", () => {
     expect(game.decision()).toMatchObject({ context: "main", kind: "action", seat: P1 });
   });
 
-  test.failing("BUG: accepting returns Kai'Sa from the trash to P1's CHAMPION ZONE (not hand, not board) — and she can then be played from there again (419.1.a)", async () => {
+  test("accepting returns Kai'Sa from the trash to P1's CHAMPION ZONE (not hand, not board) — and she can then be played from there again (419.1.a)", async () => {
     // Expected: kaisa zone trash → championZone; later `playChampion` is legal with 4 energy.
     // Actual: kaisa never leaves the trash (the effect looks for a legend instead).
-    const game = await board().resources(P1, { energy: 4 }).build();
+    // 4 ready fury runes: her cost (4 energy + fury) must be payable after the return.
+    const game = await board().runes(P1, "fury", 4).build();
     await intoHold(game);
     await game.p1.yes();
     await game.settle();
@@ -111,10 +112,14 @@ describe("Hallowed Tomb (ogn-281-298)", () => {
     expect(game.zoneOf("kaisa")).toBe("championZone");
     expect(game.p1.champion()).toBe("kaisa");
     expect(game.p1.hand()).not.toContain("kaisa");
+    // rule 419.1.a — she is playable from the Champion Zone once her cost is on the table.
+    for (let i = 0; i < 4; i++) {
+      await game.p1.tapRune();
+    }
     expect(game.p1.can("playChampion")).toBe(true);
   });
 
-  test.failing("BUG: the Legend never leaves the Legend Zone — after accepting, Daughter of the Void is still P1's legend and NOT in P1's hand (engine bounces the legend to hand)", async () => {
+  test("the Legend never leaves the Legend Zone — after accepting, Daughter of the Void is still P1's legend and NOT in P1's hand (engine bounces the legend to hand)", async () => {
     // Expected: legends are not movable game objects for this effect; only the champion unit is.
     // Actual: the `return-to-hand`/`type: legend` effect resolves against the Legend Zone card.
     const game = await board().build();
@@ -126,7 +131,7 @@ describe("Hallowed Tomb (ogn-281-298)", () => {
     expect(game.p1.hand()).not.toContain("legend");
   });
 
-  test.failing("BUG: 'if it is empty' — with the unplayed Kai'Sa still in the Champion Zone, accepting changes nothing: the trash copy stays, the zone keeps exactly its one card, the Legend stays", async () => {
+  test("'if it is empty' — with the unplayed Kai'Sa still in the Champion Zone, accepting changes nothing: the trash copy stays, the zone keeps exactly its one card, the Legend stays", async () => {
     // Expected: a complete no-op. Actual: the Legend is moved to P1's hand.
     const game = await board({ championInZone: true }).build();
     expect(game.p1.champion()).toBe("kaisaUnplayed");

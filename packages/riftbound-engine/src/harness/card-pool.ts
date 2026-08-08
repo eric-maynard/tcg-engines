@@ -132,6 +132,7 @@ export function toLookupPayload(
   return {
     abilities: (def.abilities ?? []) as CardDefinitionLookup["abilities"],
     cardType: overrides?.cardType ?? def.cardType,
+    championTag: def.championTag,
     copyAttachedUnitText: def.copyAttachedUnitText as boolean | undefined,
     copyChosenUnitToHolder: def.copyChosenUnitToHolder as boolean | undefined,
     domain: Array.isArray(domain) ? [...domain] : (domain as string | undefined),

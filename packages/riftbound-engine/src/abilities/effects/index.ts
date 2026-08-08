@@ -19,6 +19,7 @@ import {
   handle_playBanishedPass,
 } from "./play-banished-pass";
 import { handle_returnBanishedToHand } from "./return-banished-to-hand";
+import { handle_returnToChampionZone } from "./return-to-champion-zone";
 import { handle_returnToHand } from "./return-to-hand";
 import { handle_modifyMight } from "./modify-might";
 import { handle_doubleMight } from "./double-might";
@@ -107,6 +108,7 @@ export const EFFECT_HANDLERS: Record<string, EffectHandler> = {
   "play-banished-pass": handle_playBanishedPass,
   "play-banished-card": handle_playBanishedCard,
   "return-banished-to-hand": handle_returnBanishedToHand,
+  "return-to-champion-zone": handle_returnToChampionZone,
   "return-to-hand": handle_returnToHand,
   "modify-might": handle_modifyMight,
   "double-might": handle_doubleMight,
