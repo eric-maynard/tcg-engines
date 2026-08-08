@@ -61,7 +61,9 @@ describe("Wizened Elder (ogn-065-298)", () => {
     await game.p1.cast("bless", { targets: "elder" });
     await game.settle();
     expect(game.state("elder").might).toBe(6);
-    await game.p1.play("shaman");
+    // P1 still controls bf1 (rule 323.6 lapses that only once a Unit has held it, or at the
+    // next turn's Cleanup), so the play has two legal destinations — name the base.
+    await game.p1.play("shaman", { to: "base" });
     await game.settle();
     if (game.decision()?.kind === "yes-no") {
       await game.p1.yes();

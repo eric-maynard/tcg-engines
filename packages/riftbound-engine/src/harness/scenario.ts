@@ -254,6 +254,17 @@ export function buildScenarioEngine(spec: ScenarioSpec, pool: CardPool): BuiltSc
       contested: bf.contested ?? false,
       contestedBy: bf.contestedBy,
       controller: bf.controller,
+      // rule 190.4.a / 323.6 — a seeded battlefield whose controller already has a card
+      // standing on it holds it the way a conquered one does, so vacating it later loses
+      // control at the next cleanup. Control seeded with nobody there never rested on a
+      // unit, so the cleanup's vacancy check leaves it alone (state-based-checks step 6).
+      controllerOccupied:
+        bf.controller !== null &&
+        spec.cards.some(
+          (c) =>
+            resolveZone(spec, c.zone) === `battlefield-${bf.id}` &&
+            (c.controller ?? c.owner) === bf.controller,
+        ),
       id: bf.id,
     };
   }

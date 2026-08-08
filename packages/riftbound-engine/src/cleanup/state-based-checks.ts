@@ -600,7 +600,7 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
       (ctx.draft.interaction?.showdownStack?.length ?? 0) === 0 &&
       !ctx.draft.pendingChoice &&
       killed.length === 0;
-    if (bf.controller && isOpenState) {
+    if (bf.controller) {
       // rule 323.6 / 127.1: "have a Unit there" follows CONTROL, not ownership — a unit
       // stolen by e.g. Hostile Takeover holds the battlefield for its new controller.
       const controllerOf = (id: CoreCardId) =>
@@ -615,17 +615,29 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
           unitControllers.add(c);
         }
       }
-      if (!unitControllers.has(bf.controller)) {
+      if (unitControllers.has(bf.controller)) {
+        // rule 190.4.a — control rests on the controller's units being here. Recorded in
+        // every state (not just Open ones) so a unit that arrives and leaves inside one
+        // closed window still arms the 323.6 vacancy check below.
+        bf.controllerOccupied = true;
+      } else if (isOpenState) {
         // rule 190.3.a: a unit that "otherwise becomes present" (a control change, no move)
         // at a battlefield its controller doesn't control contests it. With no other enemy
         // units there the showdown is non-combat and settles straight into a conquer.
         if (unitControllers.size === 1 && !bf.contested) {
           const conqueror = [...unitControllers][0] as string;
           conquerByPresence(ctx, bfId, conqueror);
-        } else {
+          stateChanged = true;
+        } else if (bf.controllerOccupied) {
+          // rule 323.6 / 190.4.c — control is lost in cleanup once the controller's
+          // units are gone. Control that never rested on a unit here (a seeded board
+          // state, or control handed over by an effect) has nothing to vacate, so it
+          // survives until a unit of the controller occupies and then leaves it —
+          // otherwise the first cleanup after any action silently wiped it.
           bf.controller = null;
+          bf.controllerOccupied = false;
+          stateChanged = true;
         }
-        stateChanged = true;
       }
     }
 

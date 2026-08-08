@@ -715,6 +715,18 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
                 phase: "awaken",
               };
 
+              // rule 323.6 / 190.4.c — every turn re-checks Battlefield occupancy: arm the
+              // vacancy check on all controlled Battlefields so control with none of the
+              // controller's Units there lapses in this turn's first Cleanup, even if no
+              // Unit was ever seen holding it (state-based-checks step 6).
+              for (const bf of Object.values(
+                (context.state as RiftboundGameState).battlefields ?? {},
+              )) {
+                if (bf.controller) {
+                  bf.controllerOccupied = true;
+                }
+              }
+
               // Ready ALL game objects controlled by the turn player (rule 515.1).
               // Exhausted is written via counters.setFlag → cardMeta.__flags.exhausted at
               // Runtime, but test helpers seed the top-level meta.exhausted; treat either
