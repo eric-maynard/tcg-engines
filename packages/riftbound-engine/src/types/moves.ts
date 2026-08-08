@@ -72,6 +72,12 @@ export interface RiftboundMoves {
   /** Select 1 battlefield from 3 options (rule 644.5) */
   selectBattlefield: { playerId: PlayerId; battlefieldId: CardId; discardIds: CardId[] };
 
+  /**
+   * rule 485.5 — Duel (Bo1): the GAME randomly selects one of the player's
+   * three battlefields (seeded engine RNG); the other two are removed.
+   */
+  selectRandomBattlefield: { playerId: PlayerId; battlefieldIds: CardId[] };
+
   /** Place Champion Legend in Legend Zone */
   placeLegend: { playerId: PlayerId; legendId: CardId };
 

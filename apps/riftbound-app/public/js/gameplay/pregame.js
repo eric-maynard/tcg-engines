@@ -198,9 +198,22 @@ function renderMulliganUI(pregame, state, container) {
 
   const firstLabel = pregame.firstPlayer === viewingPlayer ? "You go" : `${pName(pregame.firstPlayer)} goes`;
 
+  // rule 485.5 — Duel (Bo1): the game picked each battlefield at random; there
+  // is no picker, so say which one (DESIGN.md §Pregame).
+  let randomBfHtml = "";
+  if (pregame.battlefieldRandom && pregame.battlefieldSelectedName) {
+    const picks = pregame.battlefieldRandomSelections || {};
+    const oppId = Object.keys(picks).find((pid) => pid !== viewingPlayer);
+    const oppLine = oppId && picks[oppId]?.name
+      ? ` &middot; ${esc(pName(oppId))}: <b>${esc(picks[oppId].name)}</b>`
+      : "";
+    randomBfHtml = `<div class="pregame-info" id="pregameRandomBattlefield" data-bf-id="${esc(pregame.battlefieldSelected || "")}">Battlefield selected at random: <b>${esc(pregame.battlefieldSelectedName)}</b>${oppLine}</div>`;
+  }
+
   let html = `
     <div class="pregame-title">Opening Hand</div>
     <div class="pregame-subtitle">${esc(firstLabel)} first &mdash; tap up to 2 cards to send back</div>
+    ${randomBfHtml}
     <div class="mulligan-hand" id="mulliganHandCards">
   `;
 

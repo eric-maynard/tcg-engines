@@ -1202,19 +1202,52 @@ describe("Battlefield selection: Duel = random 1 of 3, Match = chosen 1 of 3; th
     expect(Object.keys(p2View.battlefields)).not.toContain(b2);
   });
 
-  test.failing("BUG: 485.5 — in a Duel (Bo1) each player's battlefield is selected at RANDOM by the game; the engine only offers a player-driven selectBattlefield, so a supplied preference always forces the outcome (identical across seeds)", async () => {
-    // Expected: with identical inputs, different seeds yield at least two different kept battlefields for P1
-    // (a player-named id must not be able to force it). Actual: the named id is always the one kept.
+  // DESIGN (DESIGN.md §Pregame): real (non-sandbox) Duel games use `selectRandomBattlefield` — the GAME picks
+  // 1 of 3 from the seeded engine RNG and no battlefield-choice decision is surfaced to the player; sandbox
+  // (and Match, 486.5) games keep the player-driven `selectBattlefield`.
+  test("485.5 — Duel (Bo1): selectRandomBattlefield keeps exactly ONE of the player's three (row) and sets the other two aside; the pick comes from the seeded RNG (same seed ⇒ same pick, different seeds ⇒ at least two different picks) and no player preference is consulted", async () => {
     const kept = new Set<string>();
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < 12; i++) {
       const pg = throughChampions(`bo1-random-${i}`);
       const [b1, b2, b3] = pg.kit[P1]?.bfs as [string, string, string];
-      mv(pg.engine, "selectBattlefield", P1, { battlefieldId: b2, discardIds: [b1, b3] });
-      for (const id of zone(pg, "battlefieldRow", P1)) {
-        kept.add(id.replace(/^player-1-/, ""));
-      }
+      expect(mv(pg.engine, "selectRandomBattlefield", P1, { battlefieldIds: [b1, b2, b3] }).success).toBe(true);
+      const row = zone(pg, "battlefieldRow", P1);
+      expect(row).toHaveLength(1);
+      expect([b1, b2, b3]).toContain(row[0] as string);
+      expect(zone(pg, "setAside", P1).sort()).toEqual([b1, b2, b3].filter((b) => b !== row[0]).sort());
+      expect(pg.engine.getState().setup?.battlefieldChoices?.[P1]).toBe(row[0] as string);
+      expect(Object.keys(pg.engine.getState().battlefields)).toEqual([row[0] as string]);
+      kept.add((row[0] as string).replace(/^player-1-/, ""));
+      // Deterministic per seed: replaying the same seed keeps the same battlefield.
+      const again = throughChampions(`bo1-random-${i}`);
+      mv(again.engine, "selectRandomBattlefield", P1, { battlefieldIds: again.kit[P1]?.bfs ?? [] });
+      expect(zone(again, "battlefieldRow", P1)).toEqual(row);
     }
     expect(kept.size).toBeGreaterThan(1);
+  });
+
+  test("485.5 / 485.4.a — Duel: once the game has picked, NO battlefield-choice is accepted from that player (selectBattlefield and a second random pick are both refused; the row is unchanged); the other player still gets exactly one", async () => {
+    const pg = throughChampions("bo1-no-choice");
+    const [b1, b2, b3] = pg.kit[P1]?.bfs as [string, string, string];
+    expect(mv(pg.engine, "selectRandomBattlefield", P1, { battlefieldIds: [b1, b2, b3] }).success).toBe(true);
+    const row = zone(pg, "battlefieldRow", P1);
+    const other = [b1, b2, b3].find((b) => b !== row[0]) as string;
+    expect(mv(pg.engine, "selectBattlefield", P1, { battlefieldId: other, discardIds: [] }).success).toBe(false);
+    expect(mv(pg.engine, "selectRandomBattlefield", P1, { battlefieldIds: [b1, b2, b3] }).success).toBe(false);
+    expect(zone(pg, "battlefieldRow", P1)).toEqual(row);
+    const [c1, c2, c3] = pg.kit[P2]?.bfs as [string, string, string];
+    expect(mv(pg.engine, "selectRandomBattlefield", P2, { battlefieldIds: [c1, c2, c3] }).success).toBe(true);
+    expect(zone(pg, "battlefieldRow")).toHaveLength(2);
+    expect(zone(pg, "battlefieldRow", P2)).toHaveLength(1);
+  });
+
+  test("DESIGN (sandbox keeps the manual pick): the player-driven selectBattlefield is still offered and honours the named battlefield exactly (identical across seeds)", async () => {
+    for (let i = 0; i < 4; i++) {
+      const pg = throughChampions(`sandbox-choice-${i}`);
+      const [b1, b2, b3] = pg.kit[P1]?.bfs as [string, string, string];
+      expect(mv(pg.engine, "selectBattlefield", P1, { battlefieldId: b2, discardIds: [b1, b3] }).success).toBe(true);
+      expect(zone(pg, "battlefieldRow", P1)).toEqual([b2]);
+    }
   });
 
   test("486.5 / 486.6 — Match (Bo3) structure: a match-level continuation exists that removes the used battlefields for the rest of the match", async () => {

@@ -150,6 +150,13 @@ export interface PregameState {
   battlefieldOptions: Record<string, string[]>;
   /** Each player's selected battlefield card ID (once chosen) */
   battlefieldSelections: Record<string, string>;
+  /**
+   * rule 485.5 — true when the GAME picked each player's battlefield at random
+   * (Duel / Bo1, seeded engine RNG): the client shows "Battlefield selected at
+   * random: X" instead of a picker. Match (486.5) and the sandbox's Bo3 keep
+   * the manual choice.
+   */
+  battlefieldRandom?: boolean;
   /** Players who have completed their mulligan decision */
   mulliganComplete: Set<string>;
   /** Whether this is a sandbox (hotseat) game */

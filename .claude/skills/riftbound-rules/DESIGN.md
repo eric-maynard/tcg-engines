@@ -49,6 +49,11 @@ sub-step is intentionally not implemented; see `moves/play/cost-model.ts`).
 ## Pregame
 - Mulligan: 4 large cards, hover for full image, Keep/Send-back
 - No other modals (peek dialog, help, etc.) may appear over the pregame overlay
+- Battlefield selection (rule 485.5 / 486.5): in a real (non-sandbox) Duel / Bo1 the GAME picks 1 of each
+  player's 3 battlefields at RANDOM (engine move `selectRandomBattlefield`, seeded engine RNG — same seed ⇒ same
+  board) and places both at once; there is NO battlefield-choice UI — the mulligan overlay just states
+  "Battlefield selected at random: X" (+ the opponent's). Match / Bo3 keeps the manual `battlefield_select`
+  picker (486.5). Sandbox is unchanged: its solo picker offers Bo1 (random) or Bo3 (manual pick).
 
 ## Performance
 - All deck card images preloaded at first sync — no blank cards after t+1s

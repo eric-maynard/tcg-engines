@@ -244,6 +244,64 @@ export const setupMoves: Partial<
   },
 
   /**
+   * rule 485.5 — Duel (Bo1): "each player RANDOMLY selects one of their three
+   * Battlefields; the other two are removed". The game — not the player — makes
+   * the pick, from the seeded engine RNG, so no preference can force the
+   * outcome. Sandbox / Match (486.5) games use the player-driven
+   * `selectBattlefield` instead (DESIGN.md §Pregame).
+   */
+  selectRandomBattlefield: {
+    condition: (state, context) => {
+      if (state.status !== "setup" || !state.setup) {
+        return false;
+      }
+      const { playerId, battlefieldIds } = context.params;
+      if (!Array.isArray(battlefieldIds) || battlefieldIds.length === 0) {
+        return false;
+      }
+      // rule 485.4.a: one selection per player per game.
+      return state.setup.battlefieldChoices?.[playerId] === undefined;
+    },
+
+    reducer: (draft, context) => {
+      const { playerId, battlefieldIds } = context.params;
+      const { zones } = context;
+      const candidates = [...new Set(battlefieldIds as readonly string[])].filter(
+        (id) => !(draft.match?.usedBattlefields ?? []).includes(id),
+      );
+      if (candidates.length === 0) {
+        return;
+      }
+      const index = candidates.length === 1 ? 0 : (context.rng.rollDice(candidates.length) as number) - 1;
+      const kept = candidates[Math.min(Math.max(index, 0), candidates.length - 1)] as string;
+
+      if (draft.setup) {
+        draft.setup.battlefieldChoices ??= {};
+        draft.setup.battlefieldChoices[playerId] = kept;
+      }
+      zones.moveCard({
+        cardId: kept as CoreCardId,
+        targetZoneId: "battlefieldRow" as CoreZoneId,
+      });
+      draft.battlefields[kept] = {
+        contested: false,
+        controller: null,
+        id: kept,
+      };
+      // rule 485.5: the other two are removed and will not be used this game.
+      for (const other of candidates) {
+        if (other === kept) {
+          continue;
+        }
+        zones.moveCard({
+          cardId: other as CoreCardId,
+          targetZoneId: "setAside" as CoreZoneId,
+        });
+      }
+    },
+  },
+
+  /**
    * Place Champion Legend in Legend Zone
    *
    * The Champion Legend determines domain identity and stays in the Legend Zone

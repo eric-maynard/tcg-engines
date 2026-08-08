@@ -156,43 +156,63 @@ export function createGameFromDecks(
   const secondPlayer = firstPlayer === P1 ? P2 : P1;
   const isSandbox = options?.sandbox ?? false;
 
-  // In Duel mode, auto-select 1 random battlefield per player and place them now.
-  // In Match mode, defer to pregame battlefield selection.
+  // rule 485.5 — Duel (Bo1): the GAME selects 1 of each player's 3 battlefields
+  // at random (engine move `selectRandomBattlefield`, seeded engine RNG — same
+  // seed ⇒ same board) and places it now; no choice UI is shown (DESIGN.md
+  // §Pregame). Match (486.5) — and the sandbox's Bo3 option — defer to the
+  // manual `battlefield_select` pregame phase instead.
+  const randomSelections: Record<string, string> = {};
   if (gameMode === "duel") {
-    // Fallback: if a deck has no battlefields, pick from the full card pool
+    // Fallback: a deck without battlefields draws its three candidates from the full pool.
     const allBattlefields = allCards.filter((c) => c.cardType === "battlefield").map((c) => c.id);
-    const p1Bfs = deck1.battlefieldIds.length > 0 ? deck1.battlefieldIds : allBattlefields;
-    const p2Bfs = deck2.battlefieldIds.length > 0 ? deck2.battlefieldIds : allBattlefields;
-    const p1Pick = p1Bfs[Math.floor(Math.random() * p1Bfs.length)];
-    const p2Pick = p2Bfs[Math.floor(Math.random() * p2Bfs.length)];
+    const rng = engine.getRNG();
+    const candidatesFor = (deck: DeckConfig): string[] => {
+      const own = [...new Set(deck.battlefieldIds)];
+      return own.length > 0 ? own : rng.shuffle(allBattlefields).slice(0, 3);
+    };
     const bfIds: string[] = [];
-    if (p1Pick) {
-      const cardId = `${P1}-bf-${p1Pick}`;
-      registerCard(internal, cardId, p1Pick, P1, "battlefieldRow");
-      // Rule 419.4.a / 383.2.c: battlefield-card triggered abilities (e.g. Abandoned
-      // Hall unl-205) must be visible to the trigger runner, so register the
-      // definition in the engine's global card registry like every other card.
-      const def = registry.get(p1Pick);
-      if (def) cardReg.register(cardId, makeLookupPayload(def as unknown as Record<string, unknown>, cardId));
-      bfIds.push(cardId);
+    for (const [pid, deck] of decks) {
+      const defIds = candidatesFor(deck);
+      const cardIds: string[] = [];
+      for (const defId of defIds) {
+        const cardId = `${pid}-bf-${defId}`;
+        // The two the game does not keep end up "set aside" (rule 485.5: removed, not trashed).
+        registerCard(internal, cardId, defId, pid, "setAside");
+        // Rule 419.4.a / 383.2.c: battlefield-card triggered abilities (e.g. Abandoned
+        // Hall unl-205) must be visible to the trigger runner, so register the
+        // definition in the engine's global card registry like every other card.
+        const def = registry.get(defId);
+        if (def) cardReg.register(cardId, makeLookupPayload(def as unknown as Record<string, unknown>, cardId));
+        cardIds.push(cardId);
+      }
+      if (cardIds.length === 0) {continue;}
+      const result = engine.executeMove("selectRandomBattlefield", {
+        params: { battlefieldIds: cardIds, playerId: pid },
+        playerId: pid as PlayerId,
+      });
+      let kept = engine.getState().setup?.battlefieldChoices?.[pid];
+      if (!result.success || !kept) {
+        // Engine refused (should not happen in a fresh setup): fall back to a
+        // server-side crypto-random pick placed directly.
+        kept = cardIds[crypto.getRandomValues(new Uint32Array(1))[0]! % cardIds.length]!;
+        engine.executeMove("placeBattlefields", {
+          params: { battlefieldIds: [kept] },
+          playerId: pid as PlayerId,
+        });
+      }
+      bfIds.push(kept);
+      randomSelections[pid] = kept.replace(`${pid}-bf-`, "");
     }
-    if (p2Pick) {
-      const cardId = `${P2}-bf-${p2Pick}`;
-      registerCard(internal, cardId, p2Pick, P2, "battlefieldRow");
-      const def = registry.get(p2Pick);
-      if (def) cardReg.register(cardId, makeLookupPayload(def as unknown as Record<string, unknown>, cardId));
-      bfIds.push(cardId);
-    }
-    engine.executeMove("placeBattlefields", {
-      params: { battlefieldIds: bfIds },
-      playerId: P1 as PlayerId,
-    });
 
     // Create per-battlefield zones (dynamic zones for unit placement)
     for (const bfCardId of bfIds) {
       internal.zones[`battlefield-${bfCardId}`] = { cardIds: [], config: { faceDown: false, id: `battlefield-${bfCardId}`, name: `Battlefield ${bfCardId}`, ordered: false, visibility: "public" } };
       // Rule 811.1.b: every battlefield has a facedown sub-zone for [Hidden] cards (rule 107.3.a).
       internal.zones[`facedown-${bfCardId}`] = { cardIds: [], config: { faceDown: true, id: `facedown-${bfCardId}`, maxSize: 1, name: `Facedown at ${bfCardId}`, ordered: false, visibility: "private" } };
+    }
+    for (const [pid, defId] of Object.entries(randomSelections)) {
+      const name = registry.get(defId)?.name ?? defId;
+      log.push(makeLogEntry(`${options?.names?.[pid] ?? (pid === P1 ? "Player 1" : "Player 2")}'s battlefield was selected at random: ${name}.`));
     }
   }
 
@@ -201,10 +221,8 @@ export function createGameFromDecks(
       [P1]: deck1.battlefieldIds,
       [P2]: deck2.battlefieldIds,
     },
-    battlefieldSelections: gameMode === "duel" ? {
-      [P1]: deck1.battlefieldIds[Math.floor(Math.random() * deck1.battlefieldIds.length)] ?? "",
-      [P2]: deck2.battlefieldIds[Math.floor(Math.random() * deck2.battlefieldIds.length)] ?? "",
-    } : {},
+    battlefieldRandom: gameMode === "duel",
+    battlefieldSelections: gameMode === "duel" ? { ...randomSelections } : {},
     firstPlayer,
     gameMode,
     mulliganComplete: new Set(),
@@ -346,9 +364,22 @@ export function buildPregamePayload(session: GameSession, playerId: string): Rec
     return { id: defId, name: def?.name ?? defId, rulesText: def?.rulesText ?? "" };
   });
 
+  const selectedId = pregame.battlefieldSelections[playerId] ?? null;
+  // rule 485.5 — Duel: name every player's randomly selected battlefield so the
+  // overlay can say "Battlefield selected at random: X" (both are public once placed).
+  const randomSelections = pregame.battlefieldRandom
+    ? Object.fromEntries(
+        Object.entries(pregame.battlefieldSelections).map(([pid, defId]) => [
+          pid,
+          { id: defId, name: registry.get(defId)?.name ?? defId },
+        ]),
+      )
+    : undefined;
   return {
     battlefieldOptions: bfDetails,
-    battlefieldSelected: pregame.battlefieldSelections[playerId] ?? null,
+    ...(pregame.battlefieldRandom ? { battlefieldRandom: true, battlefieldRandomSelections: randomSelections } : {}),
+    battlefieldSelected: selectedId,
+    battlefieldSelectedName: selectedId ? (registry.get(selectedId)?.name ?? selectedId) : null,
     firstPlayer: pregame.firstPlayer,
     gameMode: pregame.gameMode,
     mulliganComplete: [...pregame.mulliganComplete],

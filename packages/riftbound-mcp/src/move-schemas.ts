@@ -300,6 +300,7 @@ export const INTERNAL_MOVES: Record<string, string> = {
   revealTopToOpponent: "sandbox meta",
   rollForFirst: "pregame setup",
   selectBattlefield: "pregame setup",
+  selectRandomBattlefield: "pregame setup (rule 485.5 Duel — the game picks at random)",
   sendToHand: "sandbox meta",
   shuffleDecks: "pregame setup",
   spendResources: "directed (cost payment)",
