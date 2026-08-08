@@ -43,12 +43,17 @@ function isAttachable(cardId: string, cardType: string): boolean {
 
 /**
  * rule 151.2: the activated ability of a gear (here [Equip]) may only be used
- * in a Neutral State — never while a Showdown is open, even by the Focus holder
- * on their own turn.
+ * "during the controlling player's Main Phase during an Open State, and not
+ * during a Showdown" — i.e. standard speed. A Closed State (any chain item
+ * waiting to resolve) and every Showdown state are both illegal, so [Equip] is
+ * gated exactly like playing a unit or gear.
  */
 function equipTimingAllowed(state: RiftboundGameState): boolean {
+  if (state.turn.phase !== "main") {
+    return false;
+  }
   const turnState = getTurnState(state.interaction ?? createInteractionState());
-  return turnState === "neutral-open" || turnState === "neutral-closed";
+  return turnState === "neutral-open";
 }
 
 /**

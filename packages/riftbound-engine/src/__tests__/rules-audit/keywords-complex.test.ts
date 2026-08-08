@@ -482,6 +482,9 @@ describe("Weaponmaster (rule 821) and multi-Equipment attachment", () => {
       unitId: "knight",
     });
     expect(r1.success).toBe(true);
+    // rule 151.2: [Equip] is standard speed — the first activation must resolve
+    // off the chain before a second one is legal.
+    drainChain(engine);
 
     // rule 434.1.b.1 / 818.3.b: a Top-Most card may hold "one or more"
     // Equipment; nothing caps a unit at one, and 821 (Weaponmaster) only
@@ -520,6 +523,8 @@ describe("Weaponmaster (rule 821) and multi-Equipment attachment", () => {
       unitId: "dual-wielder",
     });
     expect(r1.success).toBe(true);
+    // rule 151.2: [Equip] is standard speed — resolve the first activation first.
+    drainChain(engine);
 
     const r2 = applyMove(engine, "equipCard", {
       equipmentId: "dagger",
