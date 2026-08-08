@@ -16,6 +16,29 @@ import type { TargetDescriptor } from "../target-resolver";
 import { boundBattlefieldZone, resolveTarget } from "../target-resolver";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 
+/** How many past reveals the shared record keeps (rule 424.1 is about the moment, not a permanent log). */
+const PUBLIC_REVEAL_HISTORY = 20;
+
+/**
+ * rule 424.1 — a reveal presents the card to ALL players. Every reveal path
+ * goes through here so the identity is on the state for the log / UI / a
+ * spectator to name, whether or not the reveal parks a prompt.
+ */
+export function recordPublicReveal(
+  ctx: EffectContext,
+  playerId: string,
+  cardIds: readonly string[],
+): void {
+  if (cardIds.length === 0) return;
+  const draft = ctx.draft as unknown as {
+    publicReveals?: { playerId: string; cardIds: readonly string[]; turn: number }[];
+    turn?: { number?: number };
+  };
+  const entries = draft.publicReveals ?? [];
+  entries.push({ cardIds: [...cardIds], playerId, turn: draft.turn?.number ?? 0 });
+  draft.publicReveals = entries.slice(-PUBLIC_REVEAL_HISTORY);
+}
+
 export interface EffectHelpers {
   readonly executeEffect: (effect: ExecutableEffect, ctx: EffectContext) => void;
   readonly getTargetIds: typeof getTargetIds;
@@ -329,6 +352,9 @@ export function resolveAmount(
       .getCardsInZone("mainDeck" as CoreZoneId, ctx.playerId as CorePlayerId)
       .slice(0, n)
       .map((c) => c as string);
+    // rule 424.1 — this IS a reveal, not a private look: present the cards to
+    // every player BEFORE they are recycled, or nobody can verify the count.
+    recordPublicReveal(ctx, ctx.playerId as string, topN);
     const hits = topN.filter((id) => registry.hasKeyword(id, keyword)).length;
     if ((amount.then ?? "recycle") === "recycle") {
       for (const id of topN) {

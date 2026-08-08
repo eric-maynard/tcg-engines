@@ -51,6 +51,17 @@ describe("Teemo, Strategist (ogn-121-298)", () => {
     expect(game.p1.hand()).toHaveLength(0); // revealed, not drawn
   });
 
+  test("rule 424.1: the top 5 are REVEALED, not privately looked at — their identities are recorded on the shared state before they are recycled", async () => {
+    const game = await board().build();
+    await game.p2.move("a1", "bf1");
+    await game.p1.passPriority();
+    await game.p2.passPriority();
+    expect(game.gameState.publicReveals?.at(-1)).toMatchObject({
+      cardIds: ["c1", "c2", "c3", "c4", "c5"],
+      playerId: P1,
+    });
+  });
+
   test("'choose an enemy unit here': with two attackers the defender picks one; units elsewhere are not offered", async () => {
     const game = await board().build();
     await game.p2.move(["a1", "a2"], "bf1");

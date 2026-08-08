@@ -4,7 +4,7 @@ import { addToChain, createInteractionState } from "../../chain";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import { findAllReplacements, type ReplacementContext } from "../replacement-effects";
-import { type EffectHelpers } from "./_helpers";
+import { type EffectHelpers, recordPublicReveal } from "./_helpers";
 import { fireMandatoryRevealAbilities, handle_look } from "./look";
 
 /**
@@ -56,28 +56,10 @@ function offerRevealLook(
   return false;
 }
 
-/** How many past reveals the shared record keeps (rule 424.1 is about the moment, not a permanent log). */
-const PUBLIC_REVEAL_HISTORY = 20;
-
-/**
- * rule 424.1 — a reveal presents the card to ALL players. Every reveal path
- * goes through here so the identity is on the state for the log / UI / a
- * spectator to name, whether or not the reveal parks a prompt.
- */
-export function recordPublicReveal(
-  ctx: EffectContext,
-  playerId: string,
-  cardIds: readonly string[],
-): void {
-  if (cardIds.length === 0) return;
-  const draft = ctx.draft as unknown as {
-    publicReveals?: { playerId: string; cardIds: readonly string[]; turn: number }[];
-    turn?: { number?: number };
-  };
-  const entries = draft.publicReveals ?? [];
-  entries.push({ cardIds: [...cardIds], playerId, turn: draft.turn?.number ?? 0 });
-  draft.publicReveals = entries.slice(-PUBLIC_REVEAL_HISTORY);
-}
+// rule 424.1 — `recordPublicReveal` now lives in `_helpers` so every reveal
+// path (including amounts like Teemo's `revealTop`) can reach it; re-exported
+// here because callers still import it from the reveal handler.
+export { recordPublicReveal };
 
 export function handle_reveal(effect: ExecutableEffect, ctx: EffectContext, _h: EffectHelpers): void {
   // Rule 354.2 (ogn-160-298 Dazzling Aurora): "reveal cards from the top
