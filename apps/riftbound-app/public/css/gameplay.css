@@ -575,9 +575,13 @@
       transition: transform 0.15s;
       cursor: pointer;
     }
+    /* Hover brings the rune to the front of its fan (that is what makes a
+       lower rune readable/clickable); the lift stays small so the card never
+       leaves the clipped grid — a 24px/1.2× lift poked out of the top of the
+       pool, got cut off, and put its top strip under the resource bar. */
     .rune-stack .card:not(.exhausted):hover {
       z-index: 20 !important;
-      transform: translateY(-24px) scale(1.2) !important;
+      transform: translateY(-6px) scale(1.05) !important;
     }
     /* Exhausted runes rotate 90° (tabletop tap convention) in addition to the
        overlay dim from .card--exhausted::before.
@@ -593,7 +597,7 @@
     .rune-stack .card.exhausted:hover,
     .rune-stack .card.card--exhausted:hover {
       z-index: 20 !important;
-      transform: translateY(-18px) rotate(90deg) scale(0.82) !important;
+      transform: translateY(-4px) rotate(90deg) scale(0.75) !important;
     }
     .rune-stack .card .card-name {
       display: none;
