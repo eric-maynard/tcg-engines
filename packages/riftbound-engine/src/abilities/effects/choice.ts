@@ -139,7 +139,24 @@ function runPreChosenMode(
   // rule 355.8 / 820.2 — the target chosen for this mode while the card was
   // played travels with it.
   const chosenTargets = (effect as { _chosenTargets?: string[] })._chosenTargets;
-  h.executeEffect(picked, chosenTargets ? { ...ctx, boundTargets: chosenTargets } : ctx);
+  // rule 359.3.e.5 / 359.3.e.9 — a mode locked in at finalization keeps the
+  // object chosen then (355.15): if it is no longer legal as the item resolves
+  // the whole instruction does nothing, and no other object is substituted.
+  const locked = chosenTargets ?? ctx.boundTargets;
+  const lockedTarget = (picked as { target?: unknown }).target;
+  if (locked && locked.length > 0 && lockedTarget && typeof lockedTarget === "object") {
+    const legal = resolveTarget(
+      { ...(lockedTarget as object), quantity: "all" } as Parameters<typeof resolveTarget>[0],
+      { ...ctx, choosing: true } as Parameters<typeof resolveTarget>[1],
+    ) as string[];
+    const survivors = locked.filter((id) => legal.includes(id));
+    if (survivors.length === 0) {
+      return;
+    }
+    h.executeEffect(picked, { ...ctx, boundTargets: survivors });
+  } else {
+    h.executeEffect(picked, chosenTargets ? { ...ctx, boundTargets: chosenTargets } : ctx);
+  }
   const parked = ctx.draft.pendingChoice as { then?: unknown } | undefined;
   if (parked && parked.then === undefined) {
     ctx.draft.pendingChoice = { ...(parked as object), fromChosenMode: true } as typeof ctx.draft.pendingChoice;

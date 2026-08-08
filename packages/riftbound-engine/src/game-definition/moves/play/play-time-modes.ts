@@ -34,7 +34,15 @@ function bindsOnItem(draft: unknown, itemId: string, nodes: readonly AnyEffect[]
   }
   const found = findItem(draft, itemId);
   const item = found ? found.items[found.index] : undefined;
-  return item !== undefined && item.type === "spell" && item.triggered !== true;
+  // rule 377 — an ACTIVATED ability follows the play process too (ogn-157-298
+  // Udyr): its mode's Game Object is the ability's target, so it rides on the
+  // chain item exactly like a modal spell's. Triggered items keep the
+  // per-execution `_chosenTargets` form.
+  return (
+    item !== undefined &&
+    (item.type === "spell" || item.type === "ability") &&
+    item.triggered !== true
+  );
 }
 
 const isChoiceNode = (node: AnyEffect): boolean =>
@@ -143,8 +151,11 @@ export function raisePlayTimeModeChoice(
           const pooled = Object.values(
             (state.runePools?.[playerId]?.power ?? {}) as Partial<Record<string, number>>,
           ).reduce((a: number, b) => a + (b ?? 0), 0);
+          // rule 809.1 — [Deflect] taxes opposing SPELLS only; an activated
+          // ability choosing the same object owes nothing.
+          const isSpell = item.type === "spell";
           const surchargeOf = (id: string): number =>
-            getDeflectSurcharge(state, playerId, [id], cardsForCost);
+            isSpell ? getDeflectSurcharge(state, playerId, [id], cardsForCost) : 0;
           const options = modeTargetOptions(next, next._chosenIndex as number, ctx).filter(
             (id) => surchargeOf(id) <= pooled,
           );
@@ -162,17 +173,19 @@ export function raisePlayTimeModeChoice(
           }
           if (options.length === 1) {
             found.items[found.index] = { ...item, targets: [options[0] as string] };
-            payDeflectSurcharge(
-              ctx.draft as Parameters<typeof payDeflectSurcharge>[0],
-              playerId,
-              [options[0] as string],
-              ctx.cards as Parameters<typeof payDeflectSurcharge>[3],
-            );
+            if (isSpell) {
+              payDeflectSurcharge(
+                ctx.draft as Parameters<typeof payDeflectSurcharge>[0],
+                playerId,
+                [options[0] as string],
+                ctx.cards as Parameters<typeof payDeflectSurcharge>[3],
+              );
+            }
             // rule 359.2 — "when you choose me" fires as the choosing spell is finalized.
             ctx.fireTriggers?.({
               cardId: options[0] as string,
               chooserId: playerId,
-              sourceType: "spell",
+              sourceType: isSpell ? "spell" : "ability",
               type: "choose",
             } as Parameters<NonNullable<typeof ctx.fireTriggers>>[0]);
           }

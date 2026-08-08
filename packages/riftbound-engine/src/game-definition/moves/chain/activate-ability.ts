@@ -37,6 +37,7 @@ import {
   spellEffectHasLegalTargets,
 } from "../play/targeting";
 import { buildEffectContext, canAffordPower } from "./effect-context";
+import { raisePlayTimeModeChoice } from "../play/play-time-modes";
 
 type Defs = GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>;
 
@@ -2083,6 +2084,27 @@ export const activateAbility: Defs["activateAbility"] = {
         );
       }
     }
+    // rule 377 / 355.3 / 402.2 (ogn-157-298 Udyr) — an activated ability follows
+    // the play process: its mode AND that mode's target are chosen during
+    // finalization, before anyone gets priority, and ride on the chain item.
+    if (!draft.pendingChoice) {
+      const item = [...(draft.interaction?.chain?.items ?? [])]
+        .reverse()
+        .find((it) => it?.cardId === cardId && it?.type === "ability" && it?.triggered !== true);
+      if (item?.id !== undefined) {
+        raisePlayTimeModeChoice(
+          draft,
+          item.id as string,
+          item.effect,
+          playerId as string,
+          cardId as string,
+          buildEffectContext(draft, playerId, cardId, context) as unknown as Parameters<
+            typeof raisePlayTimeModeChoice
+          >[5],
+        );
+      }
+    }
+
     // rule 824.1.d: a Dependent ability becomes inactive "as soon as" its
     // condition stops holding — paying an XP/buff/exhaust cost can flip one off
     // while the ability is still on the chain, so re-evaluate statics now
