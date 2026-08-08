@@ -21,6 +21,7 @@ import type { DamageAssignmentPlan } from "../../combat";
 import { continueKillBatch, recordDieBatchAnswer } from "../../abilities/die-replacement-batch";
 import { executeEffect } from "../../abilities/effect-executor";
 import type { EffectContext, ExecutableEffect } from "../../abilities/effect-executor";
+import { locationKeyOf } from "../../abilities/effects/choose-per-location";
 import { markContestedOnArrival } from "../../abilities/effects/move";
 import { castSpellFromTrash } from "../../abilities/effects/play";
 import { contestBattlefieldOnArrival } from "./movement/contest-arrival";
@@ -963,6 +964,15 @@ function resumePending(
           boundTargets: picked,
         });
       }
+      // rule 355.13 (ogn-153-298) — the suspended remainder of the resolving
+      // sequence runs after the pick, whether or not anything was picked.
+      const rest = (choice as { then?: unknown }).then;
+      if (rest !== undefined && !draft.pendingChoice) {
+        executeEffect(
+          rest as ExecutableEffect,
+          buildEffectContext(draft, resume.playerId, resume.sourceCardId, context),
+        );
+      }
       if (!draft.pendingChoice) {
         postChoiceCleanup(draft, context);
       }
@@ -1364,6 +1374,26 @@ export const pendingChoiceMoves: Partial<
         // keeps the choices the item's previous controller made.
         if ((choice.anyNumber || choice.optional) && context.params.accept === false) {
           return true;
+        }
+        // rule 106 (unl-118-219): "up to one at EACH location" — a pick whose
+        // location is already spoken for is illegal, not a silently-dropped
+        // answer that still burns the pick budget.
+        if ((choice as { onePerLocation?: boolean }).onePerLocation === true) {
+          const acc = context as unknown as Parameters<typeof locationKeyOf>[1];
+          const taken = new Set((choice.picked ?? []).map((id) => locationKeyOf(id, acc)));
+          const answered = (context.params.pickedCardIds as string[] | undefined) ?? [
+            context.params.pickedCardId as string,
+          ];
+          for (const id of answered) {
+            if (typeof id !== "string") {
+              continue;
+            }
+            const key = locationKeyOf(id, acc);
+            if (taken.has(key)) {
+              return false;
+            }
+            taken.add(key);
+          }
         }
         // rule 355.13 (ogn-141-298): "up to N" / "any number of" targets may
         // be answered with several distinct picks at once, capped at N.
@@ -2414,9 +2444,16 @@ export const pendingChoiceMoves: Partial<
                   context.cards.getCardMeta(m) as Partial<RiftboundCardMeta> | undefined,
                 ),
             };
+            // rule 106 (unl-118-219): "up to one at each location" — a location
+            // already named is exhausted, so its other candidates drop out.
+            const acc = context as unknown as Parameters<typeof locationKeyOf>[1];
+            const takenLocations = (choice as { onePerLocation?: boolean }).onePerLocation
+              ? new Set(pickedSoFar.map((id) => locationKeyOf(id, acc)))
+              : undefined;
             const remainingOptions = choice.options.filter(
               (id) =>
                 !newPicks.includes(id) &&
+                !takenLocations?.has(locationKeyOf(id, acc)) &&
                 isLegalMultiTargetSet(tgt, [...pickedSoFar, id], legalityCtx),
             );
             if (remainingOptions.length > 0) {
@@ -2657,9 +2694,16 @@ export const pendingChoiceMoves: Partial<
         // open battlefield" is ONE move of a group: every other unit in the
         // group travels to the destination its controller just picked.
         const movedGroup: string[] = [choice.cardId as string];
+        // rule 446.1 — each member of the group is moved, so each one's own
+        // "When I move" trigger is owed a `move` event keyed to ITS from-zone.
+        const movedFrom: { cardId: string; from: string }[] = [
+          { cardId: choice.cardId as string, from: fromZone },
+        ];
         for (const extraId of ((choice as { alsoMoveCardIds?: readonly string[] })
           .alsoMoveCardIds ?? []) as readonly string[]) {
-          if (context.zones.getCardZone?.(extraId as CoreCardId) === targetZoneId) {
+          const extraFrom =
+            (context.zones.getCardZone?.(extraId as CoreCardId) as string | undefined) ?? "";
+          if (extraFrom === targetZoneId) {
             continue;
           }
           context.zones.moveCard({
@@ -2667,6 +2711,7 @@ export const pendingChoiceMoves: Partial<
             targetZoneId: targetZoneId as CoreZoneId,
           });
           movedGroup.push(extraId);
+          movedFrom.push({ cardId: extraId, from: extraFrom });
         }
         draft.pendingChoice = undefined;
         // rule-id: ogs-015-024 (rule 439.2.a/.b.1) — a created token is placed,
@@ -2682,27 +2727,30 @@ export const pendingChoiceMoves: Partial<
         // move: emit the `move` event (owner / movedBy) so "When I move" /
         // "When you move an enemy unit" triggers fire. Guarded so unit-test
         // stubs that omit the full context bags don't crash.
-        if (
-          context.cards &&
-          typeof context.zones.getCardsInZone === "function" &&
-          (fromZone === "base" || fromZone.startsWith("battlefield-")) &&
-          fromZone !== targetZoneId
-        ) {
-          const owner =
-            (context.cards as { getCardController?: (id: CoreCardId) => string | undefined })
-              .getCardController?.(choice.cardId as CoreCardId) ??
-            (context.cards.getCardOwner(choice.cardId as CoreCardId) as string | undefined);
-          fireTriggers(
-            {
-              cardId: choice.cardId,
-              from: fromZone,
-              movedBy: choice.playerId,
-              owner,
-              to: targetZoneId,
-              type: "move",
-            },
-            { cards: context.cards, counters: context.counters, draft, zones: context.zones },
-          );
+        if (context.cards && typeof context.zones.getCardsInZone === "function") {
+          for (const moved of movedFrom) {
+            if (
+              !(moved.from === "base" || moved.from.startsWith("battlefield-")) ||
+              moved.from === targetZoneId
+            ) {
+              continue;
+            }
+            const owner =
+              (context.cards as { getCardController?: (id: CoreCardId) => string | undefined })
+                .getCardController?.(moved.cardId as CoreCardId) ??
+              (context.cards.getCardOwner(moved.cardId as CoreCardId) as string | undefined);
+            fireTriggers(
+              {
+                cardId: moved.cardId,
+                from: moved.from,
+                movedBy: choice.playerId,
+                owner,
+                to: targetZoneId,
+                type: "move",
+              },
+              { cards: context.cards, counters: context.counters, draft, zones: context.zones },
+            );
+          }
         }
         // rule-id: ogn-173-298 — Rule 450 / 323.9 / 460: a unit arriving at a
         // battlefield its controller doesn't control contests it AND stages the
@@ -2801,6 +2849,7 @@ export const pendingChoiceMoves: Partial<
               context.zones as unknown as Parameters<typeof offerWeaponmasterEquip>[1],
               choice.playerId as string,
               cardId,
+              context.cards as unknown as Parameters<typeof offerWeaponmasterEquip>[4],
             );
           }
         }

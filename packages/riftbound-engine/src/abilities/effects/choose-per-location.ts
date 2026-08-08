@@ -5,22 +5,41 @@
 // separate location, so the chooser may name at most one candidate per zone and
 // zero everywhere is a legal answer.
 import type { CardId as CoreCardId } from "@tcg/core";
+import { getDeflectSurcharge } from "../../game-definition/moves/play/cost";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import type { TargetDescriptor } from "../target-resolver";
 import { resolveTarget } from "../target-resolver";
 import type { EffectHelpers } from "./_helpers";
 
-/** rule 420.1 — each player's base is its own location, keyed by controller. */
-function locationKey(cardId: string, ctx: EffectContext): string {
-  const zone = ctx.zones.getCardZone?.(cardId as CoreCardId) ?? "";
+/** Minimal accessors needed to key a card by its location (rule 106). */
+export interface LocationKeyAccessors {
+  cards: {
+    getCardController?: (id: CoreCardId) => string | undefined;
+    getCardOwner?: (id: CoreCardId) => string | undefined;
+  };
+  zones: { getCardZone?: (id: CoreCardId) => string | undefined };
+}
+
+/**
+ * rule 106 / rule 420.1 — each battlefield is a location and each player's base
+ * is its own location, so bases are keyed by controller.
+ * Shared with the prompt layer so "up to one at each location" can be enforced
+ * while picking, not only when the picks are applied.
+ */
+export function locationKeyOf(cardId: string, acc: LocationKeyAccessors): string {
+  const zone = acc.zones.getCardZone?.(cardId as CoreCardId) ?? "";
   if (zone === "base") {
     const controller =
-      ctx.cards.getCardController?.(cardId as CoreCardId) ??
-      ctx.cards.getCardOwner?.(cardId as CoreCardId) ??
+      acc.cards.getCardController?.(cardId as CoreCardId) ??
+      acc.cards.getCardOwner?.(cardId as CoreCardId) ??
       "";
     return `base:${controller}`;
   }
   return String(zone);
+}
+
+function locationKey(cardId: string, ctx: EffectContext): string {
+  return locationKeyOf(cardId, ctx as unknown as LocationKeyAccessors);
 }
 
 export function handle_choosePerLocation(
@@ -71,16 +90,45 @@ export function handle_choosePerLocation(
   if (options.length === 0) {
     return;
   }
+  // rule 809.1.c / 809.1.c.1 (356.2.a.2) — [Deflect] taxes ABILITIES as well as
+  // spells, and the surcharge is incurred when the target is CHOSEN. This
+  // prompt is built from `candidates` (not `target`), so it never passes
+  // through the generic gating in chain/resolve.ts: a candidate whose surcharge
+  // the chooser cannot cover is dropped here, and the prompt carries
+  // `deflectTax` so pending-choice charges it at pick time.
+  const surchargeOf = (id: string): number =>
+    getDeflectSurcharge(
+      ctx.draft,
+      ctx.playerId,
+      [id],
+      ctx.cards as Parameters<typeof getDeflectSurcharge>[3],
+      ctx.sourceCardId,
+    );
+  const deflectTax = options.some((id) => surchargeOf(id) > 0);
+  let pool = options;
+  if (deflectTax) {
+    const budget = Object.values(
+      (ctx.draft.runePools?.[ctx.playerId]?.power ?? {}) as Partial<Record<string, number>>,
+    ).reduce((a: number, b) => a + (b ?? 0), 0);
+    pool = options.filter((id) => surchargeOf(id) <= budget);
+    if (pool.length === 0) {
+      return;
+    }
+  }
   // rule 355.13: "up to one at EACH location" — the cap is the number of
   // distinct locations that hold a candidate, and declining is always legal.
-  const locations = new Set(options.map((id) => locationKey(id, ctx)));
+  const locations = new Set(pool.map((id) => locationKey(id, ctx)));
   ctx.draft.pendingChoice = {
     anyNumber: true,
+    ...(deflectTax ? { deflectTax: true as const } : {}),
     effect: effect as never,
     maxPicks: locations.size,
-    options: [...options],
+    // rule 106: the prompt layer must drop options sharing a location with an
+    // already-named pick — otherwise a second pick here eats the pick budget.
+    onePerLocation: true,
+    options: [...pool],
     playerId: ctx.playerId,
-    remaining: options.length,
+    remaining: pool.length,
     sourceCardId: ctx.sourceCardId,
     type: "choose-target",
   } as never;
