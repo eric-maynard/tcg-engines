@@ -82,7 +82,14 @@ export function casterChosenTarget(effect: unknown): TargetDescriptor | undefine
   if (typeof target !== "object" || target === null) {
     return undefined;
   }
-  const t = target as { type?: unknown; quantity?: unknown };
+  const t = target as { type?: unknown; quantity?: unknown; controller?: unknown };
+  // rule 355.10.f (unl-170-219) — "the defender must kill one of their units
+  // here": an instruction another player MUST perform is not a target
+  // (355.10.e). Nothing is chosen while the item is finalized; that player
+  // picks among their own cards as the effect resolves (`effects/kill.ts`).
+  if (e.type === "kill" && e.player === "opponent" && t.controller === "enemy") {
+    return undefined;
+  }
   if (typeof t.type !== "string") {
     return undefined;
   }

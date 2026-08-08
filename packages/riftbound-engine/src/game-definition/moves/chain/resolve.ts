@@ -761,7 +761,17 @@ export function executeResolvedItem(
     // rule 422.1.a (unl-174-219) — "each opponent must kill one of THEIR
     // units" is a per-player instruction: every chooser is asked by the kill
     // handler about their OWN units, never the source's controller here.
-    !(effect.type === "kill" && (effect as { player?: unknown }).player === "each")
+    !(effect.type === "kill" && (effect as { player?: unknown }).player === "each") &&
+    // rule 355.10.f (unl-170-219) — "the defender must kill one of their units
+    // here": an instruction another player MUST perform is not a target
+    // (355.10.e), so nothing is chosen here; that player picks among their own
+    // units inside the kill handler as the instruction resolves.
+    !(
+      effect.type === "kill" &&
+      (effect as { player?: unknown }).player === "opponent" &&
+      typeof target === "object" &&
+      (target as { controller?: unknown }).controller === "enemy"
+    )
   ) {
     let options = resolveTarget(
       { ...target, quantity: "all" },

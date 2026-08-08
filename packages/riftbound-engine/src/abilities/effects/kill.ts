@@ -179,11 +179,15 @@ function handleEachOtherChoosesKill(
  * of them chooses among the units THEY control. The descriptor is written
  * relative to the source ("enemy" units) and is re-read as "friendly" from
  * each chooser's seat.
+ *
+ * rule 355.10.f (unl-170-219 "the defender must kill one of their units here")
+ * is the singular form of the same instruction — not a target, so the opponent
+ * chooses at resolution rather than the source's controller at finalization.
  */
 function isEachOpponentsOwn(effect: ExecutableEffect): boolean {
   const tgt = effect.target as { controller?: string } | string | undefined;
   return (
-    effect.player === "each" &&
+    (effect.player === "each" || effect.player === "opponent") &&
     typeof tgt === "object" &&
     tgt !== null &&
     tgt.controller === "enemy"

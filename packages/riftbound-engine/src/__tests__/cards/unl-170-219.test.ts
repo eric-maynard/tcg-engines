@@ -144,7 +144,7 @@ describe("Atakhan (unl-170-219)", () => {
     expect(game.p1.points()).toBe(1);
   });
 
-  test.failing("BUG: with two enemy units here the DEFENDER chooses which of their units dies (355.10.f 'must' — not a target); the prompt goes to the attacker instead", async () => {
+  test("with two enemy units here the DEFENDER chooses which of their units dies (355.10.f 'must' — not a target)", async () => {
     // Expected: after both pass priority, P2 is asked to pick among a / b (never their base unit).
     // Actual: P1 receives a "Choose a target" prompt.
     const game = await scenario()
@@ -174,10 +174,12 @@ describe("Atakhan (unl-170-219)", () => {
       .unit(P2, "bf1", { might: 3, name: "B" }, "b")
       .build();
     await game.p1.move("ata", "bf1");
-    expect(game.decision()?.kind).toBe("pick"); // rule 402 (finalization): the pick comes before priority
+    // rule 355.10.f: the kill is not a target — nothing is chosen while the
+    // item is finalized; the defender picks as the instruction RESOLVES.
+    await game.acting().passPriority();
+    await game.acting().passPriority();
+    expect(game.decision()?.kind).toBe("pick");
     await game.acting().pick("b");
-    await game.acting().passPriority();
-    await game.acting().passPriority();
     expect(game.zoneOf("b")).toBe("trash");
     expect(game.zoneOf("a")).toBe("battlefield-bf1"); // only ONE unit is killed by the trigger
     await game.settle();
