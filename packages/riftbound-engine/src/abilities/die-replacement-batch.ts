@@ -612,6 +612,16 @@ function processBatch(ctx: Ctx, state: BatchState, opts: DieBatchOptions): DieBa
         if (asked.includes(c.id) || !canPayCost(draft, c.optional.payer, c.optional.cost)) {
           continue;
         }
+        // rule 371.2 (rule-id: ogn-269-298 The Boss) — "pay [rainbow], exhaust
+        // ME, and …": an already-exhausted source cannot pay, so nobody is asked.
+        if ((c.optional.cost as { exhaust?: unknown }).exhaust === true) {
+          const meta = ctx.cards.getCardMeta?.(c.sourceCardId as CoreCardId) as
+            | { exhausted?: boolean; __flags?: { exhausted?: boolean } }
+            | undefined;
+          if (meta?.exhausted === true || meta?.__flags?.exhausted === true) {
+            continue;
+          }
+        }
         const repl = c.match?.replacement as ExecutableEffect | "prevent" | undefined;
         if (!repl || repl === "prevent" || typeof repl !== "object") {
           continue;

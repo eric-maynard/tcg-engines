@@ -80,4 +80,18 @@ describe("Sett, Brawler (ogn-164-298)", () => {
     expect(t.ok).toBe(false);
     expect(game.state("sett").might).toBe(4);
   });
+
+  // DESIGN (DESIGN.md §Paying costs): "Spend my buff:" is the whole activation cost — enumerated with an
+  // EMPTY pool and charging no energy/power.
+  test("DESIGN (buff-spend activation enumerated with an empty pool): a buffed Sett with 0 energy / 0 power is offered 'Spend my buff'; activating charges nothing but the buff", async () => {
+    const game = await scenario().unit(P1, "base", CARD, "sett", { buffed: true }).build();
+    expect(game.p1.resources()).toEqual({ energy: 0, power: {} });
+    expect(game.p1.can("activate", "sett")).toBe(true);
+    expect(game.p1.option("activate", "sett")?.variants).toHaveLength(1);
+    await game.p1.activate("sett", 1);
+    expect(game.p1.resources()).toEqual({ energy: 0, power: {} });
+    expect(game.state("sett").isBuffed).toBe(false);
+    const unbuffed = await scenario().unit(P1, "base", CARD, "sett").build();
+    expect(unbuffed.p1.can("activate", "sett")).toBe(false);
+  });
 });

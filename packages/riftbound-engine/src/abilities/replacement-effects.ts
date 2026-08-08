@@ -126,6 +126,13 @@ function collectBoardCards(ctx: ReplacementContext): BoardCardEntry[] {
     for (const cardId of baseCards) {
       boardCards.push({ id: cardId as string, owner: playerId, zone: "base" });
     }
+    // rule 107.4.c (rule-id: ogn-269-298 The Boss) — the Champion Legend is a
+    // Game Object in the (public) Legend Zone, so its passive "If a buffed unit
+    // you control would die, you may pay … instead" is a live board replacement
+    // controlled by the legend's owner.
+    for (const cardId of ctx.zones.getCardsInZone("legendZone" as CoreZoneId, playerId as CorePlayerId)) {
+      boardCards.push({ id: cardId as string, owner: playerId, zone: "legendZone" });
+    }
   }
   for (const bfId of Object.keys(ctx.draft.battlefields)) {
     const zone = `battlefield-${bfId}`;
@@ -192,6 +199,7 @@ function replacementApplies(
       attachedToSource?: boolean;
       controller?: string;
       excludeSelf?: boolean;
+      filter?: string;
       location?: string;
       self?: boolean;
       type?: string;
@@ -199,6 +207,14 @@ function replacementApplies(
     condition?: { type?: string; amount?: number };
     method?: string;
   };
+  // rule 369.2 / 702 (rule-id: ogn-269-298 The Boss) — "if a BUFFED unit you
+  // control would die": the shield only sees deaths of units carrying a buff
+  // at the moment they would die.
+  if (target?.filter === "buffed") {
+    if (event.cardId === undefined || ctx.cards.getCardMeta(event.cardId as CoreCardId)?.buffed !== true) {
+      return false;
+    }
+  }
   // rule 437.2 (rule-id: ven-025-166) — "damage that ENEMY spells and abilities
   // would deal": scoped by the controller of the damage SOURCE. Fail closed
   // when the caller could not name one (combat damage is dealt by units, not

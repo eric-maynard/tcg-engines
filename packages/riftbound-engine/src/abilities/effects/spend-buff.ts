@@ -15,7 +15,10 @@ export function findAllSpendableBuffs(effect: ExecutableEffect, ctx: EffectConte
   const descriptor: TargetDescriptor =
     (effect.target as TargetDescriptor | undefined) ??
     ({ controller: "friendly", filter: "buffed", quantity: "all", type: "unit" } as TargetDescriptor);
-  // resolveTarget excludes the source; a unit may spend its own buff.
+  // resolveTarget excludes the source; a unit may spend its own buff. A
+  // descriptor naming the affected object itself ("spend ITS buff" — rule-id:
+  // ogn-269-298, `trigger-source`) never falls back to the source card.
+  const namesSubject = (descriptor as { type?: string }).type === "trigger-source";
   const candidates = [
     ...resolveTarget(descriptor, {
       cards: ctx.cards,
@@ -23,9 +26,10 @@ export function findAllSpendableBuffs(effect: ExecutableEffect, ctx: EffectConte
       playerId: ctx.playerId,
       sourceCardId: ctx.sourceCardId,
       sourceZone: ctx.sourceZone,
+      ...(ctx.triggerSourceId !== undefined ? { triggerSourceId: ctx.triggerSourceId } : {}),
       zones: ctx.zones,
     }),
-    ctx.sourceCardId,
+    ...(namesSubject ? [] : [ctx.sourceCardId]),
   ].filter((id) => {
     const meta = ctx.cards.getCardMeta?.(id as CoreCardId) as
       | Partial<RiftboundCardMeta>

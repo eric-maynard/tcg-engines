@@ -87,4 +87,21 @@ describe("Wallop (ogn-146-298)", () => {
     const game = await scenario().resources(P1, { energy: 1 }).unit(P1, "base", { might: 2 }, "u", EXHAUSTED).hand(P1, CARD, "wallop").build();
     expect(game.p1.can("cast", "wallop")).toBe(false);
   });
+
+  // DESIGN (DESIGN.md §Paying costs): manual pay is pool-only, but printed cost ALTERNATIVES are always
+  // enumerated — with an EMPTY pool and a buffed unit the only offered variants are the spend-a-buff ones.
+  test("DESIGN (cost alternative enumerated with an empty pool): at 0 energy every offered cast variant spends the buff (paidAdditionalCost=true) and casting one charges no energy", async () => {
+    const game = await board(0).build();
+    const opt = game.p1.option("cast", "wallop");
+    expect(opt).toBeDefined();
+    expect(opt!.variants.length).toBeGreaterThan(0);
+    expect(opt!.variants.every((v) => v.params.paidAdditionalCost === true)).toBe(true);
+    expect(opt!.fields.find((f) => f.arg === "payOptional")?.options).toEqual([true]);
+    await game.p1.cast("wallop", { payOptional: true, targets: "foe" });
+    expect(game.p1.resources()).toEqual({ energy: 0, power: {} });
+    expect(game.state("buffed").isBuffed).toBe(false);
+    // Without any buffed unit the alternative disappears and nothing is offered at 0 energy.
+    const none = await scenario().unit(P1, "base", { might: 2 }, "u", EXHAUSTED).hand(P1, CARD, "wallop").build();
+    expect(none.p1.option("cast", "wallop")).toBeUndefined();
+  });
 });

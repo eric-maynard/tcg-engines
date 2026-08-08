@@ -13,27 +13,18 @@
  * translate to/from a selection via `selectionFromLegacyParams` /
  * `legacyParamsFromSelection`.
  *
- * ─── TODO(G4 · Add sub-step, rules 357.1.a / 429.3 / 444.2.c) ─────────────
- * NOT implemented: affordability of a PLAY (and of a taxed move) is still
- * pool-only — ready runes / Gold / Seals are not credited, so
- * `core-rules/paying-costs-energy-power` "357.1.a — a spell is not offered as
- * playable when the pool is empty …" and "204.4.b.1/429.3 — a taxed move …"
- * stay `test.failing` (queue d61ab776d017). Design when picked up:
- *   1. `addableResources(state, zones, counters, payer)` = ready runes (+1
- *      Energy each), recyclable runes (+1 Power of their Domain), Gold, Seals;
- *      pass it as the `potential` of `canPayResourceCost` (extend the number to
- *      `{energy, power}`) from every play condition/enumerator (the
- *      `getPotentialRuneEnergy` plumbing already reaches all of them).
- *   2. Reducers gate FIRST (before any zone change / object payment): pool
- *      short but pool+addable enough ⇒ `pendingChoice = pick-many{semantics:
- *      "add-ability", min:0}` listing the legal Add activations, `resume:
- *      {kind:"replay-move", moveId, params}`; on answer apply the picked Adds
- *      and re-dispatch the move (cancel = no-op, rule 358.5).
- *   3. Harness: `decision.ts` maps it to a `pick`; the `costPaid` invariant
- *      and `game-tracer` costViolation must measure across the resume; update
- *      `.claude/skills/riftbound-rules/DESIGN.md` ("pool.energy >= cost").
- * Mid-RESOLUTION pays ("you may pay [1]", counter ransoms) already allow rune
- * taps while their prompt is open, so 444.2.c works today.
+ * ─── "Add during payment" sub-step (rules 357.1.a / 429.3 / 204.4.b.1) ────
+ * Intentionally not implemented (DESIGN.md §Paying costs): paying is MANUAL.
+ * Affordability of a PLAY, an activation and a taxed move is pool-only —
+ * ready runes / Gold / Seals are never credited or auto-exhausted; the player
+ * taps or recycles them first (the app's right-click Recycle auto-taps for +1
+ * Energy as the single convenience). What IS supported end-to-end: every
+ * printed cost ALTERNATIVE — "spend a buff … if you do, ignore this spell's
+ * [energy] cost", "Spend my buff:" activations, pay-[rainbow]-or-spend-buff
+ * replacements — is enumerated from the model's `alternatives` even when the
+ * pool is empty, and choosing it charges no Energy. Mid-RESOLUTION pays
+ * ("you may pay [1]", counter ransoms) keep their prompt open while runes are
+ * tapped, so 444.2.c works.
  * ───────────────────────────────────────────────────────────────────────────
  */
 

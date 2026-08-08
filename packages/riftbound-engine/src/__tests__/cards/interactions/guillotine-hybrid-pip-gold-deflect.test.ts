@@ -12,8 +12,9 @@
  *   (iii) {4, calm:1}  + ready Gold     → legal: Gold's [A]→the hybrid [C] pip, calm→Deflect.
  *   (iv)  {4, calm:2}  no Gold, Poro    → illegal: calm pays Deflect but cannot pay [fury|order].
  *   (v)   {4, calm:2}  no Gold, vanilla → ALSO illegal (discriminates a "generic rainbow" pip engine).
- * Can Gold be cracked mid-payment (yes — 357.1.a / 429.3; needs a READY Gold since its cost includes
- * [Exhaust])? Does Legion change the cost (no — only the effect, 812.1.c)?
+ * Can Gold be cracked mid-payment? By the rules yes (357.1.a / 429.3), but by DESIGN (DESIGN.md §Paying
+ * costs) the engine pays manually: Gold must be cracked BEFORE the play is initiated (needs a READY Gold since
+ * its cost includes [Exhaust]). Does Legion change the cost (no — only the effect, 812.1.c)?
  *
  * Rules: 135.2.e.6.c ([C] on a two-domain card = power of either of ITS domains — Defiant Dance
  * example), 135.2.e.5.a/b ([A] as a cost = any domain; [A] ADDED to the pool pays a pip of any domain,
@@ -123,14 +124,23 @@ describe("Noxian Guillotine × Pouty Poro × Gold — hybrid [C] pip vs Deflect'
     expect(game.locationOf("poro")).toBe("bf1"); // no Legion: delayed kill only
   });
 
-  test.failing("BUG: (ii) {4, fury:1} + READY Gold still on the board: the Poro must already be a legal target because Gold's Reaction [Add] may be activated inside the Pay step (357.1.a, 429.3)", async () => {
-    // Expected: affordability credits addable resources (a ready Gold = +1 power of any domain), so the
-    // Poro is offered and the cast can be initiated, cracking Gold when payment is asked for.
-    // Actual: play affordability is pool-only — with the [A] not yet in the pool the Poro is not offered.
+  // DESIGN (DESIGN.md §Paying costs): manual pay — deliberate deviation from 357.1.a. Affordability (and so the
+  // set of legal Deflect targets) is POOL-ONLY: a READY Gold that has not been cracked yet is not credited. The
+  // player cracks Gold first (previous test), then the Poro is offered.
+  test("DESIGN (manual pay, deviates from 357.1.a/429.3): (ii) {4, fury:1} + READY Gold still on the board — the Poro is NOT yet offered and a cast at it is refused with nothing spent; cracking Gold first makes it legal", async () => {
     const game = await board({ gold: "ready", power: { fury: 1 } }).build();
     expect(game.state("token-gold").isReady).toBe(true);
+    expect(targetsOffered(game, "ng")).not.toContain("poro");
+    expect(targetsOffered(game, "ng")).toContain("vanilla");
+    expect((await game.p1.try((p) => p.cast("ng", { targets: "poro" }))).ok).toBe(false);
+    expect(game.zoneOf("ng")).toBe("hand");
+    expect(game.has("token-gold")).toBe(true); // Gold was not auto-cracked
+    expect(game.p1.resources()).toEqual({ energy: 4, power: { fury: 1 } });
+    // Manual path: crack Gold → [A] in the pool → Poro offered.
+    await game.p1.activate("token-gold", 0, { sacrifice: "token-gold" });
     expect(targetsOffered(game, "ng")).toContain("poro");
     expect((await game.p1.try((p) => p.cast("ng", { targets: "poro" }))).ok).toBe(true);
+    expect(game.p1.resources()).toEqual({ energy: 0, power: { fury: 0, rainbow: 0 } });
   });
 
   test("(ii′) an EXHAUSTED Gold cannot be cracked at all — its cost includes [Exhaust] — so it can never fund Deflect and the Poro stays illegal", async () => {

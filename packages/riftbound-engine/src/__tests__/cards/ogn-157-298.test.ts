@@ -132,4 +132,21 @@ describe("Udyr, Wildman (ogn-157-298)", () => {
     expect(labels.some((l) => l.includes("Ganking"))).toBe(false);
     expect(labels).toHaveLength(3);
   });
+
+  // DESIGN (DESIGN.md §Paying costs): "Spend my buff:" is the whole activation cost — enumerated with an
+  // EMPTY pool and charging no energy/power.
+  test("DESIGN (buff-spend activation enumerated with an empty pool): a buffed Udyr with 0 energy / 0 power is offered the activation; using it charges nothing but the buff", async () => {
+    const game = await scenario()
+      .battlefield("bf1", { controller: P2 })
+      .unit(P2, "bf1", { might: 4 }, "foe")
+      .unit(P1, "base", CARD, "udyr", { buffed: true, exhausted: true })
+      .build();
+    expect(game.p1.resources()).toEqual({ energy: 0, power: {} });
+    expect(game.p1.can("activate", "udyr")).toBe(true);
+    await game.p1.activate("udyr");
+    expect(game.state("udyr").isBuffed).toBe(false);
+    expect(game.p1.resources()).toEqual({ energy: 0, power: {} });
+    await game.settle();
+    expect(game.decision()).toMatchObject({ kind: "pick", seat: P1 }); // the mode menu, paid for by the buff alone
+  });
 });

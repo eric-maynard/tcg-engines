@@ -101,4 +101,25 @@ describe("Kraken Hunter (ogn-150-298)", () => {
     expect(game.state("b").isBuffed).toBe(false);
     expect(game.p1.resources()).toEqual({ energy: 0, power: {} });
   });
+
+  // DESIGN (DESIGN.md §Paying costs): the spend-buffs alternative is enumerated from the cost model even
+  // when the POWER pool is empty — the offered variant names the buffs to spend and charges no [body].
+  test("DESIGN (cost alternative enumerated with an empty power pool): with 3 energy, no body power and two buffed allies the ONLY offered play variant spends both buffs; playing it charges 3 energy and no power", async () => {
+    const game = await scenario()
+      .resources(P1, { energy: 3 })
+      .unit(P1, "base", { might: 2 }, "a", { buffed: true })
+      .unit(P1, "base", { might: 2 }, "b", { buffed: true })
+      .hand(P1, CARD, "kh")
+      .build();
+    const opt = game.p1.option("play", "kh");
+    expect(opt).toBeDefined();
+    expect(opt!.variants).toHaveLength(1);
+    expect(opt!.variants[0]?.params).toMatchObject({ paidAdditionalCost: true, spentBuffIds: ["a", "b"] });
+    await game.p1.play("kh");
+    await game.settle({ policy: "first" });
+    expect(game.p1.resources()).toEqual({ energy: 0, power: {} });
+    // One buff only covers one [body]: with a single buffed ally and no body power nothing is offered.
+    const one = await scenario().resources(P1, { energy: 3 }).unit(P1, "base", { might: 2 }, "a", { buffed: true }).hand(P1, CARD, "kh").build();
+    expect(one.p1.option("play", "kh")).toBeUndefined();
+  });
 });

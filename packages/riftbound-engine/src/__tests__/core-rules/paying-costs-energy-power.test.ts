@@ -7,7 +7,8 @@
  *   356          Determine Total Cost: 356.1.b ignore cost = base 0 (356.1.b.3 additional costs still owed);
  *                356.2 additional costs; 356.3 increases BEFORE 356.4 discounts; 356.4.e a discount's minimum
  *                binds only that discount; 356.4.f discounts may zero an additional cost; 356.6 floor at 0
- *   357          Pay: 357.1 combined Energy + Power; 357.1.a Reaction Add abilities usable inside the Pay step
+ *   357          Pay: 357.1 combined Energy + Power; 357.1.a Reaction Add abilities usable inside the Pay step —
+ *                DESIGN (DESIGN.md §Paying costs): NOT implemented; paying is manual (tap/recycle first, then play)
  *   358.2/358.5  legality check "all costs were paid" — otherwise everything is undone (444.2.a)
  *   359.2        permanents leave the chain immediately (359.2.c units enter exhausted); 359.3.c spells linger
  *   163.1/163.2  Energy pays Energy, Power of the matching Domain pays a Domain pip; 163.2.b Universal Power
@@ -298,14 +299,51 @@ describe("Add reactions during the Pay step (354.1, 357.1.a, 429.3, 444.2.c, 359
     expect(game.chain()).toHaveLength(0);
   });
 
-  // Expected (357.1.a / 429.3): with an empty pool but two READY runes the play is legal — the card goes to the
-  // chain first (354) and the runes' [Reaction] Add abilities may be activated inside step 4 (Pay). Actual: the
-  // engine only offers a play when the pool ALREADY holds the full cost (runes must be pre-floated).
-  test.failing("BUG: 357.1.a — a spell is not offered as playable when the pool is empty even though ready runes could be tapped during the Pay step", async () => {
+  // DESIGN (DESIGN.md §Paying costs): manual pay — deliberate deviation from 357.1.a. The engine has no "Add
+  // during payment" sub-step: a play is offered only when the CURRENT pool covers its total cost. Ready runes are
+  // never auto-counted or auto-exhausted; the player taps (or right-click recycles) them first, then plays.
+  test("DESIGN (manual pay, deviates from 357.1.a): with an empty pool a 2-cost spell is NOT offered even though two ready runes could cover it; after tapping both it is offered and paid exactly; the play attempt with an empty pool is refused and fully undone", async () => {
     const game = await scenario().runes(P1, "fury", 2).hand(P1, fillerSpell(2), "S").fillDecks({ main: 10, runes: 0 }).build();
     expect(game.p1.runes({ ready: true })).toHaveLength(2);
     expect(game.p1.energy()).toBe(0);
+    // Not offered: pool-only affordability.
+    expect(game.p1.can("cast", "S")).toBe(false);
+    const refused = await game.p1.try((p) => p.cast("S"));
+    expect(refused.ok).toBe(false);
+    expect(game.zoneOf("S")).toBe("hand");
+    expect(game.p1.runes({ ready: true })).toHaveLength(2); // nothing was auto-tapped
+    expect(game.chain()).toHaveLength(0);
+    // Tapping one rune is still short of [2] → still not offered.
+    await game.p1.tapRune();
+    expect(game.p1.energy()).toBe(1);
+    expect(game.p1.can("cast", "S")).toBe(false);
+    // Tapping the second makes the pool cover the cost → offered, and paid exactly.
+    await game.p1.tapRune();
+    expect(game.p1.energy()).toBe(2);
     expect(game.p1.can("cast", "S")).toBe(true);
+    await game.p1.cast("S");
+    expect(game.p1.energy()).toBe(0);
+    expect(game.chain()).toHaveLength(1);
+    expect(game.violations()).toEqual([]);
+  });
+
+  // DESIGN (DESIGN.md §Paying costs): manual pay — deliberate deviation from 357.1.a. The one convenience is the
+  // Recycle path: recycling a READY rune yields its Power (the app's right-click auto-taps it for +1 Energy first);
+  // that resource lands in the pool BEFORE any play is initiated, so it is ordinary pool affordability.
+  test("DESIGN (manual pay): the recycle path is unaffected — recycling a ready rune floats its Power into the pool up front, after which a [fury]-pip card is offered and paid from the pool", async () => {
+    const game = await scenario()
+      .rune(P1, "fury", { alias: "R" })
+      .hand(P1, fillerUnit(0, ["fury"]), "U")
+      .fillDecks({ main: 10, runes: 0 })
+      .build();
+    expect(game.p1.power("fury")).toBe(0);
+    expect(game.p1.can("play", "U")).toBe(false); // pip not in the pool yet → not offered
+    await game.p1.recycleRune("R");
+    expect(game.p1.power("fury")).toBe(1);
+    expect(game.p1.can("play", "U")).toBe(true);
+    await game.p1.play("U");
+    expect(game.p1.power("fury")).toBe(0);
+    expect(game.zoneOf("U")).toBe("base");
   });
 });
 
@@ -599,15 +637,26 @@ describe("Applied Cost on a Standard Move (204.4, 204.4.b, 204.4.c, 429.3)", () 
     expect(game.chain()).toHaveLength(0);
   });
 
-  // Expected (204.4.b.1 / 429.3, whose example IS this situation): with an empty pool but a ready rune the move
-  // is a legal action — the Add [Reaction] may be activated at the moment the applied cost is demanded, with no
-  // priority window. Actual: the engine only lists the move when the pool already covers the surcharge.
-  test.failing("BUG: 204.4.b.1/429.3 — a taxed move is not offered when the pool is empty even though a ready rune could pay the applied cost during the move", async () => {
+  // DESIGN (DESIGN.md §Paying costs): manual pay — deliberate deviation from 357.1.a (and its applied-cost twin
+  // 204.4.b.1 / 429.3, whose example IS this situation). The engine has no "Add during payment" sub-step, so a
+  // taxed move is only performable when the pool ALREADY holds the surcharge; a ready rune is never auto-recycled.
+  test("DESIGN (manual pay, deviates from 204.4.b.1/429.3): with an empty pool the taxed two-unit move is refused even though a ready rune could pay it; nothing is auto-tapped and the units stay put — recycling the rune first (case A′) is the supported path", async () => {
     const game = await build().rune(P1, "fury", { alias: "R" }).build();
     expect(game.state("R").isReady).toBe(true);
     expect(game.p1.energy()).toBe(0);
     const r = await game.p1.try((p) => p.move(["U", "W"], "bfB"));
-    expect(r.ok).toBe(true);
+    expect(r.ok).toBe(false);
+    expect(game.state("R").isReady).toBe(true); // the rune was not touched
+    expect(game.locationOf("U")).toBe("base");
+    expect(game.locationOf("W")).toBe("base");
+    expect(game.state("U").isReady).toBe(true);
+    // Manual path: recycle for the pip, then the same move is performed.
+    await game.p1.recycleRune("R");
+    expect(game.p1.power("fury")).toBe(1);
+    await game.p1.move(["U", "W"], "bfB");
+    expect(game.p1.power("fury")).toBe(0);
+    expect(game.locationOf("U")).toBe("bfB");
+    expect(game.locationOf("W")).toBe("bfB");
   });
 });
 

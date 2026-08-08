@@ -16,6 +16,27 @@ Product decisions the visual observer agents must check FOR (not just "is it bro
 ## Resource management
 - Playing a card requires `pool.energy >= cost` — ready runes are NOT auto-counted or auto-exhausted. The player must explicitly tap runes first.
 
+## Paying costs
+Paying is MANUAL — a deliberate deviation from rules 357.1.a / 429.3 / 204.4.b.1 (the "Add during payment"
+sub-step is intentionally not implemented; see `moves/play/cost-model.ts`).
+- The engine only OFFERS a play, an activation or a taxed move (Mageseeker-style applied cost) when the
+  CURRENT pool covers its total cost. Ready runes, an uncracked Gold, a Seal etc. are never credited and never
+  auto-exhausted — even when they could obviously cover the shortfall. The player taps / recycles / cracks first,
+  then plays. Consequence: the set of legal targets is pool-only too (a [Deflect] unit is not offered until the
+  extra [A] is actually in the pool).
+- The single convenience is the app's right-click Recycle: recycling an untapped rune auto-taps it for +1 Energy
+  first. That resource lands in the pool BEFORE any play starts, so it is ordinary pool affordability.
+- Pays demanded while an ability RESOLVES ("you may pay [1] to …", a counter's ransom) keep their prompt open;
+  the player may tap runes while it is open and then answer — still manual, nothing auto-tapped.
+- Exception class that MUST work (and does): printed cost ALTERNATIVES / replacements are always enumerated from
+  the cost model, even with an empty pool, and choosing one charges no Energy —
+  - "you may spend a buff as an additional cost. If you do, ignore this spell's cost" (Wallop ogn-146,
+    Call to Glory ogn-207): with 0 energy + a buffed unit the cast is offered (spend-buff variants only);
+  - "spend any number of buffs … reduce my cost by [C] for each" (Kraken Hunter ogn-150);
+  - "Spend my buff:" activations (Sett ogn-164, Udyr ogn-157) — the buff is the whole cost;
+  - The Boss (ogn-269) "you may pay [rainbow], exhaust me, and spend its buff … instead": offered when a buffed
+    friendly unit would die and the [rainbow] POWER is in the pool (Energy irrelevant); unpayable → never asked.
+
 ## Interactions
 - Hover on any card → floating enlarged card image ONLY (no name/type/rules-text panel)
 - No fly-animation on zone change — cards appear at destination immediately

@@ -89,4 +89,20 @@ describe("Call to Glory (ogn-207-298)", () => {
     expect(game.zoneOf("ally")).toBe("battlefield-bf1");
     expect(game.state("ally")).toMatchObject({ damage: 3, might: 5 });
   });
+
+  // DESIGN (DESIGN.md §Paying costs): manual pay is pool-only, but printed cost ALTERNATIVES are always
+  // enumerated — with an EMPTY pool and a buffed unit the only offered variants are the spend-a-buff ones.
+  test("DESIGN (cost alternative enumerated with an empty pool): at 0 energy the cast is offered only as spend-a-buff variants; with 3 energy both paying and spending are offered", async () => {
+    const empty = await board(0).build();
+    const opt = empty.p1.option("cast", "ctg");
+    expect(opt).toBeDefined();
+    expect(opt!.variants.every((v) => v.params.paidAdditionalCost === true)).toBe(true);
+    expect(opt!.fields.find((f) => f.arg === "payOptional")?.options).toEqual([true]);
+    const rich = await board(3).build();
+    const both = rich.p1.option("cast", "ctg")?.fields.find((f) => f.arg === "payOptional")?.options ?? [];
+    expect([...both].sort()).toEqual([false, true]);
+    await rich.p1.cast("ctg", { payOptional: true, targets: "ally" });
+    expect(rich.p1.energy()).toBe(3); // the alternative charges no energy even when energy is available
+    expect(rich.state("donor").isBuffed).toBe(false);
+  });
 });
