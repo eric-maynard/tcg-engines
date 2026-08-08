@@ -865,5 +865,12 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
     // rule 319.1 / 472 — the Cleanup that follows combat resolution: statics,
     // state-based checks, and the victory check for a conquer point.
     cleanupAndFireDeaths(draft, context as unknown as PostMoveCleanupContext);
+
+    // rule 460 / 323.13 — this combat has fully ended, so the same Cleanup is
+    // the first moment another staged Combat elsewhere may begin.
+    openPendingContestedShowdown(
+      draft,
+      context as unknown as Parameters<typeof openPendingContestedShowdown>[1],
+    );
   },
 };

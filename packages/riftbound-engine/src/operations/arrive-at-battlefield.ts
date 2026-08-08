@@ -289,6 +289,29 @@ export interface BeginOptions {
 }
 
 /**
+ * rule 323.13 / 344 — the Cleanup of a Standard / Ganking Move begins the
+ * Showdown it staged, but a COMBAT only begins from a Neutral Open State: when
+ * the move's own "when I move" triggers went on the chain, the Combat stays
+ * staged (no designations, no attack/defend events) until that chain has fully
+ * resolved — the chain's own cleanup then opens it.
+ */
+export function beginShowdownAfterMove(io: ArrivalIO, battlefieldId: string): boolean {
+  const interaction = io.draft.interaction ?? createInteractionState();
+  const notOpen = getTurnState(interaction) !== "neutral-open" || io.draft.pendingChoice !== undefined;
+  const attacker = io.draft.battlefields?.[battlefieldId]?.contestedBy as string | undefined;
+  const opposed =
+    attacker !== undefined &&
+    unitsAt(io, battlefieldId).some((id) => {
+      const c = controllerOf(io, id);
+      return c !== undefined && c !== attacker;
+    });
+  if (notOpen && opposed) {
+    return false;
+  }
+  return beginShowdownAt(io, battlefieldId);
+}
+
+/**
  * rules 344 / 345 / 464.2 — begin the Showdown staged at `battlefieldId`: the
  * player who applied Contested gains Focus; with opposing units present it is a
  * Combat Showdown (Attacker = that player, 464.2.c.1; every other occupant
@@ -362,6 +385,15 @@ export function beginStagedShowdowns(io: ArrivalIO): boolean {
   }
   if (getActiveShowdown(interaction)?.active) {
     return false;
+  }
+  // rule 460 — a Combat is still ongoing until its Combat Damage Step (626) has
+  // run: a closed combat showdown leaves the battlefield Contested with
+  // `showdownComplete` (exactly `resolveFullCombat`'s legality). No other
+  // staged Showdown / Combat may begin while one awaits damage.
+  for (const bf of Object.values(draft.battlefields ?? {})) {
+    if (bf?.contested === true && bf.showdownComplete === true) {
+      return false;
+    }
   }
   const staged: { attacker: string; battlefieldId: string; isCombat: boolean; stagedBy?: string }[] = [];
   for (const [battlefieldId, bf] of Object.entries(draft.battlefields ?? {})) {
