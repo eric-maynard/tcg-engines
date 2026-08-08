@@ -249,7 +249,7 @@ describe("Bone Skewer (unl-139-219)", () => {
     expect(game.state("rear").isReady).toBe(true);
   });
 
-  test.failing("BUG: 'reveals their hand' is public until the spell finishes resolving (424.1.a.3) — while the pick is pending P1 sees ALL of P2's hand (spell and gear too); afterwards it is private again", async () => {
+  test("'reveals their hand' is public until the spell finishes resolving (424.1.a.3) — while the pick is pending P1 sees ALL of P2's hand (spell and gear too); afterwards it is private again", async () => {
     // Expected: during the prompt every P2 hand card is a full view for P1; after resolution hidden views.
     // Actual: no visibility grant is recorded — P1's observation shows P2's hand redacted throughout.
     const game = await board().build();

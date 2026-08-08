@@ -93,6 +93,29 @@ export function hasVisibilityGrant(
   );
 }
 
+/**
+ * rule 424.1.a.3 — a card that "is revealed" is public information from the
+ * moment it is revealed until the effect that revealed it finishes resolving.
+ * The in-flight `reveal-and-pick` prompt IS that window (unl-139-219 Bone
+ * Skewer: the WHOLE hand is shown even though only units may be picked), so
+ * the visibility clears itself as soon as the prompt is answered — no
+ * turn-scoped grant is recorded.
+ */
+export function isRevealedForPendingChoice(
+  engine: HarnessEngine,
+  viewer: Viewer,
+  id: string,
+): boolean {
+  if (viewer === SPECTATOR) {
+    return false;
+  }
+  const pending = engine.getState().pendingChoice;
+  if (pending === undefined || pending.type !== "reveal-and-pick") {
+    return false;
+  }
+  return pending.prompter === viewer && (pending.revealed as readonly string[]).includes(id);
+}
+
 export function summarizeDecision(d: Decision | null): DecisionSummary | null {
   if (!d) {
     return null;
@@ -163,7 +186,11 @@ export function viewCard(
   const inst = internal.cards[id];
   const owner = inst?.owner ?? "";
   const zone = (inst?.zone ?? "unknown") as ZoneKey;
-  if (!canSee(viewer, zone, owner) && !hasVisibilityGrant(engine, viewer, zone, owner)) {
+  if (
+    !canSee(viewer, zone, owner) &&
+    !hasVisibilityGrant(engine, viewer, zone, owner) &&
+    !isRevealedForPendingChoice(engine, viewer, id)
+  ) {
     return { hidden: true, index, owner, zone };
   }
   return buildCardState(engine, id, pool);
