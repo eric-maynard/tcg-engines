@@ -588,6 +588,50 @@ function hiddenSpellHasLegalTargets(
       return false;
     }
   }
+  // rule 811.1.d — a card played from Hidden must be able to choose its objects
+  // at THAT battlefield; 811.1.d overrides 355.13, so an "any number" / "up to N"
+  // descriptor that would happily settle for zero anywhere else still needs at
+  // least one candidate there (sfd-043-221 Emperor's Divide with no friendly unit
+  // left at its battlefield is unplayable from face down, though the same card
+  // from hand may still choose zero).
+  // `casterChosenTarget` deliberately skips the multi-pick shapes, so read the
+  // descriptor straight off the effect (or its sequence lead).
+  const rawTarget =
+    ((effect as { target?: unknown }).target as { quantity?: unknown; type?: unknown } | undefined) ??
+    (findSequenceLeadTarget(effect) as { quantity?: unknown; type?: unknown } | undefined);
+  const zeroableTarget =
+    typeof rawTarget === "object" &&
+    rawTarget !== null &&
+    typeof rawTarget.type === "string" &&
+    rawTarget.type !== "self" &&
+    rawTarget.type !== "player" &&
+    rawTarget.type !== "battlefield" &&
+    rawTarget.type !== "trigger-source"
+      ? rawTarget
+      : undefined;
+  const zeroableQty = zeroableTarget?.quantity;
+  const permitsZero =
+    zeroableQty === "any" ||
+    (typeof zeroableQty === "object" &&
+      zeroableQty !== null &&
+      (zeroableQty as { upTo?: number }).upTo !== undefined &&
+      (zeroableQty as { atLeast?: number }).atLeast === undefined);
+  if (permitsZero && zeroableTarget !== undefined && !hiddenChoiceIsPulledIn(effect)) {
+    const pool = (
+      resolveTarget({ ...(zeroableTarget as object), quantity: "all" } as never, {
+        cards: context.cards,
+        choosing: true,
+        draft: state,
+        playerId,
+        sourceCardId: cardId,
+        sourceZone: bfZone,
+        zones: context.zones,
+      } as Parameters<typeof resolveTarget>[1]) as string[]
+    ).filter((id) => context.zones.getCardZone(id as CoreCardId) === bfZone);
+    if (pool.length === 0) {
+      return false;
+    }
+  }
   return spellEffectHasLegalTargets(effect, {
     battlefieldZone: bfZone,
     cards: {
@@ -973,11 +1017,18 @@ export const revealHidden: Defs["revealHidden"] = {
       // COMPLETED by resolution (and never for a countered card), so they are
       // emitted once by chain/resolve.ts firePlayedCardTriggers — not here.
       // rule-id: ogn-167-298 — rule 811.1.c.3: revealing a facedown card is
-      // playing it "from [Hidden]".
-      fireTriggers(
-        { cardId, cardType: "spell", playerId, type: "play-from-hidden" },
-        { cards, counters, draft, zones },
-      );
+      // playing it "from [Hidden]". rule 419.4.a / 425.1.b — that play is
+      // COMPLETED by resolution, so a spell's `play-from-hidden` is emitted by
+      // chain/resolve.ts (keyed off the chain item's `fromHiddenAt`) rather
+      // than while opponents still hold a reaction window. A facedown card is
+      // always facedown AT a battlefield; without one there is nothing to key
+      // off, so fall back to firing here.
+      if (battlefieldId === undefined) {
+        fireTriggers(
+          { cardId, cardType: "spell", playerId, type: "play-from-hidden" },
+          { cards, counters, draft, zones },
+        );
+      }
       // rule 355.5 / 811.1.b — targets are chosen as the card is played.
       lockRevealedSpellTarget(draft, playerId, cardId, battlefieldId, { cards, zones });
       return;

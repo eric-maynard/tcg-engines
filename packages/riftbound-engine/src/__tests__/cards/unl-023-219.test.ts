@@ -248,7 +248,10 @@ describe("Katarina, Reckless (unl-023-219)", () => {
     await game.p2.passFocus();
     expect(game.p1.can("reveal", "storm")).toBe(true);
     await game.p1.reveal("storm", { answers: ["jug"] });
-    expect(game.chain().map((c) => c.cardId)).toEqual(expect.arrayContaining(["storm", "kat"]));
+    // rule 419.4.a: the flip only puts Storm on the chain — Katarina's "when you
+    // play a card from face down" fires once that play COMPLETES (Storm
+    // resolving), so she is not on the chain beside it.
+    expect(game.chain().map((c) => c.cardId)).toEqual(["storm"]);
     await game.settle({ policy: "first" }); // Katarina's only enemy unit is the Juggernaut; Storm's target was named
     expect(game.zoneOf("jug")).toBe("trash");
     expect(game.zoneOf("bait")).toBe("battlefield-bf1");

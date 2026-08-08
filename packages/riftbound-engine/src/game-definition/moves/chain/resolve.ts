@@ -1183,6 +1183,35 @@ export function executeResolvedItem(
 }
 
 /**
+ * rule 419.4.a / 811.1.c.3 — "when you play a card from face down" is a play
+ * trigger: it fires when the play is COMPLETED by resolution (never while an
+ * opponent still holds a reaction window, and never for a countered spell).
+ * A spell flipped from a facedown zone carries its origin battlefield on the
+ * chain item (`triggerEvent.fromHiddenAt`, set by `moves/play/hide.ts`).
+ */
+function fireFromHiddenTrigger(
+  resolved: ChainItem,
+  draft: RiftboundGameState,
+  context: Parameters<typeof buildEffectContext>[3],
+): void {
+  if (resolved.type !== "spell" || resolved.countered === true) {
+    return;
+  }
+  if ((resolved.triggerEvent as { fromHiddenAt?: string } | undefined)?.fromHiddenAt === undefined) {
+    return;
+  }
+  fireTriggers(
+    {
+      cardId: resolved.cardId,
+      cardType: "spell",
+      playerId: resolved.controller,
+      type: "play-from-hidden",
+    },
+    { cards: context.cards, counters: context.counters, draft, zones: context.zones },
+  );
+}
+
+/**
  * Rule 419.4.a: abilities that trigger on playing a card fire when that act is
  * completed by resolution — not when the card is placed on the chain, and
  * never if the card was countered (425.1.b). `preLen` is the chain length
@@ -1426,6 +1455,7 @@ export const passChainPriority: Defs["passChainPriority"] = {
       if (resolved) {
         withChainItemResolution(() => {
           executeResolvedItem(resolved, draft, context);
+          fireFromHiddenTrigger(resolved, draft, context);
           settleResolvedSpellCard(resolved, context, draft);
         });
         runPostResolutionVictoryCheck(draft);
@@ -1483,6 +1513,7 @@ export const resolveChain: Defs["resolveChain"] = {
     if (resolved) {
       withChainItemResolution(() => {
         executeResolvedItem(resolved, draft, context);
+        fireFromHiddenTrigger(resolved, draft, context);
         settleResolvedSpellCard(resolved, context, draft);
       });
       runPostResolutionVictoryCheck(draft);
