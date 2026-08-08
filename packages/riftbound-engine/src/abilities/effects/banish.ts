@@ -2,7 +2,7 @@
 import type { CardId as CoreCardId, ZoneId as CoreZoneId } from "@tcg/core";
 import type { RiftboundCardMeta } from "../../types";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
-import { removeFromBoard } from "../../operations/leave-board";
+import { recordDepartedOwner, removeFromBoard } from "../../operations/leave-board";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import { type EffectHelpers, getTargetIds } from "./_helpers";
 
@@ -51,7 +51,8 @@ export function handle_banish(effect: ExecutableEffect, ctx: EffectContext, _h: 
       targetZoneId: "banishment" as CoreZoneId,
     });
     // rule 186.1: a token anywhere off the board ceases to exist.
-    if ((targetId as string).startsWith("token-")) {
+    if (getGlobalCardRegistry().isToken(targetId as string)) {
+      recordDepartedOwner(ctx.draft, targetId, ctx.cards.getCardOwner(targetId as CoreCardId));
       ctx.zones.removeCardFromGame?.({ cardId: targetId as CoreCardId });
     }
   }

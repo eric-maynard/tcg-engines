@@ -111,7 +111,7 @@ argument and the legal values (e.g. ``cast(cleave): needs `targets` — one of: 
 
 | Read | Returns |
 |---|---|
-| `game.zoneOf(card)` | `"hand" \| "base" \| "trash" \| "banishment" \| "chain" \| "battlefield-bf1" \| "facedown-bf1" \| "mainDeck" …` |
+| `game.zoneOf(card)` | `"hand" \| "base" \| "trash" \| "banishment" \| "chain" \| "battlefield-bf1" \| "facedown-bf1" \| "mainDeck" …`; `"gone"` for a token that left the board (186.1 — it ceased to exist; `game.has(card)` is false) |
 | `game.locationOf(card)` | `"base" \| "bf1" \| undefined` |
 | `game.state(card)` | `CardState`: `damage, might (effective), baseMight, isExhausted/isTapped/isReady, isStunned, isBuffed, isHidden, isEmpowered, keywords[], grantedKeywords[], attachments[], attachedTo, owner, controller, zone, energyCost, meta (raw)` |
 | `game.p1.hand() / base() / trash() / deck() / runes({ready?}) / units("bf1") / gear() / legend() / champion()` | card ids |

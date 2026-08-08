@@ -19,7 +19,11 @@ type MetaBag = Partial<RiftboundCardMeta> & {
 } & Record<string, unknown>;
 
 export function isTokenInstance(id: string, definitionId: string | undefined): boolean {
-  return id.startsWith("token-") || (definitionId ?? "").startsWith("token-def-");
+  return (
+    id.startsWith("token-") ||
+    (definitionId ?? "").startsWith("token-def-") ||
+    getGlobalCardRegistry().isToken(id)
+  );
 }
 
 export function locationOfZone(zone: string): LocationRef | undefined {

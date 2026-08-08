@@ -142,14 +142,15 @@ describe("Rocket Barrage [Repeat] (kill Gold / deal 4) × Gold cashed in respons
     expect(game.state("front").damage).toBe(0);
   });
 
-  // Expected (186.1): a token put into a non-board zone ceases to exist — the killed Gold is not a
-  // card sitting in P2's trash. Actual: the engine files the Gold token in P2's trash like a card.
-  test.failing("BUG: (c) a killed Gold TOKEN ceases to exist — it must not remain in P2's trash (186.1)", async () => {
+  // 186.1: a token put into a non-board zone ceases to exist — the killed Gold is not a card sitting
+  // in P2's trash.
+  test("(c) a killed Gold TOKEN ceases to exist — it must not remain in P2's trash (186.1)", async () => {
     const game = await board().build();
     await castKillGoldThenShootV(game);
     await game.settle();
     expect(game.p2.gear()).toEqual([]);
     expect(game.p2.trash()).not.toContain("gold");
+    expect(game.zoneOf("gold")).toBe("gone");
   });
 
   // ── (d) variant: no gear anywhere ───────────────────────────────────────────────────────────

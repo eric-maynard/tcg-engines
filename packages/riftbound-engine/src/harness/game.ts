@@ -8,6 +8,7 @@
 
 import type { PlayerId } from "@tcg/core";
 import { getGlobalCardRegistry } from "../operations/card-lookup";
+import { getDepartedOwner } from "../operations/leave-board";
 import { createPlayableGame } from "../testing/playtest/game-setup";
 import type { DeckConfig } from "../testing/playtest/game-setup";
 import type { RiftboundGameState } from "../types";
@@ -320,12 +321,21 @@ export class Game {
     return this.backend.cardState(card);
   }
 
+  /**
+   * Zone of a card. A token that left the board has ceased to exist (rule
+   * 186.1) and reads as `"gone"` (so does any other card removed from the
+   * game); an id the game never knew still throws CARD_NOT_FOUND.
+   */
   zoneOf(card: CardRef): ZoneKey {
+    if (!this.has(card) && getDepartedOwner(this.gameState, card) !== undefined) {
+      return "gone";
+    }
     return this.state(card).zone;
   }
 
   locationOf(card: CardRef): LocationRef | undefined {
-    return locationOfZone(this.zoneOf(card));
+    const zone = this.zoneOf(card);
+    return zone === "gone" ? undefined : locationOfZone(zone);
   }
 
   /** Omniscient zone listing. `zone` may be a battlefield id shorthand. */

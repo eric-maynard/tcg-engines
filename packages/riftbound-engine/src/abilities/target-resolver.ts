@@ -726,9 +726,8 @@ function metaFlag(
  */
 function isTokenCard(cardId: string, def: unknown): boolean {
   return (
-    cardId.startsWith("token-") ||
-    (def as { isToken?: boolean; id?: string } | undefined)?.isToken === true ||
-    ((def as { id?: string } | undefined)?.id ?? "").startsWith("token-def-")
+    getGlobalCardRegistry().isToken(cardId) ||
+    (def as { isToken?: boolean; id?: string } | undefined)?.isToken === true
   );
 }
 

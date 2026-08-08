@@ -382,7 +382,7 @@ export function snapshotLKI(ctx: LeaveBoardContext, cardId: string): LKISnapshot
     damage: getDamage(ctx, cardId),
     empowered: meta.empowered === true || flags.empowered === true,
     exhausted: meta.exhausted === true || flags.exhausted === true,
-    isToken: cardId.startsWith("token-"),
+    isToken: registry.isToken(cardId),
     lastDamageSource: meta.lastDamageSource,
     lastDamagedBy: meta.lastDamagedBy,
     might,

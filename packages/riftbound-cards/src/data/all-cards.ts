@@ -1785,6 +1785,8 @@ const JSON_CARD_ENGINE_FLAGS: Record<string, Record<string, unknown>> = {
   "ven-048-166": { tags: ["Dragon"] },
   "ven-091-166": { tags: ["Dragon"] },
   "ven-115-166": { tags: ["Dragon"] },
+  // rule 186 — printed token card (exists only on the board / chain).
+  "ven-t04": { isToken: true },
 };
 
 function adaptJsonCard(c: Record<string, unknown>): Card {

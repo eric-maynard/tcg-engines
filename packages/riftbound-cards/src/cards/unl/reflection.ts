@@ -28,6 +28,7 @@ export const reflection: UnitCard = {
   cardNumber: 6,
   cardType: "unit",
   id: createCardId("unl-t06"),
+  isToken: true,
   might: 0,
   name: "Reflection",
   rarity: "common",

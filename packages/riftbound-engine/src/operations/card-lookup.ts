@@ -27,6 +27,12 @@ export interface CardDefinitionLookup {
   readonly tags?: readonly string[];
   readonly timing?: string;
   readonly isChampion?: boolean;
+  /**
+   * rule 186 — a Token (printed token card such as Recruit / Sprite / Gold, or
+   * one minted by an effect). Tokens exist only on the board or the chain:
+   * put anywhere else they cease to exist (186.1). Read via `isToken(id)`.
+   */
+  readonly isToken?: boolean;
   /** Might bonus when equipment is attached to a unit */
   readonly mightBonus?: number;
   /**
@@ -170,6 +176,19 @@ export class CardDefinitionRegistry {
    */
   get(id: string): CardDefinitionLookup | undefined {
     return this.definitions.get(id);
+  }
+
+  /**
+   * rule 186 — the ONE token test: the definition says so (`isToken`, set on
+   * printed token cards and on every effect-minted `token-def-*` / instance
+   * registration), or the id is an engine-minted `token-…` instance.
+   */
+  isToken(cardId: string): boolean {
+    if (cardId.startsWith("token-")) {
+      return true;
+    }
+    const def = this.definitions.get(cardId);
+    return def?.isToken === true || (def?.id ?? "").startsWith("token-def-");
   }
 
   /**

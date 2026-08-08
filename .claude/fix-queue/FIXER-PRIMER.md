@@ -409,8 +409,14 @@ prompt — reuse the `opt-in` pattern (`die-replacement-batch.ts offerOptionalSh
 - Tokens: `effects/create-token.ts handle_createToken` — ids `token-<slug>-…`, registers a def per instance and
   `token-def-<slug>`, unit tokens enter exhausted unless static EntersReady (`_helpers.tokenEntersReadyFromStaticGrant`),
   fires `play-token-unit`, location `"here"`→source zone / explicit zone / else base + `choose-destination` prompt if a
-  controlled battlefield exists. Parser `C/parser/impl/effects-tokens.ts`. Manual `moves/token.ts`. Off-board tokens vanish
-  in `state-based-checks.ts sweepOffBoardTokens`. Detect: `id.startsWith("token-")`, harness `state().isToken`.
+  controlled battlefield exists. Parser `C/parser/impl/effects-tokens.ts`. Manual `moves/token.ts`. TOKEN-NESS (rule 186) is
+  DEFINITION-based — ONE predicate `registry.isToken(id)` (`operations/card-lookup.ts`: def `isToken:true` — set on printed token
+  cards Recruit/Sprite/Gold/Bird/Reflection incl. `ven-t04` via `JSON_CARD_ENGINE_FLAGS`, and on every minted `token-def-*` /
+  instance registration — or a `token-…` id); harness `state().isToken` agrees. 186.1: a token put into ANY non-board zone ceases
+  to exist: `leave-board.ts leaveBoard` removes it (kill/SBA deaths only after their `die` event fired — Deathknell / "when a unit
+  dies" still trigger; bounce/banish/recycle immediately), stragglers swept by `state-based-checks.ts sweepOffBoardTokens`; the
+  owner is kept (`recordDepartedOwner/getDepartedOwner`). TESTS: a killed/bounced/banished token is in NO zone — assert
+  `game.has(tok) === false` or `game.zoneOf(tok) === "gone"` (`locationOf` → undefined); `trash()`/`hand()` never contain tokens.
 - Hidden: `moves/play/hide.ts hideCard` (needs keyword Hidden, pays 1 power of any domain, → `facedown-<bf>`, `hide`
   event) / `revealHidden` (plays it ignoring cost; `play-self` carries `fromHiddenAt` so `resolve.ts` limits targets to
   that battlefield). Orphan facedown cards trashed in `performCleanup` step 4.

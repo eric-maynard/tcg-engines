@@ -6,6 +6,7 @@ export const bird: UnitCard = {
   cardNumber: 2,
   cardType: "unit",
   id: createCardId("unl-t02"),
+  isToken: true,
   might: 1,
   name: "Bird",
   rarity: "common",

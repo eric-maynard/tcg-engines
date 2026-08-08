@@ -87,6 +87,7 @@ export function makeLookupPayload(
     inheritExhaustAbilities: def.inheritExhaustAbilities as boolean | undefined,
     interactiveCostReduction: def.interactiveCostReduction as "target-might" | undefined,
     isChampion: def.isChampion as boolean | undefined,
+    isToken: (def as { isToken?: boolean }).isToken === true ? true : undefined,
     keywords: def.keywords as string[] | undefined,
     might: def.might as number | undefined,
     mightBonus: def.mightBonus as number | undefined,

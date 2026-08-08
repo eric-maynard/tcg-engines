@@ -351,6 +351,76 @@ describe("Token → hand / deck / banishment ceases to exist; token recalled or 
   });
 });
 
+describe("186 / 186.1 — token-ness comes from the DEFINITION: a printed token card (Recruit ogn-271-298, Sprite ogn-274-298, Gold sfd-t03) placed by a scenario is a token too and ceases to exist off the board", () => {
+  const RECRUIT_CARD = "ogn-271-298";
+  const SPRITE_CARD = "ogn-274-298";
+  const GOLD_CARD = "sfd-t03";
+  /** "Kill a gear." */
+  const SMASH = spell("Smash", { target: { type: "gear" }, type: "kill" });
+
+  test("reads as a token (registry + harness) although its id is a plain alias", async () => {
+    const game = await scenario().unit(P1, "base", RECRUIT_CARD, "rec").gear(P1, GOLD_CARD, "gold").build();
+    expect(game.state("rec").isToken).toBe(true);
+    expect(game.state("gold").isToken).toBe(true);
+    expect(tokensOf(game).sort()).toEqual(["gold", "rec"]);
+  });
+
+  test("killed printed Recruit: the die-listener still triggers (it died — 428.1), then it is GONE: not on the board, not in the trash, zoneOf → 'gone'", async () => {
+    const game = await scenario().unit(P1, "base", LISTENER, "L").unit(P1, "base", RECRUIT_CARD, "rec").hand(P1, KILL, "kill").deck(P1, [CANTRIP], ["d1"]).build();
+    const hand = game.p1.hand().length;
+    await game.p1.cast("kill", { targets: "rec" });
+    await game.settle();
+    expect(game.has("rec")).toBe(false);
+    expect(game.zoneOf("rec")).toBe("gone");
+    expect(game.locationOf("rec")).toBeUndefined();
+    expect(game.p1.trash()).toEqual(["kill"]); // only the spell — trash counts exclude tokens
+    expect(game.p1.units("base")).toEqual(["L"]);
+    expect(game.p1.hand().length).toBe(hand - 1 + 1); // Listener drew 1
+  });
+
+  test("killed printed Gold gear token: gone, trash holds only the spell", async () => {
+    const game = await scenario().gear(P2, GOLD_CARD, "gold").hand(P1, SMASH, "smash").build();
+    await game.p1.cast("smash", { targets: "gold" });
+    await game.settle();
+    expect(game.zoneOf("gold")).toBe("gone");
+    expect(game.p2.trash()).toEqual([]);
+    expect(game.p2.gear()).toEqual([]);
+    expect(game.p1.trash()).toEqual(["smash"]);
+  });
+
+  test("lethal damage (SBA death) on a printed Sprite: gone, never in the trash", async () => {
+    const game = await scenario().unit(P2, "base", SPRITE_CARD, "sprite").hand(P1, PING, "ping").hand(P1, PING, "ping2").hand(P1, PING, "ping3").build();
+    const might = game.state("sprite").might;
+    for (const p of ["ping", "ping2", "ping3"].slice(0, might)) {
+      await game.p1.cast(p, { targets: "sprite" });
+      await game.settle();
+    }
+    expect(game.zoneOf("sprite")).toBe("gone");
+    expect(game.p2.trash()).toEqual([]);
+  });
+
+  test("bounced to hand / banished: gone (hand and banishment unchanged); recalled: stays on the board as the same object", async () => {
+    const bounced = await scenario().battlefield("bf1", { controller: P2 }).unit(P2, "bf1", RECRUIT_CARD, "rec").hand(P1, BOUNCE, "bounce").build();
+    const h2 = bounced.p2.hand().length;
+    await bounced.p1.cast("bounce", { targets: "rec" });
+    await bounced.settle();
+    expect(bounced.zoneOf("rec")).toBe("gone");
+    expect(bounced.p2.hand().length).toBe(h2);
+
+    const banished = await scenario().unit(P2, "base", RECRUIT_CARD, "rec").hand(P1, BANISH, "banish").build();
+    await banished.p1.cast("banish", { targets: "rec" });
+    await banished.settle();
+    expect(banished.zoneOf("rec")).toBe("gone");
+    expect(banished.p2.banishment()).toEqual([]);
+
+    const recalled = await scenario().battlefield("bf1", { controller: P2 }).unit(P2, "bf1", RECRUIT_CARD, "rec").hand(P1, RECALL, "recall").build();
+    await recalled.p1.cast("recall", { targets: "rec" });
+    await recalled.settle();
+    expect(recalled.zoneOf("rec")).toBe("base");
+    expect(recalled.state("rec").isToken).toBe(true);
+  });
+});
+
 describe("Simultaneous death (383.2.c.2): a listener that dies in the same cleanup as a token does not see the token die", () => {
   test("'deal 1 to all enemy units in a base' kills Listener and token together → P1 draws 0; L (a card) is in trash, the token is gone", async () => {
     const game = await scenario()

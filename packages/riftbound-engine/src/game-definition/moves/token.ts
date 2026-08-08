@@ -134,6 +134,7 @@ export const tokenMoves: Partial<
         registry.register(definitionId, {
           cardType: def.type === "gear" ? "gear" : "unit",
           id: definitionId,
+          isToken: true,
           keywords: def.keywords ? [...def.keywords] : undefined,
           might: def.might,
           name: def.name,
@@ -161,6 +162,7 @@ export const tokenMoves: Partial<
         registry.register(cardId, {
           cardType: def.type === "gear" ? "gear" : "unit",
           id: cardId,
+          isToken: true,
           keywords: def.keywords ? [...def.keywords] : undefined,
           might: def.might,
           name: def.name,

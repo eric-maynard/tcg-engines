@@ -109,7 +109,7 @@ describe("Pickpocket (sfd-074-221)", () => {
     const game = await board().build();
     expect(game.state("myGold").isReady).toBe(true);
     await playAndSteal(game, "myGold");
-    expect(game.zoneOf("myGold")).not.toBe("base");
+    expect(game.has("myGold")).toBe(false); // 186.1 — the killed Gold token ceased to exist
     const gold = goldTokens(game, "p1");
     expect(gold).toHaveLength(1);
     expect(game.state(gold[0] as string).isExhausted).toBe(true);

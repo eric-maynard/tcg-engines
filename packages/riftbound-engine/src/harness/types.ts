@@ -44,7 +44,8 @@ export type SimpleZoneKey =
   | "championZone"
   | "battlefieldRow"
   | "chain";
-export type ZoneKey = SimpleZoneKey | `battlefield-${string}` | `facedown-${string}`;
+/** `"gone"` = the card ceased to exist (a token that left the board, rule 186.1) or left the game. */
+export type ZoneKey = SimpleZoneKey | `battlefield-${string}` | `facedown-${string}` | "gone";
 
 export interface ZoneRef {
   readonly zone: ZoneKey;

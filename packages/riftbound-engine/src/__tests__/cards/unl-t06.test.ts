@@ -77,12 +77,12 @@ describe("Reflection (unl-t06)", () => {
     expect(game.p1.points()).toBe(1);
   });
 
-  test("142.4.b — any NON-ZERO damage on a 0-Might unit is lethal: Incinerate's 2 kills a bare Reflection (a placed card here, so it goes to the trash)", async () => {
+  test("142.4.b — any NON-ZERO damage on a 0-Might unit is lethal: Incinerate's 2 kills a bare Reflection (a token: killed, it ceases to exist — 186.1)", async () => {
     // Expected: 2 damage ≥ 0 Might and non-zero → dies in the cleanup. Actual: it sits at bf1 with 2 damage marked.
     const game = await scenario().active(P2).resources(P2, { energy: 2 }).battlefield("bf1", { controller: P1 }).unit(P1, "bf1", CARD, "bare").hand(P2, "ogs-003-024", "burn").build();
     await game.p2.cast("burn", { targets: "bare" });
     await game.settle();
-    expect(game.has("bare") ? game.zoneOf("bare") : "gone").toBe("trash");
+    expect(game.has("bare") ? game.zoneOf("bare") : "gone").toBe("gone");
   });
 
   test("142.4.b in combat — a lone 0-Might defender takes 1 from a 1-Might attacker and dies; the attacker (dealt 0) stays and conquers", async () => {
@@ -91,7 +91,7 @@ describe("Reflection (unl-t06)", () => {
     const game = await scenario().active(P2).battlefield("bf1", { controller: P1 }).unit(P1, "bf1", CARD, "bare").unit(P2, "base", { might: 1, name: "Poker" }, "poker").build();
     await game.p2.move("poker", "bf1");
     await game.settle();
-    expect(game.zoneOf("bare")).toBe("trash");
+    expect(game.has("bare")).toBe(false); // killed token ceases to exist (186.1)
     expect(game.locationOf("poker")).toBe("bf1");
     expect(game.gameState.battlefields.bf1?.controller).toBe(P2);
   });

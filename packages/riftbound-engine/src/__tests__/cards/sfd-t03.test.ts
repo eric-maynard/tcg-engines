@@ -23,13 +23,13 @@ describe("Gold (sfd-t03)", () => {
     expect(game.zoneOf("gold")).toBe("base");
   });
 
-  test("Kill this, [Exhaust]: activating kills Gold (to trash) and adds 1 [rainbow] power immediately (429.2)", async () => {
+  test("Kill this, [Exhaust]: activating kills Gold (it ceases to exist, 186.1) and adds 1 [rainbow] power immediately (429.2)", async () => {
     const game = await scenario().gear(P1, GOLD, "gold").build();
     expect(game.p1.can("activate", "gold")).toBe(true);
     await game.p1.activate("gold");
     // Add abilities resolve on finalize: nothing lingers on the chain, no priority window opens.
     expect(game.chain()).toEqual([]);
-    expect(game.zoneOf("gold")).toBe("trash");
+    expect(game.has("gold")).toBe(false); // 186.1 — the killed token ceased to exist (never rests in the trash)
     expect(game.p1.energy()).toBe(0);
     expect(game.p1.power()).toBe(1);
     expect(game.p1.power("rainbow")).toBe(1);
@@ -67,7 +67,7 @@ describe("Gold (sfd-t03)", () => {
     expect(game.actingSeat()).toBe(P1);
     expect(game.p1.can("activate", "gold")).toBe(true);
     await game.p1.activate("gold");
-    expect(game.zoneOf("gold")).toBe("trash");
+    expect(game.has("gold")).toBe(false); // 186.1 — the killed token ceased to exist (never rests in the trash)
     expect(game.p1.power()).toBe(1);
     // The bolt is still the only chain item — Gold's Add never joined it.
     expect(game.chain().map((i) => i.cardId)).toEqual(["bolt"]);

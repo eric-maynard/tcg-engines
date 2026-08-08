@@ -140,6 +140,7 @@ export function toLookupPayload(
     inheritExhaustAbilities: def.inheritExhaustAbilities as boolean | undefined,
     interactiveCostReduction: def.interactiveCostReduction as "target-might" | undefined,
     isChampion: def.isChampion,
+    isToken: (def as { isToken?: boolean }).isToken === true ? true : undefined,
     keywords: def.keywords ? [...def.keywords] : undefined,
     might: def.might,
     mightBonus: def.mightBonus,

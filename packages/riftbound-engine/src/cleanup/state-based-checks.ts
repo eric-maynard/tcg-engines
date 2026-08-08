@@ -36,6 +36,7 @@ import {
   type LeaveResult,
   clearLKI,
   leaveBoard,
+  recordDepartedOwner,
   snapshotBatch,
   snapshotLKI,
 } from "../operations/leave-board";
@@ -84,6 +85,7 @@ function sweepOffBoardTokens(ctx: CleanupContext): boolean {
     return false;
   }
   let removed = false;
+  const registry = getGlobalCardRegistry();
   // Trash/hand/deck are per-player zones: a zone read without an owner misses
   // their contents, so sweep each player's copy as well as the bare zone id.
   const owners: (CorePlayerId | undefined)[] = [
@@ -93,7 +95,8 @@ function sweepOffBoardTokens(ctx: CleanupContext): boolean {
   for (const zoneId of TOKEN_SWEEP_ZONE_IDS) {
     for (const owner of owners) {
       for (const cardId of ctx.zones.getCardsInZone(zoneId as CoreZoneId, owner)) {
-        if ((cardId as string).startsWith("token-")) {
+        if (registry.isToken(cardId as string)) {
+          recordDepartedOwner(ctx.draft, cardId as string, ctx.cards.getCardOwner?.(cardId) ?? owner);
           remove({ cardId });
           removed = true;
         }

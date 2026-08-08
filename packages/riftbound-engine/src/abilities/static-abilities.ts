@@ -710,7 +710,7 @@ function resolveStaticTargetsFromDescriptor(
         if (typeof t.filter === "string") {
           if (t.filter === "token") {
             const isToken =
-              c.id.startsWith("token-") ||
+              registry.isToken(c.id) ||
               (def as { isToken?: boolean } | undefined)?.isToken === true;
             if (!isToken) {
               return false;

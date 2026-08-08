@@ -24,6 +24,7 @@ export const gold: GearCard = {
   cardNumber: 3,
   cardType: "gear",
   id: createCardId("sfd-t03"),
+  isToken: true,
   name: "Gold",
   rarity: "common",
   rulesText:
