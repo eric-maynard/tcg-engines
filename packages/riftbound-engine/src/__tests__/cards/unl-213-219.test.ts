@@ -58,7 +58,7 @@ describe("Gardens of Becoming (unl-213-219)", () => {
   // BUG — expected: a ready unit here offers an activated ability; using it exhausts that unit (the whole
   // cost — no energy/power), puts a non-triggered P1 item on the chain, P2 gets priority, and on
   // resolution P1 gains exactly 1 XP. Actual: the grant is an unread virtual keyword; nothing is offered.
-  test.failing("BUG: a ready unit here has '[Exhaust]: Gain 1 XP' — exhausts itself, uses the chain, controller gains 1 XP", async () => {
+  test("a ready unit here has '[Exhaust]: Gain 1 XP' — exhausts itself, uses the chain, controller gains 1 XP", async () => {
     const game = await board().resources(P1, { energy: 1 }).build();
     expect(game.p1.xp()).toBe(0);
     const opt = xpOption(game, "p1", "monk");
@@ -77,7 +77,7 @@ describe("Gardens of Becoming (unl-213-219)", () => {
   });
 
   // BUG — expected: each unit here carries its own copy; two ready units → two activations → 2 XP.
-  test.failing("BUG: per-unit — two ready units here cash in once each for 2 XP total, both end exhausted", async () => {
+  test("per-unit — two ready units here cash in once each for 2 XP total, both end exhausted", async () => {
     const game = await board().build();
     await cashIn(game, "p1", "monk");
     await cashIn(game, "p1", "acolyte");
@@ -97,7 +97,7 @@ describe("Gardens of Becoming (unl-213-219)", () => {
 
   // BUG — expected: "units here" is every unit, so an ENEMY unit sitting at P1's Gardens earns XP for
   // ITS controller (P2) on P2's turn; P1 gains nothing from it and cannot use P2's unit.
-  test.failing("BUG: an enemy unit here earns XP for ITS controller on their turn (not for the Gardens' controller)", async () => {
+  test("an enemy unit here earns XP for ITS controller on their turn (not for the Gardens' controller)", async () => {
     const game = await scenario()
       .active(P2)
       .battlefield("gardens", { controller: P2, def: CARD, inert: false, owner: P1 })
@@ -129,7 +129,7 @@ describe("Gardens of Becoming (unl-213-219)", () => {
 
   // BUG — expected: …and on the controller's NEXT turn (Awaken readied it, it held the Gardens) the same
   // unit can cash in for 1 XP.
-  test.failing("BUG: next turn the unit that walked in (now ready, still here) can cash in for 1 XP", async () => {
+  test("next turn the unit that walked in (now ready, still here) can cash in for 1 XP", async () => {
     const game = await scenario()
       .battlefield("gardens", { controller: null, def: CARD, inert: false })
       .unit(P1, "base", { might: 2, name: "Pilgrim" }, "pilgrim")
@@ -172,7 +172,7 @@ describe("Gardens of Becoming (unl-213-219)", () => {
 
   // BUG — expected: partner line — at 5 XP with Wuju Master, one activation here reaches [Level 6] and
   // every P1 unit gains +1 Might (the exhausted Monk included). Actual: no ability to activate.
-  test.failing("BUG: partner — Wuju Master at 5 XP: one cash-in here reaches Level 6 and pumps every friendly unit +1", async () => {
+  test("partner — Wuju Master at 5 XP: one cash-in here reaches Level 6 and pumps every friendly unit +1", async () => {
     const game = await board().xp(P1, 5).legend(P1, WUJU_MASTER, "wuju").build();
     expect(game.state("home").might).toBe(1);
     await cashIn(game, "p1", "monk");
@@ -193,7 +193,7 @@ describe("Gardens of Becoming (unl-213-219)", () => {
   // BUG — expected: the payload should carry what the text says — a static over units here that grants
   // an ACTIVATED ability with cost [Exhaust] and effect gain-xp 1 (cf. the `grant-ability` + sibling
   // activated-ability shape used elsewhere). Actual: `grant-keyword: "ExhaustGainXp"` — no cost, no effect.
-  test.failing("BUG: registry payload — units here are granted an activated { cost: exhaust, effect: gain-xp 1 }, not a virtual keyword", async () => {
+  test("registry payload — units here are granted an activated { cost: exhaust, effect: gain-xp 1 }, not a virtual keyword", async () => {
     const def = (await loadDefaultCardPool()).get(CARD);
     expect(def).toMatchObject({ cardType: "battlefield", name: "Gardens of Becoming" });
     const abilities = (def?.abilities ?? []) as { type: string; effect?: { target?: unknown } }[];

@@ -653,6 +653,82 @@ export function empowerCostDiscount(
 }
 
 /**
+ * rule 356.4 / 356.6 (rule-id: ven-161-166) — the ENERGY a controlled
+ * battlefield shaves off this activation ("While you control this battlefield,
+ * the first friendly gear activated ability played each turn costs [1] less").
+ * Only the host's card type in the static's `target` qualifies, "you" is the
+ * battlefield's current CONTROLLER (rule 190.6.d), and a `first-each-turn`
+ * restriction is spent by the player's first gear activation of the turn —
+ * even a costless one.
+ */
+export function activationEnergyDiscount(
+  hostCardId: string,
+  playerId: string,
+  state: {
+    battlefields?: Record<string, { controller?: string | null } | undefined>;
+    gearAbilityTurn?: Record<string, number>;
+    turn: { number: number };
+  },
+  zones: {
+    getCardsInZone: (zone: CoreZoneId, player?: CorePlayerId) => readonly CoreCardId[];
+  },
+  cards: {
+    getCardOwner: (card: CoreCardId) => CorePlayerId | undefined;
+    getCardController?: (card: CoreCardId) => CorePlayerId | undefined;
+  },
+): number {
+  const registry = getGlobalCardRegistry();
+  const hostType = registry.getCardType(hostCardId);
+  let discount = 0;
+  for (const bfCardId of zones.getCardsInZone("battlefieldRow" as CoreZoneId)) {
+    const bfEntry = state.battlefields?.[bfCardId as string];
+    const controller = bfEntry
+      ? bfEntry.controller
+      : (cards.getCardController?.(bfCardId) ?? cards.getCardOwner(bfCardId as CoreCardId));
+    if (controller !== playerId) {
+      continue;
+    }
+    for (const bfAbility of registry.getAbilities(bfCardId as string) ?? []) {
+      const a = bfAbility as { type?: string; effect?: Record<string, unknown> };
+      if (a.type !== "static" || a.effect?.type !== "activation-cost-reduction") {
+        continue;
+      }
+      const target = a.effect.target as
+        | { controller?: string; cardType?: string }
+        | undefined;
+      if (target?.controller === "enemy" || (target?.cardType && target.cardType !== hostType)) {
+        continue;
+      }
+      const restrictions = (a.effect.restrictions ?? []) as { type?: string }[];
+      if (
+        restrictions.some((r) => r.type === "first-each-turn") &&
+        state.gearAbilityTurn?.[playerId] === state.turn.number
+      ) {
+        continue;
+      }
+      discount += ((a.effect.amount as number) ?? 1);
+    }
+  }
+  return discount;
+}
+
+/** rule 356.4 (rule-id: ven-161-166) — mark this turn's "first gear ability" spent. */
+export function noteGearAbilityActivation(
+  draft: {
+    gearAbilityTurn?: Record<string, number>;
+    turn: { number: number };
+  },
+  playerId: string,
+  hostCardId: string,
+): void {
+  if (getGlobalCardRegistry().getCardType(hostCardId) !== "gear") {
+    return;
+  }
+  draft.gearAbilityTurn ??= {};
+  draft.gearAbilityTurn[playerId] = draft.turn.number;
+}
+
+/**
  * rule 356.4 (rule-id: ven-163-166) — "costs [1] or [rainbow] less" removes ONE
  * resource per discount and WHICH one is the payer's choice: an energy or a
  * single Power pip. Enumerated most-energy-shaved first (the default pick), so
@@ -807,11 +883,17 @@ export function effectiveAbilityCost(
   potentialEnergy = 0,
   discount = 0,
   costOptionIndex?: number,
+  energyDiscount = 0,
 ): Record<string, unknown> | undefined {
   const chosenOption = selectCostOption(ability, pool, potentialEnergy, discount, costOptionIndex);
   const baseCost = ability.cost as Record<string, unknown> | undefined;
   const merged = chosenOption ? { ...(baseCost ?? {}), ...chosenOption } : baseCost;
-  const cost = applyResourceDiscount(merged, discount, pool, potentialEnergy);
+  let cost = applyResourceDiscount(merged, discount, pool, potentialEnergy);
+  // rule 356.6 (rule-id: ven-161-166) — an Energy-only reduction shaves the
+  // [N] part of the cost and never a Power pip, floored at zero.
+  if (cost && energyDiscount > 0) {
+    cost = { ...cost, energy: Math.max(0, ((cost.energy as number) ?? 0) - energyDiscount) };
+  }
   const mod = ability.costModifier as
     | { condition?: { type?: string; amount?: number }; reduction?: number }
     | undefined;
@@ -1141,6 +1223,13 @@ export const activateAbility: Defs["activateAbility"] = {
         state.battlefields,
       ),
       context.params.costOptionIndex as number | undefined,
+      activationEnergyDiscount(
+        cardId as string,
+        playerId as string,
+        state,
+        context.zones,
+        context.cards,
+      ),
     );
     if (effectiveCost) {
       const cost = effectiveCost;
@@ -1572,6 +1661,14 @@ export const activateAbility: Defs["activateAbility"] = {
             context.cards,
             state.battlefields,
           ),
+          undefined,
+          activationEnergyDiscount(
+            entry.hostCardId as string,
+            playerId as string,
+            state,
+            context.zones,
+            context.cards,
+          ),
         );
         if (effectiveCost) {
           const cost = effectiveCost;
@@ -1936,7 +2033,17 @@ export const activateAbility: Defs["activateAbility"] = {
         draft.battlefields,
       ),
       (context.params as Record<string, unknown>).costOptionIndex as number | undefined,
+      activationEnergyDiscount(
+        cardId as string,
+        playerId as string,
+        draft,
+        context.zones,
+        context.cards,
+      ),
     );
+    // rule 356.4 (rule-id: ven-161-166) — even a costless activation is "the
+    // first friendly gear activated ability played this turn".
+    noteGearAbilityActivation(draft, playerId as string, cardId as string);
     if (costToPay) {
       const cost = costToPay;
       deductAbilityCost(draft, playerId, cost, context.zones, context.counters);

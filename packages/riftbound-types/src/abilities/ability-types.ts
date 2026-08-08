@@ -217,6 +217,12 @@ export type Restriction =
   | { readonly type: "first-time-each-turn" }
   | { readonly type: "during-turn"; readonly whose: "your" | "opponent" }
   | { readonly type: "while-at-battlefield" }
+  /**
+   * rule 135.4.b (unl-213-219) — text that only exists on the cards it is
+   * GRANTED to ("Units here have '[Exhaust]: Gain 1 XP.'"): the card printing
+   * the text may never activate it itself.
+   */
+  | { readonly type: "granted-only" }
   | { readonly type: "use-only-if"; readonly condition: Condition };
 
 /**
