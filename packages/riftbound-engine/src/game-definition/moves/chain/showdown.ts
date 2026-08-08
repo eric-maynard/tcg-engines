@@ -36,7 +36,44 @@ export function openPendingContestedShowdown(
   draft: RiftboundGameState,
   context: ShowdownStagingContext,
 ): void {
+  if (turnPlayerMustChooseStagedCombat(draft, context)) {
+    return;
+  }
   beginStagedShowdowns({ ...context, draft });
+}
+
+/**
+ * rule 323.13 / 460 / 461.1 — only ONE Combat begins at a time and the TURN
+ * PLAYER decides which. With two or more Combats staged for them (and no
+ * Showdown-only battlefield, which 323.12 begins first) the Cleanup begins
+ * none: the choice is made with their `startShowdown` step.
+ */
+export function turnPlayerMustChooseStagedCombat(
+  draft: RiftboundGameState,
+  context: ShowdownStagingContext,
+): boolean {
+  const turnPlayer = draft.turn.activePlayer;
+  let combats = 0;
+  for (const [battlefieldId, bf] of Object.entries(draft.battlefields ?? {})) {
+    if (!bf?.contested || bf.showdownComplete === true || !bf.contestedBy) {
+      continue;
+    }
+    const zone = `battlefield-${battlefieldId}` as CoreZoneId;
+    const controllers = context.zones
+      .getCardsInZone(zone)
+      .map((id) => context.cards.getCardController?.(id as never) ?? context.cards.getCardOwner(id));
+    const attacker = bf.contestedBy as string;
+    if (!controllers.includes(attacker)) {
+      return false; // 323.11 re-staging happens first — let the Cleanup run it
+    }
+    if (!controllers.some((c) => c !== undefined && c !== attacker)) {
+      return false; // a staged Showdown-only battlefield goes first (323.12)
+    }
+    if (attacker === turnPlayer || bf.stagedBy === turnPlayer) {
+      combats += 1;
+    }
+  }
+  return combats > 1;
 }
 
 /**

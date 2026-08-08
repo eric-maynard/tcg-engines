@@ -7,6 +7,8 @@
 import type { GameMoveDefinitions } from "@tcg/core";
 import { withTriggerFinalization } from "../../abilities/trigger-finalization";
 import { withDeferredSpellSettle } from "./chain/resolve";
+import { turnPlayerMustChooseStagedCombat } from "./chain/showdown";
+import { type ArrivalIO, beginStagedShowdowns } from "../../operations/arrive-at-battlefield";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../types";
 
 // Import all move categories
@@ -29,12 +31,44 @@ import { xpMoves } from "./xp";
 /**
  * All Riftbound move definitions combined
  */
+/**
+ * rule 319.8 / 323.12 / 323.13 — every action ends with a Cleanup, and a
+ * Cleanup that finds the turn in a Neutral Open State begins whatever Showdown
+ * or Combat is staged. Wrapping every move keeps that one step from depending
+ * on which reducer happened to remember it (a Combat staged by a move whose
+ * trigger was answered through a pending choice used to stay staged forever).
+ */
+function withStagedShowdownOpening<
+  // biome-ignore lint/suspicious/noExplicitAny: structural pass-through wrapper
+  TMoves extends Record<string, { reducer: (draft: any, context: any) => void } | undefined>,
+>(moves: TMoves): TMoves {
+  const wrapped = {} as Record<string, unknown>;
+  for (const [name, move] of Object.entries(moves)) {
+    if (!move) {
+      wrapped[name] = move;
+      continue;
+    }
+    const originalReducer = move.reducer;
+    wrapped[name] = {
+      ...move,
+      // biome-ignore lint/suspicious/noExplicitAny: structural pass-through wrapper
+      reducer: (draft: any, context: any) => {
+        originalReducer(draft, context);
+        if (context?.cards && context?.zones && !turnPlayerMustChooseStagedCombat(draft, context)) {
+          beginStagedShowdowns({ ...context, draft } as ArrivalIO);
+        }
+      },
+    };
+  }
+  return wrapped as TMoves;
+}
+
 export const riftboundMoves: GameMoveDefinitions<
   RiftboundGameState,
   RiftboundMoves,
   RiftboundCardMeta,
   unknown
-> = withDeferredSpellSettle(
+> = withStagedShowdownOpening(withDeferredSpellSettle(
   withTriggerFinalization({
   // Setup moves
   ...setupMoves,
@@ -79,7 +113,7 @@ export const riftboundMoves: GameMoveDefinitions<
   // W12 deck-peek moves
   ...deckActionMoves,
   } as GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>),
-);
+));
 
 export { cardActionMoves } from "./card-actions";
 export { cardPlayMoves } from "./cards";

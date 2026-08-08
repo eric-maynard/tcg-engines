@@ -24,21 +24,26 @@ export function parseDamageEffect(text: string): DamageEffect | SequenceEffect |
   // drop it; emit damage → conditional(this-kills-target, EFFECT) so the follow-up
   // fires when the damage step left the bound target lethally damaged (rule 520).
   const killsMatch = text.match(
-    /^Deal (\d+) to (.+?)\.\s+If this kills (?:it|them),\s+(?:do this:\s*)?(.+?)\.?$/i,
+    /^Deal (\d+) to (.+?)\.\s+If this kills (?:it|them),\s+(do this:\s*)?(.+?)\.?$/i,
   );
   if (killsMatch) {
     const amount = Number.parseInt(killsMatch[1], 10);
     const target = parseCardTarget(killsMatch[2]);
-    const thenText = killsMatch[3].trim();
+    const reflexive = killsMatch[3] !== undefined;
+    const thenText = killsMatch[4].trim();
     const thenEffect = parseEffect(`${thenText.charAt(0).toUpperCase()}${thenText.slice(1)}.`);
     if (thenEffect) {
       const damage: DamageEffect = { amount, target: target as AnyTarget, type: "damage" };
+      // rule 387.2 / 388.1 — the "do this:" wording makes the follow-up a
+      // Reflexive Trigger: it is not carried out inline but becomes its own
+      // pending chain item, so opponents get Priority before it resolves.
+      const then = reflexive ? ({ effect: thenEffect, type: "reflexive" } as unknown as typeof thenEffect) : thenEffect;
       return {
         effects: [
           damage,
           {
             condition: { type: "this-kills-target" },
-            then: thenEffect,
+            then,
             type: "conditional",
           },
         ],

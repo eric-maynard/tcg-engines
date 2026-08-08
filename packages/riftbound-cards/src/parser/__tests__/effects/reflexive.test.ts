@@ -52,9 +52,21 @@ describe("Effect: reflexive trigger ('do this:')", () => {
     });
   });
 
-  it("leaves CONDITIONED 'do this' clauses to their own parsers (comma-joined: 'If this kills it, do this: …')", () => {
+  it("leaves CONDITIONED 'do this' clauses to their own parsers, but 'do this:' still makes the body reflexive (387.2/388.1)", () => {
     expect(effectOf("Deal 3 to a unit at a battlefield. If this kills it, do this: draw 1.")).toMatchObject({
-      effects: [{ type: "damage" }, { condition: { type: "this-kills-target" }, type: "conditional" }],
+      effects: [
+        { type: "damage" },
+        {
+          condition: { type: "this-kills-target" },
+          then: { effect: { amount: 1, type: "draw" }, type: "reflexive" },
+          type: "conditional",
+        },
+      ],
+      type: "sequence",
+    });
+    // no "do this:" wording ⇒ the rider stays inline
+    expect(effectOf("Deal 2 to a unit at a battlefield. If this kills it, draw 1.")).toMatchObject({
+      effects: [{ type: "damage" }, { condition: { type: "this-kills-target" }, then: { type: "draw" } }],
       type: "sequence",
     });
   });

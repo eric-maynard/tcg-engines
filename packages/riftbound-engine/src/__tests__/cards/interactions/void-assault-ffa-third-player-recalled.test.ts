@@ -240,7 +240,7 @@ describe("Void Assault in a 3-player FFA — dragging the third player's Lillia 
     expect(game.gameState.battlefields.bfC).toMatchObject({ contested: false, controller: P3 });
   });
 
-  test.failing("BUG: LEGAL: after the trigger, Neutral Open with TWO combats staged (bfA and bfB) — the TURN PLAYER P1 chooses which one begins first (323.13, 461.1); nothing auto-starts", async () => {
+  test("LEGAL: after the trigger, Neutral Open with TWO combats staged (bfA and bfB) — the TURN PLAYER P1 chooses which one begins first (323.13, 461.1); nothing auto-starts", async () => {
     // Expected: a decision for P1 naming both bfA and bfB, no showdown active yet. Actual: the engine
     // auto-begins the combat at bfA (P3 gets Focus) without asking P1.
     const game = await board().autoProcedures(false).build();

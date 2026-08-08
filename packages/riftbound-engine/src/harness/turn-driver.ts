@@ -127,7 +127,22 @@ export function runProcedures(engine: HarnessEngine, maxSteps = 16): ProcedureRu
       moveIds: [...PROCEDURE_MOVES],
       validOnly: true,
     });
-    const pick = PROCEDURE_MOVES.map((id) => legal.find((m) => m.moveId === id)).find(Boolean);
+    let pick = PROCEDURE_MOVES.map((id) => legal.find((m) => m.moveId === id)).find(Boolean);
+    if (!pick) {
+      // rule 323.13 / 461.1 — the engine's Cleanup leaves TWO OR MORE staged
+      // combats unopened because the turn player picks which one begins. That
+      // is a real decision, so it is not in PROCEDURE_MOVES; the harness driver
+      // (which carries no policy) takes the first offered one so scripted tests
+      // keep flowing. `autoProcedures(false)` surfaces the choice instead.
+      const starts = engine.enumerateMoves(seat as PlayerId, {
+        moveIds: ["startShowdown"],
+        validOnly: true,
+      });
+      if (starts.length < 2) {
+        break;
+      }
+      pick = starts[0];
+    }
     if (!pick) {
       break;
     }
