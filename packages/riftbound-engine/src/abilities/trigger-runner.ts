@@ -231,10 +231,17 @@ export function toTriggerableAbilities(cardId: string): TriggerableAbility[] {
     // riders ("[Legion] — I cost [2] less.") are read by the cost path instead.
     if (a.type === "keyword" && (a as { keyword?: string }).keyword === "Legion") {
       const effect = (a as { effect?: unknown }).effect as
-        | { type?: string }
+        | { type?: string; from?: string }
         | undefined;
       const kind = effect?.type;
-      if (effect && kind !== "cost-reduction" && kind !== "cost-increase") {
+      // rule 812 / 366.1 (rule-id: unl-025-219 Undying Legion) — "[Legion] > You
+      // may play me from your trash for <cost>" is a STANDING play permission
+      // read by the cost path (`self-trash-play.ts`), not a trigger. Turning it
+      // into a play-self trigger would put an ability on the chain (and offer a
+      // free trash play) every time a copy is played from hand.
+      const isPlayPermission =
+        (kind === "play" || kind === "play-permission") && typeof effect?.from === "string";
+      if (effect && !isPlayPermission && kind !== "cost-reduction" && kind !== "cost-increase") {
         result.push({
           condition: { type: "legion" },
           effect: effect as never,
