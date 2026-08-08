@@ -158,6 +158,28 @@ describe("rule 355.5 — the mode's target rides on the chain item before the op
     expect(game.state("b").damage).toBe(3);
     expect(game.state("a").damage).toBe(0);
   });
+
+  // rule 355.3: the mode is chosen for THIS play. Every copy of a card definition
+  // shares one ability object in the registry, so the mode picked for the first
+  // copy must not ride along on the second (and the stored effect must not be the
+  // shared object, which state storage freezes).
+  test("two copies of the same modal spell: the second copy picks its own mode", async () => {
+    const game = await scenario()
+      .resources(P1, { energy: 4 })
+      .battlefield("bf1", { controller: P2 })
+      .unit(P2, "bf1", { might: 4 }, "a")
+      .hand(P1, SALVO, "salvo1")
+      .hand(P1, SALVO, "salvo2")
+      .build();
+    await game.p1.cast("salvo1", { mode: 0, targets: "a" });
+    await game.settle();
+    expect(game.state("a").damage).toBe(3);
+    const handBefore = game.p1.hand().length;
+    await game.p1.cast("salvo2", { mode: 1 });
+    await game.settle();
+    expect(game.p1.hand()).toHaveLength(handBefore - 1 + 1); // cast one, drew one
+    expect(game.state("a").damage).toBe(3); // the first copy's damage mode did not repeat
+  });
 });
 
 describe("rule 359.3.e.5 — a response that makes the chosen target illegal fizzles that instruction; nothing is re-chosen", () => {

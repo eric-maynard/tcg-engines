@@ -2415,7 +2415,16 @@ export const playSpell: Defs["playSpell"] = {
     }
 
     const xValue = Math.max(0, xAmount ?? 0);
-    let effectToStore: unknown = combinedSpellEffect;
+    // rule 355.3 — the choices made while playing a spell (`_chosenIndex`,
+    // `_chosenTargets`) belong to THIS play, so the chain item needs its own
+    // effect object. The registry hands out one shared ability object for every
+    // copy of a card definition, and once it has been stored in state immer
+    // freezes it — stamping the second copy's mode onto it would leak into the
+    // first copy and throw on the frozen object.
+    let effectToStore: unknown =
+      combinedSpellEffect === undefined || combinedSpellEffect === null
+        ? combinedSpellEffect
+        : (structuredClone(combinedSpellEffect) as typeof combinedSpellEffect);
     if (spellEffect && repeatN > 0) {
       // rule 820.2.a (sfd-151-221) — when the caster named one GROUP of
       // targets per execution ("Give two friendly units each +1"), each copy
