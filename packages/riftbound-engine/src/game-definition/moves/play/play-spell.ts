@@ -11,6 +11,7 @@ import type {
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../../types";
 import {
   isAllAtOneBattlefield,
+  isProtectedFromEnemyChoice,
   isUntargetable,
   resolveTarget,
 } from "../../../abilities/target-resolver";
@@ -185,9 +186,15 @@ function leadCounterEffect(effect: unknown): { target?: unknown } | undefined {
   if (e?.type === "counter") {
     return e as { target?: unknown };
   }
+  // rule 355.8 / rule 424 (ogn-080-298 Mystic Reversal) — "Gain control of a
+  // spell" names a chain item the caster chooses when the spell is PLAYED, the
+  // same shape as a counter, so it takes the chain-item targeting branch too.
+  if (e?.type === "gain-control-of-spell") {
+    return e as { target?: unknown };
+  }
   if (e?.type === "sequence" && Array.isArray(e.effects)) {
     const first = e.effects[0] as { type?: string } | undefined;
-    if (first?.type === "counter") {
+    if (first?.type === "counter" || first?.type === "gain-control-of-spell") {
       return first as { target?: unknown };
     }
   }
@@ -227,7 +234,7 @@ function counterChainTarget(effect: unknown): { target?: unknown } | undefined {
     return undefined;
   }
   const kind = (effect as { type?: string } | undefined)?.type;
-  if (kind === "counter" || kind === "conditional") {
+  if (kind === "counter" || kind === "conditional" || kind === "gain-control-of-spell") {
     return spec;
   }
   return findSequenceLeadTarget(effect as SpellEffectTargetShape | undefined) === undefined
@@ -729,7 +736,17 @@ export const playSpell: Defs["playSpell"] = {
       const ctl =
         context.cards.getCardController?.(t as CoreCardId) ??
         context.cards.getCardOwner(t as CoreCardId);
-      if (ctl && ctl !== context.params.playerId && isUntargetable(t, conditionResolverCtx)) {
+      if (
+        ctl &&
+        ctl !== context.params.playerId &&
+        // rule-id: unl-057-219 (rule 757 / 758.2.a) — protection described by
+        // ANOTHER permanent's live static ("your units here with less Might
+        // than me") must be checked here too: effects whose shape carries no
+        // single `target` descriptor (sequence, for-each …) get no pool check
+        // below, so this loop is the only gate they pass through.
+        (isUntargetable(t, conditionResolverCtx) ||
+          isProtectedFromEnemyChoice(t, conditionResolverCtx as never))
+      ) {
         return false;
       }
     }

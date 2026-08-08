@@ -1630,6 +1630,45 @@ export const playUnit: Defs["playUnit"] = {
       } else {
         expandPaidCostVariants(cardId as string, optional);
       }
+
+      // rule 356.2.b (sfd-079-221) — exhausting your legend is likewise a cost
+      // of PLAYING me, not of playing me to my base: mirror the paid variant
+      // onto every other location already offered for the free play.
+      if (
+        standardTiming &&
+        hasLegendExhaustCost(cardId as string) &&
+        readyLegendId(context.zones, context.counters, context.playerId as string) !== undefined
+      ) {
+        const legendLocations = new Set(
+          results
+            .filter(
+              (r) =>
+                r.cardId === (cardId as string) &&
+                r.paidAdditionalCost !== true &&
+                r.location !== undefined &&
+                r.location !== "base",
+            )
+            .map((r) => r.location as string),
+        );
+        for (const location of legendLocations) {
+          if (
+            results.some(
+              (r) =>
+                r.cardId === (cardId as string) &&
+                r.location === location &&
+                r.paidAdditionalCost === true,
+            )
+          ) {
+            continue;
+          }
+          results.push({
+            cardId: cardId as string,
+            location,
+            paidAdditionalCost: true,
+            playerId: context.playerId as string,
+          });
+        }
+      }
     }
     // rule 355.2 (ogn-070-298): while an enemy Mageseeker Warden is at a
     // battlefield, this player may only play units to their base.
@@ -2096,11 +2135,19 @@ export function completeUnitPlay(
     zones as unknown as Parameters<typeof offerWeaponmasterEquip>[1],
     playerId,
     cardId,
+    context.cards as unknown as Parameters<typeof offerWeaponmasterEquip>[4],
   );
 
   // rule 340.2.a / 347.1 — the unit resolved on finalize with nothing left
   // on the chain and no prompt outstanding: Focus passes to the next
   // Relevant Player. A play-trigger chain keeps Focus where it is (346.1).
+  // rule 347.1.b / 340.2.a — the unit resolved immediately, so a chain that
+  // exists now was OPENED by this card's own play triggers as part of a Focus
+  // action of playing a card. That is not a trigger-opened chain for rule
+  // 346.1 purposes: Focus must still pass when it empties.
+  if (wasFocusAction && draft.interaction?.chain?.openedByTrigger) {
+    draft.interaction.chain.openedByTrigger = false;
+  }
   if (wasFocusAction && !draft.pendingChoice && draft.interaction) {
     const post = draft.interaction;
     if (!post.chain?.items.length && getActiveShowdown(post)?.focusPlayer === playerId) {

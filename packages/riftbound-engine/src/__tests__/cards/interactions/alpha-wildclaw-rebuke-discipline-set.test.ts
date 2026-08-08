@@ -70,6 +70,23 @@ describe("Alpha Wildclaw × Rebuke / Discipline — protected set is 'less Might
     expect(game.zoneOf("small")).toBe("battlefield-bf1");
   });
 
+  // The enemy spell here is Discipline, whose effect is a `sequence` (buff, then draw) and so
+  // carries no single top-level `target` descriptor: play-spell's per-target pool check is skipped
+  // for it, leaving the explicit-target loop as the only gate. It must reject the protected ally.
+  test("an ENEMY sequence-effect spell (Discipline: buff then draw) must not be castable at the protected 2-Might ally either (757/758, 355.9.b)", async () => {
+    const game = await board()
+      .resources(P2, { energy: 4, power: { chaos: 2 } })
+      .hand(P2, DISCIPLINE, "enemyDiscipline")
+      .build();
+    const offered = targetsOffered(game, P2, "enemyDiscipline");
+    expect(offered).not.toContain("small");
+    expect(offered).toContain("big");
+    await expect(game.p2.cast("enemyDiscipline", { targets: "small" })).rejects.toThrow();
+    expect(game.zoneOf("enemyDiscipline")).toBe("hand");
+    expect(game.state("small").might).toBe(2);
+    expect(game.chain()).toEqual([]);
+  });
+
   test("(a) enemy Rebuke IS offered the other 7-Might ally (7 is not less than 7) and Wildclaw itself", async () => {
     const game = await board().build();
     const offered = targetsOffered(game, P2, "rebuke");
