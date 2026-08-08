@@ -720,6 +720,10 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
         ((parked as { fromChosenMode?: boolean } | undefined)?.fromChosenMode === true ||
           parked?.type === "choose-mode" ||
           parked?.type === "confirm" ||
+          // rule 355.13 (ogn-153-298) — a per-unit `pick-many` subset prompt
+          // raised mid-sequence suspends the rest the same way a confirm does.
+          (parked?.type === "pick-many" &&
+            (parked as { suspendsSequence?: boolean }).suspendsSequence === true) ||
           parked?.type === "reveal-and-pick" ||
           // rule 355.4 (unl-202-219 Void Assault) — "Move a friendly unit, then
           // move an enemy unit": when the LATER steps own their own locked

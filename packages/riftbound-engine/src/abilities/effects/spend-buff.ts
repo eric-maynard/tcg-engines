@@ -40,9 +40,10 @@ export function findSpendableBuff(effect: ExecutableEffect, ctx: EffectContext):
 }
 
 export function handle_spendBuff(effect: ExecutableEffect, ctx: EffectContext, h: EffectHelpers): void {
-  // rule 355.13 (ogn-153-298): "you may spend its buff to ready it" is a real
-  // choice, not an auto-applied one — park a yes/no prompt for the controller.
-  // The prompt is skipped when nothing could be spent (nothing to choose).
+  // rule 355.13 (ogn-153-298): "FOR EACH friendly unit, you may spend its buff
+  // to ready it" is a per-unit choice, not one all-or-nothing yes/no — park a
+  // `pick-many` subset prompt over every unit that could spend, min 0 (spend
+  // none) to all. The prompt is skipped when nothing could be spent.
   if ((effect as { optional?: boolean }).optional === true && !ctx.boundTargets) {
     if (ctx.draft.pendingChoice) {
       return;
@@ -53,12 +54,22 @@ export function handle_spendBuff(effect: ExecutableEffect, ctx: EffectContext, h
     }
     const { optional: _optional, ...rest } = effect as ExecutableEffect & { optional?: boolean };
     ctx.draft.pendingChoice = {
-      boundTargets: spendable,
-      effect: rest,
+      max: spendable.length,
+      min: 0,
+      options: spendable.map((id) => ({ cardId: id, key: id })),
       playerId: ctx.playerId,
-      prompt: "Spend buffs to ready those units?",
+      prompt: "Spend which buffs?",
+      resume: {
+        effect: rest,
+        kind: "subset-repick",
+        playerId: ctx.playerId,
+        sourceCardId: ctx.sourceCardId,
+      },
+      semantics: "subset",
       sourceCardId: ctx.sourceCardId,
-      type: "confirm",
+      // The rest of the resolving sequence rides on this prompt's `then`.
+      suspendsSequence: true,
+      type: "pick-many",
     } as typeof ctx.draft.pendingChoice;
     return;
   }

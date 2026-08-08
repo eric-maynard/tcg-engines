@@ -24,13 +24,16 @@ export function handle_gainControlOfSpell(
     return;
   }
   const boundId = ctx.boundTargets?.[0];
-  const boundOnChain = boundId !== undefined && items.some((it) => it && it.cardId === boundId);
+  // The play-time pick names the chain item by card id, or by chain-item id
+  // when two items share a card (rule 425.1).
+  const boundOnChain =
+    boundId !== undefined && items.some((it) => it && (it.cardId === boundId || it.id === boundId));
   let stolen: (typeof items)[number] | undefined;
   for (let i = items.length - 1; i >= 0; i--) {
     const item = items[i];
     if (!item || item.type !== "spell" || item.countered) continue;
     if (item.cardId === ctx.sourceCardId) continue;
-    if (boundOnChain && item.cardId !== boundId) continue;
+    if (boundOnChain && item.cardId !== boundId && item.id !== boundId) continue;
     stolen = item;
     break;
   }

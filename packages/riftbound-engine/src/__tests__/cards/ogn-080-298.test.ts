@@ -13,6 +13,7 @@ import { P1, P2, scenario } from "../../harness";
 
 const MYSTIC_REVERSAL = "ogn-080-298";
 const CLEAVE = "ogn-004-298"; // "Give a unit [Assault 3] this turn."
+const DISCIPLINE = "ogn-058-298"; // [Reaction] "Give a unit +2 [Might] this turn. Draw 1."
 
 /** P2's turn; P2 is about to Cleave their own unit; P1 holds Mystic Reversal with exact mana. */
 function board() {
@@ -87,6 +88,33 @@ describe("Mystic Reversal (ogn-080-298)", () => {
     // so answer the prompt(s) its resolution is still waiting on.
     await game.settle({ policy: "first" });
     expect(game.zoneOf("mr")).toBe("trash");
+  });
+
+  test("with two spells on the chain the caster chooses WHICH one to take, not just the topmost", async () => {
+    // rule 355.8 — "a spell" is a caster-chosen chain item locked when Mystic
+    // Reversal is PLAYED, so P1 can reach P2's Cleave underneath their own
+    // Discipline instead of silently stealing the topmost spell (their own).
+    const game = await board()
+      .resources(P1, { energy: 6, power: { calm: 5 } })
+      .hand(P1, DISCIPLINE, "disc")
+      .build();
+    await game.p2.cast("cleave", { targets: "theirs" });
+    if (game.actingSeat() === P2) {
+      await game.p2.passPriority();
+    }
+    await game.p1.cast("disc", { targets: "mine" });
+    if (game.actingSeat() === P2) {
+      await game.p2.passPriority();
+    }
+    expect(game.chain().map((c) => c.cardId)).toEqual(["cleave", "disc"]);
+    // Both chain items are offered as targets — the caster picks, the engine
+    // does not silently take the topmost.
+    const offered = game.p1.option("cast", "mr")?.fields.find((f) => f.arg === "targets")?.options;
+    expect(offered).toEqual([["cleave"], ["disc"]]);
+    await game.p1.cast("mr", { targets: "cleave" });
+    await resolveTop(game);
+    expect(game.chain().find((c) => c.cardId === "cleave")?.controller).toBe(P1);
+    expect(game.chain().find((c) => c.cardId === "disc")?.controller).toBe(P1);
   });
 
   test("“You may make new choices for it” — P1 may retarget the stolen Cleave onto their own unit", async () => {

@@ -61,7 +61,7 @@ describe("Overt Operation (ogn-153-298)", () => {
   test("Then buff all friendly units: every friendly unit ends up with exactly one buff; enemies get none", async () => {
     const game = await board();
     await game.p1.cast("oo");
-    game.script(P1, ["yes", "bt", "yes", "bt"]);
+    game.script(P1, ["bt"]);
     await game.settle();
     expect(game.state("pt").isBuffed).toBe(true);
     expect(game.state("pt").might).toBe(3);
@@ -86,7 +86,7 @@ describe("Overt Operation (ogn-153-298)", () => {
   test("accepting the spend: the buffed exhausted unit is readied and ends re-buffed; the unbuffed one stays exhausted", async () => {
     const game = await board();
     await game.p1.cast("oo");
-    game.script(P1, ["yes", "bt", "yes", "bt"]);
+    game.script(P1, ["bt"]);
     await game.settle();
     expect(game.state("bt").isReady).toBe(true);
     expect(game.state("bt").isBuffed).toBe(true); // spent, then re-buffed by the second sentence
@@ -102,6 +102,43 @@ describe("Overt Operation (ogn-153-298)", () => {
     await game.settle();
     expect(game.state("bt").isExhausted).toBe(true);
     expect(game.state("bt").isBuffed).toBe(true);
+  });
+
+  test("'For each friendly unit' is a per-unit choice — spending one of two buffs readies only that unit", async () => {
+    // rule 355.13 — the offer is made once per friendly unit, so a subset is a
+    // legal answer; it must not be one all-or-nothing yes/no over every buff.
+    const game = await scenario()
+      .resources(P1, { energy: 5, power: { body: 2 } })
+      .hand(P1, { energyCost: 0, might: 2, name: "A" }, "a")
+      .hand(P1, { energyCost: 0, might: 2, name: "B" }, "b")
+      .hand(P1, BUFF, "buffA")
+      .hand(P1, BUFF, "buffB")
+      .hand(P1, CARD, "oo")
+      .build();
+    await game.p1.play("a");
+    await game.settle();
+    await game.p1.play("b");
+    await game.settle();
+    await game.p1.cast("buffA", { targets: "a" });
+    await game.settle();
+    await game.p1.cast("buffB", { targets: "b" });
+    await game.settle();
+    expect(game.state("a")).toMatchObject({ isBuffed: true, isExhausted: true });
+    expect(game.state("b")).toMatchObject({ isBuffed: true, isExhausted: true });
+
+    await game.p1.cast("oo");
+    await game.p1.passPriority();
+    await game.p2.passPriority();
+    const d = game.decision();
+    expect(d?.seat).toBe(P1);
+    expect(d?.kind).toBe("pick");
+    game.script(P1, ["a"]);
+    await game.settle();
+    expect(game.state("a").isReady).toBe(true);
+    expect(game.state("b").isExhausted).toBe(true);
+    // "Then buff all friendly units" still runs after the pick.
+    expect(game.state("a").isBuffed).toBe(true);
+    expect(game.state("b").isBuffed).toBe(true);
   });
 
   test("Action timing: not playable on the opponent's turn outside a showdown", async () => {

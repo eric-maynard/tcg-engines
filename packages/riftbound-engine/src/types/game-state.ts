@@ -1143,6 +1143,14 @@ export interface PickManyChoice {
     readonly sameLocation?: boolean;
   };
   readonly resume: PendingResume;
+  /**
+   * rule 355.13 (ogn-153-298) — set when this prompt interrupts a resolving
+   * sequence: the remaining steps are parked on `then` and run after the
+   * answer, whatever was picked.
+   */
+  readonly suspendsSequence?: boolean;
+  readonly then?: unknown;
+  readonly thenIsSequenceRest?: boolean;
 }
 
 export type PendingChoice =
