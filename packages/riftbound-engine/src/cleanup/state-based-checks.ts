@@ -336,6 +336,20 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
     // of the player who still owns it.
     const sideOf = (id: CoreCardId): string | undefined =>
       ctx.cards.getCardController?.(id) ?? ctx.cards.getCardOwner(id);
+    // rule 323.2.b — designation follows the CONTROLLER: a unit that changed
+    // hands mid-combat swaps Attacker↔Defender at this cleanup, even when its
+    // new side is now the only one present at the battlefield.
+    for (const cardId of units) {
+      const meta = ctx.cards.getCardMeta(cardId) as Partial<RiftboundCardMeta> | undefined;
+      if (!meta?.combatRole) {
+        continue;
+      }
+      const role = sideOf(cardId) === attackerSide ? "attacker" : "defender";
+      if (meta.combatRole !== role) {
+        ctx.cards.updateCardMeta(cardId, { combatRole: role } as Partial<RiftboundCardMeta>);
+        stateChanged = true;
+      }
+    }
     const bothSidesPresent =
       units.some((id) => sideOf(id) === attackerSide) &&
       units.some((id) => sideOf(id) !== attackerSide);
