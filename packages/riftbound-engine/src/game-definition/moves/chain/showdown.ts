@@ -17,7 +17,7 @@ import {
   beginStagedShowdowns,
 } from "../../../operations/arrive-at-battlefield";
 import { fireTriggers } from "../../../abilities/trigger-runner";
-import { cleanupAndFireDeaths } from "../../../cleanup/post-move-cleanup";
+import { cleanupAndFireDeaths, type PostMoveCleanupContext } from "../../../cleanup/post-move-cleanup";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../../types";
 import type { GameEvent } from "../../../abilities/game-events";
 import { scoreBattlefield, scoreEvents } from "../../../operations/points";
@@ -35,11 +35,27 @@ type ShowdownStagingContext = Omit<ArrivalIO, "draft">;
 export function openPendingContestedShowdown(
   draft: RiftboundGameState,
   context: ShowdownStagingContext,
-): void {
+): boolean {
   if (turnPlayerMustChooseStagedCombat(draft, context)) {
-    return;
+    return false;
   }
-  beginStagedShowdowns({ ...context, draft });
+  if (!beginStagedShowdowns({ ...context, draft })) {
+    return false;
+  }
+  refreshAfterShowdownBegan(draft, context);
+  return true;
+}
+
+/**
+ * rule 464.2 / 322.3 — designations and "in a showdown / in combat" just
+ * changed, so continuous effects conditioned on them (Akali's "unless I'm in
+ * combat", combat-only Might) are re-applied before anyone receives Focus.
+ */
+export function refreshAfterShowdownBegan(draft: RiftboundGameState, context: ShowdownStagingContext): void {
+  const ctx = context as unknown as PostMoveCleanupContext;
+  if (ctx.cards?.getCardMeta && ctx.counters && ctx.zones?.getCardsInZone) {
+    cleanupAndFireDeaths(draft, ctx);
+  }
 }
 
 /**
@@ -305,10 +321,10 @@ export const startShowdown: Defs["startShowdown"] = {
     }
 
     // rule 345 / 464.2 — same opening as the Cleanup's, minus the auto-begun mark.
-    beginShowdownAt(
-      { cards: context.cards, counters: context.counters, draft, zones: context.zones } as ArrivalIO,
-      battlefieldId,
-    );
+    const io = { cards: context.cards, counters: context.counters, draft, zones: context.zones } as ArrivalIO;
+    if (beginShowdownAt(io, battlefieldId)) {
+      refreshAfterShowdownBegan(draft, io);
+    }
   },
 };
 

@@ -573,6 +573,20 @@ export function insideMoveReducer(): boolean {
 }
 
 /**
+ * Run a post-reducer step (the Cleanup that begins a staged Showdown) as part
+ * of the move: triggers it fires are queued as ONE batch and finalized by the
+ * caller afterwards (383.3.d ordering needs the whole batch), not one by one.
+ */
+export function withinMoveReducer<T>(step: () => T): T {
+  moveDepth += 1;
+  try {
+    return step();
+  } finally {
+    moveDepth = Math.max(0, moveDepth - 1);
+  }
+}
+
+/**
  * Wrap every move so that, once its reducer (and any post-move cleanup) has
  * run and no prompt is open, Pending trigger items are finalized before the
  * next player decision is derived (rule 337.1 / 337.4). Triggers fired while

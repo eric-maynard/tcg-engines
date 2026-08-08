@@ -5,10 +5,14 @@
  */
 
 import type { GameMoveDefinitions } from "@tcg/core";
-import { withTriggerFinalization } from "../../abilities/trigger-finalization";
+import {
+  finalizePendingItems,
+  withTriggerFinalization,
+  withinMoveReducer,
+} from "../../abilities/trigger-finalization";
 import { withDeferredSpellSettle } from "./chain/resolve";
-import { turnPlayerMustChooseStagedCombat } from "./chain/showdown";
-import { type ArrivalIO, beginStagedShowdowns } from "../../operations/arrive-at-battlefield";
+import { openPendingContestedShowdown } from "./chain/showdown";
+import type { ArrivalIO } from "../../operations/arrive-at-battlefield";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../types";
 
 // Import all move categories
@@ -37,6 +41,10 @@ import { xpMoves } from "./xp";
  * or Combat is staged. Wrapping every move keeps that one step from depending
  * on which reducer happened to remember it (a Combat staged by a move whose
  * trigger was answered through a pending choice used to stay staged forever).
+ * Outermost wrapper: it runs after the move's own triggers were finalized, so a
+ * Standard Move whose mover queued "When I move" finds a Closed State and stays
+ * Staged (401.1); the "attack" / "defend" / "showdown-begin" triggers a begun
+ * Showdown queues are finalized here in turn (337.1), before anyone gets Focus.
  */
 function withStagedShowdownOpening<
   // biome-ignore lint/suspicious/noExplicitAny: structural pass-through wrapper
@@ -54,8 +62,14 @@ function withStagedShowdownOpening<
       // biome-ignore lint/suspicious/noExplicitAny: structural pass-through wrapper
       reducer: (draft: any, context: any) => {
         originalReducer(draft, context);
-        if (context?.cards && context?.zones && !turnPlayerMustChooseStagedCombat(draft, context)) {
-          beginStagedShowdowns({ ...context, draft } as ArrivalIO);
+        if (!(context?.cards && context?.zones)) {
+          return;
+        }
+        const began = withinMoveReducer(() =>
+          openPendingContestedShowdown(draft, context as Omit<ArrivalIO, "draft">),
+        );
+        if (began && !draft.pendingChoice) {
+          finalizePendingItems(draft, context);
         }
       },
     };

@@ -9,11 +9,7 @@ import type {
   GameMoveDefinitions,
 } from "@tcg/core";
 import { createInteractionState, getTurnState } from "../../../chain";
-import {
-  type ArrivalIO,
-  beginShowdownAt,
-  noteArrival,
-} from "../../../operations/arrive-at-battlefield";
+import { type ArrivalIO, noteArrival } from "../../../operations/arrive-at-battlefield";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../../types";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
 import { fireTriggers } from "../../../abilities/trigger-runner";
@@ -397,15 +393,16 @@ export const standardMove: Defs["standardMove"] = {
     draft.unitsMovedThisTurn[playerId] =
       (draft.unitsMovedThisTurn[playerId] ?? 0) + unitIds.length;
 
-    // rule 190.3.a / 450 → 319.8 / 323.12–13 / 344: arriving where the mover
-    // has no control applies Contested, and the Move's own Cleanup (a Neutral
-    // Open one — 320.1, nothing may intervene) begins the Showdown / Combat.
-    // One helper for every kind of arrival: operations/arrive-at-battlefield.ts.
+    // rule 190.3.a / 450 → 319.8 / 323.8: arriving where the mover has no
+    // control applies Contested and STAGES the Showdown / Combat. Beginning it
+    // is the Cleanup's step (323.12 / 323.13 / 344 / 460 — `moves/index.ts
+    // withStagedShowdownOpening`), which needs a Neutral Open State: with the
+    // mover's own "When I move" trigger on the chain (401.1) it stays Staged
+    // until that chain has resolved. One helper for every kind of arrival:
+    // operations/arrive-at-battlefield.ts.
     if (!toBase) {
       const io = { cards: context.cards, counters, draft, zones } as unknown as ArrivalIO;
-      if (noteArrival(io, { at: destination, cause: "move", stagedBy: playerId, unitIds }).staged) {
-        beginShowdownAt(io, destination);
-      }
+      noteArrival(io, { at: destination, cause: "move", discretionary: true, stagedBy: playerId, unitIds });
     }
   },
 };

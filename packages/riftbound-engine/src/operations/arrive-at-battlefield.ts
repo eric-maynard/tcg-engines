@@ -14,10 +14,14 @@
  *  - `beginShowdownAt` — opens the staged Showdown / Combat at one battlefield:
  *    Focus to the player who applied Contested (345), and for a Combat the
  *    Attacker / Defender designations plus their "attack" / "defend" events
- *    (464.2). Used by the Cleanup (`beginStagedShowdowns`), by the turn player's
- *    explicit `startShowdown` step, and inline by Standard / Ganking Moves —
- *    whose own Cleanup is that same Neutral Open Cleanup.
- *  - `beginStagedShowdowns` — the Cleanup step itself (323.11 → 323.12 → 323.13).
+ *    (464.2). Used by the Cleanup (`beginStagedShowdowns`) and by the turn
+ *    player's explicit `startShowdown` step — never inline by an arrival path:
+ *    a Standard Move whose mover put its own "When I move" trigger on the
+ *    chain is in a Closed State (401.1), so its Combat stays Staged until the
+ *    chain empties (323.12 / 323.13 / 344 / 460).
+ *  - `beginStagedShowdowns` — the Cleanup step itself (323.11 → 323.12 → 323.13),
+ *    run at the end of EVERY move (`moves/index.ts withStagedShowdownOpening`),
+ *    after each chain resolution and after each answered prompt.
  */
 
 import type { CardId as CoreCardId, PlayerId as CorePlayerId, ZoneId as CoreZoneId } from "@tcg/core";
@@ -105,6 +109,7 @@ export function stageContested(
   battlefieldId: string,
   controller: string,
   stagedBy?: string,
+  discretionary?: boolean,
 ): boolean {
   const bf = draft.battlefields?.[battlefieldId];
   if (!bf || bf.controller === controller) {
@@ -114,8 +119,12 @@ export function stageContested(
     bf.contested = true;
     bf.contestedBy = controller as PlayerId;
     bf.showdownComplete = false;
+    bf.stagedByAction = undefined;
   }
   bf.stagedBy = (stagedBy ?? controller) as PlayerId;
+  if (discretionary) {
+    bf.stagedByAction = true;
+  }
   return true;
 }
 
@@ -132,6 +141,14 @@ export interface ArrivalArgs {
    * opposed case is staged here.
    */
   readonly cause?: "move" | "play" | "control-change";
+  /**
+   * The arrival IS the player's Discretionary Action (Standard / Ganking Move,
+   * playing the card there) rather than an effect's resolution. The Cleanup
+   * still begins its Showdown (possibly a later Cleanup, once the mover's own
+   * triggers have resolved), but not as an `autoBegun` one (344.2): drivers
+   * pass Focus through it exactly as if it had begun inline.
+   */
+  readonly discretionary?: boolean;
 }
 
 /**
@@ -162,7 +179,7 @@ export function noteArrival(io: ArrivalIO, args: ArrivalArgs): { battlefieldId?:
     ) {
       continue;
     }
-    if (stageContested(draft, battlefieldId, controller, args.stagedBy)) {
+    if (stageContested(draft, battlefieldId, controller, args.stagedBy, args.discretionary)) {
       staged = true;
     }
   }
@@ -289,29 +306,6 @@ export interface BeginOptions {
 }
 
 /**
- * rule 323.13 / 344 — the Cleanup of a Standard / Ganking Move begins the
- * Showdown it staged, but a COMBAT only begins from a Neutral Open State: when
- * the move's own "when I move" triggers went on the chain, the Combat stays
- * staged (no designations, no attack/defend events) until that chain has fully
- * resolved — the chain's own cleanup then opens it.
- */
-export function beginShowdownAfterMove(io: ArrivalIO, battlefieldId: string): boolean {
-  const interaction = io.draft.interaction ?? createInteractionState();
-  const notOpen = getTurnState(interaction) !== "neutral-open" || io.draft.pendingChoice !== undefined;
-  const attacker = io.draft.battlefields?.[battlefieldId]?.contestedBy as string | undefined;
-  const opposed =
-    attacker !== undefined &&
-    unitsAt(io, battlefieldId).some((id) => {
-      const c = controllerOf(io, id);
-      return c !== undefined && c !== attacker;
-    });
-  if (notOpen && opposed) {
-    return false;
-  }
-  return beginShowdownAt(io, battlefieldId);
-}
-
-/**
  * rules 344 / 345 / 464.2 — begin the Showdown staged at `battlefieldId`: the
  * player who applied Contested gains Focus; with opposing units present it is a
  * Combat Showdown (Attacker = that player, 464.2.c.1; every other occupant
@@ -335,6 +329,7 @@ export function beginShowdownAt(io: ArrivalIO, battlefieldId: string, opts: Begi
     return c !== undefined && c !== attacker;
   });
   const isCombat = attackers.length > 0 && defenders.length > 0;
+  bf.stagedByAction = undefined;
   const playerIds = Object.keys(draft.players);
   const defender = isCombat
     ? bf.controller && bf.controller !== attacker
@@ -395,7 +390,13 @@ export function beginStagedShowdowns(io: ArrivalIO): boolean {
       return false;
     }
   }
-  const staged: { attacker: string; battlefieldId: string; isCombat: boolean; stagedBy?: string }[] = [];
+  const staged: {
+    attacker: string;
+    battlefieldId: string;
+    byAction: boolean;
+    isCombat: boolean;
+    stagedBy?: string;
+  }[] = [];
   for (const [battlefieldId, bf] of Object.entries(draft.battlefields ?? {})) {
     if (!bf?.contested || bf.showdownComplete === true || !bf.contestedBy) {
       continue;
@@ -415,6 +416,7 @@ export function beginStagedShowdowns(io: ArrivalIO): boolean {
     staged.push({
       attacker,
       battlefieldId,
+      byAction: bf.stagedByAction === true,
       isCombat: occupants.some((id) => {
         const c = controllerOf(io, id);
         return c !== undefined && c !== attacker;
@@ -429,5 +431,5 @@ export function beginStagedShowdowns(io: ArrivalIO): boolean {
   if (!next) {
     return false;
   }
-  return beginShowdownAt(io, next.battlefieldId, { autoBegun: true });
+  return beginShowdownAt(io, next.battlefieldId, { autoBegun: !next.byAction });
 }

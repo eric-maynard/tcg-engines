@@ -138,7 +138,10 @@ describe("Shadow Order Disciple (ven-095-166)", () => {
   test("460 — on an attack the +1 lands before combat: 2-Might Disciple burns to 3, kills the 2-Might Sentry, survives and conquers", async () => {
     const game = await board({ foe: 2 }).build();
     await game.p1.move("sod", "bf1");
-    expect(game.state("sod").combatRole).toBe("attacker");
+    // 401.1 / 323.13 — the move trigger makes this a Closed State: the Combat is only Staged
+    // (no designation yet) and begins once the trigger has resolved.
+    expect(game.state("sod").combatRole).toBeNull();
+    expect(game.gameState.battlefields.bf1).toMatchObject({ contested: true, contestedBy: P1 });
     await answerMay(game, true);
     await game.settle();
     expect(game.zoneOf("foe")).toBe("trash");

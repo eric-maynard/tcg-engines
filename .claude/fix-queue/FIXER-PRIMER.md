@@ -316,16 +316,23 @@ Recipe — wrong total: assert `computeTotalCost(...).resources` in a unit test 
   for effect moves/swaps, `effects/play.ts enterUnitFromEffect`, `create-token.ts`, `take-control.ts` cause
   `"control-change"`). It applies Contested for the unit's CONTROLLER (190.3.a/450: `bf.contested/contestedBy`,
   `showdownComplete=false`, `stagedBy` = whose action did it) and joins a showdown already running there (344.1
-  non-combat→combat upgrade, 464.2.c.3.a roles + attack/defend events for newcomers only). It never BEGINS anything:
-  `beginStagedShowdowns(io)` (= `chain/showdown.ts openPendingContestedShowdown`, run when the turn is back in Neutral
-  Open: after the chain empties in `resolve.ts`, `pending-choice.ts postChoiceCleanup`, showdown close, full combat)
-  does 323.11 (un-contest a battlefield whose contesting player has no unit left) → 323.12 (showdown-only first) →
-  323.13 (staged Combat whose attacker OR `stagedBy` is the turn player; an off-turn Reaction arrival waits for the
-  turn player's `startShowdown` step). `beginShowdownAt(io, bfId, {autoBegun})` is the single opener (focus =
-  contestedBy per 345, `startShowdownState`, `showdown-begin`, roles + become-mighty + `attack`/`defend` with
-  batchIndex) used by that Cleanup, by the `startShowdown` move, and inline by Standard/Ganking moves (their own
-  Cleanup IS Neutral Open; not `autoBegun`, so harness `settle()` does not hand it back). A control steal of the ONLY
-  unit at a battlefield is left to `performCleanup` step 6 `conquerByPresence`. Tests: `core-rules/effect-move-staging.test.ts`.
+  non-combat→combat upgrade, 464.2.c.3.a roles + attack/defend events for newcomers only). It never BEGINS anything —
+  NO caller opens inline (Standard/Ganking move, play-unit/champion included; `discretionary:true` marks those so the
+  begun showdown is not `autoBegun` → harness `settle()` passes Focus through instead of handing it back once):
+  `beginStagedShowdowns(io)` (= `chain/showdown.ts openPendingContestedShowdown`, run by the OUTERMOST move wrapper
+  `moves/index.ts withStagedShowdownOpening` after trigger finalization — so a mover whose own "When I move" trigger is
+  Pending finds a Closed State (401.1) and stays Staged — plus after the chain empties in `resolve.ts`, `pending-choice.ts
+  postChoiceCleanup`, showdown close, full combat; a begun showdown re-runs `cleanupAndFireDeaths` (statics on
+  "in combat") and its attack/defend/showdown-begin triggers are finalized as ONE batch) does 323.11 (un-contest a
+  battlefield whose contesting player has no unit left — Gust-away in response ⇒ no showdown) → 323.12 (showdown-only
+  first) → 323.13 (staged Combat whose attacker OR `stagedBy` is the turn player; ≥2 ⇒ turn player's `startShowdown`
+  pick, `turnPlayerMustChooseStagedCombat`; an off-turn Reaction arrival waits for the turn player's `startShowdown`
+  step). `beginShowdownAt(io, bfId, {autoBegun})` is the single opener (focus = contestedBy per 345,
+  `startShowdownState`, `showdown-begin`, roles + become-mighty + `attack`/`defend` with batchIndex) used by that
+  Cleanup and by the `startShowdown` move. A control steal of the ONLY unit at a battlefield is left to `performCleanup`
+  step 6 `conquerByPresence`. Tests: `core-rules/effect-move-staging.test.ts`, `core-rules/staged-showdown-timing.test.ts`.
+  TEST IDIOM: right after `move()` of a unit WITH a move trigger expect `decision().context==="chain"`, no showdown, no
+  `combatRole`; pass priority twice (or `settle()`) to see the showdown/roles.
 - Showdown / Focus: `E/chain/chain-state.ts startShowdown, passFocus, endShowdown, resetShowdownPasses, getActiveShowdown`;
   moves `moves/chain/showdown.ts passShowdownFocus` (all passed ⇒ close; non-combat close auto-conquers for a sole occupant
   + `conquer` event; combat close sets `bf.showdownComplete`), `startShowdown` (reducer = `beginShowdownAt`), `endShowdown`.

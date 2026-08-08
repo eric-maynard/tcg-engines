@@ -6,11 +6,7 @@ import type { CardId as CoreCardId, ZoneId as CoreZoneId, GameMoveDefinitions } 
 import { createInteractionState, getTurnState } from "../../../chain";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../../types";
 import { fireTriggers } from "../../../abilities/trigger-runner";
-import {
-  type ArrivalIO,
-  beginShowdownAt,
-  noteArrival,
-} from "../../../operations/arrive-at-battlefield";
+import { type ArrivalIO, noteArrival } from "../../../operations/arrive-at-battlefield";
 import { hasKeyword, relocateAttachedEquipment } from "./helpers";
 
 type Defs = GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>;
@@ -187,13 +183,12 @@ export const gankingMove: Defs["gankingMove"] = {
       { cards: context.cards, counters, draft, zones },
     );
 
-    // Rule 450 / 548.2 (unl-022-219): a Ganking move arriving at a
-    // battlefield the mover does not control applies Contested and opens
-    // a Showdown, exactly as a Standard Move does (same helper).
+    // Rule 450 / 323.8 (unl-022-219): a Ganking move arriving at a
+    // battlefield the mover does not control applies Contested and stages
+    // a Showdown, exactly as a Standard Move does (same helper); the Cleanup
+    // begins it once the turn is in a Neutral Open State (323.12 / 323.13).
     const playerId = context.params.playerId as string;
     const io = { cards: context.cards, counters, draft, zones } as unknown as ArrivalIO;
-    if (noteArrival(io, { at: toBattlefield, cause: "move", stagedBy: playerId, unitIds: [unitId] }).staged) {
-      beginShowdownAt(io, toBattlefield);
-    }
+    noteArrival(io, { at: toBattlefield, cause: "move", discretionary: true, stagedBy: playerId, unitIds: [unitId] });
   },
 };

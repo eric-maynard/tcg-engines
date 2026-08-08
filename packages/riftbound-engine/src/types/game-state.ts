@@ -373,6 +373,15 @@ export interface BattlefieldState {
   stagedBy?: PlayerId;
 
   /**
+   * rule 344.2 — the Showdown / Combat staged here came from a player's own
+   * Discretionary Action (Standard / Ganking Move, playing a card there), not
+   * from an effect's resolution. The Cleanup that begins it (which may be a
+   * later one, after the mover's own triggers resolved — 401.1 / 323.13) does
+   * not mark it `autoBegun`. Cleared when the Showdown begins.
+   */
+  stagedByAction?: boolean;
+
+  /**
    * rule 466.1.a.2: no defending unit was left here when the Combat Cleanup
    * ran, so the surviving attackers were never recalled. Carried across the
    * deferred Resolution Step (466.2) — a unit that a pending trigger puts here

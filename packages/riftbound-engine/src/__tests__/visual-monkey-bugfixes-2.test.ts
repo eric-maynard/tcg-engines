@@ -15,6 +15,7 @@ import type {
   ZoneId as CoreZoneId,
 } from "@tcg/core";
 import { combatMoves } from "../game-definition/moves/combat";
+import { riftboundMoves } from "../game-definition/moves";
 import { movementMoves } from "../game-definition/moves/movement";
 import { riftboundFlow } from "../game-definition/flow/riftbound-flow";
 import { fireTriggers } from "../abilities/trigger-runner";
@@ -378,8 +379,10 @@ describe("Fix 2: Showdown starts when units move to uncontrolled battlefield", (
       "unit-1": { owner: P1, zone: "base" },
     });
 
-    // Execute standardMove to move unit to uncontrolled bf-1
-    const reducer = movementMoves.standardMove!.reducer!;
+    // Execute standardMove to move unit to uncontrolled bf-1. The bare movement
+    // reducer only STAGES the Showdown (323.8); the Cleanup that begins it
+    // (323.12 / 344) is the engine-wide move wrapper, so drive the assembled move.
+    const reducer = riftboundMoves.standardMove!.reducer!;
     reducer(state, {
       ...context,
       params: {

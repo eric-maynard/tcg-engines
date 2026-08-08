@@ -158,7 +158,7 @@ describe("Treasure Hunter (sfd-130-221)", () => {
     expect(golds(game)).toHaveLength(1);
   });
 
-  test.failing("BUG: 344 / 323.12 / 401.1: moving into an empty uncontrolled battlefield does NOT open the non-combat Showdown while the move trigger is still on the chain", async () => {
+  test("344 / 323.12 / 401.1: moving into an empty uncontrolled battlefield does NOT open the non-combat Showdown while the move trigger is still on the chain", async () => {
     const game = await scenario()
       .battlefield("climb", { controller: null })
       .unit(P1, "base", CARD, "th")
@@ -167,10 +167,14 @@ describe("Treasure Hunter (sfd-130-221)", () => {
     expect(game.chain()).toHaveLength(1);
     // 401.1 — the Pending Item makes this a Closed State; 344 needs a Neutral Open one.
     expect(game.gameState.interaction?.showdownStack?.some((sd) => sd.active)).toBeFalsy();
-    await game.settle();
+    expect(game.gameState.battlefields.climb?.contested).toBe(true);
+    await game.p1.passPriority();
+    await game.p2.passPriority();
     expect(golds(game)).toHaveLength(1);
     // deferred, not skipped: the Cleanup opens it once the chain is empty.
-    expect(game.gameState.battlefields.climb?.contested).toBe(true);
+    expect(game.gameState.interaction?.showdownStack?.at(-1)).toMatchObject({ active: true, battlefieldId: "climb", isCombatShowdown: false, focusPlayer: P1 });
+    await game.settle();
+    expect(game.gameState.battlefields.climb).toMatchObject({ contested: false, controller: P1 });
   });
 
   test("456.1: surviving attackers RECALLED after a drawn combat do not 'move' — exactly one Gold (from the way in), not two", async () => {
