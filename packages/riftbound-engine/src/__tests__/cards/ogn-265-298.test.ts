@@ -43,4 +43,28 @@ describe("Herald of the Arcane (ogn-265-298)", () => {
     expect(d.seat).toBe(P1);
     expect(game.p1.can("activate", "herald")).toBe(false);
   });
+
+  test("the [1] is not waived by the [Exhaust] — empty pool, no runes, not offered (rule 403.1.a)", async () => {
+    // rule 577.2: every component of an activation cost must be payable, so an
+    // ability whose cost is [1] + [Exhaust] is not enumerated on an untapped
+    // host while the pool holds no energy and no ready rune can fund it.
+    const game = await scenario().resources(P1, { energy: 0 }).legend(P1, CARD, "herald").build();
+    expect(game.p1.can("activate", "herald")).toBe(false);
+    expect(game.p1.legal().some((o) => o.moveId === "activateAbility")).toBe(false);
+  });
+
+  test("a ready rune funds the [1] out of an empty pool and is exhausted to pay it (rule 357.1.a)", async () => {
+    const game = await scenario()
+      .resources(P1, { energy: 0 })
+      .runes(P1, "mind", 2)
+      .legend(P1, CARD, "herald")
+      .build();
+    expect(game.p1.can("activate", "herald")).toBe(true);
+    const before = game.p1.base().length;
+    await game.p1.activate("herald");
+    await game.settle();
+    expect(game.p1.runes({ ready: true }).length).toBe(1);
+    expect(game.p1.energy()).toBe(0);
+    expect(game.p1.base().length).toBe(before + 1);
+  });
 });
