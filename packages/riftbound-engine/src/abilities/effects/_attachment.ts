@@ -113,13 +113,24 @@ export function detachEquipment(ctx: EffectContext, equipmentId: string): void {
   }
 }
 
+/**
+ * rule 208.3 / 476.1 — a gear with the printed [Equip] ability IS Equipment
+ * (VEN gears are typed "gear" in the set JSON). Unknown ids (test stubs) are
+ * not equipment; the caller's unit test settles those.
+ */
+export function isEquipmentCard(cardId: string): boolean {
+  const registry = getGlobalCardRegistry();
+  const type = registry.getCardType(cardId);
+  return type === "equipment" || (type === "gear" && registry.hasKeyword(cardId, "Equip"));
+}
+
 /** Split a bound target pair into [equipment, unit] using the card registry. */
 export function splitEquipmentPair(ids: readonly string[]): {
   equipmentId?: string;
   unitId?: string;
 } {
   const registry = getGlobalCardRegistry();
-  const equipmentId = ids.find((id) => registry.getCardType(id) === "equipment");
+  const equipmentId = ids.find((id) => isEquipmentCard(id));
   const unitId = ids.find((id) => id !== equipmentId && registry.getCardType(id) === "unit");
   return { equipmentId, unitId };
 }

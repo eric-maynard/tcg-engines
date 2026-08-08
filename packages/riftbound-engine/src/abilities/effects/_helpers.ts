@@ -15,6 +15,31 @@ import { scoreWithinConditionMet } from "../../operations/score-within";
 import type { TargetDescriptor } from "../target-resolver";
 import { boundBattlefieldZone, resolveTarget } from "../target-resolver";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
+import { findAllReplacements } from "../replacement-effects";
+
+/**
+ * rule 370.1.a.1 — a death that a replacement effect replaces never happens,
+ * so the spell that dealt the lethal damage did NOT kill the unit. The
+ * "this kills it" test runs while the effect is still resolving (before the
+ * rule 520 state-based kill), so it has to consult the board's `die`
+ * replacements itself. A replacement gated on a "you may pay …" cost may be
+ * declined, so it is not treated as a certainty.
+ */
+function dieWouldBeReplaced(cardId: string, ctx: EffectContext): boolean {
+  const replacementCtx = {
+    cards: {
+      getCardMeta: ctx.cards.getCardMeta ?? (() => undefined),
+      getCardOwner: ctx.cards.getCardOwner,
+    },
+    draft: ctx.draft,
+    zones: { getCardsInZone: ctx.zones.getCardsInZone },
+  };
+  const matches = findAllReplacements(
+    { cardId, owner: ctx.cards.getCardOwner?.(cardId as CoreCardId), type: "die" },
+    replacementCtx as Parameters<typeof findAllReplacements>[1],
+  );
+  return matches.some((m) => (m.condition as { type?: string } | undefined)?.type !== "pay-cost");
+}
 
 /** How many past reveals the shared record keeps (rule 424.1 is about the moment, not a permanent log). */
 const PUBLIC_REVEAL_HISTORY = 20;
@@ -708,7 +733,8 @@ export function evaluateEffectCondition(
         const dmg =
           (ctx.cards.getCardMeta?.(id as CoreCardId) as Partial<RiftboundCardMeta> | undefined)
             ?.damage ?? 0;
-        return dmg >= might;
+        // rule 370.1.a.1 — a replaced death is not a kill.
+        return dmg >= might && !dieWouldBeReplaced(id, ctx);
       });
     }
     // rule 355.10 (unl-051-219 Ivern) — "Then if you revealed a Bird, Cat,
