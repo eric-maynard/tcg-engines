@@ -87,7 +87,7 @@ async function endTurnTakingRunes(game: Game, seat: Seat, take: number): Promise
 describe("Targon's Peak (ogn-289-298)", () => {
   // BUG — expected: a "conquer here" trigger whose effect installs an end-of-turn delayed trigger readying up to 2
   // RUNES. Actual parse: an immediate `ready` of up to 2 UNITS (`target.type: "unit"`, no delay).
-  test.failing("BUG: registry payload should be conquer-here → delayed end-of-turn ready of up to 2 runes (parsed as an immediate ready of up to 2 units)", async () => {
+  test("registry payload should be conquer-here → delayed end-of-turn ready of up to 2 runes (parsed as an immediate ready of up to 2 units)", async () => {
     const def = (await loadDefaultCardPool()).get(CARD);
     expect(def).toMatchObject({ cardType: "battlefield", name: "Targon's Peak" });
     expect(def?.abilities).toHaveLength(1);
@@ -104,7 +104,7 @@ describe("Targon's Peak (ogn-289-298)", () => {
 
   // BUG (shared by the tests below) — expected per 355.5.b: conquering asks nothing and readies nothing until the
   // Ending Step. Actual: the conquer immediately opens a "Choose a target for Targon's Peak" prompt listing UNITS.
-  test.failing("BUG: conquering the Peak scores normally but asks nothing and readies nothing right now (355.5.b) — runes stay tapped for the rest of my turn", async () => {
+  test("conquering the Peak scores normally but asks nothing and readies nothing right now (355.5.b) — runes stay tapped for the rest of my turn", async () => {
     const game = await board(3).build();
     await conquer(game, P1, "raider", "peak");
     expect(game.p1.points()).toBe(1);
