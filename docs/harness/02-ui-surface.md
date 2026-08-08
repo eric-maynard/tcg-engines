@@ -1,5 +1,13 @@
 # Riftbound web client + server — interface-level action/observation surface
 
+> **Update (UI affordance audit, e31df16+)** — the move-kind → control map is now maintained (and test-backed) in
+> [`UI-AFFORDANCES.md`](./UI-AFFORDANCES.md). Since this inventory was written: `equipCard` has a card-bar
+> "Equip <cost> → choose a unit" button + drag-onto-unit + sidebar row; hand cards / the champion can be dragged to a
+> lit battlefield (`location` variants, `hideCard`); facedown cards click → "Reveal"; `playSpell`/`playGear` get one
+> sidebar row per card; every `pendingChoice` type has a titled modal (order / pick-many / pay-x get composite
+> choosers; the 383.3.d trigger-order offer is a sidebar panel); the pending backdrop is click-through; the sidebar
+> header names whoever holds priority / focus / the prompt. §5 "gaps" below is partially superseded by that table.
+
 All paths under `/root/src/tcg/tcg-engines/apps/riftbound-app/` unless absolute. Client scripts are classic (non-module) globals loaded in the order at `public/gameplay.html:317-345`. **`auto-pay.js` is NOT loaded** (interactions.js:3).
 
 ---

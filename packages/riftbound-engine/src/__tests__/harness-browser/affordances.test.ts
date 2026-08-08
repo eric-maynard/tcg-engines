@@ -276,6 +276,96 @@ describeLive("affordances — sidebar, runes, plays, abilities, movement (defaul
   );
 });
 
+describeLive("affordances — drag gestures & multi-target targeting", () => {
+  test(
+    "drag: unit → base, unit → held battlefield (location variant), champion → base, board Equipment → unit (equipCard); Singularity 'up to two': pick, pick → exact 2-target variant / Done(1) / No target",
+    async () => {
+      live = await launchTest(BASE_URL);
+      const { backend, game } = live;
+      const page = backend.page;
+      const p1 = game.p1;
+      await ui.prepare(page);
+      const sel = (id: string) => `#game-scale-wrapper [data-card-id=${JSON.stringify(id)}]`;
+
+      // Hold a battlefield first (Kingpin enters ready → move → uncontested conquer).
+      const king = await fieldUnit(live, "unl-001-219");
+      const bf = game.battlefields()[0] as string;
+      await p1.move(king, bf);
+      await game.settle();
+      expect(p1.battlefields({ controlled: true })).toContain(bf);
+
+      // Hand unit dragged to BASE → base variant; dragged to the held battlefield → that location variant.
+      const { cardId: u } = await backend.tutor("sfd-018-221");
+      const variants = movesOf(backend, "playUnit").filter((m) => m.params.cardId === u);
+      expect(variants.map((v) => v.params.location).sort()).toEqual(["base", `battlefield-${bf}`].sort());
+      let got = await ui.capture(page, () => page.locator(sel(u)).first().dragTo(page.locator(`#player-base[data-drop-zone="player-base"]`).first(), { timeout: 4000 }));
+      expect(got).toEqual([{ moveId: "playUnit", params: { cardId: u, location: "base", playerId: P1 }, playerId: P1 }]);
+      got = await ui.capture(page, () => page.locator(sel(u)).first().dragTo(page.locator(`.battlefield[data-drop-zone=${JSON.stringify(bf)}] .bf-body`).first(), { timeout: 4000 }));
+      expect(got).toEqual([{ moveId: "playUnit", params: { cardId: u, location: `battlefield-${bf}`, playerId: P1 }, playerId: P1 }]);
+
+      // Champion dragged to base (single base variant → direct; several → modal "Play to base").
+      const champ = p1.champion() as string;
+      const cs = game.state(champ);
+      await backend.addResources(P1, { energy: cs.energyCost, power: Object.fromEntries(cs.powerCost.map((d) => [d, 1])) });
+      expect(movesOf(backend, "playFromChampionZone").length).toBeGreaterThan(0);
+      expect(await page.evaluate<boolean>(`document.querySelector(${JSON.stringify(sel(champ))}).classList.contains("playable")`)).toBe(true);
+      got = await ui.capture(page, async () => {
+        await page.locator(sel(champ)).first().dragTo(page.locator(`#player-base[data-drop-zone="player-base"]`).first(), { timeout: 4000 });
+        if ((await ui.modal(page)).visible) {
+          await ui.clickModalButton(page, "Play to base");
+        }
+      });
+      expect(got[0]).toMatchObject({ moveId: "playFromChampionZone", params: { location: "base" } });
+      expect(got[0]?.params.paidAdditionalCost).toBeUndefined();
+
+      // Board Equipment dragged onto a unit → equipCard for that unit.
+      const sitter = await fieldUnit(live, "sfd-018-221");
+      const { cardId: dirk } = await backend.tutor("sfd-009-221");
+      await backend.addResources(P1, { power: { fury: 2 } });
+      await p1.playGear(dirk);
+      await game.settle({ policy: "first" });
+      const eq = movesOf(backend, "equipCard").find((m) => m.params.equipmentId === dirk && m.params.unitId === sitter);
+      expect(eq).toBeDefined();
+      got = await ui.capture(page, () => page.locator(sel(dirk)).first().dragTo(page.locator(sel(sitter)).first(), { timeout: 4000 }));
+      expect(got).toEqual([{ moveId: "equipCard", params: eq?.params as Record<string, unknown>, playerId: P1 }]);
+
+      // "Up to two units" (Singularity): first pick keeps targeting open (Done (1) offered), second pick plays the 2-target variant; "No target" exists for zero.
+      const { cardId: sing } = await backend.tutor("ogn-105-298");
+      const sv = movesOf(backend, "playSpell").filter((m) => m.params.cardId === sing);
+      const two = sv.find((m) => (m.params.targets as string[]).length === 2 && new Set(m.params.targets as string[]).size === 2);
+      expect(two).toBeDefined();
+      const [t1, t2] = two?.params.targets as [string, string];
+      await ui.clickCard(page, sing);
+      let banner = await ui.targetBanner(page);
+      expect(banner?.text).toBe("Choose a target for Singularity — Esc to cancel");
+      expect(banner?.buttons).toContain("No target");
+      let second: Awaited<ReturnType<typeof ui.targetBanner>> = null;
+      got = await ui.capture(page, async () => {
+        await ui.clickCard(page, t1);
+        second = await ui.targetBanner(page);
+        await ui.clickCard(page, t2);
+      });
+      expect(second!.text).toContain("pick another or Done");
+      expect(second!.buttons).toContain("Done (1)");
+      expect(second!.validTargets).toContain(t2);
+      expect(got).toHaveLength(1);
+      expect(got[0]).toMatchObject({ moveId: "playSpell", params: { cardId: sing } });
+      expect([...(got[0]?.params.targets as string[])].sort()).toEqual([t1, t2].sort());
+      // Done (1) → the single-target variant for the first pick.
+      await ui.clickCard(page, sing);
+      got = await ui.capture(page, async () => {
+        await ui.clickCard(page, t1);
+        await page.evaluate(`Array.from(document.querySelectorAll('#targetBanner .target-banner-btn')).find(b => b.textContent.startsWith('Done')).click()`);
+      });
+      expect(got).toEqual([{ moveId: "playSpell", params: { cardId: sing, playerId: P1, targets: [t1] }, playerId: P1 }]);
+      banner = await ui.targetBanner(page);
+      expect(banner).toBeNull();
+      expect(backend.pageErrors.filter((e) => !/favicon|card-image/.test(e))).toEqual([]);
+    },
+    LIVE_TIMEOUT * 2,
+  );
+});
+
 describeLive("affordances — legend ability, battlefield units, hidden, chain & live prompts (custom deck)", () => {
   test(
     "Blind Monk legend: printed ability on the legend bar → targeting → activateAbility; unaffordable → greyed with reason; gank/recall bar; facedown → Reveal; chain overlay names targets; reveal-and-pick / opt-in / choose-target / choose-mode prompts are labelled",
