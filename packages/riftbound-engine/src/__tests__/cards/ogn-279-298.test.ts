@@ -197,7 +197,7 @@ describe("Fortified Position (ogn-279-298)", () => {
     expect(game.state("atk").grantedKeywords).toEqual([]);
   });
 
-  test.failing("BUG: 'this combat' Shield never expires (466.7) — a second combat here the same turn stacks to Shield 4, so a 5-Might attacker wrongly dies to a 2-Might defender", async () => {
+  test("'this combat' Shield never expires (466.7) — a second combat here the same turn stacks to Shield 4, so a 5-Might attacker wrongly dies to a 2-Might defender", async () => {
     // Expected: combat 1 ends → the Shield 2 grant ends with it; combat 2 grants a fresh Shield 2 →
     // defender is 4, the 5-Might attacker kills it and conquers. Actual: the combat-1 grant lingers,
     // combat 2 sums to Shield 4 (6 Might) and the attacker dies.
@@ -215,7 +215,7 @@ describe("Fortified Position (ogn-279-298)", () => {
     expect(game.gameState.battlefields.fp?.controller).toBe(P1);
   });
 
-  test.failing("BUG: 'this combat' Shield survives even across turns — two turns later the same defender defends with Shield 4", async () => {
+  test("'this combat' Shield survives even across turns — two turns later the same defender defends with Shield 4", async () => {
     // Expected: on P1's next turn a fresh attack sees exactly one Shield 2 grant (4 Might); the
     // 5-Might attacker wins. Actual: the old grant is still on the unit (neither combat end nor the
     // end-of-turn expiry removes duration:"combat"), so it defends at 6.

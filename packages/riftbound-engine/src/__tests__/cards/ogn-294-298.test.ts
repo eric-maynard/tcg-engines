@@ -156,7 +156,7 @@ describe("Trifarian War Camp (ogn-294-298)", () => {
   // layer, the ability layer is re-checked, and a printed-4 Fiora, Victorious here is [Mighty] (5) with
   // Deflect, Ganking and Shield — exactly what the engine already does when the +1 comes from a buff.
   // Actual: Might reads 5 but the "While I'm Mighty" keywords are never granted for a static Might source.
-  test.failing("BUG: Fiora, Victorious at the Camp is Mighty (4+1) and must have Deflect/Ganking/Shield — she can gank away (476.3)", async () => {
+  test("Fiora, Victorious at the Camp is Mighty (4+1) and must have Deflect/Ganking/Shield — she can gank away (476.3)", async () => {
     const game = await scenario()
       .battlefield("camp", { controller: P1, def: CARD, inert: false })
       .battlefield("open", { controller: null })

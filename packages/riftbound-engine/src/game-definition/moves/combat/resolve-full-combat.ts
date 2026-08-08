@@ -228,6 +228,30 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
           } as Partial<RiftboundCardMeta>);
         }
       }
+      // rule 466.7 — every "this combat" effect ends with the combat, including
+      // keywords granted with `duration:"combat"` (Fortified Position's
+      // [Shield 2]). The grant may sit on a unit that was never here (the
+      // chooser may pick any unit), so sweep every card that carries one.
+      const combatGrantIds =
+        (
+          cards as unknown as {
+            queryCards?: (predicate: (id: CoreCardId, meta: Record<string, unknown>) => boolean) => CoreCardId[];
+          }
+        ).queryCards?.((_id, meta) =>
+          ((meta as Partial<RiftboundCardMeta>).grantedKeywords ?? []).some(
+            (gk: { duration?: string }) => gk.duration === "combat",
+          ),
+        ) ?? unitIds;
+      for (const id of combatGrantIds) {
+        const m = cards.getCardMeta(id) as Partial<RiftboundCardMeta> | undefined;
+        const granted = m?.grantedKeywords ?? [];
+        const remaining = granted.filter((gk: { duration?: string }) => gk.duration !== "combat");
+        if (remaining.length !== granted.length) {
+          cards.updateCardMeta(id, {
+            grantedKeywords: remaining.length > 0 ? remaining : undefined,
+          } as Partial<RiftboundCardMeta>);
+        }
+      }
     };
 
     // Look up card definitions from the global registry

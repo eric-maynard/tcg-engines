@@ -413,6 +413,15 @@ export function evaluateCondition(
 
     case "control-battlefield": {
       const comparison = condition.count as { gte?: number; lte?: number; eq?: number } | undefined;
+      // rule 190.6.d — "While you control this battlefield" printed ON a
+      // battlefield card means THAT battlefield, not any battlefield; its
+      // "you" is the battlefield's current controller (conquest moves it).
+      const ownBattlefield = ctx.draft.battlefields?.[source.id];
+      if (ownBattlefield && comparison === undefined) {
+        // rule 740.1.a — the aura's "you" IS the controller, so any controller
+        // switches it on (its audience is scoped to that player elsewhere).
+        return ownBattlefield.controller !== null && ownBattlefield.controller !== undefined;
+      }
       let controlledCount = 0;
       for (const bf of Object.values(ctx.draft.battlefields)) {
         if (bf.controller === source.owner) {
@@ -691,7 +700,9 @@ function resolveStaticTargetsFromDescriptor(
   if (t.type === "spell") {
     return [];
   }
-  if (t.type !== "unit" && t.type !== "gear" && t.type !== "equipment") {
+  // rule 135.4.b (sfd-208-221) — "friendly legends have '…'": a legend in the
+  // legend zone is a board card an aura can address, like a unit or gear.
+  if (t.type !== "unit" && t.type !== "gear" && t.type !== "equipment" && t.type !== "legend") {
     return undefined;
   }
   const isGroup =
@@ -716,7 +727,12 @@ function resolveStaticTargetsFromDescriptor(
     return [];
   }
   const registry = getGlobalCardRegistry();
-  const sourceController = controllerOf(ctx, source.id, source.owner);
+  // rule 740.1.a (sfd-208-221) — the "you" of a battlefield's aura is whoever
+  // CONTROLS that battlefield right now, not the player who brought it.
+  const ownBattlefield =
+    source.zone === "battlefieldRow" ? ctx.draft.battlefields?.[source.id] : undefined;
+  const sourceController =
+    ownBattlefield?.controller ?? controllerOf(ctx, source.id, source.owner);
   return boardCards
     .filter((c) => {
       // rule 208.2 (sfd-089-221) — "(including me)": the source is addressed by
@@ -731,6 +747,9 @@ function resolveStaticTargetsFromDescriptor(
         return false;
       }
       if (t.type === "gear" && cardType !== "gear" && cardType !== "equipment") {
+        return false;
+      }
+      if (t.type === "legend" && cardType !== "legend") {
         return false;
       }
       // rule 208.3 / 476.1 — "Equipment" is the strict subset of gear with the
@@ -1158,14 +1177,35 @@ export function recalculateStaticEffects(ctx: StaticAbilityContext): boolean {
   const PASS_1_EFFECTS = new Set(["grant-keyword", "grant-keywords", "grant-ability"]);
   const PASS_2_EFFECTS = new Set(["modify-might"]);
 
-  const applyPass = (allowedEffects: Set<string>): void => {
+  // rule 476.3 — the ability layer is re-checked after the arithmetic layer, so
+  // a keyword grant conditioned on Might ("While I'm [Mighty], I have
+  // [Deflect]…") sees a static +1 Might exactly as it sees a buff. Only
+  // abilities that did NOT already apply in pass 1 are revisited, so stackable
+  // keywords are never granted twice.
+  const conditionReadsMight = (condition: Record<string, unknown> | undefined): boolean => {
+    if (!condition) {
+      return false;
+    }
+    if (condition.type === "while-mighty") {
+      return true;
+    }
+    const nested = condition.conditions;
+    if (Array.isArray(nested)) {
+      return nested.some((c) => conditionReadsMight(c as Record<string, unknown>));
+    }
+    return conditionReadsMight(condition.condition as Record<string, unknown> | undefined);
+  };
+  const pass1Applied = new Set<string>();
+
+  const applyPass = (allowedEffects: Set<string>, opts?: { onlyMightDependent?: boolean }): void => {
     for (const card of boardCards) {
       const abilities = registry.getAbilities(card.id) ?? [];
 
-      for (const ability of abilities) {
+      for (const [abilityIndex, ability] of abilities.entries()) {
         if (ability.type !== "static") {
           continue;
         }
+        const abilityKey = `${card.id}#${abilityIndex}`;
 
         const effect = ability.effect as Record<string, unknown> | undefined;
         if (!effect) {
@@ -1189,8 +1229,14 @@ export function recalculateStaticEffects(ctx: StaticAbilityContext): boolean {
         // Already applied (granted keywords), which is what enables
         // Dependency cases like "while-has-keyword-tank: +1 might".
         const condition = ability.condition as Record<string, unknown> | undefined;
+        if (opts?.onlyMightDependent && (!conditionReadsMight(condition) || pass1Applied.has(abilityKey))) {
+          continue;
+        }
         if (condition && !evaluateCondition(condition, card, ctx)) {
           continue;
+        }
+        if (allowedEffects === PASS_1_EFFECTS) {
+          pass1Applied.add(abilityKey);
         }
 
         // Resolve targets
@@ -1229,6 +1275,8 @@ export function recalculateStaticEffects(ctx: StaticAbilityContext): boolean {
   applyPass(PASS_1_EFFECTS);
   // Pass 2 — arithmetic
   applyPass(PASS_2_EFFECTS);
+  // rule 476.3 — re-check Might-dependent ability grants against post-arithmetic Might
+  applyPass(PASS_1_EFFECTS, { onlyMightDependent: true });
 
   // rule 364.3 (ogn-053-298): turn-scoped continuous effects created by a
   // spell/ability ("Buffs give an additional +1 [Might] to friendly units this
