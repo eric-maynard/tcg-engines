@@ -117,9 +117,22 @@ export function canAffordPower(
     }
   }
   let rainbowNeed = 0;
+  // rule 135.2.e.6.c: a HYBRID pip — spelled "fury|order" — is one Power of
+  // EITHER of the printing card's own Domains. Unlike [rainbow] it can never be
+  // paid with a third Domain's Power (135.2.e.5.b: only Power ADDED as
+  // universal is domain-free), so collect these separately from `rainbowNeed`.
+  let hybridNeed = 0;
+  const hybridDomains = new Set<string>();
   for (const [d, count] of Object.entries(needed)) {
     if (d === "rainbow") {
       rainbowNeed += count;
+      continue;
+    }
+    if (d.includes("|")) {
+      hybridNeed += count;
+      for (const part of d.split("|")) {
+        hybridDomains.add(part);
+      }
       continue;
     }
     const have = remaining[d] ?? 0;
@@ -135,6 +148,15 @@ export function canAffordPower(
       remaining.rainbow = (remaining.rainbow ?? 0) - short;
     }
   }
+  if (hybridNeed > 0) {
+    let hybridAvailable = remaining.rainbow ?? 0;
+    for (const d of hybridDomains) {
+      hybridAvailable += remaining[d] ?? 0;
+    }
+    if (hybridAvailable < hybridNeed) {
+      return false;
+    }
+  }
   const leftover = Object.values(remaining).reduce((a, b) => a + b, 0);
-  return leftover >= rainbowNeed;
+  return leftover >= rainbowNeed + hybridNeed;
 }

@@ -79,7 +79,7 @@ describe("Hextech Gauntlets × Weaponmaster — Might-based Equip reduction (821
   // Expected: [3][C] − 3 (Adept's Might) − [A] = nothing to pay → Gauntlets offered and attached
   // with an empty pool. Actual: the engine prices Weaponmaster off the PRINTED [3] (ignores the
   // Might reduction), so with 0 energy the Gauntlets are not even offered.
-  test.failing("BUG: (a) Adept with 0 energy/0 power left — Weaponmaster offers the Gauntlets and attaches them for free (821.1.c.2, 206.1, 356.6)", async () => {
+  test("(a) Adept with 0 energy/0 power left — Weaponmaster offers the Gauntlets and attaches them for free (821.1.c.2, 206.1, 356.6)", async () => {
     const game = await wmBoard(ADEPT, { energy: 3 }).build();
     await game.p1.play("wm");
     expect(game.p1.resources()).toEqual({ energy: 0, power: {} }); // all 3 went on the Adept
@@ -141,7 +141,7 @@ describe("Hextech Gauntlets × Weaponmaster — Might-based Equip reduction (821
   // Expected: [3] − 2 (Poro's Might) = [1], pip waived by −[A] → with exactly 1 energy left the
   // Gauntlets are offered, P1 pays 1 and they attach (Poro 2+3 = 5). Actual: engine demands the
   // printed [3] → not offered with 1 energy.
-  test.failing("BUG: (b) Poro with 1 energy left — Weaponmaster costs exactly [1]: offered, paid, attached, Poro is 5 Might (821.1.c.2)", async () => {
+  test("(b) Poro with 1 energy left — Weaponmaster costs exactly [1]: offered, paid, attached, Poro is 5 Might (821.1.c.2)", async () => {
     const game = await wmBoard(PORO, { energy: 3 }).build();
     await game.p1.play("wm");
     expect(game.p1.resources()).toEqual({ energy: 1, power: {} });
@@ -217,7 +217,7 @@ describe("Hextech Gauntlets × Weaponmaster — Might-based Equip reduction (821
   // Expected: [C] on a Fury/Order card is one FURY or ORDER power (135.2.e.6.c); ordinary calm
   // power cannot stand in for it (only ADDED [A] is universal, 135.2.e.5.b) → no Equip offered and
   // a forced attempt is rejected. Actual: the card data spells the pip `rainbow`, so calm pays it.
-  test.failing("BUG: (c) calm power cannot pay the Gauntlets' [C] pip — with 3 energy + 1 calm no Equip activation is legal (135.2.e.6.c / 135.2.e.5.b)", async () => {
+  test("(c) calm power cannot pay the Gauntlets' [C] pip — with 3 energy + 1 calm no Equip activation is legal (135.2.e.6.c / 135.2.e.5.b)", async () => {
     const game = await equipBoard({ energy: 3, power: { calm: 1 } }).build();
     expect(equipTargetsOffered(game)).toEqual([]);
     const r = await game.p1.try((p) => p.do("equipCard", { equipmentId: "hg", unitId: "big" }));

@@ -870,10 +870,15 @@ export function deductAbilityCost(
   const powerCost = cost.power as string[] | undefined;
   if (powerCost) {
     for (const domain of powerCost) {
+      // rule 135.2.e.6.c: a hybrid pip ("fury|order") is one Power of either of
+      // the printing card's own Domains — never a third Domain's Power.
+      const hybrid = domain.includes("|") ? domain.split("|") : undefined;
       // Rule 135.2.e.5.a: [rainbow] costs are paid with any Domain's Power.
       const key =
-        domain === "rainbow"
-          ? (Object.entries(pool.power).sort(([, a], [, b]) => (b ?? 0) - (a ?? 0))[0]?.[0] as
+        domain === "rainbow" || hybrid
+          ? (Object.entries(pool.power)
+              .filter(([d, v]) => (v ?? 0) > 0 && (!hybrid || d === "rainbow" || hybrid.includes(d)))
+              .sort(([, a], [, b]) => (b ?? 0) - (a ?? 0))[0]?.[0] as
               | keyof typeof pool.power
               | undefined)
           : (domain as keyof typeof pool.power);

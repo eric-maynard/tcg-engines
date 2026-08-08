@@ -54,6 +54,7 @@ import {
   minDeflectSurchargeForItem,
   payAnyDomainPower,
 } from "./chain/resolve";
+import { equipCostForTarget } from "./equip-cost";
 import { completeSuspendedPlay } from "./play/play-unit";
 import { offerWeaponmasterEquip } from "./play/weaponmaster";
 import {
@@ -774,17 +775,20 @@ function canPayOptInCost(
  * by [A] (one power of any domain); the non-power portion is still paid
  * (821.1.c.3). No Equip ability → the cost can't be paid (821.1.c.4).
  */
-export function weaponmasterEquipCost(equipmentId: string): Record<string, unknown> | undefined {
-  const abilities = getGlobalCardRegistry().getAbilities(equipmentId) ?? [];
-  const equipAbility = abilities.find(
-    (a) => a.type === "keyword" && (a as { keyword?: string }).keyword === "Equip",
-  ) as
-    | { cost?: { energy?: number; power?: readonly string[]; recycle?: number } }
-    | undefined;
-  if (!equipAbility) {
+export function weaponmasterEquipCost(
+  equipmentId: string,
+  // rule 821.1.c.2 / 206.1: the Equip cost is computed AS THOUGH [Equip] were
+  // activated choosing the Weaponmaster unit, so a per-target reduction
+  // (unl-188-219 Hextech Gauntlets: "reduced by the Might of the unit you
+  // choose") applies here exactly as it does on the ordinary Equip path.
+  unitId?: string,
+  getCardMeta?: (cardId: CoreCardId) => Partial<RiftboundCardMeta> | undefined,
+): Record<string, unknown> | undefined {
+  const base = equipCostForTarget(equipmentId, unitId, getCardMeta);
+  if (base === undefined) {
     return undefined;
   }
-  const power = [...(equipAbility.cost?.power ?? [])];
+  const power = [...base.power];
   if (power.length > 0) {
     const rainbowIdx = power.indexOf("rainbow");
     power.splice(rainbowIdx === -1 ? 0 : rainbowIdx, 1);
@@ -792,11 +796,10 @@ export function weaponmasterEquipCost(equipmentId: string): Record<string, unkno
   // rule 821.1.c.3 (sfd-150-221 Last Rites): [A] only shaves a power pip — a
   // "Recycle N cards from your trash" portion of the Equip cost survives it
   // and is still paid in full.
-  const recycle = equipAbility.cost?.recycle;
   return {
-    energy: equipAbility.cost?.energy ?? 0,
+    energy: base.energy,
     power,
-    ...(typeof recycle === "number" && recycle > 0 ? { recycleFromTrash: recycle } : {}),
+    ...(base.recycleFromTrash !== undefined ? { recycleFromTrash: base.recycleFromTrash } : {}),
   };
 }
 
@@ -815,8 +818,10 @@ function canPayWeaponmasterEquip(
   playerId: string,
   equipmentId: string,
   context: Parameters<typeof canPayOptInCost>[4],
+  unitId?: string,
+  getCardMeta?: (cardId: CoreCardId) => Partial<RiftboundCardMeta> | undefined,
 ): boolean {
-  const cost = weaponmasterEquipCost(equipmentId);
+  const cost = weaponmasterEquipCost(equipmentId, unitId, getCardMeta);
   if (cost === undefined) {
     return false;
   }
@@ -1309,7 +1314,9 @@ export const pendingChoiceMoves: Partial<
         // rule-id: sfd-119-221-weaponmaster-pays-reduced-equip-cost (821.1.c.5)
         return (
           choice.options.includes(pickedEquip) &&
-          canPayWeaponmasterEquip(state, choice.playerId, pickedEquip, context)
+          canPayWeaponmasterEquip(state, choice.playerId, pickedEquip, context, choice.unitId, (m) =>
+            context.cards.getCardMeta(m) as Partial<RiftboundCardMeta> | undefined,
+          )
         );
       }
       if (choice.type === "pay-x") {
@@ -1569,7 +1576,11 @@ export const pendingChoiceMoves: Partial<
         // offer equipment whose reduced Equip cost is payable (821.1.c.5).
         return [
           ...choice.options
-            .filter((eq) => canPayWeaponmasterEquip(state, choice.playerId, eq, context))
+            .filter((eq) =>
+              canPayWeaponmasterEquip(state, choice.playerId, eq, context, choice.unitId, (m) =>
+                context.cards.getCardMeta(m) as Partial<RiftboundCardMeta> | undefined,
+              ),
+            )
             .map((eq) => ({
               pickedCardId: eq,
               playerId: context.playerId as string,
@@ -1787,8 +1798,13 @@ export const pendingChoiceMoves: Partial<
         // rule-id: sfd-119-221-weaponmaster-pays-reduced-equip-cost
         // Rule 821.1.c: pay the Equip cost reduced by [A]; if it can't be
         // paid the Equipment stays where it is (821.1.c.5).
-        const equipCost = weaponmasterEquipCost(picked);
-        if (!equipCost || !canPayWeaponmasterEquip(draft, choice.playerId, picked, context)) {
+        const wmGetMeta = (m: CoreCardId) =>
+          context.cards.getCardMeta(m) as Partial<RiftboundCardMeta> | undefined;
+        const equipCost = weaponmasterEquipCost(picked, choice.unitId, wmGetMeta);
+        if (
+          !equipCost ||
+          !canPayWeaponmasterEquip(draft, choice.playerId, picked, context, choice.unitId, wmGetMeta)
+        ) {
           return;
         }
         deductAbilityCost(draft, choice.playerId, equipCost, context.zones, context.counters);

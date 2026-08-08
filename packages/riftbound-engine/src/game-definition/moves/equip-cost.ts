@@ -9,7 +9,7 @@ import type { CardId as CoreCardId } from "@tcg/core";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import type { RiftboundCardMeta, RiftboundGameState } from "../../types";
 import { canAffordPower } from "./chain/effect-context";
-import { getInteractiveReduction } from "./play/cost";
+import { getHybridPipDomains, getInteractiveReduction } from "./play/cost";
 
 export interface EquipCost {
   readonly energy: number;
@@ -52,9 +52,26 @@ export function printedEquipCost(equipmentId: string): EquipCost | undefined {
   const recycle = equipAbility.cost?.recycle;
   return {
     energy: equipAbility.cost?.energy ?? 0,
-    power: [...(equipAbility.cost?.power ?? [])],
+    power: hybridizePips(equipmentId, equipAbility.cost?.power ?? []),
     ...(typeof recycle === "number" && recycle > 0 ? { recycleFromTrash: recycle } : {}),
   };
+}
+
+/**
+ * rule 135.2.e.6.c: a [C] pip printed on a multi-Domain card is one Power of
+ * EITHER of that card's own Domains — plain Power of a third Domain can never
+ * pay it (only [A] ADDED to the pool is universal, 135.2.e.5.b). Card data
+ * spells such a pip `rainbow`, so re-tag it here as the hybrid pip
+ * `"fury|order"` that `canAffordPower` / `deductAbilityCost` understand.
+ * Single-Domain cards are untouched.
+ */
+function hybridizePips(equipmentId: string, power: readonly string[]): string[] {
+  const domains = getHybridPipDomains(equipmentId);
+  if (!domains) {
+    return [...power];
+  }
+  const hybrid = domains.join("|");
+  return power.map((p) => (p === "rainbow" ? hybrid : p));
 }
 
 /**
