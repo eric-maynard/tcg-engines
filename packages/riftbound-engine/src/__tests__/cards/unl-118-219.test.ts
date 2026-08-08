@@ -112,6 +112,27 @@ describe("Elder Dragon (unl-118-219)", () => {
     expect(game.zoneOf("dragon")).toBe("base");
   });
 
+  test("rule 106: once a location is named the prompt stops offering its other units, and a second pick there is illegal", async () => {
+    const game = await threeLocations().build();
+    await game.p1.play("dragon");
+    await game.settle();
+    const first = game.decision();
+    expect(first?.kind).toBe("pick");
+    await game.p1.pick("a"); // bf1
+    await game.settle();
+    const second = game.decision();
+    expect(second?.kind).toBe("pick");
+    const offered = second?.kind === "pick" ? second.options.map((o) => o.card ?? o.key) : [];
+    expect(offered).not.toContain("a2"); // same location as `a`
+    expect(offered).toEqual(expect.arrayContaining(["b", "c"]));
+    // the remaining locations are still reachable — the wasted pick used to close the prompt
+    await answerTriggerPicks(game, ["b", "c"]);
+    await game.settle();
+    expect(game.zoneOf("b")).toBe("trash");
+    expect(game.zoneOf("c")).toBe("trash");
+    expect(game.state("a2").damage).toBe(0);
+  });
+
   test("'up to one': declining every location is legal — the Dragon simply enters and no unit is damaged", async () => {
     const game = await threeLocations().build();
     await game.p1.play("dragon");
