@@ -1790,6 +1790,27 @@ const JSON_CARD_ENGINE_FLAGS: Record<string, Record<string, unknown>> = {
       },
     ],
   },
+  // rule 356.4 / 364 / 740.1.a (rule-id: ven-164-166) — Sandswept Tomb:
+  // "Each spell that chooses one or more units here that are friendly to it
+  // costs [rainbow] less." The set data parses nothing (`abilities: []`), and
+  // the scope — a discount keyed on the play's chosen targets, reaching EITHER
+  // player's spells (364) — has no rules-text pattern, so it is declared here.
+  "ven-164-166": {
+    abilities: [
+      {
+        effect: {
+          by: { power: ["rainbow"] },
+          target: {
+            chooses: { controller: "friendly", location: "here", type: "unit" },
+            controller: "any",
+            type: "spell",
+          },
+          type: "cost-reduction",
+        },
+        type: "static",
+      },
+    ],
+  },
   // rule-id: ven-115-166 — printed DRAGON tag, missing from the set data (the
   // generator emits `tags: []` for every non-champion VEN unit). Ocean Drake's
   // "return a non-Dragon unit" reads the tag, so the drakes themselves — and
