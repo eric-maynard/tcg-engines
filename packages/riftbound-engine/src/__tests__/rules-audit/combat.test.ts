@@ -281,10 +281,11 @@ describe("Rule 625.1.a: Attacker is the player who applied Contested status", ()
     applyMove(engine, "resolveFullCombat", { battlefieldId: "bf-1" });
 
     // P2 is attacker; P2 dies because P1 (defender) deals 5 damage.
-    // P1 survives, so if this were "attacker wins" it'd conquer — but
-    // Attacker (P2) is dead. Defender holds, no control change.
+    // rule 466.5 / 466.5.e: P1 is then the only player with units here, so the
+    // DEFENDER establishes control — proving P2 (not P1) was the attacker.
     const state = getState(engine);
-    expect(state.battlefields["bf-1"].controller).toBeNull();
+    expect(getCardsInZone(engine, "trash", P2)).toContain("p2-tiny");
+    expect(state.battlefields["bf-1"].controller).toBe(P1);
   });
 });
 
@@ -835,7 +836,7 @@ describe("End-to-end: resolveFullCombat applies damage, kills, outcome, cleans u
     expect(state.players[P1].victoryPoints).toBeGreaterThanOrEqual(1);
   });
 
-  it("defender wins: attacker trashed/recalled, battlefield remains uncontrolled", () => {
+  it("defender wins: attacker trashed/recalled, the surviving defender establishes control (466.5, 466.5.e)", () => {
     const engine = createMinimalGameState({ phase: "main" });
     createBattlefield(engine, "bf-1", { contested: true, showdownComplete: true, contestedBy: P1, controller: null });
     createCard(engine, "weak-atk", {
@@ -856,9 +857,10 @@ describe("End-to-end: resolveFullCombat applies damage, kills, outcome, cleans u
     const state = getState(engine);
     // Attacker killed
     expect(getCardsInZone(engine, "trash", P1)).toContain("weak-atk");
-    // Defender holds (battlefield stays uncontrolled per pre-combat state)
-    expect(state.battlefields["bf-1"].controller).toBeNull();
-    // No VP awarded
+    // rule 466.5 / 466.5.e: the sole player with units left establishes control
+    // even though the other player applied Contested — and that Conquer scores
+    // (466.5.d) for the defender, never for the attacker.
+    expect(state.battlefields["bf-1"].controller).toBe(P2);
     expect(state.players[P1].victoryPoints).toBe(0);
   });
 });

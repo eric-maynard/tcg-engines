@@ -807,6 +807,36 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
       battlefield.controller = null;
     }
 
+    // rule 466.5 / 466.5.e: the sole player with units left here establishes
+    // control — a surviving DEFENDER takes an uncontrolled (or enemy)
+    // battlefield even though the other player applied Contested. Taking
+    // control they did not already hold is a Conquer (466.5.d, 469.1).
+    if (winner === "defender" && defendersLeft.length > 0) {
+      const defendingPlayer =
+        (cards.getCardController?.(defendersLeft[0] as CoreCardId) as string | undefined) ??
+        (cards.getCardOwner(defendersLeft[0] as CoreCardId) as string | undefined);
+      if (defendingPlayer !== undefined && battlefield.controller !== defendingPlayer) {
+        battlefield.controller = defendingPlayer;
+        const { isScore } = scoreBattlefield(
+          draft,
+          defendingPlayer,
+          battlefieldId,
+          "conquer",
+          { cards, zones },
+          { previousController: controllerBeforeCombat },
+        );
+        if (isScore) {
+          for (const event of scoreEvents(defendingPlayer, battlefieldId, "conquer", {
+            afterAttack: true,
+            excessDamage,
+            previousController: controllerBeforeCombat,
+          })) {
+            fireTriggers(event, { cards, counters, draft, zones });
+          }
+        }
+      }
+    }
+
     // Clear contested status
     battlefield.contested = false;
     battlefield.contestedBy = undefined;

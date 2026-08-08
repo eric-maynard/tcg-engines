@@ -660,7 +660,15 @@ export const playUnit: Defs["playUnit"] = {
     } else if (
       targetIsBattlefield &&
       Boolean(targetBfId) &&
-      (standardTimingOk || reactionTimingOk) &&
+      // rule 822.1.d (unl-120-219): on a card that also has Ambush this
+      // permission extends Ambush itself, so it carries Ambush's Reaction
+      // timing — but only into the contested battlefield whose showdown is
+      // open, never as a free window at some quiet battlefield (310.1.a).
+      (standardTimingOk ||
+        reactionTimingOk ||
+        (hasAmbush &&
+          reactionWindowOpen(state, context.params.playerId as string) &&
+          targetBf?.contested === true)) &&
       canPlayToEnemyOccupiedBattlefield(context.params.cardId as string) &&
       battlefieldHasEnemyUnits(
         context.zones,
@@ -1378,7 +1386,21 @@ export const playUnit: Defs["playUnit"] = {
             bfZoneId as CoreZoneId,
             context.playerId as CorePlayerId,
           );
-          if (friendly.length > 0) {
+          // rule 822.1.d / 355.2 (unl-120-219): a card whose text extends
+          // Ambush to battlefields holding enemy units may be Ambushed into
+          // the contested battlefield even with no friendly unit there.
+          const enemyBfOk =
+            state.battlefields?.[bfId]?.contested === true &&
+            canPlayToEnemyOccupiedBattlefield(cardId as string) &&
+            battlefieldHasEnemyUnits(
+              context.zones,
+              (id) =>
+                (context.cards.getCardController?.(id) as string | undefined) ??
+                (context.cards.getCardOwner(id) as string | undefined),
+              bfId,
+              context.playerId as string,
+            );
+          if (friendly.length > 0 || enemyBfOk) {
             results.push({
               cardId: cardId as string,
               location: bfZoneId as string,
