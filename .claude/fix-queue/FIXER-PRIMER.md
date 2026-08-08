@@ -229,31 +229,62 @@ Recipe — timing wrong: spell → card `rulesText`/`normalizeSpellTiming`; abil
 (both `condition` and `enumerator` copies); move → that move's `condition` turn-state check.
 
 ## 7. Costs
-- `E/game-definition/moves/play/cost.ts canAffordCard(state, player, card, extras, getMeta)` and `deductCost` — KEEP IN SYNC.
-  `extras: {additionalCost, xAmount, repeatCount, targets, chosenTargetId, viaFlow, board}`. Steps: base
-  `registry.getCostToDeduct` (or Flow cost `getBaseCostForPlay`), `meta.costModifier` (`getCostModifier`; written by
-  `effects/cost-reduction.ts` / `cost-increase.ts`), interactive target-Might reduction, board statics `getBoardCostReduction`
-  → `static-cost-reduction.ts computeStaticCostReduction`, self static `getSelfScaledEnergyReduction`, X, Repeat
-  (`getEffectiveSpellRepeatCost`, `getRepeatEnergySurcharge`, `getRepeatPowerSurcharge`), Deflect (`getDeflectSurcharge`:
-  any-domain power, opponents' targets only, printed + granted).
-- Power rules: a `"rainbow"` pip is payable from any domain; pooled `power.rainbow` covers any named-domain shortfall;
-  multi-domain cards' pips are hybrid (`getHybridPipDomains`); energy reducers never waive power pips (`reducePowerCost` only).
-- `getOptionalPlayCost(cardId)` recognises ONLY: keyword Accelerate `{cost}` (kind `accelerate`); `{type:"static"|
-  "additional-cost-option", cost:{kill:Target}}` (kind `kill`, param `sacrificeId`); `{type:"static", effect:{type:
-  "additional-cost-option", additionalCost:":rb_energy_N::rb_rune_fury:"|{energy,power,xp}, ifPaid}}` (kind `pay`).
-  Discard / exhaust-a-unit / spend-buff / kill-any-number costs are unrecognised → add a kind here and handle it in
-  `play-unit.ts` (enumerator variants with `paidAdditionalCost`, reducer `resolvePayableOptionalCost`/sacrifice block) and
-  `play-spell.ts` (params `paidAdditionalCost`; `draft.additionalCostsPaid[cardId]` feeds condition `paid-additional-cost`).
-  Mandatory additional cost ⇒ enumerate only the paid variant and reject unpaid in `condition`.
+- MODEL (`E/game-definition/moves/play/cost-model.ts`): `getPlayCostModel(state, player, card, ctx)` → `PlayCostModel
+  {base, alternatives[{id:"alt"|"flow"|"self-trash"|"hidden", cost, from}], additional[AdditionalCost {id, mandatory, cost:
+  CostComponent, perUnit?, ifPaid?, condition?, perTarget?}], repeat?[tiers], x?}` (types in `T/abilities/cost-types.ts`).
+  Additional-cost ids: `accelerate`, `accelerate-granted` (board static, non-hand plays), `pay`, `kill`, `kill-any`
+  (per-kill pip discount), `discard`, `exhaust`, `spend-buff`, `spend-buff-any` (per-buff pip discount), `return-to-hand`,
+  `deflect` (mandatory, per opposing target). `computeTotalCost(state, player, card, selection, ctx, model?)` →
+  `{resources: PlayResourceCost, objects: ObjectPayment[], paidIds, entersReady, extras, illegal?}`; `canPayTotalCost`;
+  `optionalCostSubsets(model)`. Unit idioms: `E/__tests__/core-rules/cost-model.test.ts`.
+- ONE resource computation in `moves/play/cost.ts`: `computePlayResourceCost(state, player, card, extras, getMeta, consume)`
+  → `PlayResourceCost {free, ignoreEnergy, energy, named{domain:n}, any, hybrid?}` (base/alt/Flow cost, `meta.costModifier`,
+  interactive Might reduction, board statics `computeStaticCostReduction` with per-discount minimums 356.4.e, increases
+  `computeStaticCostIncrease` 356.3, self scaled/conditional/Legion discounts, one-shot next-play discounts incl. pips,
+  X, Repeat tiers, Deflect offset by waived [A], additional-cost energy/pips, waived pips), then `canPayResourceCost`
+  (restricted "use only to play X" energy via `state.restrictedEnergy`, pooled [A] covers named pips, hybrid pips) and
+  `payResourceCost` (earmark first, ledgers `spellEnergySpentThisTurn`/`powerSpentThisTurn`). `canAffordCard`/`deductCost`
+  are thin wrappers — extend the shared computation, never one wrapper. Effect-instructed plays (`pending-choice.ts`
+  reveal-and-pick `onPicked:"play"`, `effects/play.ts`) price/pay through the same functions; rule 419.2.a: an
+  unaffordable "play it" pick is filtered by `isAffordablePlayPick`.
+- PARAMS: every play move (`playUnit/playSpell/playGear/revealHidden/playFromChampionZone/activateAbility`) accepts
+  `costs: PlayCostSelection {alternativeId?, paid: {<costId>: true | {objects, count?, spec?}}}`; the legacy per-kind params
+  (`paidAdditionalCost, additionalCostSpec, sacrificeId(s), discardId, spentBuffIds, altCost, viaFlow, recycleIds`) are
+  SHIMS: conditions/reducers expand `costs` via `legacyParamsFromSelection`, enumerators attach `costs` via
+  `withCostsParam` (only when something is selected, so plain variants are unchanged). Harness: `play(c, {costs:{paid:
+  {accelerate:true, "spend-buff-any":["ally"]}}})`, `cast(c, {costs:{alternativeId:"flow"}})`, `{paid:{kill:"pawn"}}`;
+  the old `accelerate|payOptional|sacrifice|discard|flow` args still work. `draft.additionalCostsPaid[cardId]` is the LIST
+  of paid ids (read via `operations/additional-costs-paid.ts additionalCostWasPaid(state, card, id?)`; condition
+  `paid-additional-cost` may carry `costId`). Two optional costs on one card (Kraken Hunter) are independent: the bare
+  legacy flag on an object-cost variant means THAT cost; the resource cost is elected by an explicit `additionalCostSpec`.
+- `getOptionalPlayCost(cardId)` (cost.ts) is still the per-shape reader behind the model: kinds `accelerate|pay|kill|
+  discard|exhaust|spend-buff|return-to-hand` (+`mandatory`, `energyDiscount`, `ignoresBaseCost`, `entersReadyIfPaid`,
+  `condition`); `getBuffSpendCost` / `getKillAnyNumberCost` / `getSacrificeCostDiscount` / `getGrantedAcceleratePlayCost`
+  for the variable-count and granted shapes. New shape → teach the reader AND `cost-model.ts additionalFromOptional`.
+- OBJECT costs are paid through effects (`executeEffect kill` / `removeFromBoard discard` / `return-to-hand`), so
+  Deathknell, discard triggers and die replacements apply; a replaced cost-kill still counts as paid (357.2.a). If paying
+  raises a prompt (optional costed die shield, 371.2) the unit play SUSPENDS: `draft.suspendedPlay` (pure data) →
+  `play-unit.ts completeUnitPlay` runs from `pending-choice.ts postChoiceCleanup` via `completeSuspendedPlay` once no
+  prompt is open (resources were paid first; the unit is still in its origin zone meanwhile). rule 357.3: playSpell's
+  `mandatoryKillCandidates` drops sacrifices that would leave a cost-capped "play from trash" with no legal card.
+- TRIGGER costs (`item.optInCost`, from `condition:{type:"pay-cost", cost}`): simple ones (energy/power/xp/exhaust/
+  kill-me/banish-me/burn) are asked+paid at FINALIZATION (`trigger-finalization.ts` → `opt-in` with
+  `finalizationChainItemId`; decline ⇒ item removed, 404.2); object-choosing ones (`kill {amount,target}`, `discard N`,
+  `recycle`, `returnToHand`) still go through the resolution-time opt-in; payability gate for both =
+  `pending-choice.ts canPayOptInCost` (+ `killCostCandidates` / `recycleCostCandidates` count checks). Costs written
+  inside instructions (`costStep:true`, "disempower X to …") are paid by `payFinalizationCostSteps`.
 - Activated costs: `moves/chain/activate-ability.ts` condition checks energy, power (`chain/effect-context.ts canAffordPower`),
-  xp, exhaust, `discard` (param `discardId`), `recycle` (`recycleIds`), `kill` (Target or `"self"`, param `sacrificeId`);
-  reducer `deductAbilityCost` + exhaust host. Parser: `C/parser/impl/costs.ts parseActivationCost`, `impl/activated.ts`.
-- X: `play-spell.ts` param `xAmount` → energy + `variables.x` for `resolveAmount({variable:"x"})`. Repeat: param
-  `repeatCount`, reducer wraps the effect in a `sequence` of 1+n copies. Flow: param `viaFlow` (from trash, banish after).
-Recipe — additional cost not offered/mandatory: dump abilities → reshape to what `getOptionalPlayCost` reads (explicit
-abilities is fastest) → confirm enumerator variant (harness `play(c,{accelerate:true|payOptional:true|sacrifice:"x"})`).
-Recipe — reducer not applied: other permanent's static → `static-cost-reduction.ts matchesPlayedCard` + `minimum`;
-own text → `getSelfScaledEnergyReduction`; one-shot "next spell costs N less" → `meta.costModifier` via `effects/cost-reduction.ts`.
+  xp, exhaust, `discard`/`recycle`/`kill` (params or `costs.paid.{discard|recycle|kill}.objects`); reducer `deductAbilityCost`.
+- NOT DONE (fenced TODO at the top of `cost-model.ts`): the play-time Add sub-step (357.1.a — credit ready runes/Gold/
+  Seals and prompt for Add activations when the pool is short); plays and taxed moves remain pool-only (DESIGN.md).
+  Mid-resolution pays already accept rune taps while their prompt is open (444.2.c).
+Recipe — additional cost not offered/mandatory: dump abilities → does `getPlayCostModel` list it (bun -e with a harness
+game, see cost-model.test.ts `ctxOf`)? No → reshape the ability to what `getOptionalPlayCost` reads (explicit `abilities`
+is fastest). Yes but not enumerated → the move's enumerator variant for that kind (play-unit `expandPaidCostVariants` /
+`payableOptionalCostVariants` / buff & kill-any subsets; play-spell paid variants).
+Recipe — wrong total: assert `computeTotalCost(...).resources` in a unit test first; then fix inside
+`computePlayResourceCost` (board static → `static-cost-reduction.ts matchesPlayedCard`/`minimum`; own text →
+`getSelfScaledEnergyReduction`/`getSelfConditional*`; one-shot → `takeNextPlayDiscount` / `meta.costModifier`).
 `[rainbow]` in tests: `.resources(P1,{power:{rainbow:1}})` (any domain also pays a rainbow pip).
 
 ## 8. Combat / movement / scoring
