@@ -1916,19 +1916,35 @@ function waivedPower(
 /**
  * rule-id: sfd-146-221 (rules 356.2.a.2, 356.4.f, 809.1.d) — Deflect's
  * [rainbow] is a mandatory ADDITIONAL cost added before discounts, so an
- * any-domain ([rainbow]) discount offsets that surcharge before it is applied
- * to any printed pip. Returns the surcharge left owing plus the waivers still
- * available for the printed cost.
+ * any-domain ([rainbow]) discount may offset that surcharge as well as a
+ * printed pip — the payer picks (rule 356.4.d.1). Returns the surcharge left
+ * owing plus the waivers still available for the printed cost.
  */
 function offsetDeflectWithWaivedRainbow(
   waived: Partial<Record<string, number>>,
   deflectSurcharge: number,
+  printedNeed: Partial<Record<string, number>> = {},
+  available: Partial<Record<string, number>> = {},
 ): { surcharge: number; waived: Partial<Record<string, number>> } {
   const wild = waived.rainbow ?? 0;
   if (wild <= 0 || deflectSurcharge <= 0) {
     return { surcharge: deflectSurcharge, waived };
   }
-  const used = Math.min(wild, deflectSurcharge);
+  // rule 356.4.d.1 — the payer orders the discounts. A printed named pip is
+  // payable only from its own Domain (or pooled [rainbow]), while the Deflect
+  // surcharge takes Power of ANY Domain (rule 809.1.c.1), so hold the
+  // any-Domain discount back for the printed pips the pool cannot cover and
+  // spend only the remainder on the surcharge.
+  let shortfall = 0;
+  for (const [domain, n] of Object.entries(printedNeed)) {
+    if (!n || n <= 0 || domain === "rainbow") {
+      continue;
+    }
+    shortfall += Math.max(0, n - (available[domain] ?? 0));
+  }
+  // rule 135.2.e.5.b — pooled [rainbow] Power already covers a named shortfall.
+  shortfall = Math.max(0, shortfall - (available.rainbow ?? 0));
+  const used = Math.min(Math.max(0, wild - shortfall), deflectSurcharge);
   return {
     surcharge: deflectSurcharge - used,
     waived: { ...waived, rainbow: wild - used },
@@ -3127,8 +3143,9 @@ export function computePlayResourceCost(
   // Power (domain requirements are not affected by cost modifiers, only by
   // board statics that waive power pips).
   // Rule 820.1.c.2 / 820.3: multi-tier Repeat power costs stack on top.
-  // rule 356.4.f / 809.1.d: a [rainbow] discount cancels the Deflect surcharge
-  // (an additional cost added before discounts) before any printed pip.
+  // rule 356.4.f / 809.1.d: a [rainbow] discount can cancel the Deflect
+  // surcharge (an additional cost added before discounts) or a printed pip —
+  // rule 356.4.d.1 lets the payer choose, so resolve it against the pool.
   const deflect = offsetDeflectWithWaivedRainbow(
     // rule 466 (rule-id: sfd-055-221) — a self scaled discount can waive power
     // pips as well as energy.
@@ -3138,6 +3155,8 @@ export function computePlayResourceCost(
       mergePower(nextPlay.power ?? {}, getSelfScaledPowerReduction(state, playerId, cardId, extras)),
     ),
     getDeflectSurcharge(state, playerId, extras.targets, extras.board?.cards, cardId),
+    baseCost.power,
+    pool?.power ?? {},
   );
   const basePower = reducePowerCost(baseCost.power, deflect.waived, pool?.power ?? {});
   const repeatPower = getRepeatPowerSurcharge(cardId, repeatN, repeatTiers);

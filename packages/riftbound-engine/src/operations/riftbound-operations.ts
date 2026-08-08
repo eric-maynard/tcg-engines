@@ -151,12 +151,33 @@ export function spendPower(
  */
 export function emptyRunePool(state: RiftboundGameState, playerId: PlayerId): RiftboundGameState {
   return produce(state, (draft) => {
-    const pool = draft.runePools[playerId];
-    if (pool) {
-      pool.energy = 0;
-      pool.power = {};
-    }
+    emptyRunePoolInPlace(draft, playerId);
   });
+}
+
+/**
+ * Mutating form of {@link emptyRunePool} for use inside an existing draft/flow context.
+ *
+ * rule 167.1 — unspent Energy in the pool is lost when the pool empties. A
+ * restriction such as Lux's "use only to play spells" (rule 429.4) rides on that
+ * Energy, so the earmark must die with the pool; otherwise it silently taxes the
+ * next turn's fresh Energy.
+ */
+export function emptyRunePoolInPlace(
+  draft: {
+    runePools: Record<string, { energy: number; power: Record<string, number> } | undefined>;
+    restrictedEnergy?: Record<string, unknown>;
+  },
+  playerId: string,
+): void {
+  const pool = draft.runePools[playerId];
+  if (pool) {
+    pool.energy = 0;
+    pool.power = {};
+  }
+  if (draft.restrictedEnergy?.[playerId] !== undefined) {
+    delete draft.restrictedEnergy[playerId];
+  }
 }
 
 /**

@@ -33,6 +33,7 @@ import { getChannelCountLimit } from "../../operations/channel-limits";
 import { hasSkipDrawPhaseGrant } from "../moves/play/cost";
 import { clearDamage, getDamage } from "../../operations/damage-store";
 import { type LeaveBoardContext, removeFromBoard } from "../../operations/leave-board";
+import { emptyRunePoolInPlace } from "../../operations/riftbound-operations";
 import {
   beginAdditionalTurn,
   dequeueExtraTurn,
@@ -479,11 +480,7 @@ function runExpirationStep(context: FlowStepContext): void {
 
         // Empty all rune pools (rule 517.2.c)
         for (const playerId of Object.keys(context.state.runePools)) {
-          const pool = context.state.runePools[playerId];
-          if (pool) {
-            pool.energy = 0;
-            pool.power = {};
-          }
+          emptyRunePoolInPlace(context.state, playerId);
         }
 
         // Clear turn-based tracking
@@ -1155,11 +1152,7 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
             onEnd: (context) => {
               // Rune pool empties at end of draw phase (rule 515.4.d)
               const playerId = context.state.turn?.activePlayer || context.getCurrentPlayer();
-              const pool = context.state.runePools[playerId];
-              if (pool) {
-                pool.energy = 0;
-                pool.power = {};
-              }
+              emptyRunePoolInPlace(context.state, playerId);
             },
 
             order: 4,
@@ -1188,11 +1181,8 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
               // empties — not just the turn player's (draw.onEnd covers only
               // that one), so energy an opponent floated for a Reaction during
               // the Beginning/Channel/Draw Phases is lost here.
-              for (const pool of Object.values(context.state.runePools)) {
-                if (pool) {
-                  pool.energy = 0;
-                  pool.power = {};
-                }
+              for (const poolPlayerId of Object.keys(context.state.runePools)) {
+                emptyRunePoolInPlace(context.state, poolPlayerId);
               }
 
               // rule-id: 516-main-phase-start (ven-067-166 Bottled

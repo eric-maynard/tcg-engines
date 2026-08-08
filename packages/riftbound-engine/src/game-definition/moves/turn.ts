@@ -13,6 +13,7 @@ import {
   isPlayerRemoved,
   removePlayer,
 } from "../../operations/player-removal";
+import { emptyRunePoolInPlace } from "../../operations/riftbound-operations";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../types";
 
 /**
@@ -225,11 +226,7 @@ export const turnMoves: Partial<
     reducer: (draft, context) => {
       const { playerId } = context.params;
 
-      const pool = draft.runePools[playerId];
-      if (pool) {
-        pool.energy = 0;
-        pool.power = {};
-      }
+      emptyRunePoolInPlace(draft, playerId);
     },
   },
 };
