@@ -16,11 +16,13 @@ const abilities: Ability[] = [
     effect: {
       amount: 1,
       from: "deck",
-      then: { draw: "chosen" },
+      // rule 403: "Otherwise, recycle it" — a miss goes to the BOTTOM of the deck.
+      then: { draw: "chosen", recycle: "rest" },
       type: "reveal",
       until: "spell",
     },
-    trigger: { event: "defend", on: "controller" },
+    // rule 471.2.b: "When you defend HERE" — only a defend at this battlefield.
+    trigger: { event: "defend", location: "here", on: "controller" },
     type: "triggered",
   },
 ];

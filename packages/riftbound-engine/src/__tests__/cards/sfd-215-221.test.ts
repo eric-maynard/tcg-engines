@@ -52,7 +52,7 @@ describe("Ravenbloom Conservatory (sfd-215-221)", () => {
     });
   });
 
-  test.failing("BUG: the parsed trigger has no `location: \"here\"` — printed text is 'When you defend HERE'", async () => {
+  test("the parsed trigger has no `location: \"here\"` — printed text is 'When you defend HERE'", async () => {
     const def = (await loadDefaultCardPool()).get(CARD);
     const trigger = (def?.abilities?.[0] as { trigger?: Record<string, unknown> } | undefined)?.trigger;
     expect(trigger).toMatchObject({ event: "defend", location: "here", on: "controller" });
@@ -85,7 +85,7 @@ describe("Ravenbloom Conservatory (sfd-215-221)", () => {
     expect(game.violations()).toEqual([]);
   });
 
-  test.failing("BUG: a non-spell top card is not recycled — 'Otherwise, recycle it' should put the unit on the BOTTOM of the Main Deck (same size, new top = old second card)", async () => {
+  test("a non-spell top card is not recycled — 'Otherwise, recycle it' should put the unit on the BOTTOM of the Main Deck (same size, new top = old second card)", async () => {
     // Expected: deck [unit, spell, f2..f9] → [spell, f2..f9, unit]; hand unchanged.
     // Actual: the revealed unit is left on top of the deck.
     const game = await board([SKULKER, CLEAVE], ["topUnit", "second"]).build();
@@ -121,7 +121,7 @@ describe("Ravenbloom Conservatory (sfd-215-221)", () => {
     expect(game.p1.deck()[0]).toBe("p1top");
   });
 
-  test.failing("BUG: 'here' — defending at a DIFFERENT battlefield I control must not trigger the Conservatory (no chain item, no reveal)", async () => {
+  test("'here' — defending at a DIFFERENT battlefield I control must not trigger the Conservatory (no chain item, no reveal)", async () => {
     // Expected: attacking bf2 leaves the Conservatory silent. Actual: the trigger has no location
     // scope, so any defend by its controller fires it and the top spell lands in P2's hand.
     const game = await scenario()
