@@ -597,6 +597,23 @@ function trashPlayEnergyReduction(effect: ExecutableEffect, ctx: EffectContext):
 }
 
 /**
+ * rule 108.2 (rule-id: ven-114-166 Kharox) — which trash a "play a unit from
+ * the trash" instruction reads: an `enemy`/`opponent` controller on the
+ * descriptor points at the opponent's pile, anything else at the controller's
+ * own. The player who plays the card controls it either way.
+ */
+function enemyTrashOwner(
+  target: { controller?: string } | undefined,
+  ctx: EffectContext,
+): string {
+  const whose = target?.controller;
+  if (whose !== "enemy" && whose !== "opponent") {
+    return ctx.playerId;
+  }
+  return Object.keys(ctx.draft.players).find((p) => p !== ctx.playerId) ?? ctx.playerId;
+}
+
+/**
  * rule-id: ogn-196-298 — "play a unit from your trash, ignoring its Energy
  * cost. (You must still pay its Power cost.)". Rule 356.1.b: ignoring one cost
  * component leaves the others payable, so only trash cards whose remaining
@@ -639,9 +656,14 @@ function playFromTrash(effect: ExecutableEffect, ctx: EffectContext): void {
         : energyReduction > 0
           ? { additionalCost: { energy: -energyReduction } }
           : {};
+  // rule 356.1.b / 108.2 (rule-id: ven-114-166 Kharox) — "choose a unit in
+  // THEIR trash and play it": an enemy controller on the descriptor names the
+  // OPPONENT's trash as the origin pile; the card is still played (and so
+  // controlled) by this effect's controller.
+  const trashOwner = enemyTrashOwner(target, ctx);
   const trash = ctx.zones.getCardsInZone(
     "trash" as CoreZoneId,
-    ctx.playerId as CorePlayerId,
+    trashOwner as CorePlayerId,
   ) as readonly string[];
   // rule 206 (ogn-226-298): "a unit costing no more than [3] and no more than
   // [rainbow]" — printed-cost bounds on the descriptor gate the candidates.
