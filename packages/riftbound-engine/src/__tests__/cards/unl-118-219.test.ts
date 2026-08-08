@@ -137,9 +137,9 @@ describe("Elder Dragon (unl-118-219)", () => {
     expect(game.zoneOf("wall")).toBe("trash");
   });
 
-  test.failing("BUG: passive with an ALLY's combat damage — a 1-Might friendly attacker kills the 5-Might defender (both die, nobody conquers)", async () => {
-    // Expected: Poke deals 1 (P1's damage) → lethal for the enemy Wall; Wall deals 5 → Poke dies too;
-    // bf1 stays with P2 (no surviving attacker). Actual: Wall survives with its damage healed.
+  test("passive with an ALLY's combat damage — a 1-Might friendly attacker kills the 5-Might defender (both die, nobody conquers)", async () => {
+    // Poke deals 1 (P1's damage) → lethal for the enemy Wall; Wall deals 5 → Poke dies too.
+    // rule 466.5.b: no units remain here, so bf1 becomes Uncontrolled — nobody conquers.
     const game = await scenario()
       .battlefield("bf1", { controller: P2 })
       .unit(P2, "bf1", { might: 5, name: "Wall" }, "wall")
@@ -150,7 +150,7 @@ describe("Elder Dragon (unl-118-219)", () => {
     await game.settle();
     expect(game.zoneOf("poke")).toBe("trash");
     expect(game.zoneOf("wall")).toBe("trash");
-    expect(game.gameState.battlefields.bf1?.controller).toBe(P2);
+    expect(game.gameState.battlefields.bf1?.controller ?? null).toBeNull();
     expect(game.p1.points()).toBe(0);
   });
 
