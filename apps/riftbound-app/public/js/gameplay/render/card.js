@@ -187,8 +187,11 @@ function renderCardElement(card, isFacedown = false, zone = "") {
   if (isPlayable) classes.push("playable");
   if (isLegendZone && isPlayable) classes.push("legend-playable");
 
-  // Legend cards without moves get no pointer events; legend cards with moves are interactive
-  const pointerAttr = (isLegendZone && !isPlayable)
+  // Legend cards with moves are interactive; an own legend with a printed
+  // activated ability still takes the click when it has no move, so its action
+  // bar can say WHY (exhausted / can't pay / not your turn) instead of nothing.
+  const hasPrintedAbility = isLegendZone && isOwned && typeof activatedAbilitySegments === "function" && activatedAbilitySegments(card).length > 0;
+  const pointerAttr = (isLegendZone && !isPlayable && !hasPrintedAbility)
     ? ""
     : `onpointerdown="onPointerDown(event, '${esc(card.id)}')"`;
 
@@ -241,7 +244,7 @@ function renderCardElement(card, isFacedown = false, zone = "") {
          onmouseenter="showPreview(event, this)"
          onmouseleave="hidePreview()"
          ondblclick="openZoom('${esc(card.id)}')"
-         style="${isLegendZone && !isPlayable ? "cursor:default;" : ""}">
+         style="${isLegendZone && !isPlayable && !hasPrintedAbility ? "cursor:default;" : ""}">
       <img class="card-img" src="/card-image/${esc(imgId)}" alt="${esc(card.name)}" ${imgLoad.img}
            onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
       <div class="card-fallback"${imgLoad.fallbackStyle}>

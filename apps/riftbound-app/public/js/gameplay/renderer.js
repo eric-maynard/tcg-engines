@@ -56,6 +56,23 @@ function renderSidebarHeader() {
   const activeP = turn?.activePlayer ?? "";
   const isActive = activeP === viewingPlayer;
 
+  // Whose move is it REALLY: priority on the chain, focus in a showdown and a
+  // pending prompt all hand the cursor to a player regardless of whose turn it is.
+  const ix = gameState.interaction;
+  const pc = gameState.pendingChoice;
+  const cursor = pc ? (pc.prompter ?? pc.playerId)
+    : ix?.chain?.active ? ix.chain.activePlayer
+    : ix?.showdown?.active ? ix.showdown.focusPlayer
+    : activeP;
+  const myCursor = cursor === viewingPlayer;
+  const cursorText = pc
+    ? (myCursor ? "Your choice — answer the prompt" : `Waiting for ${pName(cursor)} to choose`)
+    : ix?.chain?.active
+    ? (myCursor ? "You have priority — react or pass (Space)" : `${pName(cursor)} has priority`)
+    : ix?.showdown?.active
+    ? (myCursor ? "You have focus — act or pass (Space)" : `${pName(cursor)} has focus`)
+    : (isActive ? "Your turn" : `Waiting for ${pName(activeP)}`);
+
   document.getElementById("sidebarHeader").innerHTML = `
     <div style="display:flex;align-items:center;gap:8px;">
       <div class="turn-badge" style="flex:1;">
@@ -64,9 +81,9 @@ function renderSidebarHeader() {
       </div>
       <button class="leave-btn" onclick="showLeaveConfirm()">Leave</button>
     </div>
-    <div class="game-status">
+    <div class="game-status${myCursor && !isActive && status === "playing" ? " game-status--cursor" : ""}" data-cursor="${esc(cursor || "")}">
       ${status === "playing"
-        ? (isActive ? "Your turn" : `Waiting for ${pName(activeP)}`)
+        ? esc(cursorText)
         : status === "finished" ? `Game Over — ${(() => { const vp = gameState.players?.[viewingPlayer]?.victoryPoints ?? 0; const opp = viewingPlayer === P1 ? P2 : P1; const opVp = gameState.players?.[opp]?.victoryPoints ?? 0; return (gameState.winner === viewingPlayer || vp > opVp) ? "You Win!" : "You Lose"; })()}`
         : `Status: ${status}`
       }

@@ -10,12 +10,20 @@ function onZoneClick(targetId) {
     : null;
   const destEl = document.querySelector(`[data-drop-zone="${CSS.escape(targetId)}"]`);
 
-  // Find a matching move that targets this battlefield
-  const move = interaction.matchingMoves.find(m =>
+  // Find a matching move that targets this battlefield (a play names it as
+  // `location: "battlefield-<id>"`).
+  const toHere = interaction.matchingMoves.filter(m =>
     m.params?.destination === targetId ||
     m.params?.toBattlefield === targetId ||
-    m.params?.battlefieldId === targetId
+    m.params?.battlefieldId === targetId ||
+    m.params?.location === `battlefield-${targetId}`
   );
+  if (toHere.length > 1 && interaction.action === "playCard" && typeof openPlayCostModal === "function") {
+    // Same destination, different costs (Accelerate) → let the player choose.
+    openPlayCostModal(interaction.sourceCardId);
+    return;
+  }
+  const move = toHere[0];
   if (move) {
     animateCardFly(sourceEl, destEl, () => {
       executeMove(move.moveId, move.params, move.playerId);
@@ -26,8 +34,12 @@ function onZoneClick(targetId) {
 
   // For playCard to base, check if target is the base zone
   if (interaction.action === "playCard" && targetId === "player-base") {
-    const moves = interaction.matchingMoves;
+    const moves = interaction.matchingMoves.filter(m => !m.params?.location || m.params.location === "base");
     if (beginTargetingIfNeeded(moves, interaction.sourceCardId)) return;
+    if (moves.length > 1 && typeof openPlayCostModal === "function") {
+      openPlayCostModal(interaction.sourceCardId);
+      return;
+    }
     const move = moves[0];
     if (move) {
       animateCardFly(sourceEl, destEl, () => {
@@ -36,6 +48,17 @@ function onZoneClick(targetId) {
       cancelInteraction();
     }
   }
+}
+
+/** Battlefield ids a hand card may be played / hidden to (rule 723, units to a held battlefield). */
+function handCardBattlefieldTargets(moves) {
+  const ids = [];
+  for (const m of moves) {
+    const loc = m.moveId === "hideCard" ? m.params?.battlefieldId : String(m.params?.location ?? "");
+    const bf = loc && loc !== "base" ? String(loc).replace(/^battlefield-/, "") : null;
+    if (bf && !ids.includes(bf)) ids.push(bf);
+  }
+  return ids;
 }
 
 // Pointer-Event Drag System
@@ -48,10 +71,12 @@ function hasMovesForCard(cardId, zone) {
   if (!availableMoves) return false;
   const hasDirectMove = availableMoves.some(m => {
     if (m.params?.cardId === cardId) return true;
-    if (m.params?.unitId === cardId) return true;
+    if (m.params?.unitId === cardId && m.moveId !== "equipCard") return true;
     if (m.params?.runeId === cardId) return true;
     if (m.params?.gearId === cardId) return true;
+    if (m.params?.equipmentId === cardId) return true;  // rule 476.1 [Equip]
     if (m.params?.unitIds?.includes(cardId)) return true;
+    if (m.moveId === "playFromChampionZone" && zone === "championZone") return true;
     return false;
   });
   // DESIGN.md §Resource management: no auto-pay — a hand card is draggable
@@ -67,21 +92,21 @@ function getDragContext(cardId, zone) {
 
   if (zone === "hand") {
     matchingMoves = availableMoves.filter(m =>
-      (m.moveId === "playUnit" || m.moveId === "playSpell" || m.moveId === "playGear") &&
+      (m.moveId === "playUnit" || m.moveId === "playSpell" || m.moveId === "playGear" || m.moveId === "hideCard") &&
       m.params?.cardId === cardId
     );
     if (matchingMoves.length > 0) {
       action = "playCard";
-      validTargets = ["player-base"];
+      // Base, plus any battlefield the engine lets this card be played / hidden to.
+      validTargets = matchingMoves.some(m => m.moveId !== "hideCard") ? ["player-base"] : [];
+      validTargets.push(...handCardBattlefieldTargets(matchingMoves));
     }
   } else if (zone === "championZone") {
     matchingMoves = availableMoves.filter(m => m.moveId === "playFromChampionZone");
     if (matchingMoves.length > 0) {
       action = "playChampion";
-      validTargets = ["player-base"];
-      for (const bfId of Object.keys(gameState?.battlefields ?? {})) {
-        validTargets.push(bfId);
-      }
+      // Only destinations the engine actually offers light up.
+      validTargets = ["player-base", ...handCardBattlefieldTargets(matchingMoves)];
     }
   } else if (zone === "base") {
     matchingMoves = availableMoves.filter(m =>
@@ -93,6 +118,14 @@ function getDragContext(cardId, zone) {
       for (const m of matchingMoves) {
         const bfId = m.params?.destination || m.params?.battlefieldId;
         if (bfId && !validTargets.includes(bfId)) validTargets.push(bfId);
+      }
+    } else {
+      // rule 476.1: an Equipment on the board is dragged onto the unit it attaches to.
+      const equips = availableMoves.filter(m => m.moveId === "equipCard" && m.params?.equipmentId === cardId);
+      if (equips.length > 0) {
+        matchingMoves = equips;
+        action = "equip";
+        validTargets = equips.map(m => m.params?.unitId).filter(Boolean);
       }
     }
   } else if (zone.startsWith("battlefield-")) {
@@ -222,11 +255,20 @@ document.addEventListener("pointermove", (e) => {
       mode: "awaitTarget",
       sourceCardId: dragState.cardId,
       sourceZone: dragState.zone,
-      action: ctx.action,
+      // "equip" drags target unit CARDS, so borrow the card-glow highlighter.
+      action: ctx.action === "equip" ? "chooseTarget" : ctx.action,
       validTargets: ctx.validTargets,
       matchingMoves: ctx.matchingMoves,
     };
     applyValidTargetHighlights();
+    // A hand card / champion that can also go to a battlefield lights those up too.
+    if (ctx.action === "playCard" || ctx.action === "playChampion") {
+      for (const bfId of ctx.validTargets) {
+        if (bfId === "player-base") continue;
+        const bfEl = document.querySelector(`[data-bf-id="${CSS.escape(bfId)}"]`);
+        if (bfEl) bfEl.classList.add("valid-target");
+      }
+    }
     hidePreview();
   }
 
@@ -245,9 +287,13 @@ document.addEventListener("pointermove", (e) => {
       (dragState.action === "playChampion" && dropZone === "player-base")
     );
 
-    // For equipment drag-onto-unit: allow dropping on a friendly unit card too.
+    // For equipment drag-onto-unit: allow dropping on a friendly unit card too
+    // (from hand = play attached; from the board = [Equip], rule 476.1).
     let unitDrop = null;
-    if (!dropZone && dragState.zone === "hand") {
+    if (dragState.action === "equip") {
+      const u = findUnitDropAt(e.clientX, e.clientY);
+      unitDrop = u && dragState.validTargets.includes(u.unitId) ? u : null;
+    } else if (!dropZone && dragState.zone === "hand") {
       const card = findCard(dragState.cardId);
       if (card && (card.cardType === "gear" || card.cardType === "equipment")) {
         unitDrop = findUnitDropAt(e.clientX, e.clientY);
@@ -258,7 +304,7 @@ document.addEventListener("pointermove", (e) => {
 
     // Update ghost state
     dragState.ghost.classList.toggle("over-valid", !!isValid);
-    dragState.ghost.classList.toggle("over-invalid", (dropZone && !isValidZone) || (!dropZone && !unitDrop && false));
+    dragState.ghost.classList.toggle("over-invalid", !!dropZone && !isValidZone && !unitDrop);
 
     // Update drag-over highlights on zones and units
     document.querySelectorAll(".drag-over").forEach(el => el.classList.remove("drag-over"));
@@ -284,9 +330,11 @@ document.addEventListener("pointerup", (e) => {
   if (wasDragging) {
     // Check for drop on a valid zone first, then fall back to unit-drop for equipment.
     const dropZone = findDropZoneAt(e.clientX, e.clientY);
-    const unitDrop = dropZone ? null : findUnitDropAt(e.clientX, e.clientY);
+    const unitDrop = dragState.action === "equip"
+      ? findUnitDropAt(e.clientX, e.clientY)
+      : (dropZone ? null : findUnitDropAt(e.clientX, e.clientY));
 
-    const isValid = dropZone && (
+    const isValid = dragState.action !== "equip" && dropZone && (
       dragState.validTargets.includes(dropZone) ||
       (dragState.action === "playCard" && dropZone === "player-base") ||
       (dragState.action === "playChampion" && dropZone === "player-base")
@@ -296,24 +344,38 @@ document.addEventListener("pointerup", (e) => {
       // Find the matching move and execute it
       let move = null;
       if (dragState.action === "playChampion") {
-        const location = dropZone === "player-base" ? "base" : dropZone;
-        move = dragState.matchingMoves.find(m => m.params?.location === location) ?? {
-          moveId: "playFromChampionZone",
-          params: { playerId: viewingPlayer, location },
-          playerId: viewingPlayer,
-        };
-      } else if (dragState.action === "playCard" && dropZone === "player-base") {
-        if (dragState.matchingMoves.some(m => moveTargetId(m))) {
-          // Per-target variants → targeting mode (entered after cleanup below).
-          targetingMoves = dragState.matchingMoves;
+        const location = dropZone === "player-base" ? "base" : `battlefield-${dropZone}`;
+        const there = dragState.matchingMoves.filter(m => String(m.params?.location ?? "base") === location);
+        if (there.length > 1 && typeof openPlayCostModal === "function") {
+          openPlayCostModal(cardId);  // base vs paid variants for this destination
           move = null;
-        } else if (dragState.matchingMoves.length > 1 && typeof openPlayCostModal === "function") {
+        } else {
+          move = there[0] ?? null;
+        }
+      } else if (dragState.action === "playCard" && dropZone === "player-base") {
+        const baseMoves = dragState.matchingMoves.filter(m => m.moveId !== "hideCard" && (!m.params?.location || m.params.location === "base"));
+        if (baseMoves.some(m => moveTargetId(m))) {
+          // Per-target variants → targeting mode (entered after cleanup below).
+          targetingMoves = baseMoves;
+          move = null;
+        } else if (baseMoves.length > 1 && typeof openPlayCostModal === "function") {
           // Multiple play variants (Accelerate / sacrifice) → open the choice
           // modal instead of silently picking the first.
           openPlayCostModal(cardId);
           move = null;
         } else {
-          move = dragState.matchingMoves[0];
+          move = baseMoves[0] ?? null;
+        }
+      } else if (dragState.action === "playCard") {
+        // Hand card dropped on a battlefield: play it there (unit to a held
+        // battlefield) or hide it there (rule 723). Several ways → ask.
+        const there = dragState.matchingMoves.filter(m =>
+          m.params?.location === `battlefield-${dropZone}` || (m.moveId === "hideCard" && m.params?.battlefieldId === dropZone));
+        if (there.length > 1 && typeof openPlayCostModal === "function") {
+          openPlayCostModal(cardId);
+          move = null;
+        } else {
+          move = there[0] ?? null;
         }
       } else {
         move = dragState.matchingMoves.find(m =>
@@ -329,6 +391,14 @@ document.addEventListener("pointerup", (e) => {
         animateCardFly(dragState.sourceEl, destEl, () => {
           executeMove(move.moveId, move.params, move.playerId);
         });
+      }
+    } else if (unitDrop && dragState.action === "equip") {
+      // rule 476.1: board Equipment dropped on a unit → [Equip] it there.
+      const move = dragState.matchingMoves.find(m => m.params?.unitId === unitDrop.unitId);
+      if (move) {
+        executeMove(move.moveId, move.params, move.playerId);
+      } else if (typeof showToast === "function") {
+        showToast("Can't equip that unit");
       }
     } else if (unitDrop && dragState.zone === "hand") {
       // Equipment drag-onto-unit: play the gear with the unit as chosen target

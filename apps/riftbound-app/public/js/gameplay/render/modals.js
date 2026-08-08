@@ -36,6 +36,122 @@ function describeOptInCost(cost) {
   return parts.length ? `pay ${parts.join(", ")}` : null;
 }
 
+/** Display name of a card id / zone id / seat for prompt labels. */
+function promptName(id) {
+  if (typeof id !== "string") return String(id ?? "");
+  const c = findCard(id);
+  if (c?.name) return c.name;
+  if (id === "base") return "Base";
+  if (/^battlefield-/.test(id)) return getBattlefieldName(id.replace(/^battlefield-/, ""));
+  if (gameState?.players?.[id]) return pName(id);
+  return id.replace(/^player-[12]-(?:(?:main|rune)-\d+-)?/, "");
+}
+
+/**
+ * The prompt's headline for EVERY pendingChoice type the engine can park —
+ * shared by the modal and the sidebar so neither falls back to "Choose a card"
+ * for a yes/no, an X amount or a damage split.
+ */
+function pendingChoiceTitle(pending) {
+  const src = findCard(pending.sourceCardId)?.name;
+  switch (pending.type) {
+    case "opt-in": {
+      // Rule 583 (sfd-119-221): a "you may pay X to …" trigger names its cost.
+      const cost = describeOptInCost(pending.resolved?.optInCost ?? pending.acceleratePlay?.cost);
+      if (pending.acceleratePlay) return `Pay Accelerate for ${promptName(pending.acceleratePlay.cardId)}?${cost ? ` (${cost})` : ""} — enters ready`;
+      if (pending.counterRansom) return `Pay to stop ${src ?? "the counter"}?${cost ? ` (${cost})` : ""}`;
+      return `Use ${src ?? "optional"} ability?${cost ? ` (${cost})` : ""}`;
+    }
+    case "confirm": return pending.prompt ?? `${src ? `${src}: ` : ""}Do it?`;
+    case "reveal-and-pick":
+      return pending.onPicked === "discard" ? "Discard a card"
+        : pending.onPicked === "banish" ? "Banish a card"
+        : pending.onPicked === "recycle" ? "Recycle a card"
+        : pending.onPicked === "draw" ? "Choose a card to draw"
+        : pending.onPicked === "play" ? "Choose a card to play"
+        : "Choose a card";
+    case "name-card": return `Name a ${pending.cardType === "tag" ? "tag" : (pending.cardType ?? "card")}${src ? ` for ${src}` : ""}`;
+    case "choose-destination": return `Choose where ${promptName(pending.cardId)} goes`;
+    case "choose-target":
+      // Rule ogn-256-298: "any number of" multi-pick — picks accumulate until Done.
+      if (pending.anyNumber) return `Choose any number of targets${pending.picked?.length ? ` (${pending.picked.length} chosen)` : ""}`;
+      // Rule 355.14 (ogn-041-298): fixed-total split damage.
+      if (pending.assign && typeof pending.total === "number") return `Split ${pending.total} damage${src ? ` from ${src}` : ""}`;
+      // rule 372 (RPL): which replacement applies to this death.
+      if (pending.replacementOrderFor) return `Which effect saves ${promptName(pending.replacementOrderFor)}?`;
+      // Rule 355.5: a play-time target prompt may name what is being chosen.
+      return pending.prompt ?? `Choose a target${src ? ` for ${src}` : ""}`;
+    case "choose-mode": return `${src ?? "Choose one"} — choose one`;  // Rule 355.3 / sfd-091-221
+    case "choose-player": return pending.prompt ?? `Choose a player${src ? ` for ${src}` : ""}`;
+    case "combat-damage": return `Assign ${pending.total} combat damage${pending.battlefieldId ? ` at ${getBattlefieldName(pending.battlefieldId)}` : ""}${pending.side ? ` (${pending.side})` : ""}`;
+    case "pay-x": return pending.prompt ?? `${src ?? "Pay X"} — choose X`;
+    case "order-cards": return `${src ? `${src}: ` : ""}Put the cards back in any order (first = top)`;
+    case "weaponmaster-equip": return `Weaponmaster: equip ${promptName(pending.unitId)} for [rainbow] less?`;
+    // rule 372 die-order / 373 die-assign / 383.3.d trigger-batch / 355.11.b subset — the producer ships the
+    // prompt; name the card it is about ("which death does Zhonya's Hourglass replace?").
+    case "order": {
+      const about = pending.resume?.kind === "die-order" ? promptName(pending.resume.dyingCardId) : src;
+      return `${about ? `${about}: ` : ""}${pending.prompt ?? "Choose an order"}`;
+    }
+    case "pick-many": {
+      const range = pending.min === pending.max ? `${pending.min}` : `${pending.min}–${pending.max}`;
+      return `${src ? `${src}: ` : ""}${pending.prompt ?? "Choose"} (${range})`;
+    }
+    default: return pending.prompt ?? "Choose";
+  }
+}
+
+/**
+ * Label for ONE resolvePendingChoice variant, whatever its answer shape —
+ * pickedCardId / pickedZoneId / pickedMode / pickedName / pickedPlayerId /
+ * accept / allocation / xAmount / orderedKeys / pickedKeys / orderedCardIds.
+ */
+function pendingPickLabel(pending, p) {
+  p = p || {};
+  // Rule 355.14 (ogn-041-298) / 465.2.c: damage allocation → "Unit 2 · Other 3" / "No targets".
+  if (p.allocation && typeof p.allocation === "object") {
+    const parts = Object.entries(p.allocation).filter(([, n]) => n > 0).map(([cid, n]) => `${promptName(cid)} ${n}`);
+    return parts.length ? parts.join(" · ") : "No targets";
+  }
+  // Rule 355.3: printed bullet (server `optionLabels` / parser `label`), never a raw effect id.
+  if (p.pickedMode != null && pending?.type === "choose-mode") return modeOptionText(pending, p.pickedMode);
+  if (typeof p.xAmount === "number") return `X = ${p.xAmount}`;
+  if (Array.isArray(p.pickedCardIds)) return p.pickedCardIds.map(promptName).join(" + ");
+  if (Array.isArray(p.orderedCardIds)) return p.orderedCardIds.map(promptName).join(" → ");
+  if (Array.isArray(p.orderedKeys)) {
+    if (p.label) return p.label;
+    if (p.orderedKeys.length === 0) return "Keep this order";
+    return p.orderedKeys.map(k => pending?.items?.find(i => i.key === k)?.label ?? promptName(k)).join(" → ");
+  }
+  if (Array.isArray(p.pickedKeys)) {
+    if (p.label) return p.label;
+    return p.pickedKeys.length ? p.pickedKeys.map(k => pending?.options?.find?.(o => o.key === k)?.label ?? promptName(k)).join(" + ") : "None";
+  }
+  if (p.pickedCardId) return promptName(p.pickedCardId) + (p.paidAdditionalCost ? " (pay additional cost)" : "");
+  if (p.pickedPlayerId) return pName(p.pickedPlayerId);
+  if (p.pickedName != null) return String(p.pickedName);
+  // Rule ogn-102-298 / sfd-109-221: destination zone (+ optional additional cost of a pending play).
+  if (p.pickedZoneId != null) return promptName(String(p.pickedZoneId).startsWith("battlefield-") || p.pickedZoneId === "base" ? p.pickedZoneId : `battlefield-${p.pickedZoneId}`) + (p.paidAdditionalCost ? " (pay additional cost)" : "");
+  if (typeof p.accept === "boolean") {
+    if (pending?.type === "choose-target" && pending.anyNumber) return p.accept ? "Yes" : "Done";
+    if (pending?.type === "weaponmaster-equip") return p.accept ? "Yes" : "Don't equip";
+    if (pending?.type === "choose-destination") return p.accept ? "Yes" : "Don't move";
+    // Rule ogn-067-298 / 355.13: an optional reveal-and-pick is declined AFTER the reveal.
+    if (pending?.type === "reveal-and-pick" || (pending?.type === "choose-target" && pending.optional)) return p.accept ? "Yes" : "Decline";
+    if (pending?.type === "opt-in" && pending.acceleratePlay) return p.accept ? "Pay — enters ready" : "No — enters exhausted";
+    return p.accept ? "Yes" : "No";
+  }
+  return p.label ?? "Choose";
+}
+
+/** Prompts answered with a composed value (sequence / subset / amount) rather than one click per enumerated variant. */
+function isCompositePending(pending) {
+  return !!pending && (pending.type === "order" || pending.type === "pick-many" || pending.type === "pay-x" || pending.type === "order-cards");
+}
+
+// Local, un-sent state of the composite choosers (reset whenever the prompt changes).
+let _compose = { key: null, seq: [], set: [], x: null };
+
 function renderPendingChoiceModal() {
   const pending = gameState?.pendingChoice;
   const mine = pending && (pending.prompter ?? pending.playerId) === viewingPlayer;
@@ -48,6 +164,7 @@ function renderPendingChoiceModal() {
     return;
   }
   overlay.dataset.mode = "pending";
+  overlay.dataset.pendingType = pending.type ?? "";
   // Card picks are mirrored as board glows (applyPendingChoiceHighlights); let
   // clicks reach the board by making the backdrop pass-through for those prompts.
   const hasBoardPicks = pending.type === "choose-target" || availableMoves.some(m =>
@@ -55,35 +172,16 @@ function renderPendingChoiceModal() {
     document.querySelector(`#game-scale-wrapper [data-card-id="${CSS.escape(m.params.pickedCardId)}"]`));
   overlay.classList.toggle("targeting", !!hasBoardPicks);
   if (typeof closeZoom === "function") closeZoom();
+  // A floating hover preview left over from the click that caused the prompt must not cover it.
+  if (!overlay.classList.contains("visible") && typeof hidePreview === "function") hidePreview();
 
-  // Rule ogn-067-298: opt-in ("you may …") triggers carry only {accept} —
-  // title names the source card and buttons read Yes/No instead of "—".
-  const optInSrc = pending.type === "opt-in" ? findCard(pending.sourceCardId) : null;
-  // Rule 583 (sfd-119-221): a "you may pay X to …" trigger carries its cost on
-  // the chain item as `optInCost` — name it, so Yes is never a blind click.
-  const optInCostText = pending.type === "opt-in"
-    ? describeOptInCost(pending.resolved?.optInCost) : null;
-  const title = pending.type === "opt-in"
-    ? `Use ${optInSrc?.name ?? "optional"} ability?${optInCostText ? ` (${optInCostText})` : ""}`
-    : pending.onPicked === "discard" ? "Discard a card"
-    : pending.onPicked === "banish" ? "Banish a card"
-    : pending.onPicked === "recycle" ? "Recycle a card"
-    : pending.onPicked === "draw" ? "Choose a card to draw"
-    : pending.onPicked === "play" ? "Choose a card to play"
-    : pending.type === "name-card" ? "Name a card"
-    : pending.type === "choose-destination" ? "Choose a destination"
-    // Rule ogn-256-298: "any number of" multi-pick — picks accumulate until Done.
-    : pending.type === "choose-target" && pending.anyNumber
-      ? `Choose any number of targets${pending.picked?.length ? ` (${pending.picked.length} chosen)` : ""}`
-    // Rule 355.14 (ogn-041-298): fixed-total split damage — one button per legal split.
-    : pending.type === "choose-target" && pending.assign && typeof pending.total === "number"
-      ? `Split ${pending.total} damage`
-    // Rule 355.5: a play-time target prompt may name what is being chosen.
-    : pending.type === "choose-target" ? (pending.prompt ?? `Choose a target${findCard(pending.sourceCardId)?.name ? ` for ${findCard(pending.sourceCardId).name}` : ""}`)
-    : pending.type === "choose-mode" ? `${findCard(pending.sourceCardId)?.name ?? "Choose one"} — choose one`  // Rule 355.3 / sfd-091-221
-    // Rules 372/373/383.3.d/355.11.b: generic order / pick-many prompts carry their own prompt text.
-    : (pending.type === "order" || pending.type === "pick-many") ? (pending.prompt ?? (pending.type === "order" ? "Choose an order" : "Choose"))
-    : "Choose a card";
+  if (isCompositePending(pending)) {
+    renderCompositeChoice(pending, box);
+    overlay.classList.add("visible");
+    return;
+  }
+
+  const title = pendingChoiceTitle(pending);
 
   let html = `<div class="chain-title">${esc(title)}</div>`;
   // Rule 356.1 (unl-135-219): a pick that costs something must say so before
@@ -96,6 +194,10 @@ function renderPendingChoiceModal() {
   const picks = availableMoves.filter(m => m.moveId === "resolvePendingChoice");
   const cardPicks = picks.filter(m => m.params?.pickedCardId);
   const otherPicks = picks.filter(m => !m.params?.pickedCardId);
+  // rule 355.14 / 465.2.c: a damage split names the units it is spread over —
+  // show them (inert) above the allocation buttons so "Recruit 2 · Poro 1" can be read against the board.
+  const contextIds = (pending.type === "combat-damage" || (pending.type === "choose-target" && pending.assign)) && Array.isArray(pending.options)
+    ? pending.options.map(String) : [];
 
   // Rule 355.13 (ogn-062-298): a look/reveal prompt must show EVERY card that
   // was looked at, not just the ones an eligibility filter kept ("Look at the
@@ -107,6 +209,7 @@ function renderPendingChoiceModal() {
   const shownIds = [
     ...revealedIds,
     ...cardPicks.map(m => String(m.params.pickedCardId)).filter(id => !revealedIds.includes(id)),
+    ...contextIds.filter(id => !revealedIds.includes(id) && !pickIdxOf.has(id)),
   ];
 
   if (shownIds.length) {
@@ -115,9 +218,10 @@ function renderPendingChoiceModal() {
       const card = findCard(cid);
       const imgId = (card?.definitionId ?? cid).replace(/^player-[12]-(?:main|rune)-\d+-/, "");
       const idx = pickIdxOf.get(cid);
+      const isContext = contextIds.includes(cid) && idx == null;
       const attrs = idx == null
-        ? `class="choice-modal-card choice-modal-card-ineligible" style="opacity:.4;cursor:default"`
-        : `class="choice-modal-card" data-pick-idx="${idx}"`;
+        ? `class="choice-modal-card choice-modal-card-ineligible${isContext ? " choice-modal-card-context" : ""}" data-card-id="${esc(cid)}" style="opacity:${isContext ? ".85" : ".4"};cursor:default"`
+        : `class="choice-modal-card" data-pick-idx="${idx}" data-card-id="${esc(cid)}" role="button" tabindex="0" aria-label="${esc(card?.name ?? cid)}"`;
       // Tokens (definitionId `token-def-<slug>`) usually have no art on disk or
       // in the CDN map, so the bare <img> 404s into a broken-image icon. Mirror
       // renderCard's fallback tile: hide the image and show a named tile.
@@ -133,39 +237,12 @@ function renderPendingChoiceModal() {
     html += `</div>`;
   }
   if (otherPicks.length) {
-    html += `<div class="choice-modal-btns">`;
+    // Rule 762 (name-card): hundreds of legal names — add a filter box above the buttons.
+    const many = otherPicks.length > 12;
+    if (many) html += `<input class="choice-modal-filter" type="text" placeholder="Type to filter…" style="width:100%;margin:6px 0;padding:6px 8px;background:#1e1b30;border:1px solid #3a3560;border-radius:4px;color:#e0dced;">`;
+    html += `<div class="choice-modal-btns${many ? " choice-modal-btns--many" : ""}"${many ? ' style="max-height:320px;overflow-y:auto;"' : ""}>`;
     for (let i = 0; i < otherPicks.length; i++) {
-      // Rule ogn-102-298: humanize destination zone ids ("base" /
-      // "battlefield-<id>") the same way describePlayVariant does.
-      const zid = otherPicks[i].params?.pickedZoneId;
-      const accept = otherPicks[i].params?.accept;
-      // Rule sfd-091-221: choose-mode buttons name the mode ("draw 1" / "buff me").
-      const modeIdx = otherPicks[i].params?.pickedMode;
-      const modeOpt = pending.type === "choose-mode" && modeIdx != null ? pending.effect?.options?.[modeIdx] : null;
-      // Rule 355.14 (ogn-041-298): split-damage allocation → "Unit 2 · Other 3" / "No targets".
-      const alloc = otherPicks[i].params?.allocation;
-      const allocLabel = alloc && typeof alloc === "object"
-        ? (Object.keys(alloc).length
-          ? Object.entries(alloc).map(([cid, n]) => `${findCard(cid)?.name ?? cid} ${n}`).join(" · ")
-          : "No targets")
-        : null;
-      const label = allocLabel != null
-        ? allocLabel
-        : modeOpt
-        // Rule 355.3: printed bullet (server `optionLabels` / parser `label`), never a raw effect id.
-        ? modeOptionText(pending, modeIdx)
-        : typeof accept === "boolean"
-        // Rule ogn-067-298 / ogn-256-298 / 355.13: an optional reveal-and-pick
-        // is declined AFTER the hand is revealed, so "Decline" reads better
-        // than "No" next to the revealed cards.
-        ? (pending.type === "choose-target" && pending.anyNumber ? "Done"
-          : accept ? "Yes"
-          : pending.type === "reveal-and-pick" ? "Decline" : "No")
-        : zid != null
-        // Rule sfd-109-221 (356.1.b.3): a pending play may offer the optional additional cost.
-        ? (zid === "base" ? "Base" : getBattlefieldName(String(zid).replace(/^battlefield-/, ""))) + (otherPicks[i].params?.paidAdditionalCost ? " (pay additional cost)" : "")
-        // Rules 372/373/355.11.b: order / pick-many variants ship a display `label`.
-        : (otherPicks[i].params?.pickedName ?? otherPicks[i].params?.label ?? "—");
+      const label = pendingPickLabel(pending, otherPicks[i].params);
       html += `<button class="choice-modal-btn" data-other-idx="${i}">${esc(String(label))}</button>`;
     }
     html += `</div>`;
@@ -175,10 +252,13 @@ function renderPendingChoiceModal() {
   // Attach handlers via delegation instead of inline onclick — avoids
   // interpolating server-derived params into an HTML attribute.
   box.querySelectorAll(".choice-modal-card").forEach(el => {
-    el.addEventListener("click", () => {
+    const pickIt = () => {
       const m = cardPicks[Number(el.dataset.pickIdx)];
       if (m) executeMove("resolvePendingChoice", m.params, m.playerId);
-    });
+    };
+    el.addEventListener("click", pickIt);
+    // Card tiles are the controls of a mandatory prompt: keyboard-operable too.
+    el.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pickIt(); } });
   });
   box.querySelectorAll(".choice-modal-btn").forEach(el => {
     el.addEventListener("click", () => {
@@ -186,7 +266,112 @@ function renderPendingChoiceModal() {
       if (m) executeMove("resolvePendingChoice", m.params, m.playerId);
     });
   });
+  const filter = box.querySelector(".choice-modal-filter");
+  if (filter) {
+    filter.addEventListener("input", () => {
+      const q = filter.value.trim().toLowerCase();
+      box.querySelectorAll(".choice-modal-btn[data-other-idx]").forEach(b => {
+        b.style.display = !q || b.textContent.toLowerCase().includes(q) ? "" : "none";
+      });
+    });
+  }
   overlay.classList.add("visible");
+}
+
+/**
+ * Composite prompts — an order (rule 372 / 383.3.d / 386.2), a subset (rule
+ * 355.11.b / 373) or an amount (Pay X): the player builds ONE answer here and
+ * confirms it. When the engine enumerated that exact answer its variant is
+ * sent verbatim; longer lists (only a few arrangements enumerated) send the
+ * composed value, which the move validates server-side.
+ */
+function renderCompositeChoice(pending, box) {
+  const picks = availableMoves.filter(m => m.moveId === "resolvePendingChoice");
+  const me = picks[0]?.playerId ?? viewingPlayer;
+  const key = JSON.stringify([pending.type, pending.sourceCardId, pending.items ?? pending.options ?? pending.cards ?? null, picks.length]);
+  if (_compose.key !== key) _compose = { key, seq: [], set: [], x: null };
+  const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const send = (params) => {
+    const exact = picks.find(m => Object.keys(params).every(k => same(m.params?.[k], params[k])));
+    executeMove("resolvePendingChoice", exact ? exact.params : { playerId: me, ...params }, exact ? exact.playerId : me);
+  };
+  const title = pendingChoiceTitle(pending);
+  let html = `<div class="chain-title">${esc(title)}</div>`;
+
+  if (pending.type === "order" || pending.type === "order-cards") {
+    const items = pending.type === "order"
+      ? (pending.items || []).map(i => ({ key: i.key, label: i.label ?? promptName(i.cardId ?? i.key), cardId: i.cardId }))
+      : (pending.cards || []).map(id => ({ key: id, label: promptName(id), cardId: id }));
+    const seq = _compose.seq.filter(k => items.some(i => i.key === k));
+    html += `<div class="chain-subtitle">Click the items in the order you want (${pending.type === "order-cards" ? "first = top of deck" : "first = applied / resolves first"}).</div>`;
+    html += `<div class="choice-modal-btns choice-compose" data-compose="order">`;
+    for (const it of items) {
+      const pos = seq.indexOf(it.key);
+      html += `<button class="choice-modal-btn choice-seq-item${pos >= 0 ? " chosen" : ""}" data-seq-key="${esc(it.key)}" ${pos >= 0 ? 'style="opacity:.55"' : ""}>${pos >= 0 ? `<b>${pos + 1}.</b> ` : ""}${esc(it.label)}</button>`;
+    }
+    html += `</div><div class="choice-modal-btns">`;
+    html += `<button class="choice-modal-btn choice-compose-confirm" data-compose-confirm ${seq.length === items.length ? "" : "disabled style=\"opacity:.5\""}>Confirm order${seq.length ? ` (${seq.map(k => items.find(i => i.key === k)?.label).join(" → ")})` : ""}</button>`;
+    if (seq.length) html += `<button class="choice-modal-btn" data-compose-reset>Reset</button>`;
+    if (pending.type === "order" && pending.defaultable !== false) html += `<button class="choice-modal-btn" data-compose-default>Keep listed order</button>`;
+    html += `</div>`;
+    box.innerHTML = html;
+    box.querySelectorAll("[data-seq-key]").forEach(el => el.addEventListener("click", () => {
+      const k = el.dataset.seqKey;
+      _compose.seq = _compose.seq.includes(k) ? _compose.seq.filter(x => x !== k) : [..._compose.seq, k];
+      renderCompositeChoice(pending, box);
+    }));
+    box.querySelector("[data-compose-reset]")?.addEventListener("click", () => { _compose.seq = []; renderCompositeChoice(pending, box); });
+    box.querySelector("[data-compose-default]")?.addEventListener("click", () => send({ orderedKeys: items.map(i => i.key) }));
+    box.querySelector("[data-compose-confirm]")?.addEventListener("click", () => {
+      if (seq.length !== items.length) return;
+      send(pending.type === "order" ? { orderedKeys: seq } : { orderedCardIds: seq });
+    });
+    return;
+  }
+
+  if (pending.type === "pick-many") {
+    const opts = (pending.options || []).map(o => ({ key: o.key, label: o.label ?? promptName(o.cardId ?? o.key), cardId: o.cardId }));
+    const set = _compose.set.filter(k => opts.some(o => o.key === k));
+    const min = pending.min ?? 0, max = pending.max ?? opts.length;
+    const ok = set.length >= min && set.length <= max;
+    html += `<div class="chain-subtitle">Tick ${min === max ? min : `${min} to ${max}`} — ${set.length} chosen</div>`;
+    html += `<div class="choice-modal-btns choice-compose" data-compose="pick-many">`;
+    for (const o of opts) {
+      const on = set.includes(o.key);
+      const full = !on && set.length >= max;
+      html += `<button class="choice-modal-btn choice-check-item${on ? " chosen" : ""}" data-check-key="${esc(o.key)}" ${full ? 'disabled style="opacity:.4"' : ""}>${on ? "☑" : "☐"} ${esc(o.label)}</button>`;
+    }
+    html += `</div><div class="choice-modal-btns">`;
+    html += `<button class="choice-modal-btn choice-compose-confirm" data-compose-confirm ${ok ? "" : 'disabled style="opacity:.5"'}>Done (${set.length})</button>`;
+    if (min === 0) html += `<button class="choice-modal-btn" data-compose-none>None</button>`;
+    html += `</div>`;
+    box.innerHTML = html;
+    box.querySelectorAll("[data-check-key]").forEach(el => el.addEventListener("click", () => {
+      const k = el.dataset.checkKey;
+      _compose.set = _compose.set.includes(k) ? _compose.set.filter(x => x !== k) : [..._compose.set, k];
+      renderCompositeChoice(pending, box);
+    }));
+    box.querySelector("[data-compose-none]")?.addEventListener("click", () => send({ pickedKeys: [] }));
+    box.querySelector("[data-compose-confirm]")?.addEventListener("click", () => { if (ok) send({ pickedKeys: opts.map(o => o.key).filter(k => set.includes(k)) }); });
+    return;
+  }
+
+  // pay-x: a stepper over the enumerated amounts.
+  const amounts = picks.map(m => m.params?.xAmount).filter(n => typeof n === "number").sort((a, b) => a - b);
+  const lo = amounts[0] ?? 0, hi = amounts[amounts.length - 1] ?? 0;
+  if (_compose.x == null || _compose.x < lo || _compose.x > hi) _compose.x = lo;
+  html += `<div class="chain-subtitle">Choose how much to pay (${lo}–${hi})</div>`;
+  html += `<div class="choice-modal-btns choice-compose" data-compose="pay-x" style="align-items:center;justify-content:center;">
+    <button class="choice-modal-btn" data-x-step="-1" ${_compose.x <= lo ? 'disabled style="opacity:.4"' : ""}>−</button>
+    <span class="choice-x-value" style="min-width:64px;text-align:center;font-size:20px;font-weight:700;color:#ffd070;">X = ${_compose.x}</span>
+    <button class="choice-modal-btn" data-x-step="1" ${_compose.x >= hi ? 'disabled style="opacity:.4"' : ""}>+</button>
+  </div><div class="choice-modal-btns"><button class="choice-modal-btn choice-compose-confirm" data-compose-confirm>Pay ${_compose.x}</button></div>`;
+  box.innerHTML = html;
+  box.querySelectorAll("[data-x-step]").forEach(el => el.addEventListener("click", () => {
+    _compose.x = Math.max(lo, Math.min(hi, (_compose.x ?? lo) + Number(el.dataset.xStep)));
+    renderCompositeChoice(pending, box);
+  }));
+  box.querySelector("[data-compose-confirm]")?.addEventListener("click", () => send({ xAmount: _compose.x }));
 }
 
 /**
@@ -291,23 +476,29 @@ function describePlayVariantBase(m, card) {
  */
 function openPlayCostModal(cardId) {
   // Rule ogn-193-298: match the action-panel grouping key exactly so a
-  // cardId-less champion move doesn't leak into another card's modal.
+  // cardId-less champion move doesn't leak into another card's modal. The
+  // champion may be named by "__champion" (sidebar) or its real id (card click).
+  const isChampion = cardId === "__champion" || findCardZone(cardId) === "championZone";
   const variants = availableMoves.filter(m =>
     // rule-id: ven-008-166 — spells and gear carry optional additional costs
     // too, so their variants must reach this modal instead of silently
     // defaulting to the unpaid play.
-    (m.moveId === "playUnit" ||
-      m.moveId === "playFromChampionZone" ||
-      m.moveId === "playSpell" ||
-      m.moveId === "playGear") &&
-    (m.params?.cardId ?? "__champion") === cardId,
+    isChampion
+      ? m.moveId === "playFromChampionZone"
+      : (m.moveId === "playUnit" || m.moveId === "playSpell" || m.moveId === "playGear") &&
+        m.params?.cardId === cardId,
   );
-  if (variants.length === 0) return;
-  const card = findCard(cardId);
+  // rule 723 (Hidden): "Hide at <battlefield>" is another way to use the card — listed after the plays.
+  const hides = isChampion ? [] : availableMoves.filter(m => m.moveId === "hideCard" && m.params?.cardId === cardId);
+  if (variants.length === 0 && hides.length === 0) return;
+  const card = isChampion
+    ? (typeof zoneForPlayer === "function" ? zoneForPlayer("championZone", viewingPlayer)[0] : null) ?? findCard(cardId)
+    : findCard(cardId);
   const { overlay, box } = ensureChoiceOverlay();
   overlay.dataset.mode = "playCost";
   overlay.classList.remove("targeting");
   if (typeof closeZoom === "function") closeZoom();
+  if (typeof hidePreview === "function") hidePreview();
 
   const imgId = (card?.definitionId ?? cardId).replace(/^player-[12]-(?:main|rune)-\d+-/, "");
   let html = `<div class="chain-title">Play ${esc(card?.name ?? cardId)}</div>`;
@@ -318,6 +509,12 @@ function openPlayCostModal(cardId) {
     const { label, detail } = describePlayVariant(variants[i], card);
     html += `<button class="choice-modal-btn" data-variant-idx="${i}">
       ${esc(label)}<small>${esc(detail)}</small>
+    </button>`;
+  }
+  for (let i = 0; i < hides.length; i++) {
+    const where = getBattlefieldName(String(hides[i].params?.battlefieldId ?? ""));
+    html += `<button class="choice-modal-btn" data-hide-idx="${i}">
+      ${esc(`Hide at ${where}`)}<small>${esc("facedown — pay [rainbow] now, reveal later for 0")}</small>
     </button>`;
   }
   html += `</div>`;
@@ -331,7 +528,17 @@ function openPlayCostModal(cardId) {
       if (m) executeMove(m.moveId, m.params, m.playerId);
     });
   });
-  box.querySelector(".choice-modal-cancel")?.addEventListener("click", closeChoiceModal);
+  box.querySelectorAll(".choice-modal-btn[data-hide-idx]").forEach(el => {
+    el.addEventListener("click", () => {
+      const m = hides[Number(el.dataset.hideIdx)];
+      closeChoiceModal();
+      if (m) executeMove(m.moveId, m.params, m.playerId);
+    });
+  });
+  box.querySelector(".choice-modal-cancel")?.addEventListener("click", () => {
+    closeChoiceModal();
+    if (typeof cancelInteraction === "function" && interaction.mode !== "idle") cancelInteraction();
+  });
   overlay.classList.add("visible");
 }
 
@@ -400,13 +607,25 @@ function renderChainOverlay() {
       const cardName = resolveChainCard(item.cardId);
       const controller = pName(item.controller);
       const imgId = item.cardId.replace(CHAIN_ID_PREFIX_RE, "");
+      // rule 355.5 / 355.8: what the item will do — its chosen targets and, for a
+      // "Choose one —" effect whose mode is already locked, that mode's text.
+      const targetNames = (Array.isArray(item.targets) ? item.targets : []).map(t => resolveChainCard(String(t)));
+      const eff = item.effect && typeof item.effect === "object" ? item.effect : null;
+      const modeIdxs = Array.isArray(item.chosenModes) ? item.chosenModes : (Number.isInteger(item.mode) ? [item.mode] : (Number.isInteger(eff?.mode) ? [eff.mode] : []));
+      const modeText = eff?.type === "choice" && Array.isArray(eff.options)
+        ? (modeIdxs.length
+          ? modeIdxs.map(ix => modeOptionText({ effect: eff }, ix)).join(" + ")
+          : "mode chosen on resolution")
+        : (eff && typeof humanizeEffect === "function" ? humanizeEffect(eff) : "");
+      const what = [modeText, targetNames.length ? `→ ${targetNames.join(", ")}` : ""].filter(Boolean).join(" ");
       html += `
         <div class="chain-item ${isTop ? "top-item" : ""}">
           <div class="ci-order">${isTop ? "Next" : items.length - i}</div>
           <img class="ci-img" src="/card-image/${esc(imgId)}" alt="" onerror="this.style.display='none'">
           <div class="ci-info">
             <div class="ci-name">${esc(cardName)}</div>
-            <div class="ci-detail">${esc(controller)} — ${esc(item.type)}${item.countered ? " (Countered)" : ""}</div>
+            <div class="ci-detail">${esc(controller)} — ${esc(item.triggered ? "trigger" : item.type)}${item.countered ? " (Countered)" : ""}</div>
+            ${what ? `<div class="ci-detail ci-what" data-chain-what>${esc(what)}</div>` : ""}
           </div>
         </div>
       `;

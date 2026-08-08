@@ -77,8 +77,17 @@ function formatMoveDescription(moveId, params) {
   if (!params) return null;
   const r = (v) => Array.isArray(v) ? v.map(resolveParamValue).join(", ") : resolveParamValue(v);
   const bf = (v) => typeof v === "string" ? getBattlefieldName(v) : String(v ?? "");
+  // A play location is "base" or "battlefield-<bfId>" — name the battlefield.
+  const loc = (v) => !v || v === "base" ? "base" : getBattlefieldName(String(v).replace(/^battlefield-/, ""));
   switch (moveId) {
-    case "playUnit": return `${r(params.cardId)} to ${params.location ?? "base"}`;
+    case "playUnit": return `${r(params.cardId)} to ${loc(params.location)}`;
+    case "playFromChampionZone": {
+      const champ = (typeof zoneForPlayer === "function" ? zoneForPlayer("championZone", viewingPlayer)[0] : null);
+      return `${champ?.name ?? "Champion"} to ${loc(params.location)}${params.paidAdditionalCost ? " (+ additional cost)" : ""}`;
+    }
+    // rule 476.1: [Equip] — name both the Equipment and the unit it attaches to.
+    case "equipCard": return `${r(params.equipmentId)} → ${r(params.unitId)}`;
+    case "revealHidden": return `${r(params.cardId)}`;
     // [rule:sfd-122-221 Repeat] repeatCount / paidAdditionalCost variants must be distinguishable.
     case "playSpell": return `${r(params.cardId)}${params.repeatCount ? ` (Repeat ×${params.repeatCount})` : ""}${params.paidAdditionalCost ? " (+ additional cost)" : ""}${params.targets?.length ? " → " + r(params.targets) : ""}`;
     case "playGear": return `${r(params.cardId)}${params.chosenTargetId ? " → " + r(params.chosenTargetId) : ""}`;
@@ -91,7 +100,8 @@ function formatMoveDescription(moveId, params) {
     case "contestBattlefield": return `${bf(params.battlefieldId)}`;
     case "conquerBattlefield": return `${bf(params.battlefieldId)}`;
     case "recallUnit": return `${r(params.unitId)}`;
-    case "hideCard": return `at ${bf(params.battlefieldId)}`;
+    // rule 723 (Hidden): two hideable cards at the same battlefield must be told apart.
+    case "hideCard": return `${r(params.cardId)} at ${bf(params.battlefieldId)}`;
     case "scorePoint": return `${bf(params.battlefieldId)}`;
     // Inherited abilities (Heimerdinger) share cardId — name the source card and
     // ability slot so the options are distinguishable.
@@ -203,6 +213,15 @@ function activatedAbilitySegments(card) {
     .filter(s => /^[^:]{1,48}:/.test(s));
 }
 
+/** rule 476.1: the printed "[Equip] [cost]" of an Equipment, e.g. "Equip [fury]" ("" when absent). */
+function equipCostText(cardId) {
+  const text = findCard(cardId)?.rulesText || "";
+  const m = text.match(/\[\s*Equip\s*\]\s*((?:\[[^\]]+\]\s*)*)/i);
+  if (!m) return "";
+  const cost = (m[1] || "").replace(/\s+/g, "").trim();
+  return cost ? `Equip ${cost}` : "Equip";
+}
+
 /**
  * Human label for an activateAbility move: the ability's own cost + effect text,
  * so a player can tell "[Exhaust]: Buff me" from "Empower — [2][fury]" instead of
@@ -265,15 +284,19 @@ function renderActions() {
     endShowdown: "End Showdown",
     activateAbility: "Activate Ability",
     resolveFullCombat: "Resolve Combat",
+    playFromChampionZone: "Play Champion",
+    equipCard: "Equip",
+    resolvePendingChoice: "Choose",
   };
 
   // Categorize moves into sections
   const sections = {
     turn: { label: "Turn Actions", moveIds: ["advancePhase", "endTurn", "channelRunes", "drawCard", "readyAll", "emptyRunePool"], moves: [] },
-    play: { label: "Play Cards", moveIds: ["playUnit", "playSpell", "playGear"], moves: [] },
+    play: { label: "Play Cards", moveIds: ["playUnit", "playFromChampionZone", "playSpell", "playGear", "hideCard"], moves: [] },
     // Activated abilities are a primary action (rule 331) — they belong next to
-    // Play Cards, not buried under "Other" below Concede.
-    abilities: { label: "Abilities", moveIds: ["activateAbility", "revealHidden"], moves: [] },
+    // Play Cards, not buried under "Other" below Concede. [Equip] (rule 476.1)
+    // and revealing a Hidden card (rule 723) are abilities of the card too.
+    abilities: { label: "Abilities", moveIds: ["activateAbility", "equipCard", "revealHidden"], moves: [] },
     movement: { label: "Movement", moveIds: ["standardMove", "gankingMove", "recallUnit"], moves: [] },
     runes: { label: "Rune Actions", moveIds: ["exhaustRune", "recycleRune"], moves: [] },
     battlefield: { label: "Battlefield", moveIds: ["contestBattlefield", "conquerBattlefield", "scorePoint"], moves: [] },
@@ -281,6 +304,9 @@ function renderActions() {
   };
 
   for (const move of availableMoves) {
+    // Prompt answers are rendered by the pending / trigger-order block above the
+    // sections — never as an anonymous "Other" group.
+    if (move.moveId === "resolvePendingChoice") continue;
     let placed = false;
     for (const section of Object.values(sections)) {
       if (section.moveIds.includes(move.moveId)) {
@@ -296,27 +322,45 @@ function renderActions() {
   // Move groups whose variants differ only by target; the button enters
   // targeting mode (interactions.js) instead of executing a variant directly.
   const targetPlayGroups = [];
-  const TARGETABLE_MOVES = ["playSpell", "playGear", "playUnit", "activateAbility"];
+  const TARGETABLE_MOVES = ["playSpell", "playGear", "playUnit", "activateAbility", "equipCard"];
+  // Plays whose per-card variants differ by cost / destination open the
+  // play-options modal; every other multi-variant move lists its variants.
+  const PER_CARD_MOVES = ["playUnit", "playFromChampionZone", "playSpell", "playGear", "hideCard"];
+  const COST_MODAL_MOVES = ["playUnit", "playFromChampionZone", "playSpell", "playGear"];
 
   // Pending choice (discard / pick-from-revealed / choose-target) — the engine
   // blocks every other move until this is answered, so surface it as a modal
   // panel at the top of the action list rather than burying it under "Other".
   const pending = gameState?.pendingChoice;
+  // rule 383.3.d — simultaneous triggers you control may be re-ordered, but the
+  // offer is soft: every other move stays legal and taking one keeps the listed
+  // order. Surface it as a dismissable panel, never as a blocking modal.
+  const softOrder = !pending ? gameState?.pendingTriggerOrder : null;
+  if (softOrder && softOrder.playerId === viewingPlayer) {
+    const picks = availableMoves.filter(m => m.moveId === "resolvePendingChoice");
+    if (picks.length) {
+      html += `<div class="action-section-title trigger-order-title" data-trigger-order style="background:#2a3a4a;color:#a0e0ff;padding:6px;border-radius:3px;">
+        ${esc(softOrder.prompt ?? "Order your triggers")} <span style="opacity:.7;font-weight:400">(optional — any other action keeps this order)</span>
+      </div>`;
+      for (const m of picks) {
+        const label = m.params?.label ?? (Array.isArray(m.params?.orderedKeys) ? m.params.orderedKeys.map(k => softOrder.items?.find(i => i.key === k)?.label ?? k).join(" → ") : "Keep this order");
+        html += `<button class="action-btn" data-trigger-order-pick
+          onclick='executeMove("resolvePendingChoice", ${JSON.stringify(m.params)}, ${JSON.stringify(m.playerId)})'>
+          ${esc(label)}
+        </button>`;
+      }
+    }
+  }
   if (pending) {
     const mine = (pending.prompter ?? pending.playerId) === viewingPlayer;
     // Rule ogn-067-298: opt-in ("you may …") triggers get a Yes/No prompt.
-    const verb = pending.type === "opt-in"
+    const verb = typeof pendingChoiceTitle === "function"
+      ? pendingChoiceTitle(pending)
+      : pending.type === "opt-in"
       ? `Decide: use ${findCard(pending.sourceCardId)?.name ?? "optional"} ability`
-      : pending.onPicked === "discard" ? "Discard a card"
-      : pending.onPicked === "banish" ? "Banish a card"
-      : pending.onPicked === "recycle" ? "Recycle a card"
-      : pending.onPicked === "play" ? "Choose a card to play"
-      : pending.type === "choose-destination" ? "Choose a destination"
-      // Rules 372/373/355.11.b: generic order / pick-many prompts carry their own prompt text.
-      : (pending.type === "order" || pending.type === "pick-many") ? (pending.prompt ?? "Choose")
       : "Choose a card";
-    html += `<div class="action-section-title" style="background:#3a2a4a;color:#ffd070;padding:6px;border-radius:3px;">
-      ${mine ? "⚠ " + esc(verb) : "Waiting for opponent to " + esc(verb.toLowerCase())}
+    html += `<div class="action-section-title" data-pending-type="${esc(pending.type ?? "")}" style="background:#3a2a4a;color:#ffd070;padding:6px;border-radius:3px;">
+      ${mine ? "⚠ " + esc(verb) : "Waiting for opponent: " + esc(verb)}
     </div>`;
     // rule-729 (ogn-174-298): reveal-and-pick from a hidden zone (deck/hand)
     // must show the revealed card(s) so the prompter can see what they are
@@ -334,25 +378,23 @@ function renderActions() {
     }
     if (mine) {
       const picks = availableMoves.filter(m => m.moveId === "resolvePendingChoice");
-      for (const m of picks) {
-        const cid = m.params?.pickedCardId ?? m.params?.pickedZoneId ?? m.params?.pickedName;
-        const card = typeof cid === "string" ? findCard(cid) : null;
-        const accept = m.params?.accept;
-        const zid = m.params?.pickedZoneId;
-        // Rule ogn-155-298: choose-mode picks carry only pickedMode — name the
-        // mode from pending.effect.options like the choice modal does.
-        const modeIdx = m.params?.pickedMode;
-        const modeOpt = pending.type === "choose-mode" && modeIdx != null ? pending.effect?.options?.[modeIdx] : null;
-        const label = modeOpt
-          ? modeOptionText(pending, modeIdx)  // Rule 355.3: printed bullet, never a raw effect id
-          : typeof accept === "boolean" ? (accept ? "Yes" : "No")  // Rule ogn-067-298
-          // Rule unl-144-219: humanize destination zone ids like the choice modal does.
-          : (!m.params?.pickedCardId && zid != null)
-          // Rule sfd-109-221 (356.1.b.3): a pending play may offer the optional additional cost.
-          ? (zid === "base" ? "Base" : getBattlefieldName(String(zid).replace(/^battlefield-/, ""))) + (m.params?.paidAdditionalCost ? " (pay additional cost)" : "")
-          // Rules 372/373/355.11.b: order / pick-many variants ship a display `label`.
-          : (card?.name ?? m.params?.label ?? String(cid));
-        html += `<button class="action-btn highlighted"
+      // Composite answers (an order, a subset, an X amount, a card arrangement)
+      // are built in the choice modal's stepper / sequence UI; the sidebar keeps
+      // a pointer to it plus the always-safe defaults instead of 24 permutations.
+      const composite = typeof isCompositePending === "function" && isCompositePending(pending);
+      const shown = composite
+        ? picks.filter(m => (Array.isArray(m.params?.orderedKeys) && m.params.orderedKeys.length === 0)
+            || (Array.isArray(m.params?.pickedKeys) && m.params.pickedKeys.length === (pending.min ?? 0))
+            || m.params?.accept === false).slice(0, 2)
+        : picks;
+      if (composite) {
+        html += `<button class="action-btn highlighted" onclick="renderPendingChoiceModal(true)">Open the chooser…</button>`;
+      }
+      for (const m of shown) {
+        const label = typeof pendingPickLabel === "function"
+          ? pendingPickLabel(pending, m.params)
+          : (findCard(m.params?.pickedCardId)?.name ?? m.params?.label ?? "Choose");
+        html += `<button class="action-btn highlighted" data-pending-pick
           onclick='executeMove("resolvePendingChoice", ${JSON.stringify(m.params)}, ${JSON.stringify(m.playerId)})'>
           ${esc(label)}
         </button>`;
@@ -389,11 +431,11 @@ function renderActions() {
         // enters targeting mode — never a silent first-target pick.
         const groups = {};
         for (const m of moves) {
-          const key = `${m.params?.cardId ?? ""}#${m.params?.abilityIndex ?? ""}#${m.params?.sourceCardId ?? ""}`;
+          const key = `${m.params?.cardId ?? m.params?.equipmentId ?? ""}#${m.params?.abilityIndex ?? ""}#${m.params?.sourceCardId ?? ""}`;
           (groups[key] ??= []).push(m);
         }
         for (const variants of Object.values(groups)) {
-          const cid = variants[0].params?.cardId;
+          const cid = variants[0].params?.cardId ?? variants[0].params?.equipmentId;
           const srcId = variants[0].params?.sourceCardId;
           const baseName = findCard(cid)?.name ?? cid ?? label;
           const name = srcId && srcId !== cid
@@ -404,6 +446,8 @@ function renderActions() {
           // by the bare card name (rule 331.1).
           const shown = moveId === "activateAbility"
             ? activatedAbilityLabel(cid, variants[0].params?.abilityIndex, srcId)
+            : moveId === "equipCard"
+            ? `${name}${equipCostText(cid) ? ` — ${equipCostText(cid)}` : ""} → choose a unit`
             : name;
           const detail = targetIds.length
             ? `${shown} — ${targetIds.length} target${targetIds.length === 1 ? "" : "s"}…`
@@ -429,34 +473,38 @@ function renderActions() {
             ${paramStr ? `<div class="action-detail">${esc(paramStr)}</div>` : ""}
           </button>
         `;
-      } else if (moveId === "playUnit" || moveId === "playFromChampionZone") {
-        // Group by cardId — a card with ≥2 variants (base vs Accelerate /
-        // sacrifice) opens the play-cost choice modal instead of listing
-        // near-identical sub-buttons.
+      } else if (PER_CARD_MOVES.includes(moveId)) {
+        // One row per CARD, never "Play Spell (2 options)" hiding two different
+        // spells: a card with ≥2 variants (base vs Accelerate / sacrifice /
+        // destination) opens the play-options modal; other multi-variant
+        // moves (Hide at either battlefield) list each variant by name.
         const byCard = {};
         for (const m of moves) {
           const key = m.params?.cardId ?? "__champion";
           (byCard[key] ??= []).push(m);
         }
         for (const [cid, variants] of Object.entries(byCard)) {
-          const card = cid === "__champion" ? null : findCard(cid);
+          const card = cid === "__champion"
+            ? (typeof zoneForPlayer === "function" ? zoneForPlayer("championZone", viewingPlayer)[0] : null)
+            : findCard(cid);
           const name = card?.name ?? (cid === "__champion" ? "Champion" : cid);
-          const highlighted = interaction.sourceCardId === cid;
-          if (variants.length === 1) {
-            const m = variants[0];
+          const highlighted = interaction.sourceCardId === cid || (cid === "__champion" && interaction.sourceZone === "championZone");
+          if (variants.length > 1 && COST_MODAL_MOVES.includes(moveId)) {
+            html += `
+              <button class="action-btn ${highlighted ? "highlighted" : ""}"
+                      data-play-cost-card="${esc(cid)}">
+                ${esc(moveId === "playFromChampionZone" ? `Play Champion ${name}` : `Play ${name}`)}
+                <div class="action-detail">${variants.length} play options…</div>
+              </button>`;
+            continue;
+          }
+          for (const m of variants) {
             const paramStr = formatMoveDescription(moveId, m.params) || formatParamsFallback(m.params);
             html += `
               <button class="action-btn ${highlighted ? "highlighted" : ""}"
                       onclick='executeMove(${JSON.stringify(moveId)}, ${JSON.stringify(m.params)}, ${JSON.stringify(m.playerId)})'>
                 ${esc(label)}
                 ${paramStr ? `<div class="action-detail">${esc(paramStr)}</div>` : ""}
-              </button>`;
-          } else {
-            html += `
-              <button class="action-btn ${highlighted ? "highlighted" : ""}"
-                      data-play-cost-card="${esc(cid)}">
-                Play ${esc(name)}
-                <div class="action-detail">${variants.length} play options…</div>
               </button>`;
           }
         }

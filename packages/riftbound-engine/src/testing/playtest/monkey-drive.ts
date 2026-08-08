@@ -90,14 +90,14 @@ const readState = () => p.evaluate(() => {
       handCount: document.querySelectorAll('#player-hand .card').length,
       baseCount: document.querySelectorAll('#player-base .card').length,
       baseExhausted: document.querySelectorAll('#player-base .card.card--exhausted').length,
-      bfExhausted: document.querySelectorAll('#battlefieldRow .card.card--exhausted, [id^="bf-"] .card.card--exhausted, .bf-zone .card.card--exhausted').length,
+      bfExhausted: document.querySelectorAll('#battlefieldRow .battlefield .card.card--exhausted').length,
       runeCount: document.querySelectorAll('#player-runePool .card').length,
       runeExhausted: document.querySelectorAll('#player-runePool .card.exhausted').length,
       resourceBar: document.getElementById('resourceBar')?.textContent?.replace(/\s+/g, ' ').trim(),
       actionButtons: [...document.querySelectorAll('#actionsList .action-btn')].map(e => e.textContent?.trim()).slice(0, 20),
       overlays: [...document.querySelectorAll('.visible[id$="Overlay"], .visible[id$="Dialog"]')].map(e => e.id),
       chainVisible: !!document.querySelector('.chain-overlay.visible, #chainOverlay.visible'),
-      pendingChoiceVisible: !!document.querySelector('#pendingChoice.visible, #pendingChoiceOverlay.visible, .pending-choice.visible, [data-pending-choice].visible'),
+      pendingChoiceVisible: !!document.querySelector('#choiceOverlay.visible[data-mode="pending"], .pending-choice.visible, [data-pending-choice].visible'),
     },
   };
 });
@@ -122,7 +122,7 @@ const clickables = () => p.evaluate(() => {
   push(document.querySelectorAll('#player-base .card'), "base-card", "title");
   push(document.querySelectorAll('#player-runePool .card:not(.exhausted)'), "rune", "title");
   push(document.querySelectorAll('.bf-art, [data-drop-zone]'), "drop-zone", "data-drop-zone");
-  push(document.querySelectorAll('.chain-overlay button:not([disabled]), #chainOverlay button:not([disabled]), .pending-choice button, #pendingChoice button'), "modal-btn");
+  push(document.querySelectorAll('#chainOverlay.visible button:not([disabled]), #choiceOverlay.visible .choice-modal-card[data-pick-idx], #choiceOverlay.visible .choice-modal-btn:not([disabled]), #choiceOverlay.visible .choice-modal-cancel, #targetBanner.visible .target-banner-btn, #actionBar:not(.hidden) #actionBarBtns button:not([disabled]), .battlefield__showdown-panel button:not([disabled])'), "modal-btn");
   return out;
 });
 const loc = (key: string) => p.locator(`[data-mkey="${key}"]`).first();

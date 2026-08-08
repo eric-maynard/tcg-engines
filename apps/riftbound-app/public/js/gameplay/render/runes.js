@@ -214,7 +214,7 @@ const STACK_MAX = 3;
 // Render a single rune card with its actual face image (not a generic back).
 // Uses `card.definitionId` so channeled runes show their real identity (Mind, Chaos, etc.).
 function renderRuneCard(c, topOffset, zIndex, borderColor) {
-  const classes = ["card"];
+  const classes = ["card", "rune-card"];
   if (c.cardType) classes.push("type-" + c.cardType);
   // [rule:ui-rune-exhausted-overlay] card--exhausted carries the dark overlay + lock icon (DESIGN.md: rotate 90° + dark overlay)
   if (c.meta?.exhausted) classes.push("exhausted", "card--exhausted");
@@ -248,7 +248,16 @@ function renderRuneCard(c, topOffset, zIndex, borderColor) {
     </div>
   `;
 }
-function renderRuneStacks(runes) {
+/**
+ * @param runes cards in one player's rune pool
+ * @param opts.compact  smaller, non-interactive-size cards (the opponent's pool —
+ *                      it only needs to be readable, and a full-size 250px stack
+ *                      in the opponent row is what starved the player's own row)
+ * @param opts.maxHeight logical px the stack may occupy (the pool grid's inner
+ *                      height); the fan compresses so the whole pile — label,
+ *                      every rune, and the top rune's full face — stays inside it
+ */
+function renderRuneStacks(runes, opts = {}) {
   // Group by domain — one consolidated stack per domain, regardless of count.
   // Every rune renders its own DOM card so it stays individually clickable.
   const groups = {};
@@ -256,6 +265,7 @@ function renderRuneStacks(runes) {
     const d = (Array.isArray(c.domain) ? c.domain[0] : c.domain) || "unknown";
     (groups[d] = groups[d] || []).push(c);
   }
+  const compact = !!opts.compact;
   let html = "";
   for (const [domain, cards] of Object.entries(groups)) {
     const color = DOMAIN_COLORS[domain] || "#a09030";
@@ -265,28 +275,39 @@ function renderRuneStacks(runes) {
     // (top, highest z-index) — a rotated exhausted rune lower in the pile is fully
     // covered by the ready cards stacked over it and reads as missing.
     const visibleCards = [...cards].sort((a, b) => (a.meta?.exhausted ? 1 : 0) - (b.meta?.exhausted ? 1 : 0));
-    // Fixed footprint so the zone never resizes.
     // [rule:ui-rune-pool-fixed-footprint] The pool sits in the player hand row of a
     // fixed 1080px board; a 12×26px fan (476px) starves the base row to ~0 and its
     // units paint over the resource bar (hiding power/rune readouts). Cap the
     // footprint to what the board can afford and compress the fan when a domain
-    // holds more runes than fit at the full 26px step — every rune stays rendered
-    // and individually clickable (rule 133.5.a.1).
-    const RUNE_CARD_H = 154, FAN_STEP = 26, FAN_SPAN = 3 * FAN_STEP;
-    const stackHeight = RUNE_CARD_H + FAN_SPAN;
-    const step = visibleCards.length > 1 ? Math.min(FAN_STEP, FAN_SPAN / (visibleCards.length - 1)) : FAN_STEP;
+    // holds more runes than fit — every rune stays rendered and individually
+    // clickable (rule 133.5.a.1), and the pile never pokes out of (or gets cut
+    // off by) its clipped grid.
+    const RUNE_CARD_H = compact ? 98 : 154, FAN_STEP = compact ? 16 : 26, LABEL_H = 18, MIN_STEP = 8;
+    const FAN_SPAN = 3 * FAN_STEP;
+    const room = typeof opts.maxHeight === "number" && opts.maxHeight > 0 ? opts.maxHeight - LABEL_H - RUNE_CARD_H : FAN_SPAN;
+    const span = Math.max(0, Math.min(FAN_SPAN, room));
+    const step = visibleCards.length > 1 ? Math.max(Math.min(FAN_STEP, span / (visibleCards.length - 1)), Math.min(MIN_STEP, FAN_STEP)) : FAN_STEP;
+    const stackHeight = RUNE_CARD_H + Math.min(FAN_SPAN, Math.max(span, visibleCards.length > 1 ? step * (visibleCards.length - 1) : 0));
     const label = DOMAIN_LABELS[domain] ?? domain[0].toUpperCase();
     const labelText = cards.length > 1 ? `${label} (${cards.length})` : label;
     // [rule:ui-rune-pool-never-overflows-upward] Only `height` is set inline: an
     // inline min-height beats the stylesheet's `max-height:100%`, so the stack
     // could not shrink with the hand row and spilled up over the Legend/Champion
     // zone. With height alone the clamp applies when the row is squeezed.
-    html += `<div class="rune-stack" style="height:${stackHeight + 18}px;">`;
+    html += `<div class="rune-stack${compact ? " rune-stack--compact" : ""}" data-rune-domain="${esc(domain)}" style="height:${Math.round(stackHeight + LABEL_H)}px;">`;
     html += `<div class="rune-stack-label" style="color:${color};">${labelText}</div>`;
     visibleCards.forEach((c, i) => {
-      html += renderRuneCard(c, 16 + Math.round(i * step), i + 1, color);
+      html += renderRuneCard(c, LABEL_H - 2 + Math.round(i * step), i + 1, color);
     });
     html += `</div>`;
   }
   return html;
+}
+
+/** Logical (pre-scale) inner height available to rune stacks inside a pool grid, or undefined before first layout. */
+function runePoolRoom(gridEl) {
+  if (!gridEl || !gridEl.clientHeight) return undefined;
+  const cs = getComputedStyle(gridEl);
+  const inner = gridEl.clientHeight - (parseFloat(cs.paddingTop) || 0) - (parseFloat(cs.paddingBottom) || 0);
+  return inner > 60 ? inner : undefined;
 }

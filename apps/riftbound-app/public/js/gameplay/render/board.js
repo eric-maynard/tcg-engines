@@ -36,9 +36,13 @@ function renderZones() {
     opponentBase.map(c => renderCardElement(c, false, "base")).join("") ||
     "";
 
-  // Rune pools
-  document.getElementById("player-runePool").innerHTML = renderRuneStacks(zoneForPlayer("runePool", viewingPlayer));
-  document.getElementById("opponent-runePool").innerHTML = renderRuneStacks(zoneForPlayer("runePool", opponent));
+  // Rune pools — the player's pile fans out to whatever height its row really
+  // has (never clipped, never over the Legend/Champion); the opponent's is compact.
+  const myPool = document.getElementById("player-runePool");
+  myPool.innerHTML = renderRuneStacks(zoneForPlayer("runePool", viewingPlayer), {
+    maxHeight: typeof runePoolRoom === "function" ? runePoolRoom(myPool) : undefined,
+  });
+  document.getElementById("opponent-runePool").innerHTML = renderRuneStacks(zoneForPlayer("runePool", opponent), { compact: true });
 
   // Legend and Champion zones
   const playerLegend = zoneForPlayer("legendZone", viewingPlayer);

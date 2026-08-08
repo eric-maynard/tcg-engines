@@ -157,12 +157,18 @@
       align-items: center;
       flex-shrink: 0;
     }
+    /* [rule:ui-rune-pool-fits-row] A content-independent basis: tall enough for
+       a full rune pile (label + 154px card + 3-step fan + grid padding) when the
+       board can afford it, shrinkable when it cannot — runes.js then compresses
+       the fan to the row's ACTUAL height, so the pile is never cut off at the
+       bottom and never has to spill upward over the Legend/Champion zone. */
     .player-hand-row {
       display: flex;
       gap: 8px;
       align-items: stretch;
       padding: 2px 0;
       min-height: 0;
+      flex: 0 1 264px;
     }
 
     /* ============================================
@@ -488,6 +494,18 @@
       cursor: pointer;
     }
     .hand-zone .card .card-name { font-size: 10px; padding: 3px 6px; }
+    /* [rule:ui-rune-pool-fits-row] The opponent's hand is reference-only
+       (backs, or faces in sandbox): 80% size hands ~36px of the over-subscribed
+       1080px board back to the player's own hand/rune row (hover still enlarges). */
+    #opponent-hand.hand-zone .card {
+      width: 104px;
+      height: 146px;
+    }
+    #opponent-hand.hand-zone .card.facedown {
+      width: 64px;
+      min-width: 64px;
+      height: 90px;
+    }
 
     /* Battlefield unit cards — large enough to read art/text */
     /* [rule:ui-bf-unit-not-clipped] The 1080px logical board is over-subscribed,
@@ -579,6 +597,29 @@
     }
     .rune-stack .card .card-name {
       display: none;
+    }
+    /* [rule:ui-rune-pool-fits-row] The opponent's pile is read-only: render it
+       compact (70x98, 16px fan) so the opponent row stops claiming a full 250px
+       and the player's own interactive pile gets the height instead. */
+    .rune-stack.rune-stack--compact {
+      width: 72px;
+      min-height: 116px;
+    }
+    .rune-stack.rune-stack--compact .card {
+      width: 70px;
+      min-width: 70px;
+      height: 98px;
+    }
+    .rune-stack.rune-stack--compact .rune-stack-label {
+      font-size: 9px;
+      letter-spacing: 0;
+    }
+    .rune-stack.rune-stack--compact .card:not(.exhausted):hover {
+      transform: translateY(-10px) scale(1.15) !important;
+    }
+    #opponent-runePool.rune-pool-grid {
+      align-self: center;
+      gap: 6px;
     }
 
     /* Legend + Champion zone: side by side with labels above each card */
@@ -718,6 +759,11 @@
        so the chain backdrop must never swallow clicks. */
     #chainOverlay.visible { pointer-events: none; background: rgba(5,3,15,0.35); }
     #chainOverlay.visible .chain-box { pointer-events: auto; }
+    /* A pending prompt is answered in its box OR from the sidebar's duplicate
+       buttons / the board; the dimmed backdrop must not swallow those clicks
+       (nothing behind it can do harm — the engine only accepts the answer). */
+    #choiceOverlay.visible[data-mode="pending"] { pointer-events: none; }
+    #choiceOverlay.visible[data-mode="pending"] .chain-box { pointer-events: auto; }
 
     .chain-box {
       background: #1a1830;
@@ -1257,13 +1303,24 @@
       display: flex;
       flex-direction: column;
       gap: 4px;
-      max-height: 220px;
+      /* The canonical "everything legal" list: give it room for a pending
+         prompt + play / ability / movement / rune sections before it scrolls
+         (an expanded group is also scrolled into view by toggleMoveGroup). */
+      max-height: 340px;
       overflow-y: auto;
       /* overflow-y:auto zeroes the flex min-height, so the sidebar column was
          crushing this panel to a sliver; keep it at content height (capped by
          max-height) so Turn Actions stay reachable. */
       flex-shrink: 0;
     }
+    /* It is the opponent's turn but the cursor (priority / focus / prompt) is ours. */
+    .game-status.game-status--cursor { color: #ffd070; font-weight: 700; }
+    /* Greyed-out printed ability on a card's action bar: says why it can't be used now. */
+    .action-bar-btn--disabled .ability-why { font-size: 10px; opacity: .85; }
+    /* Chain item: what it will do (mode / targets). */
+    .chain-item .ci-what { color: #c0b0e0; font-style: italic; }
+    /* Composite prompt choosers (order / subset / X stepper). */
+    .choice-modal-btn.chosen { border-color: #ffd070; color: #ffd070; }
 
     /* [rule:ui-actions-panel-scrollable] The panel is capped at 220px, so an
        expanded move group (per-rune Recycle/Exhaust options) lands below the

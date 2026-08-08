@@ -132,6 +132,8 @@ function onCardClick(cardId) {
     enterRuneSelected(cardId);
   } else if (zone.startsWith("battlefield-")) {
     enterBattlefieldCardSelected(cardId, zone);
+  } else if (zone.startsWith("facedown-")) {
+    enterFacedownSelected(cardId, zone);
   } else if (zone === "legendZone") {
     enterLegendSelected(cardId);
   } else if (zone === "championZone") {
@@ -224,6 +226,8 @@ function clearValidTargetHighlights() {
 function moveTargetId(m) {
   const t = m?.params?.targets;
   if (Array.isArray(t) && t.length > 0) return t[0];
+  // rule 476.1: an [Equip] variant targets the unit it attaches to.
+  if (m?.moveId === "equipCard") return m.params?.unitId ?? null;
   return m?.params?.chosenTargetId ?? null;
 }
 
@@ -243,6 +247,7 @@ function pickTargetedMove(moves, targetId) {
 function moveTargetList(m) {
   const t = m?.params?.targets;
   if (Array.isArray(t)) return t;
+  if (m?.moveId === "equipCard") return m.params?.unitId ? [m.params.unitId] : [];
   const c = m?.params?.chosenTargetId;
   return c ? [c] : [];
 }
@@ -391,15 +396,15 @@ function remainingTargetIds(extending, chosen) {
  * targeting mode and return true. Returns false when the caller should just play:
  * no targeted variants, or the only target is the source card itself.
  */
-function beginTargetingIfNeeded(moves, sourceCardId) {
+function beginTargetingIfNeeded(moves, sourceCardId, extraMoves) {
   const targeted = (moves || []).filter(m => moveTargetId(m));
   if (targeted.length === 0) return false;
   const targetIds = [...new Set(targeted.map(moveTargetId))];
-  if (targetIds.length === 1 && targetIds[0] === sourceCardId) return false;
+  if (targetIds.length === 1 && targetIds[0] === sourceCardId && !(extraMoves && extraMoves.length)) return false;
   // rule-id: sfd-080-221 (rule 355.13) — keep zero-target variants pending so
   // "up to N" can be declined via the banner's "No target" button.
   const zeroTarget = (moves || []).filter(m => Array.isArray(m.params?.targets) && m.params.targets.length === 0);
-  enterAwaitTargetMode([...targeted, ...zeroTarget], sourceCardId);
+  enterAwaitTargetMode([...targeted, ...zeroTarget], sourceCardId, extraMoves);
   return true;
 }
 
@@ -424,7 +429,7 @@ function beginTargetingOrPlay(moves, sourceCardId) {
   if (interaction.mode !== "idle") cancelInteraction();
 }
 
-function enterAwaitTargetMode(pendingMoves, sourceCardId) {
+function enterAwaitTargetMode(pendingMoves, sourceCardId, extraMoves) {
   const targetIds = remainingTargetIds(pendingMoves, []);
   interaction = {
     mode: "awaitTarget",
@@ -434,6 +439,8 @@ function enterAwaitTargetMode(pendingMoves, sourceCardId) {
     validTargets: targetIds,
     matchingMoves: pendingMoves,
     pendingMoves,
+    // Alternative uses of the same card offered next to targeting (rule 723 "Hide at …").
+    extraMoves: extraMoves || [],
     chosenTargets: [],
     pendingCardId: null,
     pendingCardCost: 0,
@@ -457,6 +464,12 @@ function updateTargetBanner() {
   if (chosen.length === 0) {
     const none = exactTargetVariant(interaction.pendingMoves, []);
     if (none) buttons.push({ label: "No target", move: none });
+    // rule 723 (Hidden): the card may instead be hidden facedown at a battlefield you control.
+    for (const m of interaction.extraMoves || []) {
+      if (m.moveId === "hideCard") {
+        buttons.push({ label: `Hide at ${getBattlefieldName(String(m.params?.battlefieldId ?? ""))}`, move: m });
+      }
+    }
   }
   const repeats = chosen.length === 0 ? [] : repeatVariantsFor(interaction.pendingMoves, chosen);
   const paid = chosen.length === 0 ? [] : additionalCostVariantsFor(interaction.pendingMoves, chosen);
@@ -625,15 +638,21 @@ function enterLegendSelected(cardId) {
   const abilityMoves = availableMoves.filter(m =>
     m.moveId === "activateAbility" && m.params?.cardId === cardId
   );
+  const card = findCard(cardId);
 
   if (abilityMoves.length === 0) {
-    // No activatable abilities, just select for preview
+    // No activatable ability right now. A legend that HAS a printed activated
+    // ability still answers the click: its ability shows greyed out with the
+    // reason, instead of the card silently doing nothing.
     selectedCard = cardId;
     render();
+    if (typeof activatedAbilitySegments === "function" && activatedAbilitySegments(card).length > 0) {
+      interaction = { ...interaction, mode: "cardSelected", sourceCardId: cardId, sourceZone: "legendZone", action: "activateAbility", validTargets: [], matchingMoves: [] };
+      showLegendAbilityActionBar(card?.name || cardId, [], card);
+    }
     return;
   }
 
-  const card = findCard(cardId);
   interaction = {
     mode: "cardSelected",
     sourceCardId: cardId,
@@ -645,11 +664,40 @@ function enterLegendSelected(cardId) {
   selectedCard = cardId;
 
   render();
-  showLegendAbilityActionBar(card?.name || cardId, abilityMoves);
+  showLegendAbilityActionBar(card?.name || cardId, abilityMoves, card);
+}
+
+/**
+ * Why a printed activated ability is not usable right now — shown on the
+ * greyed-out button so "nothing happens" never has to be guessed at.
+ */
+function abilityUnavailableReason(card) {
+  if (!card) return "Not available right now";
+  if (card.owner !== viewingPlayer) return "Not your card";
+  if (card.meta?.exhausted && /\[\s*Exhaust\s*\]\s*[^:]*:/i.test(card.rulesText || "")) return "Already exhausted";
+  const myTurn = gameState?.turn?.activePlayer === viewingPlayer;
+  const chain = gameState?.interaction?.chain;
+  const isReaction = /\[\s*Reaction\s*\]/i.test(card.rulesText || "");
+  if (chain?.active && !isReaction) return "Only Reactions while the chain is open";
+  if (!myTurn && !isReaction) return "Only on your turn";
+  if (gameState?.turn?.phase && gameState.turn.phase !== "main" && !isReaction) return `Not during the ${gameState.turn.phase} phase`;
+  return "Can't pay its cost right now";
+}
+
+/** Greyed-out buttons for a card's printed activated abilities that have no legal move now. */
+function disabledAbilityButtonsHtml(card) {
+  const segs = typeof activatedAbilitySegments === "function" ? activatedAbilitySegments(card) : [];
+  if (segs.length === 0) return "";
+  const why = abilityUnavailableReason(card);
+  return segs.map(seg =>
+    `<button class="action-bar-btn action-bar-btn--disabled" disabled data-ability-disabled
+       style="background:#1e1b30;border-color:#4a4566;color:#6a6288;cursor:not-allowed;"
+       title="${esc(why)}">${esc(seg)} <span class="ability-why">— ${esc(why)}</span></button>`
+  ).join("");
 }
 
 /** Show action bar for legend ability activation */
-function showLegendAbilityActionBar(cardName, abilityMoves) {
+function showLegendAbilityActionBar(cardName, abilityMoves, card) {
   const bar = document.getElementById("actionBar");
   const label = document.getElementById("actionBarLabel");
   const btns = document.getElementById("actionBarBtns");
@@ -661,12 +709,14 @@ function showLegendAbilityActionBar(cardName, abilityMoves) {
   for (let i = 0; i < abilityMoves.length; i++) {
     const move = abilityMoves[i];
     const idx = move.params?.abilityIndex ?? i;
+    if (abilityMoves.findIndex(m => (m.params?.abilityIndex ?? 0) === idx) !== i) continue; // one button per ability, not per target
     const segs = typeof activatedAbilitySegments === "function"
       ? activatedAbilitySegments(findCard(move.params?.cardId))
       : [];
     const seg = segs.length === 1 ? segs[0] : segs[idx];
     html += `<button class="action-bar-btn" style="background:#2a2050;border-color:#b080e0;color:#d0b0f0;" onclick='executeInteractionMove("activateAbility", ${idx})' title="${esc(seg || "")}">${esc(seg || `Activate Ability ${idx + 1}`)}</button>`;
   }
+  if (abilityMoves.length === 0) html += disabledAbilityButtonsHtml(card);
 
   btns.innerHTML = html;
   bar.classList.remove("hidden");
@@ -694,19 +744,53 @@ function enterChampionSelected(cardId) {
   }
 
   const card = findCard(cardId);
+  // Destinations the engine offers (base and/or controlled battlefields).
+  const bfTargets = [...new Set(playMoves
+    .map(m => String(m.params?.location ?? "base"))
+    .filter(l => l !== "base")
+    .map(l => l.replace(/^battlefield-/, "")))];
   interaction = {
     mode: "cardSelected",
     sourceCardId: cardId,
     sourceZone: "championZone",
     action: "playCard",
-    validTargets: ["player-base"],
+    validTargets: ["player-base", ...bfTargets],
     matchingMoves: playMoves,
   };
   selectedCard = cardId;
 
   render();
   applyValidTargetHighlights();
-  showActionBar(card?.name || cardId, playMoves, "Play Champion to Base");
+  showActionBar(card?.name || cardId, playMoves, `Champion: ${String(card?.name || cardId).replace(/^player-[12]-/, "")}`);
+}
+
+/** hideCard variants for a hand card (rule 723: Hide at a battlefield you control). */
+function hideMovesFor(cardId) {
+  return availableMoves.filter(m => m.moveId === "hideCard" && m.params?.cardId === cardId);
+}
+
+/** Selected mode for a facedown (Hidden) card at a battlefield: reveal it (rule 723). */
+function enterFacedownSelected(cardId, zone) {
+  const revealMoves = availableMoves.filter(m => m.moveId === "revealHidden" && m.params?.cardId === cardId);
+  const card = findCard(cardId);
+  interaction = {
+    mode: "cardSelected",
+    sourceCardId: cardId,
+    sourceZone: zone,
+    action: "revealHidden",
+    validTargets: [],
+    matchingMoves: revealMoves,
+  };
+  selectedCard = cardId;
+  render();
+  const bar = document.getElementById("actionBar");
+  const label = document.getElementById("actionBarLabel");
+  const btns = document.getElementById("actionBarBtns");
+  label.textContent = `Hidden: ${String(card?.name || cardId).replace(/^player-[12]-/, "")}`;
+  btns.innerHTML = revealMoves.length
+    ? `<button class="action-bar-btn" style="background:#203a50;border-color:#60b0e0;color:#b0e0ff;" onclick='executeInteractionMove("revealHidden")'>Reveal (play for 0)</button>`
+    : `<button class="action-bar-btn action-bar-btn--disabled" disabled title="A hidden card can be revealed from the turn after it was hidden, at Reaction speed" style="background:#1e1b30;border-color:#4a4566;color:#6a6288;cursor:not-allowed;">Reveal <span class="ability-why">— not yet (from your next turn)</span></button>`;
+  bar.classList.remove("hidden");
 }
 
 /** Enter cardSelected mode for a hand card (playUnit/playSpell/playGear) */
@@ -716,19 +800,24 @@ function enterHandCardSelected(cardId) {
     m.params?.cardId === cardId
   );
 
+  // rule 723 (Hidden): "Hide at <battlefield>" is a second way to use the card;
+  // it rides along in targeting mode (banner buttons) and in the play-options modal.
+  const hideMoves = hideMovesFor(cardId);
+
   // Targeted spells/gear: never auto-pick a target — enter targeting mode.
-  if (playMoves.length > 0 && beginTargetingIfNeeded(playMoves, cardId)) {
+  if (playMoves.length > 0 && beginTargetingIfNeeded(playMoves, cardId, hideMoves)) {
     return;
   }
 
   // Single-click play: the engine already lists a legal play (cost is paid
   // from the pool the player tapped). Multiple non-target variants (Accelerate /
-  // sacrifice) open the play-cost modal instead of silently picking one.
-  if (playMoves.length > 0) {
-    if (playMoves.length > 1 && typeof openPlayCostModal === "function") {
+  // sacrifice / destination / hide) open the play-options modal instead of
+  // silently picking one.
+  if (playMoves.length > 0 || hideMoves.length > 0) {
+    if (playMoves.length + hideMoves.length > 1 && typeof openPlayCostModal === "function") {
       openPlayCostModal(cardId);
     } else {
-      const m = playMoves[0];
+      const m = playMoves[0] ?? hideMoves[0];
       executeMove(m.moveId, m.params, m.playerId);
     }
     return;
@@ -871,15 +960,29 @@ function abilityMovesFor(cardId) {
   return availableMoves.filter(m => m.moveId === "activateAbility" && m.params?.cardId === cardId);
 }
 
+/** rule 476.1: equipCard variants that attach this Equipment (one per unit). */
+function equipMovesFor(cardId) {
+  return availableMoves.filter(m => m.moveId === "equipCard" && m.params?.equipmentId === cardId);
+}
+
+/** True when the card offers anything on its own action bar (abilities / Equip). */
+function hasCardBarActions(cardId) {
+  if (abilityMovesFor(cardId).length > 0 || equipMovesFor(cardId).length > 0) return true;
+  const card = findCard(cardId);
+  return !!card && card.owner === viewingPlayer && typeof activatedAbilitySegments === "function" && activatedAbilitySegments(card).length > 0;
+}
+
 /**
  * Buttons for a card's own activated abilities, labelled with the printed
  * "COST: effect" text so [Empower] / [Exhaust] abilities are discoverable where
- * the card is, not only in the sidebar.
+ * the card is, not only in the sidebar. Printed abilities with no legal move
+ * right now render greyed out with the reason; an Equipment's [Equip] gets a
+ * button that enters targeting over the units it may attach to.
  */
 function abilityBarHtml(cardId) {
   abilityBarGroups = [];
   const moves = abilityMovesFor(cardId);
-  if (moves.length === 0) return "";
+  const equips = equipMovesFor(cardId);
   const groups = {};
   for (const m of moves) {
     const key = `${m.params?.abilityIndex ?? ""}#${m.params?.sourceCardId ?? ""}`;
@@ -895,6 +998,20 @@ function abilityBarHtml(cardId) {
     html += `<button class="action-bar-btn" style="background:#2a2050;border-color:#b080e0;color:#d0b0f0;"
       data-ability-group="${abilityBarGroups.length}" title="${esc(label)}">${esc(label)}</button>`;
     abilityBarGroups.push({ moves: variants, sourceCardId: cardId });
+  }
+  if (equips.length > 0) {
+    const cost = typeof equipCostText === "function" ? equipCostText(cardId) : "Equip";
+    const label = `${cost || "Equip"} → choose a unit`;
+    html += `<button class="action-bar-btn" style="background:#203a30;border-color:#60c090;color:#a0f0c0;"
+      data-ability-group="${abilityBarGroups.length}" data-equip title="${esc(label)}">${esc(label)}</button>`;
+    abilityBarGroups.push({ moves: equips, sourceCardId: cardId });
+  }
+  if (moves.length === 0) {
+    const card = findCard(cardId);
+    // An Equipment's only printed "COST:" segment is its [Equip]; don't echo it greyed out next to a live Equip button.
+    if (!(equips.length > 0 && card && (card.cardType === "equipment" || card.cardType === "gear"))) {
+      html += disabledAbilityButtonsHtml(card);
+    }
   }
   return html;
 }
@@ -918,7 +1035,7 @@ function enterBaseCardSelected(cardId) {
     (m.params?.unitIds?.includes(cardId) || m.params?.unitId === cardId)
   );
 
-  if (moveMoves.length === 0 && abilityMovesFor(cardId).length === 0) {
+  if (moveMoves.length === 0 && !hasCardBarActions(cardId)) {
     selectedCard = cardId;
     render();
     return;
@@ -944,10 +1061,11 @@ function enterBaseCardSelected(cardId) {
 
   render();
   applyValidTargetHighlights();
+  const kind = card?.cardType === "unit" ? "Unit" : card?.cardType === "equipment" ? "Equipment" : card?.cardType === "gear" ? "Gear" : "Card";
   showActionBar(
     card?.name || cardId,
     moveMoves,
-    moveMoves.length ? "Move to battlefield" : `Unit: ${String(card?.name || cardId).replace(/^player-[12]-/, "")}`,
+    moveMoves.length ? "Move to battlefield" : `${kind}: ${String(card?.name || cardId).replace(/^player-[12]-/, "")}`,
   );
 }
 
@@ -991,7 +1109,7 @@ function enterBattlefieldCardSelected(cardId, zone) {
   );
 
   const allMoves = [...gankMoves, ...recallMoves];
-  if (allMoves.length === 0 && abilityMovesFor(cardId).length === 0) {
+  if (allMoves.length === 0 && !hasCardBarActions(cardId)) {
     selectedCard = cardId;
     render();
     return;
@@ -1053,6 +1171,19 @@ function showActionBar(cardName, moves, hint) {
     const types = new Set(moves.map(m => m.moveId));
     for (const moveId of types) {
       const movesOfType = moves.filter(m => m.moveId === moveId);
+      if (moveId === "playFromChampionZone") {
+        // One button per destination; ≥2 cost variants for a destination open the play-options modal.
+        const byLoc = {};
+        for (const m of movesOfType) (byLoc[String(m.params?.location ?? "base")] ??= []).push(m);
+        for (const [loc, variants] of Object.entries(byLoc)) {
+          const where = loc === "base" ? "Base" : getBattlefieldName(loc.replace(/^battlefield-/, ""));
+          const onclick = variants.length > 1
+            ? `openPlayCostModal(${JSON.stringify(interaction.sourceCardId)})`
+            : `executeMove("playFromChampionZone", ${JSON.stringify(variants[0].params)}, ${JSON.stringify(variants[0].playerId)}); cancelInteraction();`;
+          html += `<button class="action-bar-btn" data-champion-play="${esc(loc)}" onclick='${onclick}'>${esc(`Play Champion to ${where}`)}${variants.length > 1 ? "…" : ""}</button>`;
+        }
+        continue;
+      }
       const moveLabel = moveId === "playUnit" ? "Play Unit to Base"
         : moveId === "playSpell" ? "Cast Spell"
         : moveId === "playGear" ? "Play Gear"
