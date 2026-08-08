@@ -173,6 +173,67 @@ function sourceStillOnBoard(
 }
 
 /**
+ * rule 809.1.c / 809.1.d (356.2.a.2) — the smallest [Deflect] surcharge the
+ * controller cannot avoid once this item makes its single board choice: 0 when
+ * some candidate is untaxed, otherwise the cheapest taxed candidate. Deflect is
+ * part of the SAME cost payment as a "you may kill me to …" opt-in (rule 404.1),
+ * so a controller who cannot cover both may only decline (rule 404.2) — no
+ * partial payment. Returns 0 whenever the shape is not a single caster-chosen
+ * board object, or the context cannot see the board.
+ */
+export function minDeflectSurchargeForItem(
+  resolved: {
+    readonly cardId: string;
+    readonly controller: string;
+    readonly effect?: unknown;
+    readonly targets?: readonly string[];
+  },
+  draft: RiftboundGameState,
+  context: Parameters<typeof buildEffectContext>[3],
+): number {
+  if (resolved.targets !== undefined) {
+    return 0;
+  }
+  const eff = resolved.effect as ExecutableEffect | undefined;
+  const lead =
+    eff?.type === "sequence" ? (eff as { effects?: ExecutableEffect[] }).effects?.[0] : eff;
+  if (!lead || lead.type === "play" || (lead as { from?: unknown }).from !== undefined) {
+    return 0;
+  }
+  const tgt = (lead as { target?: TargetDescriptor }).target;
+  if (!tgt || typeof tgt !== "object") {
+    return 0;
+  }
+  const kind = (tgt as { type?: string }).type;
+  if (kind !== "unit" && kind !== "gear" && kind !== "unit-or-gear") {
+    return 0;
+  }
+  if ((tgt as { quantity?: unknown }).quantity !== undefined) {
+    return 0;
+  }
+  // Only an opponent's object is ever taxed, so a friendly-only choice is free.
+  if ((tgt as { controller?: unknown }).controller === "friendly") {
+    return 0;
+  }
+  if (typeof context?.cards !== "object" || typeof context?.zones !== "object") {
+    return 0;
+  }
+  const ctx = buildEffectContext(draft, resolved.controller, resolved.cardId, context);
+  const options = resolveTarget({ ...(tgt as TargetDescriptor), quantity: "all" }, {
+    ...ctx,
+    choosing: true,
+  } as Parameters<typeof resolveTarget>[1]);
+  if (options.length === 0) {
+    return 0;
+  }
+  return Math.min(
+    ...options.map((id) =>
+      getDeflectSurcharge(draft, resolved.controller, [id], context.cards as never),
+    ),
+  );
+}
+
+/**
  * rule 383.3.a / 402.4 — whether a "you may …" triggered item can be performed
  * at all: an unpayable leading cost (no buff to spend, too little XP, too few
  * cards to discard) or an unambiguously empty candidate set means the
@@ -642,6 +703,37 @@ export function executeResolvedItem(
       if (lockedMight.eq !== undefined && might !== lockedMight.eq) return false;
       return true;
     };
+    // rule 359.3.e.2 / 359.3.e.5 / 359.3.f.4 (sfd-001-221 x sfd-202-221) —
+    // "friendly"/"enemy" is read relative to the item's CONTROLLER at the
+    // moment it resolves, so a target whose control changed in response
+    // (Hostile Takeover stealing the unit a pump was aimed at) is illegal and
+    // is simply unaffected.
+    const lockedController =
+      typeof lockedTarget === "object" && lockedTarget !== null
+        ? ((lockedTarget as { controller?: unknown }).controller as string | undefined)
+        : undefined;
+    const controllerStillMatches = (id: string): boolean => {
+      if (lockedController !== "friendly" && lockedController !== "enemy") {
+        return true;
+      }
+      // Only a single-role instruction can be judged against the lead
+      // descriptor: two-role spells ("a friendly unit kills an enemy unit")
+      // and Might-comparand references bind a target the lead descriptor was
+      // never meant to describe.
+      if ((boundTargets?.length ?? 0) !== 1 || refDesc !== undefined) {
+        return true;
+      }
+      if (reachesPrivateZones || draft.battlefields?.[id] !== undefined) {
+        return true;
+      }
+      const who = controllerOf(id);
+      if (who === "") {
+        return true;
+      }
+      return lockedController === "friendly"
+        ? who === resolved.controller
+        : who !== resolved.controller;
+    };
     // rule 359.3.e.4–5 / 359.3.f.2 — a trigger finalized through the dialog
     // chose its Game Objects against the descriptor as it read THEN; on
     // resolution each one must still satisfy that descriptor as it reads NOW
@@ -698,6 +790,7 @@ export function executeResolvedItem(
         stillOnBoard(id) &&
         locationStillMatches(id) &&
         mightStillMatches(id) &&
+        controllerStillMatches(id) &&
         stillChoosable(id) &&
         !(
           controllerOf(id) !== resolved.controller &&
