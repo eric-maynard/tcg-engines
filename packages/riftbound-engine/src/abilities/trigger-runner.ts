@@ -1522,8 +1522,11 @@ export function fireTriggers(rawEvent: GameEvent, ctx: TriggerRunnerContext): nu
       // rule 390.2 — a delayed "when it dies this turn" ability installed on
       // the unit is wiped from its meta as it leaves the board, so read it
       // back from the last-known information snapshot.
+      // rule 477.1.b / 808.1.d.2 — a unit that died while copying another card
+      // (Shady Spectacles) had the COPY's rules text as it left; the copy is
+      // already reverted by the detach, so read it from the LKI snapshot.
       abilities: [
-        ...toTriggerableAbilities(event.cardId),
+        ...toTriggerableAbilities(lki?.copyOfCardId ?? event.cardId),
         ...delayedTriggerAbilitiesFrom(lki?.delayedTriggers),
       ],
       id: event.cardId,

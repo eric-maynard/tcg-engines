@@ -99,6 +99,13 @@ export interface LKISnapshot {
    * …"). `resetObjectState` clears them from meta, so they only survive here.
    */
   readonly delayedTriggers?: readonly DelayedTrigger[];
+  /**
+   * rule 477.1.b / 428.1.a.1.b — the instance this card was copying as it left
+   * the board (Shady Spectacles). Detaching wipes the copy from the registry
+   * before the `die` event is published, so the borrowed rules text (e.g. a
+   * copied [Deathknell]) only survives here.
+   */
+  readonly copyOfCardId?: string;
 }
 
 export interface LeaveResult {
@@ -369,6 +376,9 @@ export function snapshotLKI(ctx: LeaveBoardContext, cardId: string): LKISnapshot
     cardId,
     cardType: def?.cardType,
     controller,
+    ...(registry.copySourceOf(cardId) !== undefined
+      ? { copyOfCardId: registry.copySourceOf(cardId) }
+      : {}),
     damage: getDamage(ctx, cardId),
     empowered: meta.empowered === true || flags.empowered === true,
     exhausted: meta.exhausted === true || flags.exhausted === true,
