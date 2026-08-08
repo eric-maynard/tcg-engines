@@ -155,14 +155,15 @@ export function handle_play(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
     return;
   }
   // rule-id: ven-066-166 (rule 354.2 / 355.2) — "Banish a unit, then its owner
-  // plays it to the same location, ignoring its cost": like any effect-driven
-  // play the card waits in banishment as a pending chain item (rule 354.3),
-  // but its destination is fixed to the board zone it just left, so its owner
-  // is never asked to choose. rule 358.3.a: when that location can't receive a
-  // unit (sfd-216-221 Rockfall Path) the play is impossible and is skipped —
-  // the banish stands and the unit stays in its owner's banishment.
+  // plays it to the same location, ignoring its cost": the destination is fixed
+  // to the board zone the unit just left, so its owner is never asked to
+  // choose, and rule 337.2 finalizes a unit chain item immediately — there is
+  // no priority window with the unit sitting in banishment. Because the OWNER
+  // makes the play, its "when you play me" abilities trigger for the owner
+  // (rule 411.4). rule 358.3.a: when that location can't receive a unit
+  // (sfd-216-221 Rockfall Path) the play is impossible and is skipped — the
+  // banish stands and the unit stays in its owner's banishment.
   if (toLocation === "same") {
-    const turnOrderSame = Object.keys(ctx.draft.players);
     for (const targetId of targets) {
       const dest = (
         ctx.cards.getCardMeta?.(targetId as CoreCardId) as { banishedFrom?: string } | undefined
@@ -180,24 +181,8 @@ export function handle_play(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
       if (playerCannotPlay(ctx, sameOwner)) {
         continue;
       }
-      ctx.draft.interaction = addToChain(
-        ctx.draft.interaction ?? createInteractionState(),
-        {
-          cardId: targetId,
-          controller: sameOwner,
-          // rule 143.4: however it was played, the unit enters exhausted.
-          effect: {
-            effects: [
-              { target: targetId, to: dest, type: "move" },
-              { target: targetId, type: "exhaust" },
-            ],
-            type: "sequence",
-          },
-          triggered: true,
-          type: "ability",
-        },
-        turnOrderSame,
-      );
+      // rule 143.4 / 359.2.c: however it was played, the unit enters exhausted.
+      enterUnitFromEffect(targetId, dest, { ...ctx, playerId: sameOwner });
     }
     return;
   }

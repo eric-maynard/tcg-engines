@@ -102,14 +102,16 @@ describe("Ruling 4b428e5dadf3b5e3 — Temporal Breach: the owner must PLAY the b
     expect(game.state("pyke").damage).toBe(0);
   });
 
-  // Expected: while the owner is being instructed to play the banished Pyke, "hide" is simply not an
-  // available action for it (it is in banishment, 811.1.b) — the harness never lists `hide Pyke`.
-  // Actual: Pyke is never banished (effect unimplemented), so the premise cannot be reached.
-  test("ruling 4b428e5dadf3b5e3 — mid-resolution Pyke sits in banishment and `hide` is not a legal verb for it", async () => {
+  // rule 337.2: the owner's play is a UNIT chain item, so it finalizes immediately — no player ever
+  // holds priority with Pyke sitting in banishment, and therefore no player is ever in a position to
+  // hide it. The observable form of the ruling is that `hide Pyke` is not a legal verb at ANY step of
+  // the resolution, and Pyke comes back face up rather than facedown (811.1.b/811.1.c.1).
+  test("ruling 4b428e5dadf3b5e3 — `hide` is never a legal verb for Pyke while Temporal Breach resolves", async () => {
     const game = await board().autoProcedures(false).build();
     await game.p1.cast("breach", { targets: "pyke" });
-    // Step the chain manually until Pyke has left the battlefield.
-    for (let i = 0; i < 6 && game.zoneOf("pyke") === "battlefield-bf1"; i++) {
+    for (let i = 0; i < 6; i++) {
+      expect(game.p1.can("hide", "pyke")).toBe(false);
+      expect(hideOffered(game.decision(), game.p1.legal().map((o) => o.label))).toBe(false);
       const d = game.decision();
       if (d?.kind === "action" && d.passKey) {
         await game.acting().pass();
@@ -117,8 +119,9 @@ describe("Ruling 4b428e5dadf3b5e3 — Temporal Breach: the owner must PLAY the b
         break;
       }
     }
-    expect(game.zoneOf("pyke")).toBe("banishment");
-    expect(game.p1.can("hide", "pyke")).toBe(false);
-    expect(hideOffered(game.decision(), game.p1.legal().map((o) => o.label))).toBe(false);
+    expect(game.zoneOf("pyke")).toBe("battlefield-bf1");
+    expect(game.state("pyke").isHidden).toBe(false);
+    expect(game.p1.facedown("bf1")).toEqual([]);
+    expect(game.p1.power("rainbow")).toBe(1);
   });
 });
