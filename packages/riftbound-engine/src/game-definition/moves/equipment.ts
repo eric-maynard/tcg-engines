@@ -239,10 +239,17 @@ export const equipmentMoves: Partial<
         return false;
       }
 
-      // Same controller
-      const equipOwner = context.cards.getCardOwner(context.params.equipmentId as CoreCardId);
-      const unitOwner = context.cards.getCardOwner(context.params.unitId as CoreCardId);
-      if (equipOwner !== unitOwner) {
+      // rule 818.1.c.2 / 740.1.a: "a unit you control" is CONTROL, not
+      // ownership — a borrowed unit (owned by the opponent but controlled by
+      // the activating player) is a legal holder, and a unit you own but no
+      // longer control is not. Same reader as the enumerator.
+      const controllerOfCard = (id: string) =>
+        (context.cards.getCardController?.(id as CoreCardId) ??
+          context.cards.getCardOwner(id as CoreCardId)) as string | undefined;
+      if (controllerOfCard(context.params.equipmentId) !== context.params.playerId) {
+        return false;
+      }
+      if (controllerOfCard(context.params.unitId) !== context.params.playerId) {
         return false;
       }
 

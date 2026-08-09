@@ -106,10 +106,8 @@ describe("Hunter's Machete (unl-096-219)", () => {
     expect(equipOption(none)).toBeUndefined();
   });
 
-  // BUG — expected (818.1.c.2 "a unit you CONTROL", 740.1.a): the borrowed unit is a legal holder. Actual: the
-  // equipCard condition compares OWNERS (equipment owner P1 ≠ unit owner P2) and drops the variant, so a
-  // stolen unit can never be equipped.
-  test.failing("BUG: 740.1.a controller ≠ owner — a unit P1 CONTROLS but P2 OWNS must be equippable; the move compares owners and refuses", async () => {
+  // 818.1.c.2 "a unit you CONTROL" / 740.1.a: the borrowed unit is a legal holder.
+  test("740.1.a controller ≠ owner — a unit P1 CONTROLS but P2 OWNS is equippable", async () => {
     const game = await scenario()
       .resources(P1, { power: { body: 1 } })
       .card("borrowed", { controller: P1, def: { cardType: "unit", might: 2, name: "Borrowed" }, owner: P2, zone: "base" })
