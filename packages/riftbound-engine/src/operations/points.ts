@@ -24,7 +24,11 @@ import type {
   ZoneId as CoreZoneId,
 } from "@tcg/core";
 import type { GameEvent } from "../abilities/game-events";
-import { evaluateCondition as evaluateStaticCondition } from "../abilities/static-abilities";
+import {
+  evaluateCondition as evaluateStaticCondition,
+  recalculateStaticEffects,
+  type StaticAbilityContext,
+} from "../abilities/static-abilities";
 import { isResolvingChainItem } from "../chain/resolution-guard";
 import type { PlayerId, RiftboundGameState } from "../types";
 import { getBattlefieldVictoryScoreBonus } from "./battlefield-setup-effects";
@@ -440,7 +444,31 @@ export function awardPoints(
 
   player.victoryPoints += n;
   recordPointsGained(draft, playerId, cause.method, n);
+  refreshScoreDependentStatics(draft, io);
   return { ...NO_GAIN, gained: n };
+}
+
+/**
+ * rule 710 — static abilities apply continuously, so a static whose amount
+ * reads a player's points ("My Might is increased by your points") must be
+ * re-evaluated the instant the score moves, not at the next player move. Points
+ * change inside the turn flow too (Burn Out in the Draw Phase), where no move
+ * reducer runs afterwards — and after an immediate win no move ever runs again.
+ *
+ * `PointsIO` only promises the read side of `cards`; every real engine context
+ * is a structural superset that also carries `updateCardMeta`, so the recalc is
+ * attempted only when the context can actually write meta.
+ */
+function refreshScoreDependentStatics(draft: RiftboundGameState, io: PointsIO): void {
+  const cards = io.cards as Partial<StaticAbilityContext["cards"]>;
+  if (!cards.updateCardMeta || !cards.getCardMeta || !cards.getCardOwner) {
+    return;
+  }
+  recalculateStaticEffects({
+    cards: cards as StaticAbilityContext["cards"],
+    draft,
+    zones: io.zones,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -582,7 +610,11 @@ export function refillDeckOrBurnOut(
       return false;
     }
     if (burnOut(draft, playerId, io, { sequenceIndex: i }).gameEnded) {
-      return false;
+      // rule 315.4.b.2 / 431.2.d — a Burn Out INTERRUPTS the draw, it does not
+      // cancel it: the recycled deck is drawn from even when that Burn Out's
+      // point was the winning one (431.3.c: only a repeat Burn Out of the same
+      // sequence, which leaves the deck empty, ends things before the draw).
+      return io.zones.getCardsInZone("mainDeck" as CoreZoneId, playerId as CorePlayerId).length > 0;
     }
   }
   return io.zones.getCardsInZone("mainDeck" as CoreZoneId, playerId as CorePlayerId).length > 0;
