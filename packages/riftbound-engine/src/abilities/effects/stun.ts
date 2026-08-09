@@ -7,6 +7,9 @@ import { type EffectHelpers, getTargetIds } from "./_helpers";
 export function handle_stun(effect: ExecutableEffect, ctx: EffectContext, _h: EffectHelpers): void {
   const targets = getTargetIds(effect, ctx);
   const stunned = targets.length === 0 ? [ctx.sourceCardId] : targets;
+  // rule 423.1: selecting one or more Units is ONE stun action, so the events it
+  // fires form one batch — "one or more" triggers match only batchIndex 0.
+  let batchIndex = 0;
   for (const targetId of stunned) {
     // rule 423.1.a.1 (ogn-059-298): a stunned unit can't be stunned again —
     // choosing it is legal but no stun happens, so no stun event fires.
@@ -40,6 +43,7 @@ export function handle_stun(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
     // unit at a battlefield" triggers (Vex, Mocking) can match.
     const zone = ctx.zones.getCardZone(targetId as CoreCardId);
     ctx.fireTriggers?.({
+      batchIndex: batchIndex++,
       cardId: targetId,
       owner: ctx.cards.getCardOwner(targetId as CoreCardId),
       stunnedBy: ctx.playerId,

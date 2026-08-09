@@ -136,6 +136,12 @@ export interface TriggerSubjectQuery {
    * `opponent` = someone else did. Omitted = anyone.
    */
   readonly actor?: "controller" | "opponent" | "any";
+
+  /**
+   * rule 423.1 — "one or more": ONE game action affecting several subjects is a
+   * single trigger, so only the first event of that batch matches.
+   */
+  readonly batched?: boolean;
 }
 
 /**
