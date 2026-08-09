@@ -106,11 +106,12 @@ describe("Forbidding Waste (unl-210-219)", () => {
     expect(game.gameState.battlefields.fw?.controller).toBe(P2);
   });
 
-  test.failing("BUG: continuous 'while' (364.3) — bouncing one of two defenders mid-showdown leaves the other alone: it drops 3 → 1 on the spot and the 2-Might attacker conquers", async () => {
-    // The continuous recalculation itself now works (d reads 3 with a friend, 1 once alone, and the
-    // 2-Might attacker conquers). Only the surviving attacker's leftover damage still fails: rule
-    // 466.1.a.1 heals ALL units during the Combat Cleanup, so a survivor can never end a combat
-    // with damage marked. This clause needs a judge ruling before it can be flipped.
+  test("continuous 'while' (364.3) — bouncing one of two defenders mid-showdown leaves the other alone: it drops 3 → 1 on the spot and the 2-Might attacker conquers", async () => {
+    // d reads 3 while a friend shares the Waste and 1 the instant it is alone, so the 2-Might
+    // attacker kills it and conquers.
+    // rule 466.1.a.1: the Combat Special Cleanup inserts "Heal all Units", so a survivor can
+    // never end a combat with damage marked — the 1 point the lone defender dealt is wiped
+    // when the combat ends, exactly like the undamaged conqueror in the "floor" case below.
     const game = await waste(
       [
         [3, "d"],
@@ -131,7 +132,7 @@ describe("Forbidding Waste (unl-210-219)", () => {
     await game.settle();
     expect(game.zoneOf("d")).toBe("trash");
     expect(game.zoneOf("atk")).toBe("battlefield-fw");
-    expect(game.state("atk").damage).toBe(1);
+    expect(game.state("atk").damage).toBe(0); // rule 466.1.a.1: Combat Cleanup heals all units
     expect(game.gameState.battlefields.fw?.controller).toBe(P1);
   });
 
