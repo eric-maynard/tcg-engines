@@ -2,6 +2,7 @@
 import type { CardId as CoreCardId, PlayerId as CorePlayerId, ZoneId as CoreZoneId } from "@tcg/core";
 import { addToChain, createInteractionState } from "../../chain";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
+import { resolveTarget } from "../target-resolver";
 import { getOptionalPlayCost } from "../../game-definition/moves/play/cost";
 import {
   beginPlay,
@@ -15,7 +16,25 @@ import {
 } from "../../game-definition/moves/play/play-pipeline";
 import { spellEffectHasLegalTargets, type SpellEffectTargetShape } from "../../game-definition/moves/play/targeting";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
+import { isEquipmentCard } from "./_attachment";
 import { type EffectHelpers, getTargetIds } from "./_helpers";
+
+/**
+ * rule 208.3 / 476.1 — does a card satisfy a play instruction's `target.type`?
+ * "card" matches anything; otherwise the registered card type must match, except
+ * that a gear with the printed [Equip] ability IS Equipment (VEN gears are typed
+ * "gear" in the set JSON), so an "equipment" target must accept it too — the same
+ * predicate the attach mechanics use.
+ */
+function matchesPlayTargetType(cardId: string, targetType: unknown): boolean {
+  if (typeof targetType !== "string" || targetType === "" || targetType === "card") {
+    return true;
+  }
+  if (targetType === getGlobalCardRegistry().getCardType(cardId)) {
+    return true;
+  }
+  return targetType === "equipment" && isEquipmentCard(cardId);
+}
 
 /** The play instruction's shape (parser / explicit abilities). */
 interface PlayEffectShape {
@@ -270,8 +289,7 @@ function offerPileCandidates(eff: PlayEffectShape, ctx: EffectContext, pile: "tr
     if (linked !== undefined && !linked.has(id)) {
       return false;
     }
-    const cardType = registry.getCardType(id);
-    if (target?.type && target.type !== "card" && target.type !== cardType) {
+    if (!matchesPlayTargetType(id, target?.type)) {
       return false;
     }
     if (killedCaps !== undefined) {
@@ -432,6 +450,55 @@ function replaySelfSpell(effect: ExecutableEffect, ctx: EffectContext): void {
   if (ctx.draft.cardsPlayedThisTurn) {
     ctx.draft.cardsPlayedThisTurn[replayPlayer] = (ctx.draft.cardsPlayedThisTurn[replayPlayer] ?? 0) + 1;
   }
+  bindReplayTarget(ctx, cardId, replayPlayer, spellEffect);
+}
+
+/**
+ * rule 355.5 / 355.8 — playing the card again follows the play process, so a
+ * target the replayed spell names is chosen NOW, as it goes on the Chain (never
+ * deferred to resolution: an item may only sit on the Chain once valid choices
+ * exist for all of its targets). A single legal object locks itself; several
+ * park a `choose-target` bound to the new item, exactly like a play-time slot.
+ */
+function bindReplayTarget(
+  ctx: EffectContext,
+  cardId: string,
+  replayPlayer: string,
+  spellEffect: SpellEffectTargetShape | undefined,
+): void {
+  const descriptor = spellEffect?.target;
+  if (!descriptor || typeof descriptor !== "object" || (descriptor as { quantity?: unknown }).quantity === "all") {
+    return;
+  }
+  const items = ctx.draft.interaction?.chain?.items;
+  const item = items?.[items.length - 1];
+  if (!item || item.cardId !== cardId) {
+    return;
+  }
+  const options = resolveTarget({ ...(descriptor as object), quantity: "all" } as Parameters<typeof resolveTarget>[0], {
+    cards: ctx.cards,
+    choosing: true,
+    draft: ctx.draft,
+    playerId: replayPlayer,
+    sourceCardId: cardId,
+    zones: ctx.zones,
+  } as Parameters<typeof resolveTarget>[1]) as string[];
+  if (options.length === 0) {
+    return;
+  }
+  if (options.length === 1) {
+    (item as { targets?: readonly string[] }).targets = [options[0] as string];
+    return;
+  }
+  ctx.draft.pendingChoice = {
+    bindToChainItemId: item.id,
+    effect: spellEffect,
+    options,
+    playerId: replayPlayer,
+    remaining: 1,
+    sourceCardId: cardId,
+    type: "choose-target",
+  } as unknown as typeof ctx.draft.pendingChoice;
 }
 
 /**
@@ -607,8 +674,7 @@ function playCandidatesFromHand(effect: ExecutableEffect, ctx: EffectContext): s
       : [];
   const hand = ctx.zones.getCardsInZone("hand" as CoreZoneId, ctx.playerId as CorePlayerId) as readonly string[];
   return hand.filter((id) => {
-    const cardType = registry.getCardType(id);
-    if (target?.type && target.type !== "card" && target.type !== cardType) {
+    if (!matchesPlayTargetType(id, target?.type)) {
       return false;
     }
     for (const f of filters) {

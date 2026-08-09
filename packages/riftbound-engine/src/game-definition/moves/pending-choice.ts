@@ -2292,6 +2292,12 @@ export const pendingChoiceMoves: Partial<
             );
           }
           postChoiceCleanup(draft, context);
+        } else if (!draft.pendingChoice) {
+          // rule 359.3.f / 371.2 — a plainly DECLINED opt-in still ends a
+          // resolution: deaths staged by whatever executed just before the
+          // prompt (e.g. the damage whose rider offered this play) are only
+          // detected by the cleanup pass, which no other branch runs here.
+          postChoiceCleanup(draft, context);
         }
         return;
       }

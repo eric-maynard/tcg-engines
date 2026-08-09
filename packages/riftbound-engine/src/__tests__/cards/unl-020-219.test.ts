@@ -48,6 +48,16 @@ function lone(p2Power: Record<string, number> = {}) {
     .hand(P1, CARD, "dg");
 }
 
+/** Two enemy units, so the replay's target is a real choice rather than an auto-lock. */
+function two() {
+  return scenario()
+    .resources(P1, { energy: 4, power: { fury: 2 } })
+    .resources(P2, { energy: 0, power: { calm: 1 } })
+    .unit(P2, "base", { might: 8, name: "Giant" }, "giant")
+    .unit(P2, "base", { might: 3, name: "Apprentice" }, "appr")
+    .hand(P1, CARD, "dg");
+}
+
 describe("Dancing Grenade (unl-020-219)", () => {
   test("registry payload should be a flat 'deal 2 to a unit' spell (parser emits amount = 2 × count(all units) and drops the replay clause)", async () => {
     // Expected: amount 2, target any unit (+ some representation of the [rainbow] replay rider).
@@ -191,6 +201,48 @@ describe("Dancing Grenade (unl-020-219)", () => {
     }
     expect(game.state("giant").damage).toBe(4);
     expect(game.zoneOf("giant")).toBe("base");
+    expect(game.violations()).toEqual([]);
+  });
+
+  test("the replayed spell's target is chosen as it goes on the chain (rules 355.5 / 355.8), not at resolution", async () => {
+    // Playing the card again follows the play process: valid choices for all targets must be made
+    // before the item can sit on the chain, so the chain view shows `targets` and nobody is asked
+    // for one after priority passes.
+    const game = await two().build();
+    await game.p1.cast("dg", { targets: "giant" });
+    await game.settle();
+    expect(game.decision()).toMatchObject({ kind: "yes-no", seat: P2 });
+    await game.p2.yes();
+    // The replay target is asked NOW, while the item waits on the chain.
+    expect(game.decision()).toMatchObject({ kind: "pick", seat: P2 });
+    await game.p2.pick("appr");
+    expect(game.chain()).toEqual([
+      expect.objectContaining({ cardId: "dg", controller: P2, targets: ["appr"] }),
+    ]);
+  });
+
+  test("a lethal replay picked through the target prompt kills the unit (2+ legal units on the board)", async () => {
+    const game = await two().build();
+    await game.p1.cast("dg", { targets: "giant" });
+    await game.settle();
+    if (game.decision()?.kind === "yes-no") {
+      await game.p2.yes();
+    }
+    if (game.decision()?.kind === "pick") {
+      await game.p2.pick("appr");
+    }
+    await game.settle();
+    if (game.decision()?.kind === "pick") {
+      await game.p2.pick("appr");
+      await game.settle();
+    }
+    if (game.decision()?.kind === "yes-no") {
+      await game.acting().no();
+      await game.settle();
+    }
+    // 2 + 1 Bonus Damage = 3 on a 3-Might unit: lethal.
+    expect(game.zoneOf("appr")).toBe("trash");
+    expect(game.state("giant").damage).toBe(2);
     expect(game.violations()).toEqual([]);
   });
 
