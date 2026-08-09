@@ -808,6 +808,27 @@ const JSON_CARD_ENGINE_FLAGS: Record<string, Record<string, unknown>> = {
   "ven-004-166": {
     abilities: [{ effect: { keyword: "Tank", type: "ignore-keyword" }, type: "static" }],
   },
+  // rule 765-767 / 809 — Heisho, Shell of the World: "Players ignore [Deflect]
+  // while paying for spells and abilities choosing something here." Same shape
+  // as Dune Surfer: no "ignore <keyword>" rules-text parse exists, so the
+  // static is declared here. `players: "all"` is 105/190 (a battlefield's
+  // passive text is symmetric), `location: "here"` scopes it to objects at this
+  // battlefield (767), and `procedure: "paying-costs"` keeps the waiver to the
+  // payment only — the object still HAS Deflect (809.3).
+  "ven-158-166": {
+    abilities: [
+      {
+        effect: {
+          keyword: "Deflect",
+          location: "here",
+          players: "all",
+          procedure: "paying-costs",
+          type: "ignore-keyword",
+        },
+        type: "static",
+      },
+    ],
+  },
   // rule 827 / 806.1.c.2 / 341 — Rogue Assassin: "[Empower] [3][rainbow] /
   // [Action][>] [Exhaust]: If it's your turn, move a friendly unit in a
   // showdown to base and if I'm [Empowered], ready it." The generator emits
@@ -1919,6 +1940,7 @@ function adaptJsonCard(c: Record<string, unknown>): Card {
     cardNumber: c.collectorNumber,
     cardType: c.cardType,
     domain: domains?.length === 1 ? domains[0] : domains,
+    effectText: (c.effectText as string | null | undefined) ?? undefined,
     energyCost: c.energy ?? c.energyCost,
     id: c.id,
     isChampion: c.isChampion,
