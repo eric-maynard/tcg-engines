@@ -49,6 +49,7 @@ import { handle_attach } from "./attach";
 import { handle_attach_or_detach } from "./attach-or-detach";
 import { handle_detach } from "./detach";
 import { handle_equipAttach } from "./equip-attach";
+import { handle_weaponmasterAttach } from "./weaponmaster-attach";
 import { handle_become_copy } from "./become-copy";
 import { handle_sequence } from "./sequence";
 import { handle_conditional } from "./conditional";
@@ -146,6 +147,9 @@ export const EFFECT_HANDLERS: Record<string, EffectHandler> = {
   "detach": handle_detach,
   // rule 377.3 / 818.1.c.1: the chain-resolution half of an [Equip] activation.
   "equip-attach": handle_equipAttach,
+  // rule 821.1.c / 383.3.b: the chain-resolution half of [Weaponmaster]'s
+  // "Pay … to attach it to this unit" — the cost is paid here, not at the pick.
+  "weaponmaster-attach": handle_weaponmasterAttach,
   // rule 477.1.b (ven-137-166): equipped unit becomes a copy of a chosen unit.
   "become-copy": handle_become_copy,
   "sequence": handle_sequence,

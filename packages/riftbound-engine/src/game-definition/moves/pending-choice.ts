@@ -758,7 +758,7 @@ export function weaponmasterEquipCost(
  * other than the one the Equipment would attach to (sacrificing the holder
  * would undo the attach).
  */
-function weaponmasterSacrificeOptions(
+export function weaponmasterSacrificeOptions(
   state: RiftboundGameState,
   playerId: string,
   holderUnitId: string | undefined,
@@ -784,7 +784,7 @@ function trashSize(zones: any, playerId: string): number {
 }
 
 /** rule-id: sfd-119-221-weaponmaster-pays-reduced-equip-cost — 821.1.c.5 payability gate. */
-function canPayWeaponmasterEquip(
+export function canPayWeaponmasterEquip(
   state: RiftboundGameState,
   playerId: string,
   equipmentId: string,
@@ -1767,104 +1767,36 @@ export const pendingChoiceMoves: Partial<
         if (context.params.accept === false || !picked || !choice.options.includes(picked)) {
           return;
         }
-        // rule-id: sfd-119-221-weaponmaster-pays-reduced-equip-cost
-        // Rule 821.1.c: pay the Equip cost reduced by [A]; if it can't be
-        // paid the Equipment stays where it is (821.1.c.5).
+        // rule 383.3.b / 204.3.b (821.1.c): "Pay the cost of its Equip ability
+        // … to attach it" is a cost inside an instruction LATER in the effect,
+        // so it is paid on RESOLUTION, not now. The pick finalizes the trigger
+        // (383.3.a); the item goes on the Chain, every player gets priority,
+        // and the "weaponmaster-attach" handler pays and attaches when it
+        // resolves — exactly like the ordinary [Equip] activation (377.3).
         const wmGetMeta = (m: CoreCardId) =>
           context.cards.getCardMeta(m) as Partial<RiftboundCardMeta> | undefined;
-        const equipCost = weaponmasterEquipCost(picked, choice.unitId, wmGetMeta);
+        // rule 821.1.c.5 — an Equipment whose reduced cost can't be paid is
+        // never put on the Chain; it stays where it is.
         if (
-          !equipCost ||
+          !weaponmasterEquipCost(picked, choice.unitId, wmGetMeta) ||
           !canPayWeaponmasterEquip(draft, choice.playerId, picked, context, choice.unitId, wmGetMeta)
         ) {
           return;
         }
-        deductAbilityCost(draft, choice.playerId, equipCost, context.zones, context.counters);
-        const registry = getGlobalCardRegistry();
-        const priorMeta = context.cards.getCardMeta(picked as CoreCardId) as
-          | Partial<RiftboundCardMeta>
-          | undefined;
-        const priorHolder = priorMeta?.attachedTo;
-        if (priorHolder && priorHolder !== choice.unitId) {
-          const holderMeta = context.cards.getCardMeta(priorHolder as CoreCardId) as
-            | Partial<RiftboundCardMeta>
-            | undefined;
-          context.cards.updateCardMeta(priorHolder as CoreCardId, {
-            equippedWith: (holderMeta?.equippedWith ?? []).filter((id) => id !== picked),
-          } as Partial<RiftboundCardMeta>);
-        }
-        const equipDef = registry.get(picked);
-        const newEquipMeta: Partial<RiftboundCardMeta> = { attachedTo: choice.unitId };
-        if (equipDef?.copyAttachedUnitText) {
-          newEquipMeta.copiedFromCardId = choice.unitId;
-        }
-        context.cards.updateCardMeta(picked as CoreCardId, newEquipMeta);
-        const unitMeta = context.cards.getCardMeta(choice.unitId as CoreCardId) as
-          | Partial<RiftboundCardMeta>
-          | undefined;
-        const already = unitMeta?.equippedWith ?? [];
-        if (!already.includes(picked)) {
-          context.cards.updateCardMeta(choice.unitId as CoreCardId, {
-            equippedWith: [...already, picked],
-          } as Partial<RiftboundCardMeta>);
-        }
-        fireTriggers(
+        draft.interaction = addToChain(
+          draft.interaction ?? createInteractionState(),
           {
             cardId: choice.unitId,
-            equipmentId: picked,
-            playerId: choice.playerId,
-            type: "attach-equipment",
+            controller: choice.playerId,
+            effect: { equipmentId: picked, type: "weaponmaster-attach", unitId: choice.unitId },
+            // rule 337.1 / 402-404: the controller already decided the "you may"
+            // and chose the Equipment, so the item enters the Chain finalized.
+            status: "finalized",
+            triggered: true,
+            type: "ability",
           },
-          { cards: context.cards, counters: context.counters, draft, zones: context.zones },
+          Object.keys(draft.players),
         );
-        // rule 821.1.c.3 / 818.1.c.3 (sfd-178-221 Blade of the Ruined King):
-        // [A] waives one power pip only — the "Kill a friendly unit" half of
-        // the Equip cost is still owed on the Weaponmaster path. rule 428.1.a.1
-        // — it is an Active Kill, so a token ceases to exist (186.1).
-        if (equipCost.killFriendlyUnit === true && !draft.pendingChoice) {
-          const fodder = weaponmasterSacrificeOptions(
-            draft,
-            choice.playerId,
-            choice.unitId,
-            context,
-          );
-          if (fodder.length === 1) {
-            executeEffect(
-              { target: { type: "unit" }, type: "kill" } as unknown as ExecutableEffect,
-              {
-                ...buildEffectContext(draft, choice.playerId, picked, context),
-                boundTargets: [fodder[0] as string],
-              } as EffectContext,
-            );
-          } else if (fodder.length > 1) {
-            // rule 357.2: the payer picks which friendly unit pays.
-            draft.pendingChoice = {
-              effect: { target: { type: "unit" }, type: "kill" },
-              options: fodder as never,
-              playerId: choice.playerId as never,
-              remaining: 1,
-              sourceCardId: picked as never,
-              type: "choose-target",
-            } as RiftboundGameState["pendingChoice"];
-          }
-        }
-        // rule 821.1.c / 476.1 (sfd-150-221 Last Rites): the non-resource part
-        // of the Equip cost — "Recycle N cards from your trash" — is paid by
-        // its payer choosing which cards leave the trash.
-        const recycleCount = equipCost.recycleFromTrash as number | undefined;
-        if (recycleCount !== undefined && recycleCount > 0 && !draft.pendingChoice) {
-          const trash = context.zones
-            .getCardsInZone("trash" as CoreZoneId, choice.playerId as CorePlayerId)
-            .map((id: unknown) => id as string);
-          draft.pendingChoice = {
-            onPicked: "recycle",
-            prompter: choice.playerId,
-            remaining: recycleCount,
-            revealed: trash,
-            revealer: choice.playerId,
-            type: "reveal-and-pick",
-          } as RiftboundGameState["pendingChoice"];
-        }
         return;
       }
 

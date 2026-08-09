@@ -365,6 +365,9 @@ describe("pending-choice decisions (one per engine PendingChoice type)", () => {
 
     const picked = await scenario().resources(P1, { energy: 3 }).gear(P1, SERRATED_DIRK, "dirk").hand(P1, SENTINEL_ADEPT, "adept").build();
     await picked.p1.play("adept", { answers: ["dirk"] });
+    // rule 383.3.b / 204.3.b: the pick finalizes the [Weaponmaster] trigger; "Pay
+    // … to attach it" is a later instruction, so the attach lands on resolution.
+    await picked.settle();
     expect(picked.state("dirk").attachedTo).toBe("adept");
     expect(picked.state("adept").attachments).toEqual(["dirk"]);
   });
@@ -374,6 +377,8 @@ describe("pending-choice decisions (one per engine PendingChoice type)", () => {
     const BATTLEAXE = "unl-019-219"; // Equip [1][fury] → reduced to [1]
     const paid = await scenario().resources(P1, { energy: 4 }).gear(P1, BATTLEAXE, "axe").hand(P1, SENTINEL_ADEPT, "adept").build();
     await paid.p1.play("adept", { answers: ["axe"] });
+    // rule 383.3.b: the reduced Equip cost is paid when the trigger resolves.
+    await paid.settle();
     expect(paid.state("axe").attachedTo).toBe("adept");
     expect(paid.p1.energy()).toBe(0);
 

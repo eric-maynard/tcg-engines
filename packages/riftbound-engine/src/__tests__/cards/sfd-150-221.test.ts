@@ -186,6 +186,10 @@ describe("Last Rites (sfd-150-221)", () => {
     expect(offer).toMatchObject({ kind: "pick", seat: P1 });
     expect(offer?.kind === "pick" ? offer.options.map((o) => o.card ?? o.key) : []).toEqual(["rites"]);
     await game.p1.pick("rites");
+    // rule 383.3.b / 204.3.b: the pick finalizes the [Weaponmaster] trigger; the
+    // "Pay the cost of its Equip ability … to attach it" instruction — including
+    // its Recycle-2 half — is paid when that trigger RESOLVES off the chain.
+    await game.settle();
     const recycle = game.decision();
     expect(recycle).toMatchObject({ kind: "pick", seat: P1 });
     expect(recycle?.kind === "pick" ? recycle.options.map((o) => o.card ?? o.key).sort() : []).toEqual(["t1", "t2", "t3"]);

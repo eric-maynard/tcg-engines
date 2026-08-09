@@ -29,9 +29,9 @@
  * energy → stays; with 1 energy → may pay 1 and attach, or decline. (c) 4-Might → [0]+[fury|order];
  * 1-Might → [2]+[fury|order]; calm can never pay the pip.
  *
- * NOTE: the engine's card data encodes the Gauntlets' pip as `rainbow` (so any power pays it), the
- * Weaponmaster path does not apply the per-target Might reduction, and Weaponmaster is an immediate
- * pendingChoice rather than a chain item. The BUG tests below record what the rules demand.
+ * NOTE: the Weaponmaster pick finalizes the trigger (383.3.a); the trigger then sits on the Chain
+ * and its "Pay … to attach" instruction runs on resolution (383.3.b), so every attach assertion
+ * below comes after a priority window.
  */
 import { describe, expect, test } from "bun:test";
 import { P1, P2, scenario } from "../../../harness";
@@ -95,8 +95,7 @@ describe("Hextech Gauntlets × Weaponmaster — Might-based Equip reduction (821
   // Expected: opting in / choosing the Equipment happens at finalization (383.3.a) but "Pay … to
   // attach" is a cost-within-instructions later in the effect → paid on RESOLUTION (383.3.b,
   // 204.3.b): the trigger sits on the chain, P2 gets priority, and only then does it attach.
-  // Actual: Weaponmaster is an off-chain prompt that pays and attaches the instant it is answered.
-  test.failing("BUG: (a) Weaponmaster's pay-and-attach happens on resolution — after the pick the trigger is on the chain, P2 has priority, Gauntlets not yet attached (383.3.a/383.3.b/204.3.b)", async () => {
+  test("(a) Weaponmaster's pay-and-attach happens on resolution — after the pick the trigger is on the chain, P2 has priority, Gauntlets not yet attached (383.3.a/383.3.b/204.3.b)", async () => {
     const game = await wmBoard(ADEPT, { energy: 6, power: { fury: 1 } }).build(); // rich enough for any pricing
     await game.p1.play("wm");
     expect(weaponmasterOffered(game)).toContain("hg");

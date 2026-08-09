@@ -67,6 +67,13 @@ const pickOptions = (game: Game) => {
 async function recycle(game: Game, keys: string[]): Promise<void> {
   const left = [...keys];
   for (let i = 0; i < 4 && left.length > 0; i++) {
+    // rule 383.3.b / 204.3.b: on the [Weaponmaster] path the pick only finalizes
+    // the trigger — "Pay the cost of its Equip ability … to attach it" is a cost
+    // in a LATER instruction, so the Recycle-2 prompt opens when that trigger
+    // resolves off the chain. Settle first, then answer it.
+    if (game.decision()?.kind !== "pick") {
+      await game.settle();
+    }
     const d = game.decision();
     if (d?.kind !== "pick" || d.seat !== P1 || d.semantics === "equip") {
       return;
@@ -101,6 +108,9 @@ describe("(a) Weaponmaster + exactly 2 in trash + NO chaos: the pip is waived, R
     const deckBefore = game.p1.deck().length;
     await game.p1.play("poro", { to: "base" });
     await game.p1.pick("rites");
+    // rule 383.3.b / 204.3.b: the Recycle-2 half is part of "Pay … to attach it",
+    // a later instruction — it is asked for when the trigger resolves, not now.
+    await game.settle();
     expect(game.decision()).toMatchObject({ kind: "pick", seat: P1, semantics: "from-revealed" });
     expect(pickOptions(game).sort()).toEqual(["t1", "t2"]);
     await recycle(game, ["t1", "t2"]);

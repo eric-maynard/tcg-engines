@@ -27,8 +27,11 @@ describe("Jax, Unrelenting (sfd-119-221)", () => {
     const handBefore = game.p1.hand().length;
     // Play Jax (4) → Weaponmaster prompt: pick the Dirk → attach fires the trigger.
     await game.p1.play("jax", { answers: ["dirk"] });
-    expect(game.state("dirk").attachedTo).toBe("jax");
+    // rule 383.3.b / 204.3.b: the pick finalizes the [Weaponmaster] trigger, but
+    // "Pay … to attach it" is a cost in a LATER instruction — it is paid, and the
+    // attach happens, only once the trigger resolves off the chain.
     await game.settle();
+    expect(game.state("dirk").attachedTo).toBe("jax");
     const d = game.decision();
     expect(d?.kind).toBe("yes-no");
     expect(d?.kind === "yes-no" && d.prompt).toContain("Pay [1]");
