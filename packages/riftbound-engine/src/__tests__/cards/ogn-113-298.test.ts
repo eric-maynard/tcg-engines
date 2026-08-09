@@ -56,14 +56,20 @@ describe("Malzahar, Fanatic (ogn-113-298)", () => {
     expect(game.p1.power("rainbow")).toBe(2);
   });
 
-  test("cannot be activated while Malzahar is exhausted, nor with nothing else friendly to kill", async () => {
+  test("cannot be activated while Malzahar is exhausted; alone he may pay the kill cost with himself", async () => {
     const exhausted = await scenario()
       .unit(P1, "base", CARD, "malz", { exhausted: true })
       .unit(P1, "base", { might: 1 }, "fodder")
       .build();
     expect(exhausted.p1.can("activate", "malz")).toBe(false);
+    // rule 356 / ruling 0ac224d0569cbf56: costs are paid together and the host
+    // matches its own "friendly permanent" descriptor — Malzahar exhausts and
+    // kills HIMSELF, and the [Add] still resolves.
     const alone = await scenario().unit(P1, "base", CARD, "malz").unit(P2, "base", { might: 1 }, "theirs").build();
-    expect(alone.p1.can("activate", "malz")).toBe(false); // Malzahar can't be both killed and exhausted
+    expect(alone.p1.can("activate", "malz")).toBe(true);
+    await alone.p1.activate("malz", 0, { sacrifice: "malz" });
+    expect(alone.zoneOf("malz")).toBe("trash");
+    expect(alone.p1.power("rainbow")).toBe(2);
   });
 
   test("[Action] timing: not usable on the opponent's turn outside a showdown", async () => {

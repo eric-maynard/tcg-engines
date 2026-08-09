@@ -1694,16 +1694,18 @@ export const activateAbility: Defs["activateAbility"] = {
       // Rule 577.2: A [Kill] (sacrifice) cost requires a legal target on
       // the board matching the descriptor. Malzahar (ogn-113-298) is the
       // canonical case: exhaust + kill a friendly permanent → +2 rainbow.
-      // The host card cannot pay its own kill cost — unless the cost is
-      // literally "Kill this" (ogn-212-298 Forge of the Future), where the
-      // host is the only legal sacrifice.
+      // rule 356: the host itself matches "a friendly permanent", so it is a
+      // legal sacrifice for its OWN kill cost (ruling 0ac224d0569cbf56 —
+      // Heimerdinger may kill himself to pay the ability he inherited). Only an
+      // explicit `excludeSelf` ("another …") narrows it; a literal "Kill this"
+      // (ogn-212-298 Forge of the Future) makes the host the only option.
       if (cost.kill) {
         const sacrificeId = context.params.sacrificeId as string | undefined;
         const options =
           cost.kill === "self"
             ? [cardId as string]
             : // rule 577.2: enumerate EVERY legal sacrifice (quantity "all"),
-              // else the default single pick may be the host itself.
+              // else the default single pick is silently the first candidate.
               resolveTarget({ ...(cost.kill as TargetDescriptor), quantity: "all" }, {
                 cards: context.cards,
                 choosing: true,
@@ -1712,7 +1714,7 @@ export const activateAbility: Defs["activateAbility"] = {
                 sourceCardId: cardId,
                 sourceZone: zone,
                 zones: context.zones,
-              }).filter((id) => id !== cardId);
+              });
         if (options.length === 0) {
           return false;
         }
@@ -2182,6 +2184,9 @@ export const activateAbility: Defs["activateAbility"] = {
             | string
             | undefined;
           // rule 577.2: list every legal sacrifice, not the default single pick.
+          // rule 356 / ruling 0ac224d0569cbf56: the host matches its own
+          // "friendly permanent" descriptor, so it stays in the list unless the
+          // descriptor says "another" (`excludeSelf`, applied by resolveTarget).
           sacrificeOptions = resolveTarget({ ...(killCost as TargetDescriptor), quantity: "all" }, {
             cards: context.cards,
             choosing: true,
@@ -2190,7 +2195,7 @@ export const activateAbility: Defs["activateAbility"] = {
             sourceCardId: entry.hostCardId,
             sourceZone: hostZone,
             zones: context.zones,
-          }).filter((id) => id !== entry.hostCardId);
+          });
           if (sacrificeOptions.length === 0) {
             continue;
           }

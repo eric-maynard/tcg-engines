@@ -725,7 +725,7 @@ describe("Malzahar, Fanatic (ogn-113-298): sacrifice cost", () => {
     stunned: false,
   };
 
-  test("not enumerated when there is no other friendly permanent to sacrifice", () => {
+  test("alone on the board the host is its own legal sacrifice", () => {
     const state = createMockState();
     const harness = createHarness({
       "malzahar-1": { meta: { ...emptyMeta }, owner: "p1", zone: "base" },
@@ -740,10 +740,11 @@ describe("Malzahar, Fanatic (ogn-113-298): sacrifice cost", () => {
     const enumerator = chainMoves.activateAbility!.enumerator!;
     const results = enumerator(state, context as unknown as Parameters<typeof enumerator>[1]);
 
-    // The host card cannot pay its own kill cost, so with no other friendly
-    // permanent on the board the ability must not be enumerated at all.
+    // rule 356 / ruling 0ac224d0569cbf56: the host matches its own "friendly
+    // permanent" descriptor, so it may be killed to pay its own cost.
     const malzaharEntries = results.filter((r) => r.cardId === "malzahar-1");
-    expect(malzaharEntries.length).toBe(0);
+    expect(malzaharEntries.length).toBe(1);
+    expect(malzaharEntries[0]!.sacrificeId).toBe("malzahar-1");
   });
 
   test("enumerates one option per friendly permanent and reducer trashes the pick", () => {
@@ -762,9 +763,10 @@ describe("Malzahar, Fanatic (ogn-113-298): sacrifice cost", () => {
     const enumerator = chainMoves.activateAbility!.enumerator!;
     const results = enumerator(state, enumCtx as unknown as Parameters<typeof enumerator>[1]);
 
+    // One variant per legal sacrifice — the fodder AND Malzahar himself.
     const malzaharEntries = results.filter((r) => r.cardId === "malzahar-1");
-    expect(malzaharEntries.length).toBe(1);
-    expect(malzaharEntries[0]!.sacrificeId).toBe("fodder-1");
+    expect(malzaharEntries.length).toBe(2);
+    expect(malzaharEntries.map((r) => r.sacrificeId).sort()).toEqual(["fodder-1", "malzahar-1"]);
 
     // Activate, choosing the fodder unit as the sacrifice.
     const reducer = chainMoves.activateAbility!.reducer!;
