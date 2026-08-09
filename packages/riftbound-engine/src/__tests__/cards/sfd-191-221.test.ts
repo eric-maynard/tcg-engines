@@ -58,13 +58,21 @@ const equipOption = (game: Game) => game.p1.legal().find((o) => o.moveId === "eq
 const equip = (game: Game, unitId = "squire", equipmentId = "crown") => game.p1.choose("equipCard:-", { params: { equipmentId, unitId } });
 
 describe("Rabadon's Deathcrown (sfd-191-221)", () => {
-  test("registry payload: 4-energy Calm/Mind equipment with two hybrid pips, +3 bonus, and exactly two abilities — the Unique keyword and [Equip] costed one [rainbow]-spelled (hybrid) pip", async () => {
+  // rule 715.1 — the Effect Text box ("Your spells and abilities deal 3 Bonus Damage") is a
+  // controller-scoped static, carried as the virtual keyword BonusDamage and flagged `effectText`
+  // so it counts only while the Deathcrown is attached (136.2.b/c).
+  test("registry payload: 4-energy Calm/Mind equipment with two hybrid pips, +3 bonus, and three abilities — the Unique keyword, [Equip] costed one [rainbow]-spelled (hybrid) pip, and the Effect Text's 3 Bonus Damage", async () => {
     const def = (await loadDefaultCardPool()).get(CARD);
     expect(def).toMatchObject({ cardType: "equipment", domain: ["calm", "mind"], energyCost: 4, mightBonus: 3, name: "Rabadon's Deathcrown" });
     expect(def?.powerCost).toEqual(["rainbow", "rainbow"]);
     expect(def?.abilities).toEqual([
       { keyword: "Unique", type: "keyword" },
       { cost: { power: ["rainbow"] }, keyword: "Equip", type: "keyword" },
+      {
+        effect: { keyword: "BonusDamage", target: "controller", type: "grant-keyword", value: 3 },
+        effectText: true,
+        type: "static",
+      },
     ]);
     const game = await board().build();
     expect(game.state("crown").keywords).toEqual(expect.arrayContaining(["Unique", "Equip"]));

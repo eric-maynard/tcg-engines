@@ -183,6 +183,15 @@ const PLAY_LOCATION_PATTERN = /^You may play me to (an? .+? battlefield)\.?$/i;
 const FRIENDLY_PLAY_LOCATION_PATTERN =
   /^Friendly units may be played to (?:an? )?open battlefields?\.?$/i;
 
+/**
+ * rule 715.1 — the standing "Your spells and abilities deal N Bonus Damage."
+ * (Annie, Fiery ogs-001-024; Rabadon's Deathcrown sfd-191-221). The bonus is a
+ * controller-scoped aggregate, so it is modelled as the virtual keyword
+ * BonusDamage granted to the controller, which `abilities/bonus-damage.ts`
+ * sums off every board card that player controls.
+ */
+const BONUS_DAMAGE_STATIC_PATTERN = /^Your spells and abilities deal (\d+) Bonus Damage\.?$/i;
+
 // ============================================================================
 // Helper Functions
 // ============================================================================
@@ -353,7 +362,8 @@ export function isStaticAbility(text: string): boolean {
     EACH_TYPE_HAS_PATTERN.test(cleanText) ||
     RESTRICTION_PATTERN.test(cleanText) ||
     PLAY_LOCATION_PATTERN.test(cleanText) ||
-    FRIENDLY_PLAY_LOCATION_PATTERN.test(cleanText)
+    FRIENDLY_PLAY_LOCATION_PATTERN.test(cleanText) ||
+    BONUS_DAMAGE_STATIC_PATTERN.test(cleanText)
   );
 }
 
@@ -476,6 +486,24 @@ function parseStaticAbilityInner(
   cleanText: string,
   text: string,
 ): StaticAbilityParseResult | undefined {
+  // rule 715.1 — "Your spells and abilities deal N Bonus Damage."
+  const controllerBonusDamageMatch = cleanText.match(BONUS_DAMAGE_STATIC_PATTERN);
+  if (controllerBonusDamageMatch) {
+    return {
+      ability: {
+        effect: {
+          keyword: "BonusDamage",
+          target: "controller",
+          type: "grant-keyword",
+          value: Number.parseInt(controllerBonusDamageMatch[1], 10),
+        } as unknown as Effect,
+        type: "static",
+      } as StaticAbility,
+      endIndex: text.length,
+      startIndex: 0,
+    };
+  }
+
   // "This/I enter(s) exhausted." — self-state static (Platewyrm Egg).
   if (/^(?:This|I) enters? exhausted\.?$/i.test(cleanText)) {
     return {

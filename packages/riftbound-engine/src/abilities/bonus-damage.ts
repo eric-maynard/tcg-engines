@@ -44,8 +44,14 @@ function staticBonusFor(ctx: EffectContext): number {
   }
   let bonus = 0;
   for (const cardId of boardCards) {
+    // rule 136.2.b/c — an Equipment's Effect Text abilities are inactive while
+    // it is unattached (Rabadon's Deathcrown sfd-191-221).
+    const attached =
+      (ctx.cards.getCardMeta?.(cardId as CoreCardId) as { attachedTo?: string } | undefined)
+        ?.attachedTo !== undefined;
     for (const ability of registry.getAbilities(cardId) ?? []) {
       if (ability?.type !== "static") continue;
+      if ((ability as { effectText?: boolean }).effectText === true && !attached) continue;
       const effect = (ability as { effect?: Record<string, unknown> }).effect;
       if (
         effect?.type === "grant-keyword" &&
