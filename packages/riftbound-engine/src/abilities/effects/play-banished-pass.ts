@@ -2,19 +2,9 @@
 import type { CardId as CoreCardId, PlayerId as CorePlayerId, ZoneId as CoreZoneId } from "@tcg/core";
 import { addToChain, createInteractionState } from "../../chain";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
-import {
-  canAffordCard,
-  type CostExtras,
-  deductCost,
-} from "../../game-definition/moves/play/cost";
-import {
-  spellEffectHasLegalTargets,
-  type SpellEffectTargetShape,
-} from "../../game-definition/moves/play/targeting";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import type { EffectHelpers } from "./_helpers";
-import { enterUnitFromEffect } from "./play";
-import { playDestinationOptions } from "../../game-definition/moves/play/play-pipeline";
+import { beginPlay, type PlayIO } from "../../game-definition/moves/play/play-pipeline";
 
 /** Cards a `look` with `onPicked: "banish"` put into banishment, per source card. */
 export interface LookBanishRecord {
@@ -129,79 +119,27 @@ export function handle_playBanishedCard(
   if (ctx.zones.getCardZone(cardId as CoreCardId) !== "banishment") {
     return;
   }
-  // rule 358.3.a (ogn-115-298 × ogn-026-298) — an instruction to play a card is
-  // skipped as impossible for a player who can't play cards this turn; the card
-  // just stays banished.
-  if (
-    (ctx.draft as { cannotPlayCardsThisTurn?: Record<string, boolean> }).cannotPlayCardsThisTurn?.[
-      owner
-    ] === true
-  ) {
-    return;
-  }
-  const extras: CostExtras =
-    (effect as { ignoreEnergyCost?: boolean }).ignoreEnergyCost === false
-      ? {}
-      : { ignoreEnergyCost: true };
-  if (!canAffordCard(ctx.draft, owner, cardId, extras, ctx.cards.getCardMeta)) {
-    return;
-  }
-  const registry = getGlobalCardRegistry();
-  const cardType = registry.getCardType(cardId);
-  const spellEffect = (registry.getAbilities(cardId) ?? []).find((a) => a.type === "spell")?.effect;
-  // rule 355.8 / 358.5 — a spell whose effect has no legal target when it would
-  // be finalized cannot be played: the whole attempt is undone, so nothing is
-  // paid and the card stays where it was (rule-id: ogn-115-298 × ogn-064-298).
-  if (
-    cardType === "spell" &&
-    !spellEffectHasLegalTargets(spellEffect as SpellEffectTargetShape | undefined, {
-      cards: ctx.cards,
-      choosing: true,
-      draft: ctx.draft,
-      playerId: owner,
-      sourceCardId: cardId,
-      zones: ctx.zones,
-    } as Parameters<typeof spellEffectHasLegalTargets>[1])
-  ) {
-    return;
-  }
-  deductCost(ctx.draft, owner, cardId, extras, ctx.cards.getCardMeta);
-  if (cardType === "spell") {
-    // rule 354.1: playing a spell puts it on the chain; its targets are chosen
-    // when it is finalized (rule 355.5), not when it was banished.
-    ctx.zones.moveCard({ cardId: cardId as CoreCardId, targetZoneId: "chain" as CoreZoneId });
-    ctx.draft.interaction = addToChain(
-      ctx.draft.interaction ?? createInteractionState(),
-      {
-        cardId,
-        controller: owner,
-        effect: spellEffect as unknown as ExecutableEffect,
-        resolveTo: "trash",
-        type: "spell",
-      },
-      Object.keys(ctx.draft.players),
-    );
-    ctx.draft.interaction = slotBeneathPendingPlays(ctx.draft.interaction);
-    if (ctx.draft.cardsPlayedThisTurn) {
-      ctx.draft.cardsPlayedThisTurn[owner] = (ctx.draft.cardsPlayedThisTurn[owner] ?? 0) + 1;
-    }
-    return;
-  }
-  if (cardType !== "unit" && cardType !== "gear") {
-    return;
-  }
-  // rule 355.2 / 355.4: a permanent entering from off-board goes to its
-  // player's base or any battlefield they control — their choice.
-  const destOptions = playDestinationOptions(ctx.draft, owner, cardId);
-  if (destOptions.length > 1 && !ctx.draft.pendingChoice) {
-    ctx.draft.pendingChoice = {
+  // rule 419.3 / 356.1.b — its OWNER plays it through the ONE play pipeline
+  // (Energy ignored, Power still paid; a spell needs a legal target — 355.8;
+  // an unpayable / impossible play leaves the card banished — 358.3.a).
+  beginPlay(
+    ctx as unknown as PlayIO,
+    {
       cardId,
-      options: destOptions,
-      playerId: owner as CorePlayerId,
+      costMode:
+        (effect as { ignoreEnergyCost?: boolean }).ignoreEnergyCost === false
+          ? { kind: "full" }
+          : { kind: "ignore-energy" },
+      location: "prompt",
+      playerId: owner,
       sourceCardId: ctx.sourceCardId,
-      type: "choose-destination",
-    } as NonNullable<typeof ctx.draft.pendingChoice>;
-    return;
+      via: "effect",
+    },
+    { immediate: true },
+  );
+  // rule 337.1.b / 340.1 — a spell it put on the Chain slots beneath the play
+  // items still waiting, so a later player's play (or counterspell) sees it.
+  if (ctx.draft.interaction) {
+    ctx.draft.interaction = slotBeneathPendingPlays(ctx.draft.interaction);
   }
-  enterUnitFromEffect(cardId, destOptions[0] ?? "base", { ...ctx, playerId: owner });
 }

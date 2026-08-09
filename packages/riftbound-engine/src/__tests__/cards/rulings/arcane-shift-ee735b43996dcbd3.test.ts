@@ -78,17 +78,13 @@ describe("Ruling ee735b43996dcbd3 — Arcane Shift can replay your only unit bac
       }
       await game.seat(d.seat).pass();
     }
-    const d = game.decision();
-    expect(d).toMatchObject({ kind: "pick", seat: P1 });
-    expect(game.zoneOf("atk")).toBe("banishment");
     expect(game.state("def").damage).toBe(3);
     // Fort is mid-combat and P2's: control cannot have passed to the attacker (190.4.b) …
     expect(game.gameState.battlefields.fort?.controller).toBe(P2);
-    // … so the only valid replay destination is P1's base (355.2.a).
-    const keys = (d as PickD).options.map((o) => o.key).sort();
-    expect(keys).not.toContain("battlefield-fort");
-    expect(keys).toEqual(["base"]);
-    await game.p1.pick("base");
+    // … so the only valid replay destination is P1's base (355.2.a): a single
+    // valid location is not a choice — the unit is simply played there.
+    expect(game.decision()?.kind).not.toBe("pick");
+    expect(game.zoneOf("atk")).toBe("base");
     await game.settle({ policy: "first" });
     expect(game.zoneOf("atk")).toBe("base");
     expect(game.p1.units("fort")).toEqual([]);

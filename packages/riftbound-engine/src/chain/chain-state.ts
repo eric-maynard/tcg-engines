@@ -76,6 +76,14 @@ export interface ChainItem {
    * the event's from/to zones at chain-resolution time.
    */
   readonly triggerEvent?: unknown;
+  /**
+   * rule 383.3.d — the batch of SIMULTANEOUSLY triggered abilities this item
+   * belongs to (one `fireTriggers` pass, or one multi-card leave batch whose
+   * events are published card by card). Only items sharing a batch may be
+   * reordered by their controller; items from different batches entered the
+   * Chain one after another (337.1.b), so their order is already fixed.
+   */
+  readonly triggerBatch?: string;
   /** Rule 583 (unl-021-219): "you may" trigger — controller opts in on resolve */
   readonly optional?: boolean;
   /**
@@ -90,6 +98,13 @@ export interface ChainItem {
    * is only legal when affordable, and the cost is deducted before the effect.
    */
   readonly optInCost?: unknown;
+  /**
+   * rule 392 (rule-id: ogn-289-298) — a DELAYED triggered ability floating on
+   * its controller ("… at the end of this turn"): no source object holds its
+   * choices, so its "up to N" objects are named while the item is FINALIZED
+   * (rule 402.2) rather than at resolution.
+   */
+  readonly delayed?: boolean;
   /** Whether this item was countered (skip execution on resolve) */
   readonly countered?: boolean;
   /** rule-id: ven-015-166 — "This can't be countered." (rule 544): counter attempts are refused */
@@ -295,6 +310,32 @@ export function createInteractionState(): TurnInteractionState {
     nextChainItemId: 1,
     showdownStack: [],
   };
+}
+
+/**
+ * rule 383.3.d — collapse the per-event `triggerBatch` stamps of every triggered
+ * item appended since `chainLenBefore` into ONE batch. Use it around a game step
+ * whose events are published object by object but happen simultaneously (every
+ * card of one leave batch; every Attacker/Defender designation of one combat),
+ * so their controller may still order them.
+ */
+export function collapseTriggerBatch(
+  interaction: TurnInteractionState | null | undefined,
+  chainLenBefore: number,
+): void {
+  const items = interaction?.chain?.items;
+  if (!items || items.length - chainLenBefore < 2) {
+    return;
+  }
+  const batch = items.slice(chainLenBefore).find((it) => it.triggerBatch !== undefined)?.triggerBatch;
+  if (batch === undefined) {
+    return;
+  }
+  for (let i = chainLenBefore; i < items.length; i++) {
+    if (items[i].triggered === true) {
+      items[i] = { ...items[i], triggerBatch: batch };
+    }
+  }
 }
 
 // ============================================================================

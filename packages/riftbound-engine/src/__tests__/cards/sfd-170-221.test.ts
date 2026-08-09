@@ -121,8 +121,8 @@ describe("Rek'Sai, Swarm Queen (sfd-170-221)", () => {
     const game = await board().build();
     await attack(game, true);
     await game.p1.pick("top");
-    expect(game.p1.energy()).toBe(7);
     await finishPlay(game, ["base"]);
+    expect(game.p1.energy()).toBe(7); // rule 355.2 → 357: paid once the location is chosen
     expect(game.zoneOf("top")).toBe("base");
     expect(game.state("top").isExhausted).toBe(true);
     expect(game.p1.deck()[0]).toBe("third");

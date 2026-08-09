@@ -166,6 +166,29 @@ describe("Jayce, Man of Progress (sfd-084-221)", () => {
     expect(game.p1.can("play", "seven")).toBe(false);
   });
 
+  test("'you MAY play a gear … ignoring its Energy cost' is optional: paying the gizmo in full keeps the waiver for the 7-drop", async () => {
+    // rule 356.1.b — the permission is an option, not a forced discount: both prices
+    // must be offered for a covered gear, and declining must leave it available.
+    const game = await board().build();
+    await playAndKill(game, "mask");
+    await game.p1.do("addResources", { energy: 2 });
+    const opt = game.p1.option("playGear", "cheap");
+    expect(
+      (opt?.variants ?? []).map((v) => v.params.useEnergyWaiver).sort((a, b) => String(a).localeCompare(String(b))),
+    ).toEqual([false, true]);
+    // Pay the printed 2 energy rather than burning the waiver...
+    await game.p1.playGear("cheap", { params: { useEnergyWaiver: false } });
+    await game.settle();
+    expect(game.zoneOf("cheap")).toBe("base");
+    expect(game.p1.energy()).toBe(0);
+    // ...so the 7-cost gear is still free (only its [mind] power is paid).
+    expect(game.p1.can("play", "seven")).toBe(true);
+    await game.p1.play("seven");
+    await game.settle();
+    expect(game.zoneOf("seven")).toBe("base");
+    expect(game.p1.resources()).toEqual({ energy: 0, power: { mind: 0 } });
+  });
+
   test("'a gear' — only ONE free play: after the free 7-drop, the 2-cost gizmo needs real energy again", async () => {
     const game = await board().build();
     await playAndKill(game, "mask");
@@ -177,6 +200,23 @@ describe("Jayce, Man of Progress (sfd-084-221)", () => {
     await game.p1.do("addResources", { energy: 2 });
     await game.p1.play("cheap");
     expect(game.p1.energy()).toBe(0);
+  });
+
+  test("an OVER-CAP gear played at full price doesn't touch the permission: the 8-drop is charged in full, the 7-drop is still free", async () => {
+    // rule 356.1.b — the waiver covers gear costing at most [7]; a 9/8-cost gear is
+    // outside it entirely, so paying for one must not spend the one-shot permission.
+    const game = await board({ mind: 2 }).build();
+    await playAndKill(game, "mask");
+    await game.p1.do("addResources", { energy: 8 });
+    await game.p1.play("eight");
+    await game.settle();
+    expect(game.zoneOf("eight")).toBe("base");
+    expect(game.p1.resources()).toEqual({ energy: 0, power: { mind: 1 } });
+    expect(game.p1.can("play", "seven")).toBe(true);
+    await game.p1.play("seven");
+    await game.settle();
+    expect(game.zoneOf("seven")).toBe("base");
+    expect(game.p1.resources()).toEqual({ energy: 0, power: { mind: 0 } });
   });
 
   test("'this turn' — unused, the permission lapses: free now, full 7 energy on your next turn", async () => {

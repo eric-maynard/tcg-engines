@@ -117,6 +117,15 @@ describe("Kato the Arm (sfd-112-221)", () => {
     expect(game.state("buddy").grantedKeywords).toContainEqual(expect.objectContaining({ duration: "turn", keyword: "Deflect" }));
   });
 
+  test("807.1.b.3: a copied keyword keeps its VALUE — Kato's printed [Deflect 1] lands on the buddy as Deflect 1, not a valueless keyword", async () => {
+    const game = await board().build();
+    await game.p1.move("kato", "own");
+    await resolveTrigger(game, "buddy");
+    const deflect = (game.state("buddy").grantedKeywords ?? []).find((gk) => gk.keyword === "Deflect");
+    expect(deflect).toBeDefined();
+    expect(deflect?.value).toBe(1);
+  });
+
   test("the copied Deflect is functional — this turn an opponent must pay an extra power to target the buddy (809)", async () => {
     // Expected: this turn P2 (exactly 1 energy, no power) cannot Bolt the buddy — Deflect surcharge unpaid.
     // Actual: no Deflect is copied, so the Bolt is legal.

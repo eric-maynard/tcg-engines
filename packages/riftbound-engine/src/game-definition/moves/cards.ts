@@ -10,6 +10,7 @@ import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../.
 import { withPostMoveCleanup } from "../../cleanup/post-move-cleanup";
 import { hideCard, revealHidden } from "./play/hide";
 import { playFromChampionZone } from "./play/play-champion";
+import { playFromZone } from "./play/play-from-zone";
 import { playGear } from "./play/play-gear";
 import { playSpell } from "./play/play-spell";
 import { playUnit } from "./play/play-unit";
@@ -34,4 +35,6 @@ export const cardPlayMoves: Partial<
   // maintenance and the loose gear would linger there (rule 518 recall).
   ...withPostMoveCleanup({ revealHidden }),
   playFromChampionZone,
+  // rule 366.1 / 419.1.a — plays a permission makes legal from another zone.
+  playFromZone,
 };

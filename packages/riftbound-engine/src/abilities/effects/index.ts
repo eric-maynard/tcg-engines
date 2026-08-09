@@ -33,6 +33,7 @@ import { handle_empower } from "./empower";
 import { handle_replacement } from "./replacement";
 import { handle_heal } from "./heal";
 import { handle_grantFlow } from "./grant-flow";
+import { handle_grantPlayPermission } from "./grant-play-permission";
 import { handle_grantKeyword } from "./grant-keyword";
 import { handle_grantKeywords } from "./grant-keywords";
 import { handle_addResource } from "./add-resource";
@@ -123,6 +124,7 @@ export const EFFECT_HANDLERS: Record<string, EffectHandler> = {
   "replacement": handle_replacement,
   "heal": handle_heal,
   "grant-flow": handle_grantFlow,
+  "grant-play-permission": handle_grantPlayPermission,
   "grant-keyword": handle_grantKeyword,
   "grant-keywords": handle_grantKeywords,
   "add-resource": handle_addResource,

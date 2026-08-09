@@ -28,6 +28,7 @@ import type { CardId as CoreCardId, PlayerId as CorePlayerId, ZoneId as CoreZone
 import type { GameEvent } from "../abilities/game-events";
 import { fireTriggers, type TriggerRunnerContext } from "../abilities/trigger-runner";
 import {
+  collapseTriggerBatch,
   createInteractionState,
   getActiveShowdown,
   getTurnState,
@@ -245,6 +246,10 @@ function assignCombatRoles(
   defenders: readonly string[],
 ): void {
   const occupants = [...attackers, ...defenders];
+  // rule 464.2.c.3 / 383.3.d — all designations of one combat happen at once, so
+  // the abilities they trigger are simultaneous even though each unit publishes
+  // its own "attack" / "defend" event.
+  const chainLenBefore = io.draft.interaction?.chain?.items.length ?? 0;
   const roleOf = (id: string) => metaOf(io, id)?.combatRole;
   const getMeta = (id: CoreCardId) => metaOf(io, id as string);
   const stamp = (id: string, role: "attacker" | "defender", owner: string): boolean => {
@@ -290,6 +295,7 @@ function assignCombatRoles(
       type: "defend",
     } as GameEvent);
   }
+  collapseTriggerBatch(io.draft.interaction, chainLenBefore);
 }
 
 export interface BeginOptions {

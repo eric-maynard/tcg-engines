@@ -445,7 +445,7 @@ describe("resolvePendingChoice move", () => {
   });
 
   // rule-id: ogn-062-298-look-banish-play (Reinforce)
-  it("onPicked play: banishes the pick, pays cost less the reduction, and finalizes the play onto the board", () => {
+  it("onPicked play: banishes the pick, recycles the rest, and queues the play as a Pending Item (354.2) priced with the reduction", () => {
     registry.register("rp-big-unit", {
       cardType: "unit",
       energyCost: 7,
@@ -460,20 +460,22 @@ describe("resolvePendingChoice move", () => {
       onPicked: "play",
       onRest: "recycle",
       playEnergyReduction: 5,
-      playImmediate: true,
       prompter: "p1",
       revealed: ["rp-spell", "rp-big-unit"],
       revealer: "p1",
       type: "reveal-and-pick",
     };
     const moves: { cardId: string; targetZoneId: string; position?: string }[] = [];
+    const zoneOf = new Map<string, string>();
     const context = {
       cards: { getCardOwner: () => "p1" },
       counters: { clearAllCounters: () => {} },
       params: { pickedCardId: "rp-big-unit", playerId: "p1" },
       zones: {
+        getCardZone: (id: string) => zoneOf.get(id),
         moveCard: (p: { cardId: string; targetZoneId: string; position?: string }) => {
           moves.push(p);
+          zoneOf.set(p.cardId, p.targetZoneId);
         },
       },
     };
@@ -484,10 +486,15 @@ describe("resolvePendingChoice move", () => {
     expect(moves[0]).toMatchObject({ cardId: "rp-big-unit", targetZoneId: "banishment" });
     expect(moves.some((m) => m.targetZoneId === "hand")).toBe(false);
     expect(moves[1]).toMatchObject({ cardId: "rp-spell", position: "bottom", targetZoneId: "mainDeck" });
-    expect(state.runePools.p1?.energy).toBe(2);
-    // rule 337.1.b / 337.2: the pending play finalizes at once — the unit
-    // enters the board rather than waiting as a chain item.
-    expect(moves[moves.length - 1]).toMatchObject({ cardId: "rp-big-unit", targetZoneId: "base" });
+    // rule 354.2 / 354.3 — the play is a Pending Item on the chain (its player's
+    // location / cost dialog and the payment run when it is finalized by the
+    // move wrapper, not inside the pick); the card waits in banishment (108.6.c).
+    const items = state.interaction?.chain?.items ?? [];
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({ cardId: "rp-big-unit", controller: "p1", status: "pending", type: "permanent" });
+    expect((items[0] as { play?: { costMode?: unknown } }).play?.costMode).toEqual({ energy: 5, kind: "reduce" });
+    expect(zoneOf.get("rp-big-unit")).toBe("banishment");
+    expect(state.runePools.p1?.energy).toBe(4);
     expect(state.pendingChoice).toBeUndefined();
   });
 
@@ -573,7 +580,10 @@ describe("resolvePendingChoice move", () => {
     // rule-id: sfd-200-221 — Arcane Shift: banish FRIENDLY, play it, deal 3
     // to the ENEMY, banish THIS. Bound [friendly, enemy] must not banish both
     // nor damage the friendly, and "Banish this" hits the spell itself.
-    const { ctx, draft, zoneOf } = buildMockCtx({ opponentHand: [] });
+    const { ctx, draft, zoneOf } = buildMockCtx({
+      cardTypes: { enemy: "unit", friendly: "unit" },
+      opponentHand: [],
+    });
     zoneOf.set("friendly", "battlefield-bf1");
     zoneOf.set("enemy", "battlefield-bf1");
     zoneOf.set("source-spell", "chain");

@@ -18,6 +18,8 @@ const FILLER = "ogn-175-298"; // Shipyard Skulker, a vanilla 3-Might unit
 const THREE = { cardType: "unit", energyCost: 3, might: 3, name: "Three" };
 const FOUR = { cardType: "unit", energyCost: 4, might: 4, name: "Four" };
 const ONE = { cardType: "unit", energyCost: 1, might: 1, name: "One" };
+const SENTRY = "ogn-096-298"; // Watchful Sentry — [Deathknell]: Draw 1 (Might 1)
+const TEEMO = "ogn-197-298"; // Teemo, Scout — When you play me, give me +3 Might
 
 function board(res = { energy: 1, power: { order: 1 } }, gearMeta?: { exhausted?: boolean }) {
   return scenario()
@@ -103,5 +105,34 @@ describe("Baited Hook (ogn-242-298)", () => {
     expect(deck[0]).toBe("sixth");
     expect(deck.slice(-4)).toEqual(expect.arrayContaining(["four", "sk1", "one", "sk2"]));
     expect(deck).not.toContain("three");
+  });
+
+  // rule 383.3.d — the killed Sentry's [Deathknell] and the play-self trigger of
+  // the unit Baited Hook goes on to play answer DIFFERENT events, so they were
+  // never simultaneous: the chain order is fixed (Teemo on top, resolves first)
+  // and no ordering question is asked.
+  test("a Deathknell from the kill and the played unit's play trigger are not simultaneous — no order prompt", async () => {
+    const game = await scenario()
+      .resources(P1, { energy: 1, power: { order: 1 } })
+      .gear(P1, CARD, "hook")
+      .unit(P1, "base", SENTRY, "sentry")
+      .deck(P1, [TEEMO, FILLER, FILLER, FILLER, FILLER, FILLER], [
+        "teemo",
+        "f1",
+        "f2",
+        "f3",
+        "f4",
+        "sixth",
+      ])
+      .build();
+    await game.p1.activate("hook", 0, { targets: "sentry" });
+    await game.settle();
+    await game.p1.pick("teemo");
+    expect(game.decision()?.kind).not.toBe("order");
+    await game.settle();
+    expect(game.decision()?.kind).not.toBe("order");
+    expect(game.zoneOf("teemo")).toBe("base");
+    // Deathknell resolved last: exactly one card drawn, and it is the 6th card.
+    expect(game.p1.hand()).toEqual(["sixth"]);
   });
 });

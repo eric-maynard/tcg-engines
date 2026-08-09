@@ -90,6 +90,36 @@ describe("Icathian Rain (ogn-248-298)", () => {
     expect(game.state("c").damage).toBe(2);
   });
 
+  test("355.9.a.1: a unit an earlier instance already killed is not offered to a later instance's choose-target prompt", async () => {
+    const game = await scenario()
+      .resources(P1, { energy: 7, power: { rainbow: 3 } })
+      .battlefield("bf1", { controller: P2 })
+      .unit(P1, "base", { might: 2, name: "Weak" }, "weak")
+      .unit(P2, "bf1", { might: 20 }, "a")
+      .unit(P2, "base", { might: 20 }, "b")
+      .hand(P1, CARD, "rain")
+      .build();
+    await game.p1.cast("rain", { targets: ["weak", "a"] });
+    let firstPrompt: string[] | undefined;
+    let deadAtPrompt: string | undefined;
+    for (let i = 0; i < 20; i++) {
+      const d = game.decision();
+      if (d?.kind === "action" && d.context === "chain") {
+        await game.acting().pass();
+      } else if (d?.kind === "pick" && d.seat === P1) {
+        if (firstPrompt === undefined) {
+          firstPrompt = d.options.map((o) => o.card ?? o.key);
+          deadAtPrompt = game.zoneOf("weak");
+        }
+        await game.p1.pick("b");
+      } else {
+        break;
+      }
+    }
+    expect(deadAtPrompt).toBe("trash"); // the 2-Might unit died to the first instance
+    expect(firstPrompt).not.toContain("weak"); // …so it is no longer a legal choice
+  });
+
   test("no [Action]/[Reaction]: not castable on the opponent's turn", async () => {
     const oppTurn = await board().active(P2).build();
     expect(oppTurn.p1.can("cast", "rain")).toBe(false);

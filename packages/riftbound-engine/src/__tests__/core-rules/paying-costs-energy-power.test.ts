@@ -540,6 +540,9 @@ describe("'Ignoring its cost' zeroes the base cost only; a chosen optional addit
     // The attack trigger is on the chain; P1 then P2 may respond.
     expect(decisionOf(game)?.context).toBe("chain");
     expect(decisionOf(game)?.seat).toBe(P1);
+    // rule 128.6 — a play out of a private zone naming a card type is the
+    // player's to make: pick L (declinable), then decline the Accelerate offer.
+    game.script(P1, ["L", "no"]);
     await game.settle();
     expect(game.zoneOf("L")).toBe("battlefield-bf1");
     expect(game.state("L").isExhausted).toBe(true);

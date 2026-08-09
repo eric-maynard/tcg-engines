@@ -84,7 +84,7 @@ describe("Power Nexus (sfd-214-221)", () => {
   // 'yes' becomes acceptable, the four Power are spent and P1 scores a second point. Actual: only "[Exhaust]: Add [1]"
   // is offered during the prompt (`recycleRune` is refused under every pending choice), so the Nexus can never be paid
   // on the natural line.
-  test.failing("BUG: core line — recycle four runes during the pay prompt (164.2.b/429.3), accept → 4 Power spent, 2 points, one rune left in the pool", async () => {
+  test("core line — recycle four runes during the pay prompt (164.2.b/429.3), accept → 4 Power spent, 2 points, one rune left in the pool", async () => {
     const game = await aboutToHold().build();
     await holdAndGetPrompt(game);
     expect(game.p1.legal().some((o) => o.verb === "recycleRune")).toBe(true);
@@ -99,7 +99,9 @@ describe("Power Nexus (sfd-214-221)", () => {
     await game.settle();
     expect(game.phase()).toBe("main");
     expect(game.p1.points()).toBe(2);
-    expect(game.p1.runes()).toHaveLength(1);
+    // One rune is left in the pool. Rule 594 put the four recycled runes on the bottom of the
+    // (empty) Rune Deck, so the Channel Step after the Beginning Phase channels 2 of them back.
+    expect(game.p1.runes()).toHaveLength(3);
     expect(game.violations()).toEqual([]);
   });
 
@@ -186,7 +188,7 @@ describe("Power Nexus (sfd-214-221)", () => {
   // BUG — same root cause as the core line (no way to Add Power during the prompt). Expected: from 6 points the hold
   // makes 7 and the paid Nexus point makes 8 = the Victory Score; a non-conquer point is not subject to the Final
   // Point restriction (471.1.a.1), so P1 wins on the spot.
-  test.failing("BUG: from 6 points — hold (7), recycle four and pay (8) → P1 wins the game with a non-conquer final point (471.1.a.1)", async () => {
+  test("from 6 points — hold (7), recycle four and pay (8) → P1 wins the game with a non-conquer final point (471.1.a.1)", async () => {
     const game = await aboutToHold({ points: 6 }).build();
     await holdAndGetPrompt(game);
     expect(game.p1.points()).toBe(7);

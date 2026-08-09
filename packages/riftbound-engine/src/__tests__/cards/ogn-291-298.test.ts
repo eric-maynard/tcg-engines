@@ -80,18 +80,22 @@ describe("The Candlelit Sanctum (ogn-291-298)", () => {
     expect(game.violations()).toEqual([]);
   });
 
-  test("recycle none: declining leaves both cards on top in their original order and ends the effect", async () => {
+  test("recycle none: declining keeps both cards on top — the arrangement (386.2) may repeat their original order", async () => {
     const game = await walkIn().build();
     await game.p1.move("walker", "bf1");
     await game.settle();
     await game.p1.decline();
+    // rule 386.2 — "put those you don't back in any order": keeping both opens
+    // the arrangement; answering with the order they were in is legal.
+    expect(game.decision()?.kind).toBe("order");
+    await game.p1.order(["c1", "c2"]);
     await game.settle();
     expect(game.decision()?.kind).toBe("action");
     expect(game.p1.deck().slice(0, 3)).toEqual(["c1", "c2", "c3"]);
     expect(game.p1.hand()).toEqual([]);
   });
 
-  test.failing("BUG: 'one or both' — the prompt only accepts a single card, so both looked-at cards cannot be recycled", async () => {
+  test("'one or both' — both looked-at cards can be recycled in one answer", async () => {
     // Expected: a 0..2 pick (or two successive prompts) so that c1 AND c2 end at the bottom and c3 becomes the top card.
     // Actual: the reveal-and-pick prompt has max 1 and a two-key answer is rejected.
     const game = await walkIn().build();
@@ -105,7 +109,7 @@ describe("The Candlelit Sanctum (ogn-291-298)", () => {
     expect(game.p1.deck().slice(-2).sort()).toEqual(["c1", "c2"]);
   });
 
-  test.failing("BUG: 'put those you don't back in any order' — keeping both offers no way to put c2 above c1", async () => {
+  test("'put those you don't back in any order' — keeping both lets P1 put c2 above c1", async () => {
     // Expected: after choosing to recycle neither, P1 arranges the two kept cards (deck-arrange / order prompt) → c2 can be made the top card.
     // Actual: declining the recycle ends the effect with the original order; no arrange step exists.
     const game = await walkIn().build();

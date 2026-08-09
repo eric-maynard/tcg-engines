@@ -430,9 +430,53 @@ prompt — reuse the `opt-in` pattern (`die-replacement-batch.ts offerOptionalSh
   that battlefield). Orphan facedown cards trashed in `performCleanup` step 4.
 - Leaving the board: kill path in `performCleanup` resets buffed/damage/exhausted/stunned/grantedKeywords/mightModifier and
   detaches equipment; `effects/return-to-hand.ts bounceToHand` resets too; `effects/banish.ts` → `banishment`;
-  `effects/recall.ts` → base (keeps state, no `move` event). Play by effect: `effects/play.ts handle_play` (adds a pending
-  chain item / places the card; cost handling inside), `reveal-and-pick onPicked:"play"` in `pending-choice.ts`, Flow via
-  `play-spell.ts viaFlow`, Deathknell "play me from trash" uses `draft.recentDeaths` (dispatcher).
+  `effects/recall.ts` → base (keeps state, no `move` event).
+- PLAYS — ONE pipeline, `E/game-definition/moves/play/play-pipeline.ts` (rules 354–359 / 419):
+  - `enterPlayedPermanent(io, {cardId, playerId(performer), entryZone, via, from?, paidIds, entersReady, stun, stagedBy})`
+    is the ONLY enter step for units/gear, used by the `playUnit/playGear/playFromChampionZone/revealHidden` reducers AND
+    every effect play: battlefield-token entry replacement, fresh object (`leave-board.ts resetObjectState`, 124.1) when
+    played from trash/banishment/deck, controller := performer (191.1), enters exhausted unless enters-ready
+    replacement / static / paid Accelerate (143.4), `recordAdditionalCostsPaid`, `play-self`+`play-card` fired ONCE with
+    `via` (`hand|effect|permission|hidden|champion|replay`) + `from` (origin zone), Legion count + `notePlayThisTurn`,
+    arrival contest (`noteArrival`, discretionary iff hand/champion/hidden/permission), [Weaponmaster]/[Quick-Draw].
+    Spells an effect plays: `putPlayedSpellOnChain` (`castSpellFromTrash` is a thin alias).
+  - `beginPlay(io, EffectPlaySpec {cardId, playerId, via, costMode {full|ignore-all|ignore-energy|ignore-power|
+    ignore-any-and-all|reduce{energy}|fixed{energy,power}}, location? "prompt"|"same-as-lki"|{fixed}|{only}|{extra},
+    declinable?, sourceCardId, stagedBy, stun, then?, recycleAfter}, {immediate?})` = a play an EFFECT instructs (419.3):
+    `canPerformEffectPlay` gate (419.2.a: affordable under the mode, mandatory additional cost payable, spell has a legal
+    target, some legal location) → declinable ⇒ `opt-in {playConfirmSpec}` first (128.6) → the card becomes a Pending Item
+    on the chain (`type:"permanent"|"spell"`, `status:"pending"`, `play:{…progress}`; a card from a PRIVATE zone waits in
+    the `chain` zone, one in trash/banishment waits there) → the move wrapper's `trigger-finalization.ts
+    finalizePendingItems` (oldest pending first, 337.1.b; items blocked by `finalizeAfter` are skipped) calls
+    `continueEffectPlay`: location prompt to the PERFORMER (`choose-destination {playItemId}`; a single legal location is
+    auto) → mandatory additional cost object (`choose-target {playItemId, playCostId}`, 356.2.a.1 — required under ANY
+    cost mode) → optional additional resource cost offer (`opt-in {playItemId, playCostId, resolved.optInCost}` —
+    printed/granted Accelerate or "you may pay", 355.1.a / 356.1.b.3; free under any-and-all 356.5.a) → pay
+    (`computePlayResourceCost`+`payResourceCost`, then the cost kill/bounce via its effect) → item leaves the chain →
+    `enterPlayedPermanent` / `putPlayedSpellOnChain` → `then` (played card bound, `triggerSourceId`) → `cleanupAndFireDeaths`.
+    Answers are written back by `pending-choice.ts` (`recordEffectPlayAnswer`) and the wrapper re-enters. `{immediate:true}`
+    continues at once when nothing older is pending (used by permission plays / accepted confirms); default = after the
+    enclosing effect finishes (354.3).
+  - Producers: `effects/play.ts handle_play` — A "play me" (`target self`; no cost fields ⇒ free: the trigger paid; `cost` ⇒
+    fixed 356.1.a; `optional` ⇒ declinable), B "play a X from your trash/banishment" (`offerPileCandidates` → `reveal-and-pick
+    {onPicked:"play", playSpec}`; filters: type, printed-cost bounds 206, tags, `linkedToSource`, killed-unit caps; Kharox
+    reads THEIR trash), C "from your hand" (private ⇒ declinable pick even for one candidate), D explicit/bound targets ("banish
+    it, then its OWNER plays it" — performer = owner unless `player:"controller"`; `toLocation:"same"` ⇒ `same-as-lki`).
+    `pending-choice.ts` reveal-and-pick `onPicked:"play"` (look.ts / reveal.ts / reveal-hand.ts legacy fields `playTo/playStun/
+    playIgnoreCost/playIgnoreEnergy/playEnergyReduction/playHere/playRecycleAfter` or an explicit `playSpec`) → `playSpecFromChoice`
+    → `beginPlay` (Bone Skewer `playTo` ⇒ performer = OWNER, `ignore-any-and-all`, stunned, `stagedBy` caster); the pick's `then`
+    rides on the play; a `then:{type:"optional"}` follow-up (ven-089) is its own chain item decided at resolution.
+    `play-banished-pass.ts` (Promising Future) → `beginPlay` per card. Flow stays `play-spell.ts viaFlow`; tokens stay `create-token.ts`.
+  - PERMISSIONS (366.1 / 419.1.a): `E/operations/play-permissions.ts` — `draft.playPermissions[]` runtime grants
+    (`grantPlayPermission`, effect `grant-play-permission {target, zone?, duration turn|permanent, cost?, ignoreCost?, player?,
+    once?}`; turn grants lapse by `grantedOnTurn`) + standing ones derived on read (`hasPlayFromTrashGrant` board static →
+    `static-board`; `self-trash-play.ts getSelfTrashPlayCost` → `static-self`); `collectPlayPermissions/permissionsForCard`.
+    Move `moves/play/play-from-zone.ts playFromZone {cardId, permissionId?}` (harness `p1.playFrom(card, {answers})`,
+    verb `playFrom`) enumerates runtime + non-trash permissions (static trash ones are still served by playUnit/playSpell/
+    playGear's own trash handling), gates timing like the card type, and plays via `beginPlay(via:"permission", immediate)`.
+  - Tests: `core-rules/play-pipeline.test.ts` (via × costMode matrix, 337.1.b two pending plays), `core-rules/play-permissions.test.ts`.
+    HARNESS: an effect play now asks, in order: [pick the card] → destination (only if ≥2 legal) → [mandatory cost object] →
+    [yes/no optional cost, only when payable] — answer with `pick()/yes()/no()` or `{answers:[…]}` on the triggering verb.
 
 ## 11. Parser quick map (`C/parser/`)
 - `index.ts parseAbilities` → `impl/normalize.ts normalizeTokens/stripReminders` (`[2]`→`:rb_energy_2:`, `[fury]`→
@@ -517,3 +561,6 @@ prompt — reuse the `opt-in` pattern (`die-replacement-batch.ts offerOptionalSh
   `bun test packages/riftbound-engine/src/__tests__/cards 2>&1 | grep -B3 'marked as failing but it passed'`.
 - Scratch files only under `packages/riftbound-engine/src/__tests__/cards/do_not_commit/`.
 - Never revert/reformat other lanes' in-flight edits; keep condition↔enumerator and `canAffordCard`↔`deductCost` pairs in sync.
+
+## Held-out data
+`packages/riftbound-cards/src/data/rulings/test.json` (and the test-split entries inside all-rulings.json) are a HELD-OUT benchmark. Never read them, never write tests from them, never use them to motivate an engine change. Discovery/writers use train.json only.

@@ -142,7 +142,8 @@ describe("Arcane Shift × Possession-stolen Thousand-Tailed Watcher — 'its own
     expect(d?.seat).toBe(P2);
     expect(game.state("victim").damage).toBe(3);
     expect(game.zoneOf("shift")).toBe("banishment");
-    expect(game.chain()).toEqual([]);
+    // rule 354.2 — only the Watcher's own pending play is left on the chain.
+    expect(game.chain().map((c) => c.cardId)).toEqual(["watcher"]);
   });
 
   test("(b) P2 plays it to bf2 without Accelerate: it arrives exhausted, undamaged, controlled AND owned by P2 — Possession's control change is gone (143.4, 124.1, 191.1)", async () => {
@@ -215,7 +216,8 @@ describe("Arcane Shift × Possession-stolen Thousand-Tailed Watcher — 'its own
     expect(game.zoneOf("ownWatcher")).toBe("banishment");
     expect(game.state("victim").damage).toBe(3);
     expect(game.zoneOf("shift")).toBe("banishment");
-    expect(game.chain()).toEqual([]);
+    // rule 354.2 — only the Watcher's own pending play is left on the chain.
+    expect(game.chain().map((c) => c.cardId)).toEqual(["ownWatcher"]);
   });
 
   test("(d) own Watcher: valid destinations are P1's base or a battlefield P1 controls — including 'home', the one it just left — and not P2's bf2 (355.2.a)", async () => {

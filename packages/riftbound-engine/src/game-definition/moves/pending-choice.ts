@@ -24,7 +24,6 @@ import type { EffectContext, ExecutableEffect } from "../../abilities/effect-exe
 import { locationKeyOf } from "../../abilities/effects/choose-per-location";
 import { markContestedOnArrival } from "../../abilities/effects/move";
 import { isBlockedByTwoOtherPlayers } from "./movement/helpers";
-import { castSpellFromTrash } from "../../abilities/effects/play";
 import { contestBattlefieldOnArrival } from "./movement/contest-arrival";
 import { openPendingContestedShowdown } from "./chain/showdown";
 import { hasTrashToBanishReplacement } from "../../abilities/replacement-effects";
@@ -56,17 +55,19 @@ import {
 } from "./chain/resolve";
 import { equipCostForTarget } from "./equip-cost";
 import { completeSuspendedPlay } from "./play/play-unit";
-import { offerWeaponmasterEquip } from "./play/weaponmaster";
-import { enterPlayedPermanent, playDestinationOptions } from "./play/play-pipeline";
+import {
+  beginPlay,
+  canPerformEffectPlay,
+  type EffectPlaySpec,
+  recordEffectPlayAnswer,
+} from "./play/play-pipeline";
 import {
   type CostExtras,
   canPayResourceCost,
   computePlayResourceCost,
   createMetaAccessor,
-  discountOptionalPlayCost,
   getCardEffectiveMight,
   getDeflectSurcharge,
-  getOptionalPlayCost,
   getPotentialRuneEnergy,
   payResourceCost,
 } from "./play/cost";
@@ -283,92 +284,6 @@ function enumerateSplitAllocations(
   out.sort((a, b) => Object.keys(a).length - Object.keys(b).length);
   out.push({});
   return out;
-}
-
-/**
- * rule-id: sfd-109-221 (rule 356.1.b.3 / 560) — a pending "play it, ignoring
- * its cost" finalized via choose-destination is still a play: the unit's
- * optional "you may pay X as an additional cost" may be paid. Returns that
- * cost when `choice` is such a play (card entering the board from off-board)
- * and its controller can pay it from their pool right now.
- */
-function pendingPlayOptionalCost(
-  state: RiftboundGameState,
-  choice: PendingChoice,
-  // biome-ignore lint/suspicious/noExplicitAny: move context bag is framework-typed
-  context: any,
-): { energy: number; power: readonly string[] } | undefined {
-  if (choice.type !== "choose-destination" || choice.created) {
-    return undefined;
-  }
-  const from = context.zones?.getCardZone?.(choice.cardId as CoreCardId) as string | undefined;
-  if (from === undefined || isBoardZone(from)) {
-    return undefined;
-  }
-  const optional = getOptionalPlayCost(choice.cardId as string);
-  if (optional?.kind !== "pay" || (optional.cost?.xp ?? 0) > 0) {
-    return undefined;
-  }
-  const cost = { energy: optional.cost?.energy ?? 0, power: optional.cost?.power ?? [] };
-  return canPayOptInCost(state, choice.playerId, choice.cardId as string, cost, {
-    counters: context.counters ?? {},
-  })
-    ? cost
-    : undefined;
-}
-
-/**
- * rule 356.2.b.1 (rule-id: sfd-200-221-accelerate-on-free-replay) — a unit an
- * effect made someone play (Arcane Shift's "its owner plays it, ignoring its
- * cost") entered exhausted (rule 143.4); its [Accelerate] cost is an optional
- * additional cost of THAT play, so its player is offered the opt-in now and
- * paying readies it. Skipped when it is already ready, unpayable, or another
- * prompt is pending.
- */
-function maybeOfferAccelerate(
-  draft: RiftboundGameState,
-  cardId: string,
-  playerId: string,
-  // biome-ignore lint/suspicious/noExplicitAny: move context bag is framework-typed
-  context: any,
-): void {
-  if (draft.pendingChoice) {
-    return;
-  }
-  if (getGlobalCardRegistry().get(cardId)?.cardType !== "unit") {
-    return;
-  }
-  if (context.counters?.getFlag?.(cardId as CoreCardId, "exhausted") !== true) {
-    return;
-  }
-  const optional = getOptionalPlayCost(cardId);
-  if (optional?.kind !== "accelerate") {
-    return;
-  }
-  const printed = { energy: optional.cost?.energy ?? 0, power: optional.cost?.power ?? [] };
-  if (printed.energy === 0 && printed.power.length === 0) {
-    return;
-  }
-  // rule 356.4.c (sfd-149-221): friendly "optional additional costs you pay
-  // cost [1] or [rainbow] less" statics shave this cost before it is offered.
-  const board =
-    context.cards && context.zones ? { cards: context.cards, zones: context.zones } : undefined;
-  const cost = discountOptionalPlayCost(draft, playerId, printed, board) ?? printed;
-  if (!canPayOptInCost(draft, playerId, cardId, cost, { counters: context.counters ?? {} })) {
-    return;
-  }
-  draft.pendingChoice = {
-    playerId,
-    resolved: {
-      cardId,
-      controller: playerId,
-      effect: { type: "enter-ready" },
-      optInCost: cost,
-      type: "ability",
-    },
-    sourceCardId: cardId,
-    type: "opt-in",
-  } as typeof draft.pendingChoice;
 }
 
 /**
@@ -1095,38 +1010,86 @@ export function isAffordablePlayPick(
   cardId: string,
   context?: { cards: unknown; zones: unknown },
 ): boolean {
-  if (choice.type !== "reveal-and-pick" || choice.onPicked !== "play" || choice.playTo !== undefined) {
+  if (choice.type !== "reveal-and-pick" || choice.onPicked !== "play") {
     return true;
   }
-  if (choice.playIgnoreCost || state.runePools[choice.prompter] === undefined) {
+  // Minimal unit-test contexts (no board accessors) cannot price anything.
+  const zones = context?.zones as { getCardsInZone?: unknown; getCardZone?: unknown } | undefined;
+  if (typeof zones?.getCardsInZone !== "function" || typeof zones?.getCardZone !== "function") {
     return true;
   }
-  // A spell "played" from the trash is cast through its own path (castSpellFromTrash).
-  if (choice.playFrom === "trash" && getGlobalCardRegistry().getCardType(cardId) === "spell") {
-    return true;
-  }
-  const cards = context?.cards as
-    | { getCardOwner?: unknown; getCardMeta?: (id: CoreCardId) => unknown }
-    | undefined;
-  const zones = context?.zones as { getCardsInZone?: unknown } | undefined;
-  const hasBoard = typeof zones?.getCardsInZone === "function" && typeof cards?.getCardOwner === "function";
-  const extras: CostExtras = {
-    ...(hasBoard ? { board: { cards: context?.cards, zones: context?.zones } as CostExtras["board"] } : {}),
-    ...(choice.playIgnoreEnergy ? { ignoreEnergyCost: true } : {}),
-    ...((choice.playEnergyReduction ?? 0) > 0
-      ? { additionalCost: { energy: -(choice.playEnergyReduction ?? 0) } }
-      : {}),
-  };
-  const meta =
-    typeof cards?.getCardMeta === "function"
-      ? createMetaAccessor(cards as { getCardMeta: (id: CoreCardId) => unknown })
-      : undefined;
-  return canPayResourceCost(
-    state,
-    choice.prompter,
-    cardId,
-    computePlayResourceCost(state, choice.prompter, cardId, extras, meta, false),
+  return canPerformEffectPlay(
+    { cards: context?.cards, counters: undefined, draft: state, zones: context?.zones } as never,
+    playSpecFromChoice(state, choice, cardId, context as { cards: { getCardOwner?: (id: CoreCardId) => unknown } }),
   );
+}
+
+/**
+ * rule 419.3 — the play bundle a `reveal-and-pick { onPicked: "play" }` prompt
+ * stands for, for the picked `cardId`: an explicit `playSpec` from the
+ * producer, or the legacy fields (`playTo` = the OWNER plays it there
+ * "ignoring any and all costs", stunned if `playStun` — unl-139-219;
+ * `playIgnoreCost` / `playIgnoreEnergy` / `playEnergyReduction` = the cost
+ * mode; `playHere` = an extra valid location — sfd-170-221; `playRecycleAfter`).
+ */
+export function playSpecFromChoice(
+  state: RiftboundGameState,
+  choice: PendingChoice,
+  cardId: string,
+  context?: { cards?: { getCardOwner?: (id: CoreCardId) => unknown } },
+): EffectPlaySpec {
+  const c = choice as PendingChoice & {
+    playSpec?: Omit<EffectPlaySpec, "cardId">;
+    playTo?: string;
+    playStun?: boolean;
+    playIgnoreCost?: boolean;
+    playIgnoreEnergy?: boolean;
+    playEnergyReduction?: number;
+    playHere?: string;
+    playRecycleAfter?: boolean;
+    prompter: string;
+    revealer?: string;
+    sourceCardId?: string;
+    then?: unknown;
+  };
+  const followUp = c.then as { type?: string } | undefined;
+  // "…play it. Then / If you do, …" (or the rest of the sequence this pick
+  // suspended) runs after the play; a "you may do this" follow-up
+  // (ven-089-166) is a reflexive item of its own instead.
+  const then = followUp !== undefined && followUp.type !== "optional" ? { then: c.then } : {};
+  if (c.playSpec) {
+    return { ...c.playSpec, cardId, ...(c.playSpec.then === undefined ? then : {}) };
+  }
+  if (c.playTo !== undefined) {
+    const owner = (context?.cards?.getCardOwner?.(cardId as CoreCardId) as string | undefined) ?? c.revealer ?? c.prompter;
+    return {
+      cardId,
+      costMode: { kind: "ignore-any-and-all" },
+      location: { fixed: c.playTo },
+      playerId: owner,
+      sourceCardId: c.sourceCardId,
+      stagedBy: c.prompter ?? c.revealer,
+      via: "effect",
+      ...(c.playStun === true ? { stun: true } : {}),
+      ...then,
+    };
+  }
+  return {
+    cardId,
+    costMode: c.playIgnoreCost
+      ? { kind: "ignore-all" }
+      : c.playIgnoreEnergy
+        ? { kind: "ignore-energy" }
+        : (c.playEnergyReduction ?? 0) > 0
+          ? { energy: c.playEnergyReduction, kind: "reduce" }
+          : { kind: "full" },
+    location: c.playHere !== undefined ? { extra: [c.playHere] } : "prompt",
+    playerId: c.prompter,
+    sourceCardId: c.sourceCardId,
+    via: "effect",
+    ...(c.playRecycleAfter === true ? { recycleAfter: true } : {}),
+    ...then,
+  };
 }
 
 /**
@@ -1160,45 +1123,6 @@ export function pickDefaultForChoice(choice: PendingChoice): string | number | u
     return undefined;
   }
   return choice.revealed.find((id) => isValidPendingPick(choice, id));
-}
-
-/**
- * rule 337.1.b / 337.2 / 354.3 (ogn-242-298 Baited Hook) — finalize a pending
- * play an effect created ("banish a unit from among them and play it"): the
- * card's player picks its location and the unit enters the board immediately,
- * firing its play triggers on top of the chain. Returns true when a location
- * prompt was parked (the caller must stop and wait for the answer).
- */
-function finalizePendingPlay(
-  draft: RiftboundGameState,
-  // biome-ignore lint/suspicious/noExplicitAny: move context bag is framework-typed
-  context: any,
-  play: { cardId: string; playerId: string; sourceCardId?: string; then?: unknown },
-): boolean {
-  // rule 355.2 / 355.4: base, or any battlefield this player controls.
-  const destOptions = playDestinationOptions(draft, play.playerId, play.cardId);
-  if (destOptions.length > 1) {
-    draft.pendingChoice = {
-      cardId: play.cardId,
-      options: destOptions,
-      playerId: play.playerId,
-      sourceCardId: play.sourceCardId,
-      ...(play.then !== undefined ? { then: play.then } : {}),
-      type: "choose-destination",
-    } as RiftboundGameState["pendingChoice"];
-    return true;
-  }
-  // Guarded so unit-test stubs that omit the full context bags don't crash.
-  if (!context.cards || !context.counters || typeof context.zones.getCardsInZone !== "function") {
-    context.zones.moveCard({ cardId: play.cardId as CoreCardId, targetZoneId: "base" as CoreZoneId });
-    return false;
-  }
-  // rule 419.4.a / 359.2 — a card played by an effect is still played: the ONE enter path.
-  enterPlayedPermanent(
-    { cards: context.cards, counters: context.counters, draft, zones: context.zones },
-    { cardId: play.cardId, entryZone: destOptions[0] ?? "base", playerId: play.playerId, via: "effect" },
-  );
-  return false;
 }
 
 /**
@@ -1427,14 +1351,6 @@ export const pendingChoiceMoves: Partial<
       }
       if (choice.type === "choose-destination") {
         if (choice.playerId !== context.params.playerId) {
-          return false;
-        }
-        // rule-id: sfd-109-221 (rule 356.1.b.3) — paying the optional
-        // additional cost on a pending play is only legal when payable.
-        if (
-          context.params.paidAdditionalCost === true &&
-          !pendingPlayOptionalCost(state, choice, context)
-        ) {
           return false;
         }
         // rule-id: ogn-262-298 (rule 355.13) — "You may move …": declining the
@@ -1667,20 +1583,15 @@ export const pendingChoiceMoves: Partial<
         if (choice.playerId !== (context.playerId as string)) {
           return [];
         }
-        // rule-id: sfd-109-221 (rule 356.1.b.3 / 560) — a pending "play it,
-        // ignoring its cost" still offers the unit's optional additional cost.
-        const payable = pendingPlayOptionalCost(state, choice, context) !== undefined;
         // rule-id: ogn-262-298 (rule 355.13) — "You may move …": declining is
         // one of the answers, so the prompt is never auto-taken.
         const declineVariants = choice.optional
           ? [{ accept: false, playerId: context.playerId as string }]
           : [];
-        return [...declineVariants, ...choice.options.flatMap((zoneId) => [
-          { pickedZoneId: zoneId, playerId: context.playerId as string },
-          ...(payable
-            ? [{ paidAdditionalCost: true, pickedZoneId: zoneId, playerId: context.playerId as string }]
-            : []),
-        ])];
+        return [
+          ...declineVariants,
+          ...choice.options.map((zoneId) => ({ pickedZoneId: zoneId, playerId: context.playerId as string })),
+        ];
       }
       if (choice.prompter !== (context.playerId as string)) {
         return [];
@@ -1954,6 +1865,36 @@ export const pendingChoiceMoves: Partial<
         // the optional flag cleared so target selection etc. proceeds normally;
         // on decline the trigger fizzles.
         draft.pendingChoice = undefined;
+        // rule 354.2 / 355.1.a / 128.6 — an answer for a card an effect is
+        // PLAYING (decline the play / elect its optional additional cost): it is
+        // written on the pending play item; the wrapper's finalization pass
+        // continues that play (`play-pipeline.ts continueEffectPlay`).
+        const playItemId = (choice as { playItemId?: string }).playItemId;
+        if (playItemId !== undefined) {
+          const accepted = context.params.accept === true;
+          if ((choice as { playConfirm?: boolean }).playConfirm === true) {
+            recordEffectPlayAnswer(draft, playItemId, { accept: accepted, kind: "confirm" });
+          } else {
+            recordEffectPlayAnswer(draft, playItemId, { accept: accepted, kind: "optional" });
+          }
+          return;
+        }
+        // rule 128.6 / "you may play it" — the player chose whether to make an
+        // instructed play at all; accepting starts it (the card goes to the Chain).
+        const confirmSpec = (choice as { playConfirmSpec?: EffectPlaySpec }).playConfirmSpec;
+        if (confirmSpec !== undefined) {
+          if (context.params.accept === true) {
+            beginPlay(
+              { cards: context.cards, counters: context.counters, draft, zones: context.zones },
+              confirmSpec,
+              { immediate: true },
+            );
+          }
+          if (!draft.pendingChoice) {
+            postChoiceCleanup(draft, context);
+          }
+          return;
+        }
         // rule 383.3.a.2 / 402.1.a: this answer was asked while the trigger was
         // being FINALIZED. Accepting leaves a non-optional item on the chain
         // (it resolves without asking again); declining removes the item, so
@@ -2021,14 +1962,6 @@ export const pendingChoiceMoves: Partial<
           }
           return;
         }
-        // rule 356.5.a / 356.4.f.1 (unl-139-219 Bone Skewer): the instructed
-        // play already happened — the answer only records whether the (zeroed)
-        // optional additional cost counts as paid.
-        const instructed = (
-          choice as {
-            instructedPlay?: { cardId: string; playFrom?: string; playStun: boolean; playTo?: string; stagedBy?: string };
-          }
-        ).instructedPlay;
         // rule 158.1 (sfd-136-221) — "Counter a spell unless its controller pays
         // [N]": accepting charges the ransom in full and the counter does
         // nothing; declining re-runs the counter with the `unless` stripped.
@@ -2090,36 +2023,6 @@ export const pendingChoiceMoves: Partial<
               ...(payChoice.boundTargets ? { boundTargets: payChoice.boundTargets } : {}),
             });
           }
-          if (!draft.pendingChoice) {
-            postChoiceCleanup(draft, context);
-          }
-          return;
-        }
-        if (instructed) {
-          // rule 717 / 356.5.a (unl-139-219 Bone Skewer × ogn-010-298) — the
-          // folded-in optional cost had its AMOUNT zeroed by "ignoring any and
-          // all costs", but electing it still buys its benefit: an accepted
-          // [Accelerate] enters the unit ready, and "if you paid the additional
-          // cost" riders on its play trigger see it as paid. The play commits
-          // now, through the ONE enter path.
-          const accepted = context.params.accept === true;
-          const optional = getOptionalPlayCost(instructed.cardId);
-          enterPlayedPermanent(
-            { cards: context.cards, counters: context.counters, draft, zones: context.zones },
-            {
-              cardId: instructed.cardId,
-              entersReady:
-                accepted && (optional?.kind === "accelerate" || optional?.entersReadyIfPaid === true),
-              entryZone: instructed.playTo ?? "base",
-              from: instructed.playFrom,
-              paidAdditionalCost: accepted,
-              paidIds: accepted ? [optional?.kind === "accelerate" ? "accelerate" : (optional?.kind ?? "pay")] : [],
-              playerId: choice.playerId,
-              stagedBy: instructed.stagedBy,
-              stun: instructed.playStun,
-              via: "effect",
-            },
-          );
           if (!draft.pendingChoice) {
             postChoiceCleanup(draft, context);
           }
@@ -2390,6 +2293,17 @@ export const pendingChoiceMoves: Partial<
 
       if (choice.type === "choose-target") {
         const picked = context.params.pickedCardId as string;
+        // rule 356.2.a.1 / 357.2 — the object paying a MANDATORY additional cost
+        // of a card an effect is playing: recorded on the pending play item.
+        const playItemId = (choice as { playItemId?: string }).playItemId;
+        if (playItemId !== undefined) {
+          if (!choice.options.includes(picked)) {
+            return;
+          }
+          draft.pendingChoice = undefined;
+          recordEffectPlayAnswer(draft, playItemId, { kind: "mandatory", objectId: picked });
+          return;
+        }
         // rule 355.8 / 820.2 (unl-182-219) — the target of a mode chosen while
         // PLAYING the card: lock it onto that mode inside the chain item's
         // effect, then move on to the next execution's choices.
@@ -2429,7 +2343,9 @@ export const pendingChoiceMoves: Partial<
         // rule 355.5 / 811.1.b (ogn-213-298): a play-time target choice — lock
         // the pick onto the pending chain item and let priority proceed; the
         // effect runs (or mistargets) later, when that item resolves.
-        if (choice.bindToChainItemId !== undefined) {
+        // rule 402.2 (ogn-289-298) — an "up to N" finalization pick accumulates
+        // first (below) and binds the whole set at once.
+        if (choice.bindToChainItemId !== undefined && choice.anyNumber !== true) {
           if (!choice.options.includes(picked)) {
             return;
           }
@@ -2564,6 +2480,34 @@ export const pendingChoiceMoves: Partial<
             }
           }
           draft.pendingChoice = undefined;
+          // rule 402.2 (ogn-289-298) — "up to N" named while the item was
+          // FINALIZED: bind the whole set (possibly empty, rule 355.13) onto the
+          // chain item and let Priority proceed; the effect runs at resolution
+          // with exactly these objects.
+          if (choice.bindToChainItemId !== undefined) {
+            const items = draft.interaction?.chain?.items;
+            const idx = items?.findIndex((it) => it.id === choice.bindToChainItemId) ?? -1;
+            if (items && idx >= 0) {
+              items[idx] = { ...items[idx], targets: pickedSoFar } as (typeof items)[number];
+            }
+            if (pickedSoFar.length > 0) {
+              chargePromptedDeflectTax(draft, choice, pickedSoFar, context.cards);
+              const trigCtx = {
+                cards: context.cards,
+                counters: context.counters,
+                draft,
+                zones: context.zones,
+              };
+              for (const id of pickedSoFar) {
+                fireTriggers(
+                  { cardId: id, chooserId: choice.playerId, sourceType: "ability", type: "choose" },
+                  trigCtx,
+                );
+              }
+            }
+            postChoiceCleanup(draft, context);
+            return;
+          }
           // rule 355.2 (ogn-187-298): a chained prompt ("starting with the next
           // player, each player may …") continues whether or not this chooser
           // declined, and the next prompt belongs to the SPELL's controller
@@ -2719,6 +2663,18 @@ export const pendingChoiceMoves: Partial<
 
       if (choice.type === "choose-destination") {
         const zoneId = context.params.pickedZoneId as string;
+        // rule 355.2 — the location of a card an effect is PLAYING, chosen by
+        // the player performing that play: recorded on the pending play item;
+        // the wrapper's finalization pass completes the play there.
+        const playItemId = (choice as { playItemId?: string }).playItemId;
+        if (playItemId !== undefined) {
+          if (!choice.options.includes(zoneId)) {
+            return;
+          }
+          draft.pendingChoice = undefined;
+          recordEffectPlayAnswer(draft, playItemId, { kind: "location", zoneId });
+          return;
+        }
         // rule 355.4 / 349 — a Move Destination chosen while the card is played
         // / the ability finalized: nothing moves now; the choice rides on the
         // chain item and the wrapper's finalization pass asks the next one.
@@ -2775,77 +2731,30 @@ export const pendingChoiceMoves: Partial<
             : `battlefield-${zoneId}`;
         const fromZone =
           (context.zones.getCardZone?.(choice.cardId as CoreCardId) as string | undefined) ?? "";
-        // rule-id: sfd-109-221 (rule 354.2 / 356.1.b.3 / 560) — finalizing a
-        // pending "play it, ignoring its cost": the card enters the board from
-        // off-board, so this is a play. Charge the optional additional cost if
-        // elected (and still payable) before the card moves.
+        // rule 354.2 / 419.3 — a destination chosen for a card that is NOT on the
+        // board (an effect "moving" a banished / trashed card onto it) is a PLAY
+        // of that card to that location: hand it to the ONE play pipeline.
         const enteringPlay =
           !choice.created &&
           context.cards &&
           typeof context.zones.getCardsInZone === "function" &&
           fromZone !== "" &&
           !isBoardZone(fromZone);
-        let paidAdditionalCost = false;
-        if (enteringPlay && context.params.paidAdditionalCost === true) {
-          const extra = pendingPlayOptionalCost(draft, choice, context);
-          if (extra) {
-            deductAbilityCost(draft, choice.playerId, extra, context.zones, context.counters);
-            paidAdditionalCost = true;
-          }
-        }
         if (enteringPlay) {
-          // rule 354.2 / 419.4.a / 359.2 (sfd-109-221, sfd-200-221) — the
-          // location its player just chose completes a PLAY an effect
-          // instructed: the card enters through the ONE enter path (fresh
-          // object, exhausted / enter-ready, controller = the player playing it,
-          // play triggers carrying the paid additional cost, Legion count,
-          // contest of a battlefield they don't control — begun by the Cleanup).
-          const cardId = choice.cardId as string;
-          const paidOptional = paidAdditionalCost ? getOptionalPlayCost(cardId) : undefined;
           draft.pendingChoice = undefined;
-          enterPlayedPermanent(
+          beginPlay(
             { cards: context.cards, counters: context.counters, draft, zones: context.zones },
             {
-              cardId,
-              entersReady: paidOptional?.entersReadyIfPaid === true || paidOptional?.kind === "accelerate",
-              entryZone: targetZoneId,
-              paidAdditionalCost,
-              paidIds: paidOptional ? [paidOptional.kind === "accelerate" ? "accelerate" : "pay"] : [],
+              cardId: choice.cardId as string,
+              costMode: { kind: "ignore-all" },
+              location: { fixed: targetZoneId },
               playerId: choice.playerId as string,
-              skipWeaponmaster: true,
+              sourceCardId: (choice.sourceCardId ?? choice.cardId) as string,
               via: "effect",
+              ...(choice.then !== undefined ? { then: choice.then } : {}),
             },
+            { immediate: true },
           );
-          // rule-id: ogn-258-298 (rule 387) — a follow-up carried on the prompt
-          // ("…play it. Then …") resolves now with the played card bound.
-          if (choice.then) {
-            executeEffect(choice.then as ExecutableEffect, {
-              ...buildEffectContext(
-                draft,
-                choice.playerId,
-                (choice.sourceCardId ?? choice.cardId) as string,
-                context,
-              ),
-              boundTargets: [cardId],
-              sameZone: targetZoneId,
-            });
-          }
-          // rule 356.2.b.1 — [Accelerate] is an optional additional cost of the
-          // play: the player who PLAYS the card may pay it to have the unit
-          // enter ready (offered when payable and nothing else is being asked).
-          maybeOfferAccelerate(draft, cardId, choice.playerId, context);
-          // rule 821.1.c / 356.1.b (sfd-127-221) — [Weaponmaster] on every play.
-          if (getGlobalCardRegistry().get(cardId)?.cardType === "unit") {
-            offerWeaponmasterEquip(
-              draft as unknown as Parameters<typeof offerWeaponmasterEquip>[0],
-              context.zones as unknown as Parameters<typeof offerWeaponmasterEquip>[1],
-              choice.playerId as string,
-              cardId,
-              context.cards as unknown as Parameters<typeof offerWeaponmasterEquip>[4],
-            );
-          }
-          // rule 323.6 / 323.12 — the answer ends the resolution: Cleanup (and the
-          // staged Showdown) unless another prompt is parked.
           if (!draft.pendingChoice) {
             postChoiceCleanup(draft, context);
           }
@@ -3153,17 +3062,9 @@ export const pendingChoiceMoves: Partial<
         deductAbilityCost(draft, choice.prompter, pickCost, context.zones, context.counters);
       }
       const pickedCardId = picks[picks.length - 1] as string;
-      /** rule 337.1.b (ogn-242-298) — a "banish it and play it" pick, finalized below. */
-      let pendingPlayFinalize: string | undefined;
-      // Set when the pick's `then` follow-up rides the play's chain item instead
-      // of running inline (rule-id: ven-089-166-look-then-empower).
+      // Set when the pick's `then` follow-up rides the Chain as its own item
+      // instead of running inline (rule-id: ven-089-166-look-then-empower).
       let followUpOnChain = false;
-      /**
-       * rule 355.1.a / 356.1.b.3 (ogn-226-298 × ogn-010-298) — a unit an effect
-       * played from the trash "ignoring its cost" still gets its own optional
-       * additional costs: [Accelerate] is offered once the pick has settled.
-       */
-      let accelerateAfterPick: { cardId: string; playerId: string } | undefined;
       let remaining = choice.remaining ?? 1;
       let taken = choice.taken ?? 0;
       let revealed = choice.revealed as readonly string[];
@@ -3212,7 +3113,12 @@ export const pendingChoiceMoves: Partial<
         // board below, so leave it where it is for now.
         // rule 419.3 (unl-139-219): a forced play to a fixed battlefield goes
         // straight there too.
-        if (choice.playFrom !== "trash" && choice.playTo === undefined && !ownerChoiceRecycle) {
+        if (
+          choice.playFrom !== "trash" &&
+          choice.playTo === undefined &&
+          (choice as { playSpec?: unknown }).playSpec === undefined &&
+          !ownerChoiceRecycle
+        ) {
           context.zones.moveCard(moveParams);
         }
         revealed = revealed.filter((r) => r !== id);
@@ -3238,7 +3144,9 @@ export const pendingChoiceMoves: Partial<
         taken += 1;
         remaining -= 1;
       }
-      if (remaining > 0) {
+      // rule 355.13 (ogn-291-298) — an "up to N" prompt is answered once: the
+      // unused picks are simply not taken, so it never re-parks.
+      if (remaining > 0 && choice.upTo !== true) {
         const rest = { ...choice, revealed: [...revealed] } as typeof choice;
         if (revealed.some((id) => isValidPendingPick(rest, id))) {
           draft.pendingChoice = { ...rest, remaining, taken };
@@ -3304,275 +3212,52 @@ export const pendingChoiceMoves: Partial<
         }
       }
 
-      // rule-id: ogn-062-298-look-banish-play — "banish a unit from among
-      // them, then play it, reducing its cost by [N]": pay the discounted
-      // cost from the prompter's pool and add the play to the chain (rule
-      // 354.2/354.3) so its owner chooses a location when it finalizes.
-      // rule 419.3 / 811.1.c.1 (unl-139-219 Bone Skewer): "They play that unit
-      // to that battlefield, ignoring any and all costs." The card's OWNER
-      // plays it — control stays with them, nothing is paid, the destination
-      // is fixed, and Hide is never an alternative (Hide is not a subset of
-      // Play). rule 143.4: it enters exhausted; rule 423: stunned if asked.
-      if (choice.onPicked === "play" && choice.playTo !== undefined) {
-        const playedOwner = context.cards.getCardOwner(pickedCardId as CoreCardId) ?? choice.revealer;
-        // rule 356.4.f.1 / 356.2 (unl-139-219 × unl-052-219) — "ignoring any and
-        // all costs" zeroes the AMOUNT of a folded-in optional additional cost,
-        // but the decision to pay is still the playing player's and is made
-        // before costs are determined (and before the unit enters); an optional
-        // cost counts as paid by that decision. Ask them now — the answer
-        // commits the play (opt-in `instructedPlay`).
-        if (getOptionalPlayCost(pickedCardId as string) !== undefined) {
-          // rule 354.2 — the card being played waits on the Chain (limbo), no
-          // longer in the zone it is played from, while its player answers.
-          const playFromZone =
-            (context.zones.getCardZone?.(pickedCardId as CoreCardId) as string | undefined) ?? "hand";
-          context.zones.moveCard({ cardId: pickedCardId as CoreCardId, targetZoneId: "chain" as CoreZoneId });
-          draft.pendingChoice = {
-            instructedPlay: {
-              cardId: pickedCardId as string,
-              playFrom: playFromZone,
-              playStun: choice.playStun === true,
-              playTo: choice.playTo,
-              revealer: choice.revealer,
-              stagedBy: choice.prompter ?? choice.revealer,
-            },
-            playerId: playedOwner,
-            resolved: {},
-            sourceCardId: choice.sourceCardId,
-            type: "opt-in",
-          } as NonNullable<typeof draft.pendingChoice>;
-          return;
+      // rule 419.3 / 354.2 — "…play it": the picked card is PLAYED through the
+      // ONE play pipeline. It goes to the Chain as a Pending Item now; once this
+      // instruction's remaining steps (recycle / draw / trash the rest, "then …")
+      // are done (354.3) the wrapper's finalization pass has its player choose
+      // the location (355.2), elect / pay any additional cost the instruction's
+      // cost mode leaves (355.1.a, 356.1.b), pay, and the permanent enters the
+      // board at once (337.2) — a spell becomes a spell item. rule 358.3.a: a
+      // player who can't play cards this turn, or a card that cannot be played
+      // right now (419.2.a), simply leaves the card where the pick put it.
+      /** Plays queued by this pick (Bone Skewer, look→play, trash/hand plays). */
+      const queuedPlays: string[] = [];
+      if (choice.onPicked === "play") {
+        for (const id of picks) {
+          const spec = playSpecFromChoice(draft, choice, id as string, context);
+          const begun = beginPlay(
+            { cards: context.cards, counters: context.counters, draft, zones: context.zones },
+            spec,
+          );
+          if (begun) {
+            queuedPlays.push(begun.itemId);
+          }
         }
-        // rule 419.3 / 190.3.a.1 (unl-139-219) — the OWNER plays it to that
-        // battlefield through the ONE enter path: exhausted (143.4), stunned if
-        // asked (423), contesting a battlefield they do not control (the caster's
-        // action staged it — 323.13), play triggers, Legion count.
-        enterPlayedPermanent(
-          { cards: context.cards, counters: context.counters, draft, zones: context.zones },
-          {
-            cardId: pickedCardId as string,
-            entryZone: choice.playTo as string,
-            playerId: playedOwner,
-            stagedBy: choice.prompter ?? choice.revealer,
-            stun: choice.playStun === true,
-            via: "effect",
-          },
-        );
-      } else if (
-        choice.onPicked === "play" &&
-        // rule 358.3.a (ogn-115-298 × ogn-026-298) — an instruction to play a
-        // card is skipped as impossible when that player can't play cards this
-        // turn; the card simply stays where the pick put it (banishment).
-        draft.cannotPlayCardsThisTurn?.[choice.prompter] !== true
-      ) {
-        const pool = draft.runePools[choice.prompter];
-        // rule 356 / 357 — price and pay the instructed play through the ONE
-        // shared cost computation (board discounts/increases, pooled [rainbow]
-        // covering a named pip — 135.2.e.5.b, restricted Energy), with the
-        // instruction's own modifications folded in:
-        // rule 356.1.b.1 (ogn-025-298): "ignoring its cost" zeroes the base
-        // cost (increases still apply, 356.1.b.3); rule-id ogn-115-298:
-        // "ignoring Energy costs" waives only the energy — Power pips are still
-        // paid; "for [N] less" is a flat discount. rule 356.4 (sfd-010-221) —
-        // the picked card is played from banishment / trash / deck, never from
-        // a hand, so its own "costs less from anywhere other than your hand"
-        // static stacks (the board-aware computation sees the origin zone).
-        // (Minimal mock contexts in unit tests lack the board accessors.)
-        const hasBoard =
-          typeof context.zones.getCardsInZone === "function" &&
-          typeof context.cards.getCardOwner === "function";
-        const costExtras: CostExtras = {
-          ...(hasBoard ? { board: { cards: context.cards, zones: context.zones } as CostExtras["board"] } : {}),
-          ...(choice.playIgnoreCost ? { altCost: { energy: 0, power: [] } } : {}),
-          ...(choice.playIgnoreEnergy ? { ignoreEnergyCost: true } : {}),
-          ...((choice.playEnergyReduction ?? 0) > 0
-            ? { additionalCost: { energy: -(choice.playEnergyReduction ?? 0) } }
-            : {}),
-        };
-        const metaForCost =
-          typeof context.cards.getCardMeta === "function" ? createMetaAccessor(context.cards) : undefined;
-        // rule 356.4 / 419.2.a: a discount reduces the cost, it does not waive
-        // it — the reduced cost must still be payable in full, otherwise the
-        // card cannot be played and simply stays where the pick put it.
-        const affordable =
-          pool === undefined ||
-          canPayResourceCost(
-            draft,
-            choice.prompter,
-            pickedCardId as string,
-            computePlayResourceCost(draft, choice.prompter, pickedCardId as string, costExtras, metaForCost, false),
-          );
-        // rule 354.2 (ogn-115-298 × ogn-095-298) — "play" a spell puts it on
-        // the chain; it is never placed on the board like a permanent.
-        const isSpell =
-          choice.playFrom !== "trash" &&
-          getGlobalCardRegistry().getCardType(pickedCardId as string) === "spell";
-        // rule 355.8 / 358.5 (ogn-115-298 × ogn-064-298) — a spell with no
-        // legal target cannot be finalized: the play attempt is undone, so the
-        // card stays where it is and nothing is paid.
-        const spellPlayable =
-          !isSpell ||
-          spellEffectHasLegalTargets(
-            (getGlobalCardRegistry().getAbilities(pickedCardId as string) ?? []).find(
-              (a: { type: string }) => a.type === "spell",
-            )?.effect as SpellEffectTargetShape | undefined,
+        // rule-id: ven-089-166-look-then-empower — "…play it. Then you may do
+        // this: Empower it": a reflexive follow-up about the card once it is ON
+        // the board — its own optional item, finalized after the play (337.1.b).
+        const followUp = choice.then as { type?: string; effect?: unknown } | undefined;
+        if (followUp?.type === "optional" && followUp.effect !== undefined && queuedPlays.length > 0) {
+          followUpOnChain = true;
+          draft.interaction = addToChain(
+            draft.interaction ?? createInteractionState(),
             {
-              cards: {
-                getCardController: (c: CoreCardId) => context.cards.getCardController?.(c),
-                getCardMeta: (c: CoreCardId) => context.cards.getCardMeta?.(c),
-                getCardOwner: (c: CoreCardId) => context.cards.getCardOwner(c),
+              cardId: choice.sourceCardId ?? (pickedCardId as string),
+              controller: choice.prompter,
+              effect: {
+                ...((followUp as { effect: object }).effect as object),
+                target: pickedCardId as string,
               },
-              choosing: true,
-              draft,
-              playerId: choice.prompter,
-              sourceCardId: pickedCardId as string,
-              zones: {
-                getCardZone: (c: CoreCardId) => context.zones.getCardZone(c),
-                getCardsInZone: (z: CoreZoneId, p?: CorePlayerId) =>
-                  context.zones.getCardsInZone(z, p),
-              },
-            } as Parameters<typeof spellEffectHasLegalTargets>[1],
+              optional: true,
+              // rule 387.1 — decided when it resolves (after the played card's
+              // own play triggers, which land above it), not at finalization.
+              optionalOnResolution: true,
+              triggered: true,
+              type: "ability",
+            } as never,
+            Object.keys(draft.players),
           );
-        if (affordable && spellPlayable) {
-          if (pool) {
-            payResourceCost(
-              draft,
-              choice.prompter,
-              pickedCardId as string,
-              computePlayResourceCost(draft, choice.prompter, pickedCardId as string, costExtras, metaForCost, true),
-            );
-          }
-          // rule 359.2.c / 143.4 (ogn-196-298, ogn-226-298): "play a unit from
-          // your trash" completes as part of the enclosing effect — the unit
-          // enters its owner's base exhausted and fires its own play triggers.
-          if (choice.playFrom === "trash") {
-            // rule 354.2 / 594 (rule-id: ogn-112-298) — a SPELL played from the
-            // trash goes on the chain, never to a board location; "Then recycle
-            // it" sends it to the bottom of the Main Deck when it leaves.
-            if (getGlobalCardRegistry().getCardType(pickedCardId as string) === "spell") {
-              castSpellFromTrash(
-                pickedCardId as string,
-                choice.prompter,
-                choice.playRecycleAfter === true,
-                { draft, zones: context.zones },
-              );
-              draft.pendingChoice = undefined;
-              postChoiceCleanup(draft, context);
-              return;
-            }
-            // rule 355.2 / 355.4 (rule-id: sfd-165-221-glasc-mixologist-deathknell-destination):
-            // a card entering play from off-board may be placed at its player's base OR
-            // any battlefield they control — the choice is theirs. The
-            // choose-destination handler completes the play through the same
-            // enter path as the single-destination case below.
-            const destOptions = playDestinationOptions(draft, choice.prompter, pickedCardId as string);
-            if (destOptions.length > 1) {
-              draft.pendingChoice = {
-                cardId: pickedCardId as string,
-                options: destOptions,
-                playerId: choice.prompter,
-                sourceCardId: choice.sourceCardId,
-                type: "choose-destination",
-              } as RiftboundGameState["pendingChoice"];
-              return;
-            }
-            // rule 419.3 / 359.2 — the ONE enter path: fresh object, exhausted,
-            // controlled by the player who plays it even out of an OPPONENT's
-            // trash (108.2 / 191.1 — ven-114-166 Kharox), play triggers, Legion.
-            draft.pendingChoice = undefined;
-            enterPlayedPermanent(
-              { cards: context.cards, counters: context.counters, draft, zones: context.zones },
-              {
-                cardId: pickedCardId as string,
-                entryZone: destOptions[0] ?? "base",
-                playerId: choice.prompter,
-                skipWeaponmaster: true,
-                via: "effect",
-              },
-            );
-            // rule 356.2.b.1 / 805.2.b — the play's [Accelerate] is still the
-            // playing player's to elect; paying it readies the unit.
-            accelerateAfterPick = { cardId: pickedCardId as string, playerId: choice.prompter };
-          } else if (isSpell) {
-            // rule 354.2 / 419.1 (ogn-115-298) — the instructed spell play puts
-            // it on the chain under the instructed player; it resolves there and
-            // ends in its owner's trash like any other spell.
-            castSpellFromTrash(pickedCardId as string, choice.prompter, false, {
-              draft,
-              zones: context.zones,
-            });
-          } else if (choice.playImmediate) {
-            // rule 337.1.b / 337.2 (ogn-242-298) — "banish a unit from among
-            // them … and play it" is ONE instruction: the banished card is a
-            // PENDING PLAY, not a chain item that waits its turn. It finalizes
-            // as soon as the resolving ability finishes its instructions, its
-            // player picks the location, and the unit enters the board at once.
-            // Deferred to after "then recycle the rest" so the rest of the
-            // instruction happens before the location prompt.
-            pendingPlayFinalize = pickedCardId as string;
-          } else {
-            const placeEffect = {
-              // rule 355.2.b (sfd-170-221) — "you may play it here" adds the
-              // instructing card's battlefield to the valid locations.
-              ...(choice.playHere !== undefined ? { extraDestinations: [choice.playHere] } : {}),
-              target: pickedCardId as string,
-              to: "choose",
-              type: "move",
-            };
-            // rule-id: ven-089-166-look-then-empower — "…play it. Then you may
-            // do this: Empower it": the follow-up is about the card once it is
-            // ON the board, so it becomes its own optional chain item resolving
-            // after the play (and after the play's own triggers).
-            const followUp = choice.then as { type?: string; effect?: unknown } | undefined;
-            if (followUp?.type === "optional" && followUp.effect !== undefined) {
-              followUpOnChain = true;
-              draft.interaction = addToChain(
-                draft.interaction ?? createInteractionState(),
-                {
-                  cardId: choice.sourceCardId ?? (pickedCardId as string),
-                  controller: choice.prompter,
-                  effect: {
-                    ...((followUp as { effect: object }).effect as object),
-                    target: pickedCardId as string,
-                  },
-                  optional: true,
-                  triggered: true,
-                  type: "ability",
-                },
-                Object.keys(draft.players),
-              );
-            }
-            draft.interaction = addToChain(
-              draft.interaction,
-              {
-                cardId: pickedCardId as string,
-                controller: choice.prompter,
-                effect: placeEffect,
-                triggered: true,
-                type: "ability",
-              },
-              Object.keys(draft.players),
-            );
-          }
-          // rule 356.1 / 145.2 (ogn-025-298 Blind Fury): the player who PLAYS
-          // a card controls it, even when another player owns it.
-          const owner = context.cards.getCardOwner(pickedCardId as CoreCardId);
-          if (owner !== undefined && owner !== choice.prompter) {
-            const metaNow = context.cards.getCardMeta(pickedCardId as CoreCardId) as
-              | Partial<RiftboundCardMeta>
-              | undefined;
-            context.cards.updateCardMeta(pickedCardId as CoreCardId, {
-              controlEffects: [
-                ...(metaNow?.controlEffects ?? []),
-                { controllerId: choice.prompter },
-              ],
-            } as Partial<RiftboundCardMeta>);
-            (
-              context.cards as {
-                setCardController?: (cardId: CoreCardId, controllerId: string) => void;
-              }
-            ).setCardController?.(pickedCardId as CoreCardId, choice.prompter);
-          }
         }
       }
 
@@ -3617,27 +3302,10 @@ export const pendingChoiceMoves: Partial<
       // (picked-to-recycle and/or recycled rest) so Karma's buff fires once.
       fireRecycleEvent(draft, context, choice.prompter, recycledIds);
 
-      // rule 337.1.b / 337.2 / 354.3 (ogn-242-298) — finalize the pending play:
-      // its player chooses the location and the unit enters the board now, so
-      // its play trigger lands ABOVE anything already on the chain (a Deathknell
-      // queued earlier by the same ability resolves last).
-      if (pendingPlayFinalize !== undefined) {
-        if (
-          finalizePendingPlay(draft, context, {
-            cardId: pendingPlayFinalize,
-            playerId: choice.prompter,
-            sourceCardId: choice.sourceCardId,
-            then: choice.then,
-          })
-        ) {
-          return;
-        }
-      }
-
       // Resume the originating effect's `then` clause (e.g. discard 1 → draw 1).
-      if (choice.then) {
-        // rule-id: ven-089-166-look-then-empower — "…play it. Then you may do
-        // this: Empower it": the follow-up's "it" is the picked card.
+      // A PLAY pick carries its "then" on the play itself (it runs once the card
+      // has actually been played — `playSpecFromChoice`).
+      if (choice.then && choice.onPicked !== "play") {
         const effectCtx: EffectContext = {
           ...buildEffectContext(draft, choice.prompter, choice.sourceCardId ?? "", context),
           // rule 355.8 (ogn-008-298): the caster's play-time target survives the prompt.
@@ -3647,22 +3315,6 @@ export const pendingChoiceMoves: Partial<
         if (!followUpOnChain) {
           executeEffect(choice.then as ExecutableEffect, effectCtx);
         }
-      }
-      if (accelerateAfterPick) {
-        maybeOfferAccelerate(
-          draft,
-          accelerateAfterPick.cardId,
-          accelerateAfterPick.playerId,
-          context,
-        );
-        // rule 821.1.c / 356.1.b (sfd-127-221) — [Weaponmaster] on every play.
-        offerWeaponmasterEquip(
-          draft as unknown as Parameters<typeof offerWeaponmasterEquip>[0],
-          context.zones as unknown as Parameters<typeof offerWeaponmasterEquip>[1],
-          accelerateAfterPick.playerId,
-          accelerateAfterPick.cardId,
-          context.cards as unknown as Parameters<typeof offerWeaponmasterEquip>[4],
-        );
       }
       // rule 319.7 / rule-id: ogn-019-298 — the pick changed game state (a
       // discard, recycle, banish…), so refresh statics + SBA like the other

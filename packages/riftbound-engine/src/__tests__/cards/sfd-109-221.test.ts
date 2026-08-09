@@ -40,11 +40,11 @@ async function auroraRevealsAkshan() {
 describe("Akshan, Mischievous (sfd-109-221) — played by Dazzling Aurora", () => {
   test("the pending play offers the optional [body][body] cost; paying it fires the play trigger and steals an enemy gear", async () => {
     const game = await auroraRevealsAkshan();
+    // rule 355.1.a / 356.2.b — base is the only location (auto); the optional
+    // additional cost is its own yes/no on the pending play.
     const d = game.decision();
-    expect(d?.kind).toBe("pick");
-    const keys = (d as { options: { key: string }[] }).options.map((o) => o.key);
-    expect(keys).toEqual(["base", "base+pay"]);
-    await game.p1.pick("base+pay");
+    expect(d).toMatchObject({ canAccept: true, kind: "yes-no", seat: P1 });
+    await game.p1.yes();
     expect(game.zoneOf("akshan")).toBe("base");
     expect(game.p1.power("body")).toBe(0);
     expect(game.chain().map((c) => c.cardId)).toEqual(["akshan"]);
@@ -55,7 +55,7 @@ describe("Akshan, Mischievous (sfd-109-221) — played by Dazzling Aurora", () =
 
   test("declining the additional cost plays Akshan without stealing", async () => {
     const game = await auroraRevealsAkshan();
-    await game.p1.pick("base");
+    await game.p1.no();
     expect(game.zoneOf("akshan")).toBe("base");
     // Declining spends nothing, but answering the prompt closes the Ending Step:
     // the turn rotates and rule 517.2.c / 316.3 empty the unspent [body][body].

@@ -35,6 +35,7 @@ const PRIORITY_CLASS = new Set([
   "playSpell",
   "playGear",
   "playFromChampionZone",
+  "playFromZone",
   "activateAbility",
   "standardMove",
   "gankingMove",
@@ -118,6 +119,12 @@ export const pendingChoiceGatesMoves: Invariant = {
       const legal = engine.enumerateMoves(pid as PlayerId, { validOnly: true });
       for (const m of legal) {
         if (m.moveId === "concede") {
+          continue;
+        }
+        // rule 444.2.c / 429.3 — the Pay window an `opt-in` prompt opens for
+        // its own player keeps that player's rune Add abilities usable
+        // (`resources.ts runeAddAllowedDuringChoice`); not a gating violation.
+        if ((m.moveId === "exhaustRune" || m.moveId === "recycleRune") && pc.type === "opt-in" && pid === chooser) {
           continue;
         }
         if (m.moveId !== "resolvePendingChoice") {

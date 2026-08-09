@@ -52,8 +52,9 @@ function runeAddAllowedDuringChoice(state: RiftboundGameState, playerId: string)
   if (
     p.counterRansom !== undefined ||
     p.payChoice !== undefined ||
-    p.acceleratePlay !== undefined ||
-    p.instructedPlay !== undefined
+    // rule 355.1.a / 357 — electing (and then paying) a pending play's
+    // optional additional cost is part of that play's Pay step.
+    (p.playItemId !== undefined && p.playConfirm !== true)
   ) {
     return true;
   }
@@ -202,7 +203,10 @@ const resourceMoveDefs: Partial<
    */
   recycleRune: {
     condition: (state, context) => {
-      if (state.pendingChoice) {
+      // rule 164.2.b / 429.3 — "Recycle this: [Reaction] — Add [C]" is an Add
+      // ability like the exhaust one, so it stays usable inside the Pay window
+      // a resolving ability opens (444.2.c); every other pending choice freezes it.
+      if (!runeAddAllowedDuringChoice(state, context.params.playerId as string)) {
         return false;
       }
       if (state.status !== "playing") {
@@ -229,7 +233,7 @@ const resourceMoveDefs: Partial<
       return true;
     },
     enumerator: (state, context) => {
-      if (state.pendingChoice) {
+      if (!runeAddAllowedDuringChoice(state, context.playerId as string)) {
         return [];
       }
       if (state.status !== "playing") {

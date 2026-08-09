@@ -2,372 +2,321 @@
 import type { CardId as CoreCardId, PlayerId as CorePlayerId, ZoneId as CoreZoneId } from "@tcg/core";
 import { addToChain, createInteractionState } from "../../chain";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
+import { getOptionalPlayCost } from "../../game-definition/moves/play/cost";
 import {
-  canAffordCard,
-  type CostExtras,
-  deductCost,
-  getOptionalPlayCost,
-} from "../../game-definition/moves/play/cost";
-import { enterPlayedPermanent, type PlayVia } from "../../game-definition/moves/play/play-pipeline";
-import { extractBattlefieldId } from "../../zones/zone-configs";
-import { battlefieldForbidsUnitPlays } from "../play-restrictions";
+  beginPlay,
+  canPerformEffectPlay,
+  type EffectPlaySpec,
+  enterPlayedPermanent,
+  type PlayIO,
+  type PlayLocationSpec,
+  type PlayVia,
+  putPlayedSpellOnChain,
+} from "../../game-definition/moves/play/play-pipeline";
 import { spellEffectHasLegalTargets, type SpellEffectTargetShape } from "../../game-definition/moves/play/targeting";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import { type EffectHelpers, getTargetIds } from "./_helpers";
 
-/**
- * rule 358.3.a (rule-id: ogn-026-298 Brynhir Thundersong) — a "player can't play
- * cards" restriction applies to every play, including one an effect INSTRUCTS a
- * player to make (rule 419.1: putting the card on the chain is the play). The
- * instruction is then impossible for that player and is skipped; the rest of the
- * effect (e.g. ven-066-166's banish) still stands.
- */
-function playerCannotPlay(ctx: EffectContext, playerId: string): boolean {
-  return ctx.draft.cannotPlayCardsThisTurn?.[playerId] === true;
+/** The play instruction's shape (parser / explicit abilities). */
+interface PlayEffectShape {
+  readonly target?: unknown;
+  readonly from?: string;
+  readonly toLocation?: unknown;
+  readonly ignoreCost?: unknown;
+  readonly reduceCost?: { energy?: unknown };
+  readonly cost?: { energy?: number; power?: readonly string[] };
+  readonly optional?: boolean;
+  readonly player?: string;
+  readonly recycleAfter?: boolean;
+  readonly linkedToSource?: boolean;
+  readonly then?: unknown;
 }
 
+/** rule 356.1.a / 356.1.b / 356.5.a — the instruction's words as a cost mode. */
+export function costModeOfPlayEffect(
+  effect: { ignoreCost?: unknown; cost?: { energy?: number; power?: readonly string[] } },
+  energyReduction = 0,
+): EffectPlaySpec["costMode"] {
+  if (effect.cost !== undefined) {
+    return { energy: effect.cost.energy ?? 0, kind: "fixed", power: [...(effect.cost.power ?? [])] };
+  }
+  switch (effect.ignoreCost) {
+    case true:
+    case "all":
+      return { kind: "ignore-all" };
+    case "energy":
+      return { kind: "ignore-energy" };
+    case "power":
+      return { kind: "ignore-power" };
+    case "any-and-all":
+      return { kind: "ignore-any-and-all" };
+    default:
+      return energyReduction > 0 ? { energy: energyReduction, kind: "reduce" } : { kind: "full" };
+  }
+}
+
+/** rule 355.2 / 355.2.b — the instruction's destination words as a location spec. */
+function locationSpecOf(toLocation: unknown, ctx: EffectContext, performer: string): PlayLocationSpec | undefined {
+  if (toLocation === undefined) {
+    return "prompt";
+  }
+  if (toLocation === "same") {
+    return "same-as-lki";
+  }
+  if (toLocation === "base") {
+    return { fixed: "base" };
+  }
+  if (toLocation === "here") {
+    const here = ctx.sourceZone;
+    return here && (here === "base" || here.startsWith("battlefield-")) ? { fixed: here } : { fixed: "base" };
+  }
+  if (typeof toLocation === "object" && toLocation !== null) {
+    const bf = (toLocation as { battlefield?: unknown }).battlefield;
+    const all = Object.keys(ctx.draft.battlefields ?? {});
+    if (bf === "controlled") {
+      // rule-id: sfd-111-221 — "to a battlefield you control": never the base.
+      return {
+        only: all
+          .filter((id) => ctx.draft.battlefields[id]?.controller === performer)
+          .map((id) => `battlefield-${id}`),
+      };
+    }
+    if (bf === "any") {
+      // rule-id: unl-184-219 (355.2.b) — "to any battlefield": all of them, no base.
+      return { only: all.map((id) => `battlefield-${id}`) };
+    }
+    if (typeof bf === "string" && ctx.draft.battlefields?.[bf]) {
+      return { fixed: `battlefield-${bf}` };
+    }
+  }
+  if (typeof toLocation === "string" && toLocation.startsWith("battlefield-")) {
+    return { fixed: toLocation };
+  }
+  return "prompt";
+}
+
+/**
+ * rule 419.3 — "play <card(s)>": every branch builds ONE `EffectPlaySpec` and
+ * hands it to the play pipeline (`beginPlay`): the pending item on the Chain,
+ * the performer's location / additional-cost dialog, payment under the
+ * instruction's cost mode and the shared enter step all live there. Cards in
+ * a private or off-board pile the performer must first CHOOSE from (hand,
+ * trash, banishment) are offered through a `reveal-and-pick` prompt whose
+ * pick re-enters the same pipeline (`pending-choice.ts`).
+ */
 export function handle_play(effect: ExecutableEffect, ctx: EffectContext, _h: EffectHelpers): void {
+  const eff = effect as unknown as PlayEffectShape;
+  const registry = getGlobalCardRegistry();
   // rule-id: unl-186-219 — "you may play this from your trash for [C]" on a
   // SPELL: the card re-enters the chain as a fresh spell play (rule 354).
-  if (
-    (effect as { target?: unknown }).target === "self" &&
-    getGlobalCardRegistry().getCardType(ctx.sourceCardId) === "spell"
-  ) {
+  if (eff.target === "self" && registry.getCardType(ctx.sourceCardId) === "spell") {
     replaySelfSpell(effect, ctx);
     return;
   }
-  // rule-id: ogn-194-298 (rules 355.13 / 356.1.a) — "you may play me for
-  // [rainbow]" on a UNIT that has just left the deck: an optional self play
-  // for a stated alternative cost, resolved outside the chain.
-  if (
-    (effect as { target?: unknown }).target === "self" &&
-    getGlobalCardRegistry().getCardType(ctx.sourceCardId) === "unit" &&
-    (effect as { cost?: unknown }).cost !== undefined
-  ) {
-    playSelfUnitForCost(effect, ctx);
-    return;
-  }
-  // Rule 354.2: an effect that instructs a player to play a card adds that
-  // card to the chain as a pending item; its play process pauses while the
-  // enclosing effect finishes (rule 354.3). The pending item keeps the turn
-  // in a closed state (rule 309.1) so cleanup step 4 does not strip
-  // battlefield control (rule 323.6). When the pending item is later
-  // finalized its owner chooses a location (rule 355.2) via the stored
-  // move-choose effect and the card enters the board there (rule 337.2).
-  const toLocation = (effect as unknown as { toLocation?: unknown }).toLocation;
-  // rule-id: ogn-107-298 — "play a card with [Hidden] from your hand": the
-  // hand is not a board zone the target resolver scans, so gather candidates
-  // from the controller's hand and let them choose one (rule 355.10).
-  let targets: string[];
-  const from = (effect as { from?: unknown }).from;
-  // rule-id: ogn-196-298 (rule 356.1.b) — "play a unit from your trash,
-  // ignoring its Energy cost": the trash is not a board zone the target
-  // resolver scans, so gather the controller's own trash units that they can
-  // still pay the Power cost for and let them choose one (rule 355.10).
-  // ("play THIS from your trash" — a bare `self` target — keeps the generic
-  // path below: the card to play is already known.)
-  if (from === "trash" && typeof (effect as { target?: unknown }).target === "object") {
-    playFromTrash(effect, ctx);
-    return;
-  }
-  // rule-id: unl-148-219 (rules 355.10 / 397) — "Play a unit banished with
-  // this. (You must pay its costs.)": banishment is not a board zone the
-  // target resolver scans, so gather the linked candidates the controller can
-  // actually pay for and let them choose one.
-  if (from === "banishment" && typeof (effect as { target?: unknown }).target === "object") {
-    playFromBanishment(effect, ctx);
-    return;
-  }
-  // rule-id: unl-179-219 (rule 356.1.b) — "play a unit from your hand to your
-  // base, ignoring its Energy cost": the hand is not a board zone, and the
-  // destination and remaining (Power) cost are both fixed, so the controller
-  // simply picks an affordable hand unit and it enters their base.
-  if (
-    from === "hand" &&
-    toLocation === "base" &&
-    (effect as { ignoreCost?: unknown }).ignoreCost !== undefined
-  ) {
-    playFromHandToBase(effect, ctx);
-    return;
-  }
-  // rule-id: sfd-111-221 (rule 355.2 / 356.1.b) — "play a unit from hand to a
-  // battlefield you control, reducing its cost by [3]": the destination is
-  // restricted to the controller's own battlefields (never an enemy's), and a
-  // reduction leaves the rest of the cost payable, so the play is charged here.
-  if (from === "hand" && isControlledBattlefieldDest(toLocation)) {
-    playFromHandToControlledBattlefield(effect, ctx);
-    return;
-  }
-  // rule-id: sfd-024-221 (rules 355.10.a / 356.1.b.1) — "play an Equipment with
-  // Energy cost no more than [2], ignoring its cost": the hand is not a board
-  // zone, the destination of a gear play is always base (rule 143.1.a.1), and
-  // "ignoring its cost" waives the whole printed cost, so the play resolves
-  // here instead of parking a pending chain item that needs a location choice.
-  if (
-    from === "hand" &&
-    toLocation === undefined &&
-    isGearTargetDescriptor((effect as { target?: unknown }).target)
-  ) {
-    playGearFromHand(effect, ctx);
-    return;
-  }
-  if (from === "hand" && !ctx.boundTargets) {
-    const candidates = playCandidatesFromHand(effect, ctx);
-    if (candidates.length === 0) {
+  const from = eff.from;
+  const io = ctx as unknown as PlayIO;
+
+  // A. "play ME" (Deathknell / leave-deck / permission triggers) — the card is known.
+  if (eff.target === "self" || eff.target === undefined) {
+    const cardId = ctx.sourceCardId;
+    if (typeof from === "string" && from !== "anywhere" && ctx.zones.getCardZone(cardId as CoreCardId) !== from) {
       return;
     }
-    if (candidates.length > 1 && !ctx.draft.pendingChoice) {
-      ctx.draft.pendingChoice = {
-        effect,
-        options: candidates,
-        playerId: ctx.playerId,
-        remaining: 1,
-        sourceCardId: ctx.sourceCardId,
-        type: "choose-target",
-      };
-      return;
-    }
-    targets = [candidates[0] as string];
-  } else {
-    targets = getTargetIds(effect, ctx);
-  }
-  // rule-id: ogn-107-298 — "If it's a unit, play it here", ignoring its cost:
-  // location and payment are both fixed, so the pending play finalizes as
-  // soon as this effect finishes (rule 354.3 → 355.2) and the permanent
-  // enters the source's battlefield directly.
-  const here = ctx.sourceZone;
-  if (
-    toLocation === "here" &&
-    (effect as { ignoreCost?: unknown }).ignoreCost === true &&
-    here &&
-    (here === "base" || here.startsWith("battlefield-"))
-  ) {
-    for (const targetId of targets) {
-      if (getGlobalCardRegistry().getCardType(targetId) !== "unit") {
-        continue;
-      }
-      enterUnitFromEffect(targetId, here, ctx);
-      offerAccelerateOnInstructedPlay(targetId, ctx);
-    }
-    return;
-  }
-  // rule-id: ven-066-166 (rule 354.2 / 355.2) — "Banish a unit, then its owner
-  // plays it to the same location, ignoring its cost": the destination is fixed
-  // to the board zone the unit just left, so its owner is never asked to
-  // choose, and rule 337.2 finalizes a unit chain item immediately — there is
-  // no priority window with the unit sitting in banishment. Because the OWNER
-  // makes the play, its "when you play me" abilities trigger for the owner
-  // (rule 411.4). rule 358.3.a: when that location can't receive a unit
-  // (sfd-216-221 Rockfall Path) the play is impossible and is skipped — the
-  // banish stands and the unit stays in its owner's banishment.
-  if (toLocation === "same") {
-    for (const targetId of targets) {
-      const dest = (
-        ctx.cards.getCardMeta?.(targetId as CoreCardId) as { banishedFrom?: string } | undefined
-      )?.banishedFrom;
-      if (dest === undefined) {
-        continue;
-      }
-      if (
-        dest.startsWith("battlefield-") &&
-        battlefieldForbidsUnitPlays(extractBattlefieldId(dest) ?? "")
-      ) {
-        continue;
-      }
-      const sameOwner = ctx.cards.getCardOwner(targetId as CoreCardId) ?? ctx.playerId;
-      if (playerCannotPlay(ctx, sameOwner)) {
-        continue;
-      }
-      // rule 143.4 / 359.2.c: however it was played, the unit enters exhausted.
-      enterUnitFromEffect(targetId, dest, { ...ctx, playerId: sameOwner });
-    }
-    return;
-  }
-  // rule-id: ogn-102-298 — an explicit "to their base" destination fixes both
-  // location and payment, so the play finalizes right here (rule 354.3 →
-  // 355.2): the unit enters its owner's base as a newly played permanent.
-  if (toLocation === "base" && (effect as { ignoreCost?: unknown }).ignoreCost === true) {
-    for (const targetId of targets) {
-      if (getGlobalCardRegistry().getCardType(targetId) !== "unit") {
-        continue;
-      }
-      enterUnitFromEffect(targetId, "base", ctx);
-    }
-    return;
-  }
-  const turnOrder = Object.keys(ctx.draft.players);
-  // rule-id: unl-184-219 (rule 355.2.b) — `toLocation: { battlefield: "any" }`
-  // ("plays it to any battlefield"): the effect makes every battlefield a legal
-  // destination, so the base is not offered and controlled-only filtering does
-  // not apply.
-  const dest = toLocation === "base" ? "base" : isAnyBattlefieldDest(toLocation) ? "any-battlefield" : "choose";
-  for (const targetId of targets) {
-    const owner = ctx.cards.getCardOwner(targetId as CoreCardId) ?? ctx.playerId;
-    if (playerCannotPlay(ctx, owner)) {
-      continue;
-    }
-    ctx.draft.interaction = addToChain(
-      ctx.draft.interaction ?? createInteractionState(),
+    beginPlay(
+      io,
       {
-        cardId: targetId,
-        controller: owner,
-        effect: { target: targetId, to: dest, type: "move" },
-        triggered: true,
-        type: "ability",
+        cardId,
+        // "…pay [fury] to play me" / "[Deathknell] play me": the ability's own
+        // cost (if any) was the price — the card's cost is not paid again unless
+        // the instruction names one ("play me for [rainbow]" — 356.1.a).
+        costMode:
+          eff.cost === undefined && eff.ignoreCost === undefined && eff.reduceCost === undefined
+            ? { kind: "ignore-all" }
+            : costModeOfPlayEffect(eff, energyReductionOf(eff, ctx)),
+        declinable: eff.optional === true,
+        location: locationSpecOf(eff.toLocation, ctx, ctx.playerId),
+        playerId: ctx.playerId,
+        sourceCardId: cardId,
+        via: "effect",
+        ...(eff.then !== undefined ? { then: eff.then } : {}),
       },
-      turnOrder,
     );
-  }
-}
-
-/**
- * rule 135.2.e.5 — pay a flat `{energy, power[]}` cost out of the player's
- * pool. A `[rainbow]` pip is paid from whichever Domain has the most left;
- * pooled universal Power covers a named-Domain shortfall. Kept local so the
- * effect layer does not depend on the activated-ability move.
- */
-function payFlatCost(
-  ctx: EffectContext,
-  cost: { energy?: number; power?: readonly string[] },
-): boolean {
-  const pool = ctx.draft.runePools[ctx.playerId];
-  if (!pool) {
-    return false;
-  }
-  const energy = cost.energy ?? 0;
-  if (pool.energy < energy) {
-    return false;
-  }
-  const power: Record<string, number> = {};
-  for (const [d, v] of Object.entries(pool.power)) {
-    if (typeof v === "number" && v > 0) {
-      power[d] = v;
-    }
-  }
-  for (const domain of cost.power ?? []) {
-    const key =
-      domain === "rainbow"
-        ? Object.entries(power).sort(([, a], [, b]) => b - a)[0]?.[0]
-        : (power[domain] ?? 0) > 0
-          ? domain
-          : (power.rainbow ?? 0) > 0
-            ? "rainbow"
-            : undefined;
-    if (key === undefined || (power[key] ?? 0) <= 0) {
-      return false;
-    }
-    power[key] = (power[key] ?? 0) - 1;
-  }
-  pool.energy -= energy;
-  for (const domain of Object.keys(pool.power)) {
-    (pool.power as Record<string, number>)[domain] = power[domain] ?? 0;
-  }
-  return true;
-}
-
-/**
- * rule-id: ogn-194-298 (rules 355.13 / 356.1.a / 355.2) — "you may play me for
- * [rainbow]": an optional self play for a stated ALTERNATIVE cost (the printed
- * cost is replaced, not added to), offered while the card sits outside the
- * board. Accepting pays exactly that cost and the unit enters its controller's
- * base, or a battlefield they control when there is a choice.
- */
-function playSelfUnitForCost(effect: ExecutableEffect, ctx: EffectContext): void {
-  const cardId = ctx.sourceCardId;
-  if (playerCannotPlay(ctx, ctx.playerId)) {
     return;
   }
-  const cost = ((effect as { cost?: { energy?: number; power?: readonly string[] } }).cost ??
-    {}) as { energy?: number; power?: readonly string[] };
-  if ((effect as { optional?: unknown }).optional === true) {
-    if (ctx.draft.pendingChoice) {
-      return;
-    }
-    // Rule 355.8: never offer a play the controller could not pay for.
-    const pool = ctx.draft.runePools[ctx.playerId];
-    if (!pool || pool.energy < (cost.energy ?? 0)) {
-      return;
-    }
-    const pips = (cost.power ?? []).length;
-    const available = Object.values(pool.power).reduce<number>(
-      (a, b) => a + (typeof b === "number" ? b : 0),
-      0,
+
+  // B. "play a <card> from your trash / banishment" — the performer picks one
+  // of the eligible cards in that pile (355.10), then plays it.
+  if ((from === "trash" || from === "banishment") && typeof eff.target === "object") {
+    offerPileCandidates(eff, ctx, from);
+    return;
+  }
+
+  // C. "play a <card> from your hand …" — a private zone: the performer picks
+  // (and may always decline — 128.6), then plays it.
+  const boundInHand =
+    ctx.boundTargets?.filter((id) => ctx.zones.getCardZone(id as CoreCardId) === "hand") ?? [];
+  if (from === "hand" && boundInHand.length === 0) {
+    const template = specTemplate(eff, ctx, ctx.playerId);
+    const candidates = playCandidatesFromHand(effect, ctx).filter((id) =>
+      canPerformEffectPlay(io, { ...template, cardId: id }),
     );
-    if (available < pips) {
+    if (candidates.length === 0 || ctx.draft.pendingChoice) {
       return;
     }
     ctx.draft.pendingChoice = {
-      effect: { ...(effect as object), optional: false },
-      playerId: ctx.playerId,
-      sourceCardId: cardId,
-      type: "confirm",
-      // biome-ignore lint/suspicious/noExplicitAny: branded id types
-    } as any;
+      onPicked: "play",
+      optional: true,
+      playSpec: template,
+      prompter: ctx.playerId,
+      remaining: 1,
+      revealed: [...candidates],
+      revealer: ctx.playerId,
+      sourceCardId: ctx.sourceCardId,
+      type: "reveal-and-pick",
+    } as unknown as typeof ctx.draft.pendingChoice;
     return;
   }
-  if (!payFlatCost(ctx, cost)) {
-    return;
+
+  // D. explicit objects ("banish a unit, then its owner plays it …", a card a
+  // previous step named): one play per target. A player can only play their
+  // OWN card this way (rule 103), so the performer is the card's owner —
+  // whoever controlled it before ("its owner plays it", 191.1) — unless the
+  // instruction explicitly hands the play to this effect's controller.
+  const targets = from === "hand" ? boundInHand : getTargetIds(effect, ctx);
+  for (const targetId of targets) {
+    const type = registry.getCardType(targetId);
+    if (type !== "unit" && type !== "gear" && type !== "equipment" && type !== "spell") {
+      continue;
+    }
+    const owner = (ctx.cards.getCardOwner(targetId as CoreCardId) as string | undefined) ?? ctx.playerId;
+    const performer = eff.player === "controller" || eff.player === "self" ? ctx.playerId : owner;
+    beginPlay(
+      io,
+      {
+        ...specTemplate(eff, ctx, performer),
+        cardId: targetId,
+        ...(performer !== ctx.playerId ? { stagedBy: ctx.playerId } : {}),
+        via: eff.toLocation === "same" ? "replay" : "effect",
+      },
+    );
   }
-  const destinations = ["base", ...controlledBattlefieldZones(ctx)];
-  if (destinations.length === 1) {
-    enterUnitFromEffect(cardId, "base", ctx);
-    return;
-  }
-  ctx.draft.pendingChoice = {
-    cardId,
-    options: destinations,
-    playerId: ctx.playerId,
-    sourceCardId: cardId,
-    type: "choose-destination",
-  } as typeof ctx.draft.pendingChoice;
+}
+
+/** The instruction's play bundle for `performer`, minus the card. */
+function specTemplate(eff: PlayEffectShape, ctx: EffectContext, performer: string): Omit<EffectPlaySpec, "cardId"> {
+  return {
+    costMode: costModeOfPlayEffect(eff, energyReductionOf(eff, ctx)),
+    location: locationSpecOf(eff.toLocation, ctx, performer),
+    playerId: performer,
+    sourceCardId: ctx.sourceCardId,
+    via: "effect",
+    ...(eff.recycleAfter === true ? { recycleAfter: true } : {}),
+    ...(eff.then !== undefined ? { then: eff.then } : {}),
+  };
 }
 
 /**
- * rule 355.1.a / 356.1.b.3 — ignoring a card's cost only waives the cost it
- * HAS: an optional additional cost such as [Accelerate] is still the playing
- * player's to elect and to pay in full. The unit has already entered (it is on
- * the board exhausted); accepting the prompt charges the Accelerate cost and
- * readies it (rule 356.2.b.1). The prompt is only raised when the cost is
- * actually payable, so a player who cannot pay is never asked.
+ * rule 355.10 / 419.3.c — "play a <card> from your trash / banishment": gather
+ * the pile's cards that match the descriptor (type, printed-cost bounds — 206,
+ * tags, "banished with this" link — 397, the caps set by a unit killed to pay
+ * this card's own cost — 356.1.b.1 / 357.2) AND that the performer could
+ * actually play right now, and let them pick one (declinable — the pick may
+ * always be passed up). Nothing eligible: nothing happens.
  */
-function offerAccelerateOnInstructedPlay(cardId: string, ctx: EffectContext): void {
-  if (ctx.draft.pendingChoice) {
-    return;
-  }
-  const optional = getOptionalPlayCost(cardId);
-  if (optional?.kind !== "accelerate") {
-    return;
-  }
-  const cost = { energy: optional.cost?.energy ?? 0, power: [...(optional.cost?.power ?? [])] };
-  const pool = ctx.draft.runePools[ctx.playerId];
-  if (!pool || pool.energy < cost.energy) {
-    return;
-  }
-  const needed: Record<string, number> = {};
-  for (const domain of cost.power) {
-    needed[domain] = (needed[domain] ?? 0) + 1;
-  }
-  for (const [domain, count] of Object.entries(needed)) {
-    if ((pool.power[domain as keyof typeof pool.power] ?? 0) < count) {
-      return;
+function offerPileCandidates(eff: PlayEffectShape, ctx: EffectContext, pile: "trash" | "banishment"): void {
+  const registry = getGlobalCardRegistry();
+  const target = eff.target as { type?: string; controller?: string; filter?: unknown } | undefined;
+  // rule 356.1.b.1 / 357.2 — "Play a unit from your trash that costs no more
+  // Energy and no more Power than the killed unit, ignoring its cost": the
+  // unit killed to pay this card's mandatory additional cost sets two
+  // independent caps, and the play itself is free. That unit is in the trash
+  // by now but is not a candidate — targets are locked (355.5) before the
+  // additional cost is paid (357).
+  const mandatoryKill = getOptionalPlayCost(ctx.sourceCardId);
+  const killedForCost =
+    pile === "trash" && mandatoryKill?.kind === "kill" && mandatoryKill.mandatory === true
+      ? ctx.draft.lastKilledUnitId
+      : undefined;
+  const killedCaps =
+    killedForCost === undefined
+      ? undefined
+      : {
+          energy: registry.getEnergyCost(killedForCost) ?? 0,
+          id: killedForCost,
+          power: (registry.getPowerCost(killedForCost) ?? []).length,
+        };
+  // rule 108.2 (ven-114-166 Kharox) — "a unit in THEIR trash": the opponent's
+  // pile is the origin; the performer still plays (and so controls) the card.
+  const pileOwner = pile === "trash" ? enemyTrashOwner(target, ctx) : ctx.playerId;
+  const linked =
+    eff.linkedToSource === true
+      ? new Set(
+          ((ctx.cards.getCardMeta?.(ctx.sourceCardId as CoreCardId) as { exiledByThis?: readonly string[] } | undefined)
+            ?.exiledByThis ?? []) as readonly string[],
+        )
+      : undefined;
+  const costFilters = Array.isArray(target?.filter)
+    ? (target?.filter as readonly unknown[])
+    : target?.filter !== undefined
+      ? [target.filter]
+      : [];
+  const template: Omit<EffectPlaySpec, "cardId"> = {
+    ...specTemplate(eff, ctx, ctx.playerId),
+    ...(killedCaps !== undefined ? { costMode: { kind: "ignore-all" as const } } : {}),
+  };
+  const io = ctx as unknown as PlayIO;
+  const cards = ctx.zones.getCardsInZone(pile as CoreZoneId, pileOwner as CorePlayerId) as readonly string[];
+  const candidates = cards.filter((id) => {
+    if (linked !== undefined && !linked.has(id)) {
+      return false;
     }
+    const cardType = registry.getCardType(id);
+    if (target?.type && target.type !== "card" && target.type !== cardType) {
+      return false;
+    }
+    if (killedCaps !== undefined) {
+      if (
+        id === killedCaps.id ||
+        (registry.getEnergyCost(id) ?? 0) > killedCaps.energy ||
+        (registry.getPowerCost(id) ?? []).length > killedCaps.power
+      ) {
+        return false;
+      }
+    }
+    if (!costFilters.every((f) => matchesPrintedCostFilter(id, f, ctx) && matchesCardTagFilter(id, f))) {
+      return false;
+    }
+    return canPerformEffectPlay(io, { ...template, cardId: id });
+  });
+  // A board pick bound by the chain resolver is meaningless here; only a pick
+  // among the pile's candidates counts.
+  const chosen = ctx.boundTargets?.find((id) => candidates.includes(id));
+  if (chosen !== undefined) {
+    beginPlay(io, { ...template, cardId: chosen });
+    return;
   }
+  if (candidates.length === 0 || ctx.draft.pendingChoice) {
+    return;
+  }
+  // rule 355.10: the performer chooses which card to play; the choice is
+  // theirs alone, so it is offered even with a single candidate.
   ctx.draft.pendingChoice = {
-    acceleratePlay: { cardId, cost, readyOnly: true },
-    playerId: ctx.playerId,
-    // rule 356.2.b.1 — accepting charges `optInCost` and then runs the
-    // resolved effect: the unit that already entered flips to ready.
-    resolved: {
-      cardId,
-      controller: ctx.playerId,
-      effect: { target: cardId, type: "ready" },
-      optInCost: cost,
-      triggered: true,
-      type: "ability",
-    },
+    onPicked: "play",
+    optional: true,
+    playFrom: "trash",
+    playSpec: template,
+    prompter: ctx.playerId,
+    remaining: 1,
+    revealed: [...candidates],
+    revealer: ctx.playerId,
     sourceCardId: ctx.sourceCardId,
-    type: "opt-in",
-  } as NonNullable<EffectContext["draft"]["pendingChoice"]>;
+    type: "reveal-and-pick",
+  } as unknown as typeof ctx.draft.pendingChoice;
+}
+
+/** rule 356.4 — the instruction's flat Energy discount ("reducing its cost by [3]", or the recycled unit's Might). */
+function energyReductionOf(eff: PlayEffectShape, ctx: EffectContext): number {
+  return trashPlayEnergyReduction(eff as unknown as ExecutableEffect, ctx);
 }
 
 /**
@@ -611,252 +560,6 @@ function enemyTrashOwner(
 }
 
 /**
- * rule-id: ogn-196-298 — "play a unit from your trash, ignoring its Energy
- * cost. (You must still pay its Power cost.)". Rule 356.1.b: ignoring one cost
- * component leaves the others payable, so only trash cards whose remaining
- * cost the controller can pay are legal choices (rule 355.8).
- */
-function playFromTrash(effect: ExecutableEffect, ctx: EffectContext): void {
-  const registry = getGlobalCardRegistry();
-  const target = (effect as { target?: unknown }).target as { type?: string } | undefined;
-  const ignoreCost = (effect as { ignoreCost?: unknown }).ignoreCost;
-  // rule 356.4 (rule-id: sfd-026-221) — "Reduce its Energy cost by the Might of
-  // the unit you recycled": the discount is only known once the cost has been
-  // paid, so it is read from the recycled card (this effect's trigger source).
-  const energyReduction = trashPlayEnergyReduction(effect, ctx);
-  // rule 356.1.b.1 / 357.2 — "Play a unit from your trash that costs no more
-  // Energy and no more Power than the killed unit, ignoring its cost": the
-  // unit killed to pay this card's mandatory additional cost sets two
-  // independent caps, and the play itself is free. That unit is in the trash
-  // by now but is not a candidate — targets are locked (355.5) before the
-  // additional cost is paid (357).
-  const mandatoryKill = getOptionalPlayCost(ctx.sourceCardId);
-  const killedForCost =
-    mandatoryKill?.kind === "kill" && mandatoryKill.mandatory === true
-      ? ctx.draft.lastKilledUnitId
-      : undefined;
-  const killedCaps =
-    killedForCost === undefined
-      ? undefined
-      : {
-          energy: registry.getEnergyCost(killedForCost) ?? 0,
-          id: killedForCost,
-          power: (registry.getPowerCost(killedForCost) ?? []).length,
-        };
-  const extras: CostExtras =
-    killedCaps !== undefined
-      ? { ignoreBaseCost: true }
-      : ignoreCost === true
-      ? { ignoreBaseCost: true }
-      : ignoreCost === "energy"
-        ? { ignoreEnergyCost: true }
-        : energyReduction > 0
-          ? { additionalCost: { energy: -energyReduction } }
-          : {};
-  // rule 356.1.b / 108.2 (rule-id: ven-114-166 Kharox) — "choose a unit in
-  // THEIR trash and play it": an enemy controller on the descriptor names the
-  // OPPONENT's trash as the origin pile; the card is still played (and so
-  // controlled) by this effect's controller.
-  const trashOwner = enemyTrashOwner(target, ctx);
-  const trash = ctx.zones.getCardsInZone(
-    "trash" as CoreZoneId,
-    trashOwner as CorePlayerId,
-  ) as readonly string[];
-  // rule 206 (ogn-226-298): "a unit costing no more than [3] and no more than
-  // [rainbow]" — printed-cost bounds on the descriptor gate the candidates.
-  const costFilters = Array.isArray((target as { filter?: unknown } | undefined)?.filter)
-    ? ((target as { filter: readonly unknown[] }).filter as readonly unknown[])
-    : (target as { filter?: unknown } | undefined)?.filter !== undefined
-      ? [(target as { filter: unknown }).filter]
-      : [];
-  const candidates = trash.filter((id) => {
-    const cardType = registry.getCardType(id);
-    if (target?.type && target.type !== "card" && target.type !== cardType) {
-      return false;
-    }
-    if (killedCaps !== undefined) {
-      if (id === killedCaps.id) {
-        return false;
-      }
-      if ((registry.getEnergyCost(id) ?? 0) > killedCaps.energy) {
-        return false;
-      }
-      if ((registry.getPowerCost(id) ?? []).length > killedCaps.power) {
-        return false;
-      }
-    }
-    if (!costFilters.every((f) => matchesPrintedCostFilter(id, f, ctx))) {
-      return false;
-    }
-    // rule-id: sfd-026-221 (rule 355.8) — "play a MECH from your trash": a tag
-    // bound on the descriptor gates the candidates too.
-    if (!costFilters.every((f) => matchesCardTagFilter(id, f))) {
-      return false;
-    }
-    return canAffordCard(ctx.draft, ctx.playerId, id, extras, ctx.cards.getCardMeta);
-  });
-  // Board targets bound by the chain resolver are meaningless here (the card
-  // is in the trash): only a pick among the trash candidates counts.
-  let chosen = ctx.boundTargets?.find((id) => candidates.includes(id));
-  if (chosen === undefined) {
-    if (candidates.length === 0) {
-      return;
-    }
-    if (!ctx.draft.pendingChoice) {
-      // rule 355.10: the controller chooses which trash unit to play; the
-      // choice is theirs alone, so it is offered even with a single candidate.
-      ctx.draft.pendingChoice = {
-        onPicked: "play",
-        optional: true,
-        playFrom: "trash",
-        playIgnoreEnergy: extras.ignoreEnergyCost === true,
-        playIgnoreCost: extras.ignoreBaseCost === true,
-        // rule 356.4 (rule-id: sfd-026-221) — the discount survives the pick.
-        playEnergyReduction: energyReduction,
-        // rule-id: ogn-112-298 (rule 594) — "Then recycle it": a spell played
-        // from the trash goes to the bottom of its owner's Main Deck instead of
-        // back to the trash when it finishes resolving.
-        playRecycleAfter: (effect as { recycleAfter?: unknown }).recycleAfter === true,
-        prompter: ctx.playerId,
-        remaining: 1,
-        revealed: [...candidates],
-        revealer: ctx.playerId,
-        sourceCardId: ctx.sourceCardId,
-        type: "reveal-and-pick",
-      } as typeof ctx.draft.pendingChoice;
-      return;
-    }
-    chosen = candidates[0] as string;
-  }
-  deductCost(ctx.draft, ctx.playerId, chosen, extras, ctx.cards.getCardMeta);
-  if (registry.getCardType(chosen) === "unit") {
-    // rule 355.2 / 355.4 — a unit entering play from off-board is placed at its
-    // player's base OR any battlefield they control, their choice. The shared
-    // `choose-destination` handler finalizes the play (exhaust, play triggers,
-    // play count, [Accelerate] offer) exactly as the pick path does.
-    if (!offerOffBoardPlayDestination(chosen, ctx)) {
-      enterUnitFromEffect(chosen, "base", ctx);
-    }
-    return;
-  }
-  if (registry.getCardType(chosen) === "spell") {
-    castSpellFromTrash(
-      chosen,
-      ctx.playerId,
-      (effect as { recycleAfter?: unknown }).recycleAfter === true,
-      ctx,
-    );
-  }
-}
-
-/**
- * rule 355.2 / 355.4 — offer the destination for a unit played from off-board
- * when its controller has more than one legal place to put it. Returns true
- * when a prompt was parked (the play finalizes in the `choose-destination`
- * handler); false when the base is the only destination and the caller should
- * place the unit itself.
- */
-function offerOffBoardPlayDestination(cardId: string, ctx: EffectContext): boolean {
-  if (ctx.draft.pendingChoice) {
-    return false;
-  }
-  const options = [
-    "base",
-    ...Object.entries(ctx.draft.battlefields ?? {})
-      .filter(([, bf]) => (bf as { controller?: string }).controller === ctx.playerId)
-      .map(([bfId]) => `battlefield-${bfId}`),
-  ];
-  if (options.length < 2) {
-    return false;
-  }
-  ctx.draft.pendingChoice = {
-    cardId,
-    options,
-    playerId: ctx.playerId,
-    sourceCardId: ctx.sourceCardId,
-    type: "choose-destination",
-  } as typeof ctx.draft.pendingChoice;
-  return true;
-}
-
-/**
- * rule-id: unl-148-219 (Cursed Sarcophagus) — "Play a unit banished with this.
- * (You must pay its costs.)"
- *
- * rule 397: `linkedToSource` limits the candidates to the objects this card's
- * own linked trigger banished (`exiledByThis`), so a card that was already in
- * banishment, or one banished by anything else, is never offered.
- * rule 349/356: nothing is waived — a candidate the controller cannot pay for
- * in full is not a legal pick, and the pick charges the cost. The unit stays in
- * banishment until it enters the base exhausted (rule 143.4), which is what the
- * shared off-board pick path (`playFrom: "trash"`) already does.
- */
-function playFromBanishment(effect: ExecutableEffect, ctx: EffectContext): void {
-  const registry = getGlobalCardRegistry();
-  const target = (effect as { target?: unknown }).target as { type?: string } | undefined;
-  const ignoreCost = (effect as { ignoreCost?: unknown }).ignoreCost;
-  const extras: CostExtras =
-    ignoreCost === true
-      ? { ignoreBaseCost: true }
-      : ignoreCost === "energy"
-        ? { ignoreEnergyCost: true }
-        : {};
-  const linked =
-    (effect as { linkedToSource?: unknown }).linkedToSource === true
-      ? new Set(
-          ((
-            ctx.cards.getCardMeta?.(ctx.sourceCardId as CoreCardId) as
-              | { exiledByThis?: readonly string[] }
-              | undefined
-          )?.exiledByThis ?? []) as readonly string[],
-        )
-      : undefined;
-  const banishment = ctx.zones.getCardsInZone(
-    "banishment" as CoreZoneId,
-    ctx.playerId as CorePlayerId,
-  ) as readonly string[];
-  const candidates = banishment.filter((id) => {
-    if (linked !== undefined && !linked.has(id)) {
-      return false;
-    }
-    const cardType = registry.getCardType(id);
-    if (target?.type && target.type !== "card" && target.type !== cardType) {
-      return false;
-    }
-    return canAffordCard(ctx.draft, ctx.playerId, id, extras, ctx.cards.getCardMeta);
-  });
-  let chosen = ctx.boundTargets?.find((id) => candidates.includes(id));
-  if (chosen === undefined) {
-    if (candidates.length === 0) {
-      return;
-    }
-    if (!ctx.draft.pendingChoice) {
-      ctx.draft.pendingChoice = {
-        onPicked: "play",
-        optional: true,
-        // The shared off-board play path: the picked card is left where it is
-        // and moved straight onto the board when the play finalizes.
-        playFrom: "trash",
-        playIgnoreCost: extras.ignoreBaseCost === true,
-        playIgnoreEnergy: extras.ignoreEnergyCost === true,
-        prompter: ctx.playerId,
-        remaining: 1,
-        revealed: [...candidates],
-        revealer: ctx.playerId,
-        sourceCardId: ctx.sourceCardId,
-        type: "reveal-and-pick",
-      } as typeof ctx.draft.pendingChoice;
-      return;
-    }
-    chosen = candidates[0] as string;
-  }
-  deductCost(ctx.draft, ctx.playerId, chosen, extras, ctx.cards.getCardMeta);
-  if (registry.getCardType(chosen) === "unit") {
-    enterUnitFromEffect(chosen, "base", ctx);
-  }
-}
-
-/**
  * rule-id: ogn-112-298 (rules 354.2 / 356.1.b / 594) — a spell an effect plays
  * from the trash goes on the chain like any other spell play: its controller is
  * the player the effect instructed, its targets are chosen as it resolves, and
@@ -872,165 +575,12 @@ export function castSpellFromTrash(
     zones: { moveCard: (p: { cardId: CoreCardId; targetZoneId: CoreZoneId }) => void };
   },
 ): void {
-  const spellEffect = (getGlobalCardRegistry().getAbilities(cardId) ?? []).find(
-    (a) => a.type === "spell",
-  )?.effect;
-  bag.zones.moveCard({ cardId: cardId as CoreCardId, targetZoneId: "chain" as CoreZoneId });
-  bag.draft.interaction = addToChain(
-    bag.draft.interaction ?? createInteractionState(),
-    {
-      cardId,
-      controller: playerId,
-      effect: spellEffect,
-      resolveTo: recycleAfter ? "mainDeck" : "trash",
-      type: "spell",
-    },
-    Object.keys(bag.draft.players),
-  );
-  // Rule 724 (Legion): a card played by an effect still counts as played.
-  if (bag.draft.cardsPlayedThisTurn) {
-    bag.draft.cardsPlayedThisTurn[playerId] = (bag.draft.cardsPlayedThisTurn[playerId] ?? 0) + 1;
-  }
-}
-
-/**
- * rule-id: unl-179-219 — "play a unit from your hand to your base, ignoring
- * its Energy cost. (You must still pay its Power cost.)". Rule 355.8: only
- * hand cards whose remaining cost the controller can pay are legal choices;
- * rule 355.10: the choice is theirs alone, so it is offered even with one
- * candidate.
- */
-function playFromHandToBase(effect: ExecutableEffect, ctx: EffectContext): void {
-  const ignoreCost = (effect as { ignoreCost?: unknown }).ignoreCost;
-  const extras: CostExtras = ignoreCost === true ? { ignoreBaseCost: true } : { ignoreEnergyCost: true };
-  const candidates = playCandidatesFromHand(effect, ctx).filter((id) =>
-    canAffordCard(ctx.draft, ctx.playerId, id, extras, ctx.cards.getCardMeta),
-  );
-  // The prompt hands the pick back through `then` as the trigger source.
-  const fromPick = (effect as { pickedFromPrompt?: boolean }).pickedFromPrompt
-    ? ctx.triggerSourceId
-    : undefined;
-  let chosen = [fromPick, ...(ctx.boundTargets ?? [])].find(
-    (id): id is string => id !== undefined && candidates.includes(id),
-  );
-  if (chosen === undefined) {
-    if (candidates.length === 0 || ctx.draft.pendingChoice) {
-      return;
-    }
-    // The pick itself does nothing (the card is already in hand); the play
-    // happens in `then`, which receives the picked card as its trigger source.
-    ctx.draft.pendingChoice = {
-      onPicked: "draw",
-      optional: true,
-      prompter: ctx.playerId,
-      remaining: 1,
-      revealed: [...candidates],
-      revealer: ctx.playerId,
-      sourceCardId: ctx.sourceCardId,
-      then: { ...(effect as object), pickedFromPrompt: true },
-      type: "reveal-and-pick",
-    } as typeof ctx.draft.pendingChoice;
-    return;
-  }
-  deductCost(ctx.draft, ctx.playerId, chosen, extras, ctx.cards.getCardMeta);
-  enterUnitFromEffect(chosen, "base", ctx);
-}
-
-/** rule-id: sfd-111-221 — `toLocation: { battlefield: "controlled" }`. */
-function isControlledBattlefieldDest(toLocation: unknown): boolean {
-  return (
-    typeof toLocation === "object" &&
-    toLocation !== null &&
-    (toLocation as { battlefield?: unknown }).battlefield === "controlled"
-  );
-}
-
-/** rule-id: unl-184-219 (rule 355.2.b) — `toLocation: { battlefield: "any" }`. */
-function isAnyBattlefieldDest(toLocation: unknown): boolean {
-  return (
-    typeof toLocation === "object" &&
-    toLocation !== null &&
-    (toLocation as { battlefield?: unknown }).battlefield === "any"
-  );
-}
-
-/**
- * rule 355.2 (rule-id: sfd-111-221) — the battlefield zones the effect's
- * controller currently controls and that can legally receive a unit play.
- */
-function controlledBattlefieldZones(ctx: EffectContext): string[] {
-  const battlefields =
-    (ctx.draft as { battlefields?: Record<string, { controller?: string | null }> }).battlefields ?? {};
-  return Object.entries(battlefields)
-    .filter(([id, bf]) => bf?.controller === ctx.playerId && !battlefieldForbidsUnitPlays(id))
-    .map(([id]) => `battlefield-${id}`);
-}
-
-/**
- * rule-id: sfd-111-221 — "You may play a unit from hand to a battlefield you
- * control, reducing its cost by [3]". Rule 355.10.a: the hand is not a board
- * zone, so the controller picks the unit as this effect resolves; rule 356.1.b:
- * the reduction only discounts the Energy component, the rest is still paid;
- * rule 355.2: the destination is limited to their own battlefields, and is
- * prompted for only when more than one qualifies.
- */
-function playFromHandToControlledBattlefield(effect: ExecutableEffect, ctx: EffectContext): void {
-  if (playerCannotPlay(ctx, ctx.playerId)) {
-    return;
-  }
-  const destinations = controlledBattlefieldZones(ctx);
-  if (destinations.length === 0) {
-    return;
-  }
-  const reduce = (effect as { reduceCost?: { energy?: number } }).reduceCost;
-  const extras: CostExtras =
-    reduce?.energy !== undefined ? { additionalCost: { energy: -reduce.energy } } : {};
-  const candidates = playCandidatesFromHand(effect, ctx).filter(
-    (id) =>
-      getGlobalCardRegistry().getCardType(id) === "unit" &&
-      canAffordCard(ctx.draft, ctx.playerId, id, extras, ctx.cards.getCardMeta),
-  );
-  // The prompt hands the pick back through `then` as the trigger source.
-  const fromPick = (effect as { pickedFromPrompt?: boolean }).pickedFromPrompt
-    ? ctx.triggerSourceId
-    : undefined;
-  const chosen = [fromPick, ...(ctx.boundTargets ?? [])].find(
-    (id): id is string => id !== undefined && candidates.includes(id),
-  );
-  if (chosen === undefined) {
-    if (candidates.length === 0 || ctx.draft.pendingChoice) {
-      return;
-    }
-    // The pick itself does nothing (the card is already in hand); the play
-    // happens in `then`, which receives the picked card as its trigger source.
-    ctx.draft.pendingChoice = {
-      onPicked: "draw",
-      optional: true,
-      prompter: ctx.playerId,
-      remaining: 1,
-      revealed: [...candidates],
-      revealer: ctx.playerId,
-      sourceCardId: ctx.sourceCardId,
-      then: { ...(effect as object), pickedFromPrompt: true },
-      type: "reveal-and-pick",
-    } as typeof ctx.draft.pendingChoice;
-    return;
-  }
-  deductCost(ctx.draft, ctx.playerId, chosen, extras, ctx.cards.getCardMeta);
-  if (destinations.length === 1) {
-    enterUnitFromEffect(chosen, destinations[0] as string, ctx);
-    return;
-  }
-  // rule 355.2: more than one controlled battlefield — the controller chooses.
-  // The choose-destination branch of `pending-choice.ts` finalizes the play
-  // (exhaust, play-self / play-card triggers) for a card entering from hand.
-  ctx.draft.pendingChoice = {
-    cardId: chosen,
-    options: destinations,
-    playerId: ctx.playerId,
-    sourceCardId: ctx.sourceCardId,
-    type: "choose-destination",
-  } as typeof ctx.draft.pendingChoice;
+  putPlayedSpellOnChain(bag as unknown as PlayIO, {
+    cardId,
+    playerId,
+    resolveTo: recycleAfter ? "mainDeck" : "trash",
+    via: "effect",
+  });
 }
 
 /**
@@ -1077,60 +627,6 @@ function playCandidatesFromHand(effect: ExecutableEffect, ctx: EffectContext): s
     }
     return true;
   });
-}
-
-/** rule-id: sfd-024-221 — a target descriptor naming an Equipment/gear card. */
-function isGearTargetDescriptor(target: unknown): boolean {
-  const type = (target as { type?: unknown } | undefined)?.type;
-  return type === "equipment" || type === "gear";
-}
-
-/**
- * rule-id: sfd-024-221 (rules 355.10.a / 356.1.b.1 / 143.1.a.1) — "play an
- * Equipment … ignoring its cost" from hand. The controller picks one of the
- * eligible cards as the effect resolves; the gear enters their base and the id
- * is reported back through `playedSink` so an enclosing sequence's
- * `pendingValue` ("Attach it to me") can bind the card that was actually played.
- */
-function playGearFromHand(effect: ExecutableEffect, ctx: EffectContext): void {
-  if (playerCannotPlay(ctx, ctx.playerId)) {
-    return;
-  }
-  const ignoreCost = (effect as { ignoreCost?: unknown }).ignoreCost;
-  const extras: CostExtras =
-    ignoreCost === true
-      ? { ignoreBaseCost: true }
-      : ignoreCost === "energy"
-        ? { ignoreEnergyCost: true }
-        : {};
-  const candidates = playCandidatesFromHand(effect, ctx).filter((id) =>
-    canAffordCard(ctx.draft, ctx.playerId, id, extras, ctx.cards.getCardMeta),
-  );
-  const chosen =
-    ctx.boundTargets?.find((id) => candidates.includes(id)) ??
-    (candidates.length === 1 ? candidates[0] : undefined);
-  if (chosen === undefined) {
-    if (candidates.length > 1 && !ctx.draft.pendingChoice) {
-      ctx.draft.pendingChoice = {
-        effect,
-        options: candidates,
-        playerId: ctx.playerId,
-        remaining: 1,
-        sourceCardId: ctx.sourceCardId,
-        type: "choose-target",
-      };
-    }
-    return;
-  }
-  deductCost(ctx.draft, ctx.playerId, chosen, extras, ctx.cards.getCardMeta);
-  enterGearFromEffect(chosen, ctx);
-  const sink = (ctx as { playedSink?: { ids: string[] } }).playedSink;
-  sink?.ids.push(chosen);
-}
-
-/** rule 143.1.a.1 — gear an effect plays enters its player's base through the ONE enter path. */
-function enterGearFromEffect(cardId: string, ctx: EffectContext): void {
-  enterPlayedPermanent(ctx, { cardId, entryZone: "base", playerId: ctx.playerId, via: "effect" });
 }
 
 /**

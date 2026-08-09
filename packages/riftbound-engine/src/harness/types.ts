@@ -195,6 +195,7 @@ export type ActionVerb =
   | "hide"
   | "reveal"
   | "playChampion"
+  | "playFrom"
   | "tapRune"
   | "recycleRune"
   | "passPriority"

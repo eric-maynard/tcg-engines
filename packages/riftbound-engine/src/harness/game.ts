@@ -1061,6 +1061,15 @@ export class SeatHandle {
     return this.verb("revealHidden", card, args, `reveal(${card})`, opts);
   }
 
+  /**
+   * PlayFromZone: play a card a PERMISSION makes playable from its current zone
+   * (trash / banishment …). Location and additional costs are prompts of the
+   * play itself — pre-answer them with `{ answers: ["battlefield-bf1", "yes"] }`.
+   */
+  async playFrom(card: CardRef, opts: VerbOptions = {}): Promise<Extract<ActResult, { ok: true }>> {
+    return this.verb("playFromZone", card, {}, `playFrom(${card})`, opts);
+  }
+
   async playChampion(to: LocationRef | string = "base", opts: VerbOptions = {}): Promise<Extract<ActResult, { ok: true }>> {
     return this.verb("playFromChampionZone", undefined, { to }, `playChampion(→ ${to})`, opts, () => true);
   }

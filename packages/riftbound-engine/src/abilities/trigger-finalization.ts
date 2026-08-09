@@ -26,6 +26,7 @@
 import type { CardId as CoreCardId } from "@tcg/core";
 import type { ChainItem } from "../chain/chain-state";
 import { removeChainItem } from "../chain/chain-state";
+import { continueEffectPlay, isPendingPlayItem } from "../game-definition/moves/play/play-pipeline";
 import { buildEffectContext } from "../game-definition/moves/chain/effect-context";
 import { executeResolvedItem, optInIsPerformable } from "../game-definition/moves/chain/resolve";
 import { raiseChainDestinationChoices } from "../game-definition/moves/play/play-time-destinations";
@@ -422,13 +423,6 @@ function offerTriggerOrder(draft: RiftboundGameState, ctx: FinalizationContext):
   for (const it of fresh) {
     byController.set(it.controller, [...(byController.get(it.controller) ?? []), it]);
   }
-  const chooser = [...byController.keys()]
-    .filter((pid) => (byController.get(pid)?.length ?? 0) >= 2)
-    .sort((a, b) => rank(a) - rank(b))[0];
-  if (chooser === undefined) {
-    return;
-  }
-  const mine = byController.get(chooser) as ChainItem[];
   // Interchangeable items leave nothing to order: copies of one trigger (rule
   // 808.2 — Karthus doubling a [Deathknell]) or the same source-independent
   // effect from two cards (two Watchful Sentries' "Draw 1"). An effect that
@@ -438,9 +432,31 @@ function offerTriggerOrder(draft: RiftboundGameState, ctx: FinalizationContext):
     const sourceBound = /"self"|"trigger-source"|"here"|"source"|"same"/.test(json);
     return `${sourceBound ? it.cardId : ""}|${json}`;
   };
-  if (new Set(mine.map(signature)).size < 2) {
+  // rule 383.3.d — only abilities that triggered SIMULTANEOUSLY are ordered by
+  // their controller. Items carrying different `triggerBatch` stamps entered the
+  // Chain one after another (337.1.b) and their order is already fixed — a
+  // [Deathknell] fired by a kill vs. the play-self trigger of the unit the same
+  // effect then played (rule-id: ogn-242-298 Baited Hook).
+  const orderableGroup = (owned: readonly ChainItem[]): ChainItem[] | undefined => {
+    const byBatch = new Map<string, ChainItem[]>();
+    for (const it of owned) {
+      const key = it.triggerBatch ?? "";
+      byBatch.set(key, [...(byBatch.get(key) ?? []), it]);
+    }
+    for (const group of byBatch.values()) {
+      if (group.length >= 2 && new Set(group.map(signature)).size >= 2) {
+        return group;
+      }
+    }
+    return undefined;
+  };
+  const chooser = [...byController.keys()]
+    .filter((pid) => orderableGroup(byController.get(pid) ?? []) !== undefined)
+    .sort((a, b) => rank(a) - rank(b))[0];
+  if (chooser === undefined) {
     return;
   }
+  const mine = orderableGroup(byController.get(chooser) as ChainItem[]) as ChainItem[];
   const nameOf = (cardId: string): string =>
     (ctx.cards.getCardName?.(cardId as CoreCardId) as string | undefined) ??
     (getGlobalCardRegistry().get(cardId) as { name?: string } | undefined)?.name ??
@@ -485,16 +501,19 @@ export function finalizePendingItems(draftLike: unknown, ctx: FinalizationContex
       return;
     }
     const items = chainItems(draft);
-    const item = items?.find((it) => it.status === "pending");
+    // rule 337.1.b / 354.2 — oldest Pending Item first; an item that must wait
+    // for an effect-instructed play appended before it (`finalizeAfter`) is
+    // passed over until that play has left the Chain.
+    const blocked = (it: ChainItem): boolean =>
+      it.finalizeAfter?.some((id) => items?.some((other) => other.id === id)) === true;
+    const item = items?.find((it) => it.status === "pending" && !blocked(it));
     if (!items || !item) {
+      if (items?.some((it) => it.status === "pending")) {
+        return;
+      }
       // rule 383.3.d — everything is finalized: offer the same-controller
       // ordering of the items this batch added (soft prompt, default = as listed).
       offerTriggerOrder(draft, ctx);
-      return;
-    }
-    // rule 337.1.b / 354.2 — an effect-instructed play appended before this
-    // trigger finalizes first (it asks its location as it leaves the Chain).
-    if (item.finalizeAfter?.some((id) => items.some((it) => it.id === id))) {
       return;
     }
     if (item.countered) {
@@ -502,6 +521,15 @@ export function finalizePendingItems(draftLike: unknown, ctx: FinalizationContex
       continue;
     }
     const context = toResolveContext(ctx);
+    // rule 354.2 / 419.3 / 337.2 — a card an effect is PLAYING: finish its play
+    // (location, additional costs, payment) and let it leave the Chain — a
+    // permanent enters the board at once, a spell becomes a spell item.
+    if (isPendingPlayItem(item)) {
+      if (continueEffectPlay({ ...context, draft } as never, item) === "prompted") {
+        return;
+      }
+      continue;
+    }
 
     // Step 1 — rule 402.1 / 383.3.a (+ 383.3.b base cost on the same prompt).
     if (item.optional === true) {

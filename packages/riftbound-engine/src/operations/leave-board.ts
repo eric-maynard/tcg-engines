@@ -28,7 +28,7 @@ import type {
 import { isDieReplacementRunning, runDieBatch } from "../abilities/die-replacement-batch";
 import type { EffectContext } from "../abilities/effect-executor";
 import type { GameEvent } from "../abilities/game-events";
-import type { ChainItem } from "../chain";
+import { type ChainItem, collapseTriggerBatch } from "../chain";
 import * as replacementEffects from "../abilities/replacement-effects";
 import type { RiftboundCardMeta, RiftboundGameState } from "../types";
 import type { DelayedTrigger } from "../types/game-state";
@@ -206,6 +206,39 @@ function markNewObjectForChainTargets(draft: RiftboundGameState, cardId: string)
     if (!list.includes(cardId)) {
       list.push(cardId);
     }
+  }
+}
+
+/**
+ * rule 355.9.a.1 (rule-id: ogn-248-298) — a parked `choose-target` prompt lists
+ * the candidates that were legal when it was raised. A unit that leaves the
+ * board before the prompt is answered is no longer a legal choice, so drop it
+ * from the parked options instead of offering (and accepting) a trashed unit —
+ * Icathian Rain's later "Deal 2 to a unit" must not aim at what its first
+ * instance already killed. Prompts that deliberately look off-board (a
+ * descriptor naming a `location`) keep their own candidates.
+ */
+function dropFromPendingUnitChoice(draft: RiftboundGameState, cardId: string): void {
+  const pc = draft.pendingChoice as
+    | { type?: string; options?: unknown; effect?: { target?: unknown } }
+    | undefined;
+  if (pc?.type !== "choose-target" || !Array.isArray(pc.options)) {
+    return;
+  }
+  const target = pc.effect?.target as { type?: unknown; location?: unknown } | undefined;
+  if (
+    typeof target !== "object" ||
+    target === null ||
+    target.type !== "unit" ||
+    typeof target.location === "string"
+  ) {
+    return;
+  }
+  const options = pc.options as string[];
+  const kept = options.filter((id) => id !== cardId);
+  // Never strand the prompt with nothing to pick.
+  if (kept.length > 0 && kept.length !== options.length) {
+    (pc as { options: string[] }).options = kept;
   }
 }
 
@@ -699,6 +732,7 @@ export function leaveBoard(
   resetObjectState(ctx, cardId);
   if (isBoardZone(lki.zone)) {
     markNewObjectForChainTargets(ctx.draft, cardId);
+    dropFromPendingUnitChoice(ctx.draft, cardId);
   }
 
   const result: LeaveResult = {
@@ -832,6 +866,10 @@ function orderBatchTriggersByTurnOrder(draft: RiftboundGameState, chainLenBefore
     })
     .map((e) => e.item);
   (chain as { items: ChainItem[] }).items = [...head, ...tail];
+  // rule 383.3.d — the whole batch triggered simultaneously even though its
+  // events were published one card at a time, so the per-event batch stamps the
+  // trigger runner wrote become one: their controller may still order them.
+  collapseTriggerBatch(draft.interaction, chainLenBefore);
 }
 
 export function emitLeaveEvents(

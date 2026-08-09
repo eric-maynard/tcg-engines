@@ -139,7 +139,7 @@ describe("Targon's Peak (ogn-289-298)", () => {
     expect(game.p1.runes({ ready: true })).toHaveLength(2);
   });
 
-  test.failing("BUG: 'up to 2' — with a single exhausted rune that one is readied; and the chooser may take ZERO (355.13)", async () => {
+  test("'up to 2' — with a single exhausted rune that one is readied; and the chooser may take ZERO (355.13)", async () => {
     const one = await board(1, 2).build();
     await conquer(one, P1, "raider", "peak");
     expect(await endTurnTakingRunes(one, P1, 2)).toBe(1);
@@ -153,7 +153,7 @@ describe("Targon's Peak (ogn-289-298)", () => {
     expect(zero.p1.runes({ ready: true })).toHaveLength(0);
   });
 
-  test.failing("BUG: RUNES only — the exhausted conqueror (a unit) is never offered and stays exhausted through P2's turn", async () => {
+  test("RUNES only — the exhausted conqueror (a unit) is never offered and stays exhausted through P2's turn", async () => {
     const game = await board(3).build();
     await conquer(game, P1, "raider", "peak");
     expect(game.state("raider").isExhausted).toBe(true);
@@ -194,7 +194,7 @@ describe("Targon's Peak (ogn-289-298)", () => {
     expect(game.p1.runes({ ready: true })).toHaveLength(0);
   });
 
-  test.failing("BUG: 'you' = the conquering player — P2 takes the Peak on P2's turn: P2 chooses 2 of P2's runes at the end of P2's turn; P1 is never asked", async () => {
+  test("'you' = the conquering player — P2 takes the Peak on P2's turn: P2 chooses 2 of P2's runes at the end of P2's turn; P1 is never asked", async () => {
     const game = await board(3).active(P2).build();
     await conquer(game, P2, "bystander", "peak");
     expect(game.p2.points()).toBe(1);
@@ -204,7 +204,7 @@ describe("Targon's Peak (ogn-289-298)", () => {
     expect(game.p2.runes({ ready: true })).toHaveLength(2); // readied at the end of P2's turn, untouched by P1's Awaken
   });
 
-  test.failing("BUG: 392 — the scheduled ready survives losing the Peak: conquer, then Bolt my own conqueror (control lapses), end turn → still choose and ready 2 runes", async () => {
+  test("392 — the scheduled ready survives losing the Peak: conquer, then Bolt my own conqueror (control lapses), end turn → still choose and ready 2 runes", async () => {
     const game = await board(3, 1).hand(P1, BOLT, "bolt").build();
     await conquer(game, P1, "raider", "peak");
     await game.p1.tapRune();

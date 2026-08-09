@@ -232,7 +232,7 @@ export function handle_look(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
   const lookEff = effect as {
     onPicked?: "recycle" | "banish" | "discard" | "draw" | "play";
     onRest?: "recycle" | "draw" | "trash";
-    then?: { recycle?: unknown };
+    then?: { recycle?: unknown; draw?: unknown };
     filter?: {
       excludeCardTypes?: readonly string[];
       cardTypes?: readonly string[];
@@ -242,11 +242,15 @@ export function handle_look(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
     reduceCost?: { energy?: number };
     ignoreEnergyCost?: boolean;
     ignoreCost?: boolean;
-    playImmediately?: boolean;
     maxMightAboveKilled?: number;
     followUp?: unknown;
   };
   const visionLike = lookEff.then?.recycle !== undefined;
+  // rule 355.13 (ogn-291-298 The Candlelit Sanctum) — "You may recycle one or
+  // BOTH of them": when the whole `then` is the recycle (no draw partner), the
+  // pick is an "up to N" over every looked-at card, answered in one go.
+  const recycleAnyOfThem =
+    visionLike && lookEff.then?.draw === undefined && lookEff.onPicked === undefined && topN.length > 1;
   const onPicked = lookEff.onPicked ?? (visionLike ? "recycle" : "draw");
   const onRest = lookEff.onRest ?? (visionLike ? undefined : "recycle");
   const lookExcluded = lookEff.filter?.excludeCardTypes;
@@ -303,16 +307,13 @@ export function handle_look(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
     // rule 356.1.b.1 (ogn-242-298) — "play it, ignoring its cost": nothing is
     // paid, energy and power alike.
     ...(onPicked === "play" && lookEff.ignoreCost ? { playIgnoreCost: true } : {}),
-    // rule 337.1.b / 337.2 (ogn-242-298, ogn-062-298) — "banish … and play it"
-    // is ONE instruction: the play finalizes with the ability, it never waits
-    // on the chain for a priority round. This is the default for every
-    // banish-then-play pick; the `playHere` (sfd-170-221) and `followUp`
-    // (ven-089-166) shapes still route through the chain path, which is where
-    // their extra destinations / follow-up item are wired.
-    ...(onPicked === "play" &&
-    (lookEff.playImmediately ??
-      (lookEff.followUp === undefined && !(ctx.sourceZone ?? "").startsWith("battlefield-")))
-      ? { playImmediate: true }
+    // rule 386.2 (ogn-291-298) — "Put those you don't [recycle] back in any
+    // order": keeping every looked-at card leaves two or more on top, and
+    // their order is the looker's decision. Declining the recycle is the only
+    // outcome that keeps more than one (a pick recycles the rest of the pair),
+    // so the arrangement is offered from the decline path.
+    ...(visionLike && topN.length >= 2
+      ? { onDecline: { amount: topN.length, type: "order-top" } }
       : {}),
     // rule-id: ogn-062-298-look-pick-filter — "banish a unit from among
     // them" must restrict the pick; thread the effect's filter through so
@@ -335,6 +336,8 @@ export function handle_look(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
     // rule-id: ogn-235-298-vision-optional-recycle — "You may recycle it"
     // means leave-on-top is a legal outcome; the pick must be declinable.
     ...(visionLike || lookEff.optional ? { optional: true } : {}),
+    // rule 355.13 (ogn-291-298) — "one or both": up to `remaining` picks, one answer.
+    ...(recycleAnyOfThem ? { remaining: topN.length, upTo: true } : {}),
     prompter: looker,
     revealed: topN,
     revealer: looker,

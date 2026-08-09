@@ -103,6 +103,7 @@ const VERBS: Record<string, ActionVerb> = {
   passChainPriority: "passPriority",
   passShowdownFocus: "passFocus",
   playFromChampionZone: "playChampion",
+  playFromZone: "playFrom",
   playGear: "equip",
   playSpell: "cast",
   playUnit: "play",
@@ -179,12 +180,14 @@ const PARAM_ARG: Record<string, { arg: string; kind: ActionFieldKind }> = {
   targets: { arg: "targets", kind: "cards" },
   toBattlefield: { arg: "to", kind: "zone" },
   unitIds: { arg: "units", kind: "cards" },
+  // rule 356.1.b — spend a granted "ignoring its Energy cost" on this play?
+  useEnergyWaiver: { arg: "waiveEnergy", kind: "bool" },
   viaFlow: { arg: "flow", kind: "bool" },
   xAmount: { arg: "x", kind: "int" },
 };
 
 /** Params never surfaced as fields. additionalCostSpec / costs ride with the legacy cost params they mirror. */
-const HIDDEN_PARAMS = new Set(["playerId", "additionalCostSpec", "costs", "modes"]);
+const HIDDEN_PARAMS = new Set(["playerId", "additionalCostSpec", "costs", "modes", "permissionId"]);
 
 /** Follow-up priority: which still-varying field to ask about first. */
 const FOLLOW_UP_ORDER = [
@@ -1336,6 +1339,10 @@ const DEFAULT_PREFS: { param: string; keep: (v: unknown) => boolean }[] = [
   { keep: (v) => v === undefined, param: "sacrificeId" },
   { keep: (v) => v === undefined, param: "discardId" },
   { keep: (v) => v === undefined, param: "chosenTargetId" },
+  // rule 356.1.b (sfd-084-221) — a granted "ignoring its Energy cost" is now
+  // enumerated both ways; plain `play(gear)` spends it, `params:
+  // { useEnergyWaiver: false }` pays full price and keeps it.
+  { keep: (v) => v !== false, param: "useEnergyWaiver" },
 ];
 
 function choiceFor(ctx: DecisionContext, field: string, value: unknown, card?: CardRef): PickOption {
