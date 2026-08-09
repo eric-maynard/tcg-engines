@@ -286,7 +286,12 @@ function renderCardElement(card, isFacedown = false, zone = "") {
       <img class="card-img" src="/card-image/${esc(imgId)}" alt="${esc(card.name)}" ${imgLoad.img}
            onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
       <div class="card-fallback"${imgLoad.fallbackStyle}>
-        <div class="fallback-cost">${card.energyCost != null ? esc(card.energyCost) : "&mdash;"}</div>
+        <div class="fallback-cost">${(() => {
+          // rule 402.4 (sfd-103-221): show the cost the engine will charge —
+          // the server prices hand cards with static reductions applied.
+          const cost = typeof card.effectiveEnergyCost === "number" ? card.effectiveEnergyCost : card.energyCost;
+          return cost != null ? esc(cost) : "&mdash;";
+        })()}</div>
         <div class="fallback-name">${esc(card.name || "")}</div>
         <div class="fallback-type">${esc(card.cardType || "")}</div>
       </div>

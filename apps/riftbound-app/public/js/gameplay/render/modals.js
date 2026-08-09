@@ -430,9 +430,31 @@ function formatCostTokens(energy, power) {
  * (of ANY domain) waives one [D] pip. Returns the printed cost unchanged for
  * cards without that clause. -> [energy, powerCost[]]
  */
+/**
+ * rule 402.4 (sfd-103-221 Jaull-Fish, "I cost [2] less for each Mighty unit you
+ * control") — a cost modifier changes what the player actually pays, so every
+ * price this modal renders must come from the server-priced
+ * `effectiveEnergyCost`/`effectivePowerCost` when they are present; the printed
+ * cost is only the fallback for zones the server does not price.
+ * -> [energy, power[]]
+ */
+function effectivePlayCost(card) {
+  const energy =
+    typeof card?.effectiveEnergyCost === "number"
+      ? card.effectiveEnergyCost
+      : Number(card?.energyCost) || 0;
+  const power = Array.isArray(card?.effectivePowerCost)
+    ? card.effectivePowerCost
+    : Array.isArray(card?.powerCost)
+      ? card.powerCost
+      : [];
+  return [energy, power];
+}
+
 function sacrificeDiscountedCost(card, sacIds) {
-  const basePower = Array.isArray(card?.powerCost) ? [...card.powerCost] : [];
-  let energy = Number(card?.energyCost) || 0;
+  const [effEnergy, effPower] = effectivePlayCost(card);
+  const basePower = [...effPower];
+  let energy = effEnergy;
   const clause = String(card?.rulesText ?? "").match(
     /\[1\]\s*less for each Energy it costs and \[([a-z]+)\]\s*less for each Power it costs/i,
   );
@@ -454,8 +476,9 @@ function sacrificeDiscountedCost(card, sacIds) {
 }
 
 function describePlayVariantBase(m, card) {
-  const basePower = Array.isArray(card?.powerCost) ? card.powerCost : [];
-  const baseCost = formatCostTokens(card?.energyCost ?? 0, basePower);
+  // rule 402.4: price from the server's effective cost, not the printed one.
+  const [baseEnergy, basePower] = effectivePlayCost(card);
+  const baseCost = formatCostTokens(baseEnergy, basePower);
   // Rule ogn-193-298: location-only variants (base vs open battlefield) must
   // name their destination or they render as identical buttons.
   const loc = m.params?.location;
@@ -548,7 +571,7 @@ function describePlayVariantBase(m, card) {
     // Show the TOTAL the player will actually pay (base + Accelerate), power
     // included — "5 + 1 energy + mind" hid both the base mind and the real sum.
     const total = formatCostTokens(
-      (Number(card?.energyCost) || 0) + (Number(spec?.energy) || 0),
+      baseEnergy + (Number(spec?.energy) || 0),
       [...basePower, ...(Array.isArray(spec?.power) ? spec.power : [])],
     );
     return {
