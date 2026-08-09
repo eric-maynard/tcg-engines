@@ -195,8 +195,16 @@ function unitIsAloneAtLocation(card: BoardCard, ctx: StaticAbilityContext): bool
   if (!card.zone.startsWith("battlefield-")) {
     return false;
   }
+  const registry = getGlobalCardRegistry();
   const cardsAtZone = ctx.zones.getCardsInZone(card.zone as CoreZoneId);
-  return cardsAtZone.filter((id) => ctx.cards.getCardOwner(id) === card.owner).length === 1;
+  // rule 740.2.a — only other friendly UNITS break "alone"; attached gear and
+  // equipment travel with the unit but are not units.
+  return (
+    cardsAtZone.filter(
+      (id) =>
+        ctx.cards.getCardOwner(id) === card.owner && registry.get(id as string)?.cardType === "unit",
+    ).length === 1
+  );
 }
 
 /**
@@ -407,6 +415,12 @@ export function evaluateCondition(
       const showdown = interaction ? getActiveShowdown(interaction) : null;
       if (!showdown?.active) {
         return false;
+      }
+      // rule 190.6.d / 363 — printed ON a battlefield ("during showdowns here")
+      // the source IS the location, so compare battlefield ids; the battlefield
+      // card sits in the battlefield row, not in `battlefield-<id>`.
+      if (ctx.draft.battlefields?.[source.id]) {
+        return showdown.battlefieldId === source.id;
       }
       return source.zone === `battlefield-${showdown.battlefieldId}`;
     }

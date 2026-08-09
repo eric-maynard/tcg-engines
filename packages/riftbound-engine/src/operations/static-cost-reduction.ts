@@ -416,15 +416,14 @@ export function computeStaticCostIncrease(
   const playedKeywords = playedDef.keywords ?? [];
   const playedTags = playedDef.tags ?? [];
 
-  const zonesToScan: string[] = [];
-  for (const other of Object.keys(ctx.draft.players ?? {})) {
-    if (other === playerId) {
-      continue;
-    }
-    for (const zoneId of PLAYER_BOARD_ZONES) {
-      zonesToScan.push(zoneId);
-    }
-  }
+  const playedTiming = (playedDef as { timing?: string }).timing;
+
+  // rule 363/364 — a surcharge printed on a BATTLEFIELD ("cards with [Reaction]
+  // cost [rainbow] more here") names no "you", so every player's plays are
+  // scanned, including the paying player's own permanents and battlefields with
+  // no controller at all. `controller: "enemy"` auras still only reach the
+  // other seat's plays; `controller: "any"` reaches everyone's.
+  const zonesToScan: string[] = [...PLAYER_BOARD_ZONES, "battlefieldRow"];
   for (const bfId of Object.keys(ctx.draft.battlefields ?? {})) {
     zonesToScan.push(`battlefield-${bfId}`);
   }
@@ -433,12 +432,15 @@ export function computeStaticCostIncrease(
   for (const zoneId of zonesToScan) {
     const isPerPlayer = PLAYER_BOARD_ZONES.includes(zoneId);
     const ids: readonly CoreCardId[] = isPerPlayer
-      ? Object.keys(ctx.draft.players ?? {})
-          .filter((p) => p !== playerId)
-          .flatMap((p) =>
+      ? Object.keys(ctx.draft.players ?? {}).flatMap((p) =>
+          [...ctx.zones.getCardsInZone(zoneId as CoreZoneId, p as CorePlayerId)],
+        )
+      : [
+          ...ctx.zones.getCardsInZone(zoneId as CoreZoneId),
+          ...Object.keys(ctx.draft.players ?? {}).flatMap((p) =>
             [...ctx.zones.getCardsInZone(zoneId as CoreZoneId, p as CorePlayerId)],
-          )
-      : ctx.zones.getCardsInZone(zoneId as CoreZoneId);
+          ),
+        ];
     for (const permId of ids) {
       if (seen.has(permId as string)) {
         continue;
@@ -446,9 +448,6 @@ export function computeStaticCostIncrease(
       const controller =
         ctx.cards.getCardController?.(permId as CoreCardId) ??
         ctx.cards.getCardOwner(permId as CoreCardId);
-      if (!controller || controller === playerId) {
-        continue;
-      }
       seen.add(permId as string);
       for (const ability of registry.getAbilities(permId as string) ?? []) {
         if ((ability as { type?: string }).type !== "static") {
@@ -458,11 +457,21 @@ export function computeStaticCostIncrease(
           const target = (effect as { target?: unknown }).target as
             | { controller?: string }
             | undefined;
-          // Only "enemy spells cost more" auras hit the other player's plays.
-          if (!target || typeof target !== "object" || target.controller !== "enemy") {
+          if (!target || typeof target !== "object") {
             continue;
           }
-          if (!matchesCardShape(target, playedCardType, playedKeywords, playedTags)) {
+          const audience = target.controller;
+          if (audience === "enemy") {
+            // "enemy spells cost more" — only the other seat's plays.
+            if (!controller || controller === playerId) {
+              continue;
+            }
+          } else if (audience !== "any" && audience !== "all") {
+            continue;
+          }
+          if (
+            !matchesCardShape(target, playedCardType, playedKeywords, playedTags, playedTiming)
+          ) {
             continue;
           }
           const cond = (ability as { condition?: Record<string, unknown> }).condition;
@@ -470,7 +479,7 @@ export function computeStaticCostIncrease(
             const sourceZone = findPermanentZone(ctx, permId as string) ?? zoneId;
             const passes = evaluateCondition(
               cond,
-              { id: permId as string, owner: controller, zone: sourceZone },
+              { id: permId as string, owner: controller ?? playerId, zone: sourceZone },
               {
                 cards: {
                   getCardMeta: ctx.cards.getCardMeta,
@@ -1052,6 +1061,7 @@ function matchesCardShape(
   playedCardType: string | undefined,
   playedKeywords: readonly string[],
   playedTags: readonly string[] = [],
+  playedTiming?: string,
 ): boolean {
   // Type filter (when present).
   if (t.type) {
@@ -1068,8 +1078,13 @@ function matchesCardShape(
     }
   }
   // Keyword filter (when present).
+  // rule 811.6 / 251 — [Reaction] and [Action] are printed as the card's TIMING,
+  // not as entries in `keywords`, so a "cards with [Reaction]" audience has to
+  // read the timing too (a Hidden card is played facedown at Reaction timing).
   if (t.keyword && !playedKeywords.includes(t.keyword)) {
-    return false;
+    if (playedTiming === undefined || t.keyword.toLowerCase() !== playedTiming.toLowerCase()) {
+      return false;
+    }
   }
   // rule 356.4 — tag-scoped auras ("Your Dragons' Energy costs are reduced …").
   // Tags are matched case-insensitively so a plural/singular mismatch in

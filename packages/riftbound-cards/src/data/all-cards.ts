@@ -808,6 +808,27 @@ const JSON_CARD_ENGINE_FLAGS: Record<string, Record<string, unknown>> = {
   "ven-004-166": {
     abilities: [{ effect: { keyword: "Tank", type: "ignore-keyword" }, type: "static" }],
   },
+  // rule 363 / 356.3 / 811.6 — Mystic Vortex: "During showdowns here, cards with
+  // [Reaction] cost [rainbow] more to play." The generator emits `abilities: []`.
+  // It names no "you", so the audience is EVERY player's cards (`controller:
+  // "any"`), and the scope is the showdown's location, not the played card's —
+  // hence a plain `while-in-showdown` condition on the battlefield itself.
+  // Hidden cards have [Reaction] (811.6) and a cost increase survives "ignoring
+  // its base cost" (356.1.b.3), so flipping a facedown card is no longer free.
+  "ven-160-166": {
+    abilities: [
+      {
+        condition: { type: "while-in-showdown" },
+        effect: {
+          amount: { power: ["rainbow"] },
+          scope: "play",
+          target: { controller: "any", keyword: "Reaction" },
+          type: "cost-increase",
+        },
+        type: "static",
+      },
+    ],
+  },
   // rule 828.1.d / 419.3 / 206 — Tail-Cloaked Matriarch: "[Empower] [2][chaos] /
   // When I become [Empowered], you may choose a unit in your trash with Energy
   // cost no more than [3] and Power cost no more than [rainbow]. Play it to your

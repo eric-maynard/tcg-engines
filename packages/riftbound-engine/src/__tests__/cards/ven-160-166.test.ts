@@ -55,7 +55,7 @@ function board(p1Power: Record<string, number> = { rainbow: 1 }, p2Power: Record
 }
 
 describe("Mystic Vortex (ven-160-166)", () => {
-  test.failing("BUG: registry payload — no ability is parsed at all; expected a static cost-increase of [rainbow] on Reaction cards conditioned on a showdown here", async () => {
+  test("registry payload — no ability is parsed at all; expected a static cost-increase of [rainbow] on Reaction cards conditioned on a showdown here", async () => {
     const def = (await loadDefaultCardPool()).get(CARD);
     expect(def).toMatchObject({ cardType: "battlefield", name: "Mystic Vortex" });
     const abilities = (def?.abilities ?? []) as { type?: string }[];
@@ -67,7 +67,7 @@ describe("Mystic Vortex (ven-160-166)", () => {
     expect(json.toLowerCase()).toContain("showdown");
   });
 
-  test.failing("BUG: attacker's Reaction spell during the showdown HERE should cost 2 energy + [rainbow] (Discipline: 3/1 → 1/0); the surcharge is not applied", async () => {
+  test("attacker's Reaction spell during the showdown HERE should cost 2 energy + [rainbow] (Discipline: 3/1 → 1/0); the surcharge is not applied", async () => {
     const game = await board().build();
     await game.p1.move("atk", "mv");
     expect(game.decision()).toMatchObject({ context: "showdown", kind: "action", seat: P1 });
@@ -75,13 +75,13 @@ describe("Mystic Vortex (ven-160-166)", () => {
     expect(game.p1.resources()).toEqual({ energy: 1, power: { rainbow: 0 } });
   });
 
-  test.failing("BUG: affordability — with 2 energy and NO power, Discipline must not be playable inside a showdown at the Vortex", async () => {
+  test("affordability — with 2 energy and NO power, Discipline must not be playable inside a showdown at the Vortex", async () => {
     const game = await board({}).resources(P1, { energy: 2 }).build();
     await game.p1.move("atk", "mv");
     expect(game.p1.can("cast", "disc")).toBe(false);
   });
 
-  test.failing("BUG: 'cards' means everyone's — the DEFENDER's own Reaction spell during the showdown here also pays +[rainbow] (P2: 2/1 → 0/0)", async () => {
+  test("'cards' means everyone's — the DEFENDER's own Reaction spell during the showdown here also pays +[rainbow] (P2: 2/1 → 0/0)", async () => {
     const game = await board().build();
     await game.p1.move("atk", "mv");
     await game.p1.passFocus();
@@ -90,7 +90,7 @@ describe("Mystic Vortex (ven-160-166)", () => {
     expect(game.p2.resources()).toEqual({ energy: 0, power: { rainbow: 0 } });
   });
 
-  test.failing("BUG: Hidden interplay (811.6 + 356.1.b.3) — flipping the facedown card HERE during the showdown here costs exactly [rainbow] instead of being free", async () => {
+  test("Hidden interplay (811.6 + 356.1.b.3) — flipping the facedown card HERE during the showdown here costs exactly [rainbow] instead of being free", async () => {
     const game = await board().build();
     await game.p1.move("atk", "mv");
     await game.p1.passFocus();
@@ -99,14 +99,14 @@ describe("Mystic Vortex (ven-160-166)", () => {
     expect(game.p2.resources()).toEqual({ energy: 2, power: { rainbow: 0 } });
   });
 
-  test.failing("BUG: with no power at all the facedown card here cannot be flipped during a showdown here (the [rainbow] surcharge is unpayable)", async () => {
+  test("with no power at all the facedown card here cannot be flipped during a showdown here (the [rainbow] surcharge is unpayable)", async () => {
     const game = await board({ rainbow: 1 }, {}).build();
     await game.p1.move("atk", "mv");
     await game.p1.passFocus();
     expect(game.p2.can("reveal", "hiddenHere")).toBe(false);
   });
 
-  test.failing("BUG: the scope is the SHOWDOWN's location — a Hidden card flipped at ANOTHER battlefield while the showdown is open here still pays +[rainbow]", async () => {
+  test("the scope is the SHOWDOWN's location — a Hidden card flipped at ANOTHER battlefield while the showdown is open here still pays +[rainbow]", async () => {
     const game = await board().build();
     await game.p1.move("atk", "mv");
     await game.p1.passFocus();
@@ -154,7 +154,7 @@ describe("Mystic Vortex (ven-160-166)", () => {
     expect(game.p1.resources()).toEqual({ energy: 1, power: { rainbow: 1 } });
   });
 
-  test.failing("BUG: uncontrolled Vortex — stepping onto it empty opens a showdown here; the opponent's Reaction answer should pay +[rainbow] (P2: 2/1 → 0/0)", async () => {
+  test("uncontrolled Vortex — stepping onto it empty opens a showdown here; the opponent's Reaction answer should pay +[rainbow] (P2: 2/1 → 0/0)", async () => {
     const game = await scenario()
       .resources(P2, { energy: 2, power: { rainbow: 1 } })
       .battlefield("mv", { controller: null, def: CARD, inert: false, owner: P2 })
