@@ -74,8 +74,16 @@ function metaOf(io: ArrivalIO, cardId: string): Partial<RiftboundCardMeta> | und
   return io.cards.getCardMeta?.(cardId as CoreCardId) as Partial<RiftboundCardMeta> | undefined;
 }
 
-function setRole(io: ArrivalIO, cardId: string, role: "attacker" | "defender"): void {
-  io.cards.updateCardMeta?.(cardId as CoreCardId, { combatRole: role } as never);
+function setRole(
+  io: ArrivalIO,
+  cardId: string,
+  role: "attacker" | "defender",
+  battlefieldId: string,
+): void {
+  io.cards.updateCardMeta?.(cardId as CoreCardId, {
+    combatRole: role,
+    combatRoleAt: battlefieldId,
+  } as never);
 }
 
 export function toBattlefieldId(zoneOrBattlefieldId: string): string | undefined {
@@ -265,14 +273,23 @@ function assignCombatRoles(
   // the abilities they trigger are simultaneous even though each unit publishes
   // its own "attack" / "defend" event.
   const chainLenBefore = io.draft.interaction?.chain?.items.length ?? 0;
-  const roleOf = (id: string) => metaOf(io, id)?.combatRole;
+  // rule 464.2.a / 383.4.e — a designation belongs to ONE Combat: a unit
+  // dragged out of an ongoing combat into a queued one at another battlefield
+  // is designated afresh there, so its stale role must not suppress the new
+  // "attack" / "defend" event.
+  const roleOf = (id: string): string | null | undefined => {
+    const meta = metaOf(io, id) as (Partial<RiftboundCardMeta> & { combatRoleAt?: string }) | undefined;
+    return meta?.combatRoleAt !== undefined && meta.combatRoleAt !== battlefieldId
+      ? undefined
+      : meta?.combatRole;
+  };
   const getMeta = (id: CoreCardId) => metaOf(io, id as string);
   const stamp = (id: string, role: "attacker" | "defender", owner: string): boolean => {
     if (roleOf(id) === role) {
       return false;
     }
     const before = getCardEffectiveMight(id, getMeta);
-    setRole(io, id, role);
+    setRole(io, id, role, battlefieldId);
     if (before < MIGHTY_THRESHOLD && getCardEffectiveMight(id, getMeta) >= MIGHTY_THRESHOLD) {
       emit(io, { cardId: id, owner, type: "become-mighty" } as GameEvent);
     }

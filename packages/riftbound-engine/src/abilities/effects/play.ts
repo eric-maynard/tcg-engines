@@ -3,6 +3,7 @@ import type { CardId as CoreCardId, PlayerId as CorePlayerId, ZoneId as CoreZone
 import { addToChain, createInteractionState } from "../../chain";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import { getLKI } from "../../operations/leave-board";
+import { playNamesPublicPile } from "../play-from-pile";
 import { resolveTarget } from "../target-resolver";
 import { getOptionalPlayCost } from "../../game-definition/moves/play/cost";
 import {
@@ -328,6 +329,12 @@ function offerPileCandidates(eff: PlayEffectShape, ctx: EffectContext, pile: "tr
         beginPlay(io, { ...template, cardId: id });
       }
     }
+    return;
+  }
+  // rule 359.3.e.7 (rule-id: sfd-140-221 Fizz) — the card was NAMED as the item
+  // was finalized; an opponent who recycled it out of the pile in response
+  // makes the instruction do nothing. Its controller never picks a replacement.
+  if (playNamesPublicPile(eff) && (ctx.boundTargets?.length ?? 0) > 0) {
     return;
   }
   if (candidates.length === 0 || ctx.draft.pendingChoice) {

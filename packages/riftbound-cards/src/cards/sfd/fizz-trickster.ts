@@ -14,7 +14,11 @@ const abilities: Ability[] = [
       from: "trash",
       ignoreCost: "energy",
       recycleAfter: true,
-      target: { filter: { energyCost: { lte: 3 } }, type: "spell" },
+      // rule 355.10.a / 355.5.b — your trash is a PUBLIC zone, so the spell is a
+      // TARGET named as the trigger goes on the chain (and locked there), not a
+      // card picked as the ability resolves. Naming the zone is what tells the
+      // chain resolver that (same descriptor shape as ogn-196-298).
+      target: { controller: "friendly", filter: { energyCost: { lte: 3 } }, location: "trash", type: "spell" },
       type: "play",
     },
     optional: true,

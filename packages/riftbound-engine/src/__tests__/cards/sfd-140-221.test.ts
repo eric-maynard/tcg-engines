@@ -162,6 +162,9 @@ describe("Fizz, Trickster (sfd-140-221)", () => {
     expect(game.p1.energy()).toBe(0);
     expect(pick?.options.map((o) => o.key)).toContain("confront");
     await game.p1.pick("confront");
+    // rule 383.3.b — the spell is NAMED as the trigger is finalized; it is PLAYED when that trigger resolves.
+    await game.p1.passPriority();
+    await game.p2.passPriority();
     expect(game.p1.energy()).toBe(0);
     expect(game.chain().some((c) => c.cardId === "confront" && !c.triggered)).toBe(true);
     await game.settle();
@@ -173,6 +176,9 @@ describe("Fizz, Trickster (sfd-140-221)", () => {
     const pick = await playAndAccept(game);
     expect(pick).toBeDefined();
     await game.p1.pick("inc");
+    // rule 383.3.b — the spell is NAMED as the trigger is finalized; it is PLAYED when that trigger resolves.
+    await game.p1.passPriority();
+    await game.p2.passPriority();
     await handToOpponent(game, "tgt");
     expect(game.actingSeat()).toBe(P2);
     expect(game.decision()).toMatchObject({ context: "chain", kind: "action", seat: P2 });
@@ -211,24 +217,19 @@ describe("Fizz, Trickster (sfd-140-221)", () => {
     expect(game.p1.hand()).toEqual(["d1"]);
   });
 
-  test("356.1.b.2 negative space: WITHOUT fury power Void Seeker is not a legal pick — no damage, no draw, and nothing but Fizz was paid for", async () => {
+  test("356.1.b.2 negative space: WITHOUT fury power Void Seeker may be NAMED but is never played — no damage, no draw, and nothing but Fizz was paid for", async () => {
+    // rule 355.5.b / 355.10.a (same stance as ogn-196-298): the trash spell is a TARGET named as the
+    // trigger is finalized, and affording it is no part of a target's legality (power can still be
+    // added in response). rule 419.2.a / 419.3.c: with no [fury] by resolution the play simply does
+    // not happen — Void Seeker stays in the trash and nothing is spent.
     const game = await board({ energy: 6 }).build();
     const pick = await playAndAccept(game);
-    expect(pick?.options.map((o) => o.key) ?? []).not.toContain("vs");
-    if (pick) {
-      const r = await game.p1.try((p) => p.pick("vs"));
-      expect(r.ok).toBe(false);
-      // The "you may" was accepted above; the trash is PUBLIC, so the spell to play is a target
-      // (355.10.a) and the accepted instruction can no longer be declined (359.3.e.6, 128.6
-      // a-contrario) — an eligible spell must be played. Confront needs no power and no target.
-      const declined = await game.p1.try((p) => p.decline());
-      expect(declined.ok).toBe(false);
-      await game.p1.pick("confront");
-    }
+    expect(pick?.options.map((o) => o.key) ?? []).toContain("vs");
+    await game.p1.pick("vs");
     await game.settle();
     expect(game.state("tgt").damage).toBe(0); // Void Seeker never happened
     expect(game.zoneOf("vs")).toBe("trash"); // and it never left the trash
-    expect(game.p1.hand()).toEqual(["d1"]); // Confront's draw
+    expect(game.p1.hand()).toEqual([]); // no draw
     expect(game.p1.resources()).toEqual({ energy: 3, power: { chaos: 0 } }); // no Energy spent on the trash spell
   });
 
@@ -273,6 +274,9 @@ describe("Fizz, Trickster (sfd-140-221)", () => {
     const pick = await playAndAccept(game);
     expect(pick).toBeDefined();
     await game.p1.pick("inc");
+    // rule 383.3.b — the spell is NAMED as the trigger is finalized; it is PLAYED when that trigger resolves.
+    await game.p1.passPriority();
+    await game.p2.passPriority();
     // The only legal "unit at a battlefield" locks itself onto the item right
     // away, so the opponent sees the target before responding.
     expect(game.chain().find((c) => c.cardId === "inc")).toMatchObject({ targets: ["tgt"] });
