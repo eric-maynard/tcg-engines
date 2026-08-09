@@ -108,6 +108,43 @@ export function mandatoryRevealEffects(cardId: string): unknown[] {
   return out;
 }
 
+/**
+ * rule 369.1 / 370.1 / 424 (ogn-194-298 Nocturne × sfd-041-221 Apprentice Smith) — "as you
+ * look at or REVEAL me from the top of your deck, you may …". The same optional
+ * self-replacement the look path offers below, raised for a public REVEAL as well: it is
+ * offered while the card is still in the deck, before the revealing effect's own follow-up.
+ * Parks a `confirm` prompt for the first card not yet offered and hangs `continuation` off
+ * the answer (both branches); returns true when a prompt was parked.
+ */
+export function offerAsYouRevealChoice(
+  ctx: EffectContext,
+  revealedIds: readonly string[],
+  owner: string,
+  continuation: (offered: readonly string[]) => unknown,
+  alreadyOffered: readonly string[] = [],
+): boolean {
+  for (const revealedId of revealedIds) {
+    if (alreadyOffered.includes(revealedId)) {
+      continue;
+    }
+    const asYouReveal = asYouLookAbility(revealedId);
+    if (!asYouReveal) {
+      continue;
+    }
+    ctx.draft.pendingChoice = {
+      boundTargets: [revealedId as CoreCardId],
+      effect: asYouReveal,
+      playerId: owner as CorePlayerId,
+      sourceCardId: revealedId as CoreCardId,
+      then: continuation([...alreadyOffered, revealedId]),
+      type: "confirm",
+      // biome-ignore lint/suspicious/noExplicitAny: branded id types
+    } as any;
+    return true;
+  }
+  return false;
+}
+
 /** Runs every mandatory on-reveal ability of the cards just revealed from `owner`'s deck. */
 export function fireMandatoryRevealAbilities(
   revealedIds: readonly string[],
@@ -153,13 +190,16 @@ export function handle_look(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
     (effect as { player?: string }).player === "opponent"
       ? (Object.keys(ctx.draft.players).find((p) => p !== ctx.playerId) ?? ctx.playerId)
       : ctx.playerId;
+  // rule 419 / 421 — only a look explicitly flagged as a public REVEAL is one;
+  // an unflagged look stays private (no reveal replacements, no reveal triggers).
+  const isReveal = (effect as { reveal?: boolean }).reveal === true;
   // rule 424 (sfd-188-221 Void Rush + sfd-018-221 Void Hatchling) — a look
   // flagged as a public REVEAL from a deck can be replaced before it happens;
   // the replacement's prefix resolves first and the reveal then sees the deck
   // it left behind.
   if (
     from === "mainDeck" &&
-    (effect as { reveal?: boolean }).reveal === true &&
+    isReveal &&
     (effect as { revealReplaced?: boolean }).revealReplaced !== true
   ) {
     const prefix = revealReplacementPrefix(ctx, looker);
@@ -218,8 +258,11 @@ export function handle_look(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
         continue;
       }
       // Mandatory on-reveal abilities resolve before any choice about the
-      // revealed cards is offered (rule 429.2).
-      const mandatory = mandatoryRevealEffects(revealedId);
+      // revealed cards is offered (rule 429.2) — but ONLY when this look is
+      // actually a public reveal. rule 419 / 421: looking is not revealing, so
+      // a private look (ogn-242-298 Baited Hook) never fires "as I'm revealed
+      // from your deck" (sfd-175-221 Undertitan).
+      const mandatory = isReveal ? mandatoryRevealEffects(revealedId) : [];
       if (mandatory.length > 0) {
         fireMandatoryRevealAbilities([revealedId], looker, ctx, _h);
         handled.push(revealedId);

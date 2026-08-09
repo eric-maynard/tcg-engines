@@ -40,11 +40,30 @@ function replacementConditionHolds(
  *
  * Returns true when a replacement took over (the raw delta was NOT applied).
  */
+/**
+ * rule 359.3.f (ogn-060-298 Mask of Foresight x ogn-169-298 Gust) — a card that
+ * left the board before the effect resolved is gone as far as that effect is
+ * concerned: the new object in hand / trash / the deck must not carry the
+ * modifier the whiffed trigger meant for the unit that used to be there.
+ */
+const OFF_BOARD_ZONES = new Set([
+  "hand",
+  "mainDeck",
+  "runeDeck",
+  "trash",
+  "banishment",
+  "championZone",
+]);
+
 export function applyMightModifierDelta(
   cardId: string,
   delta: number,
   ctx: EffectContext,
 ): boolean {
+  const zone = ctx.zones.getCardZone?.(cardId as CoreCardId) as string | undefined;
+  if (zone !== undefined && OFF_BOARD_ZONES.has(zone)) {
+    return false;
+  }
   const mightBefore = getEffectiveMight(cardId, ctx);
 
   if (delta < 0) {

@@ -14,7 +14,12 @@ import type { EffectHelpers } from "./_helpers";
 
 interface ConquerAbility {
   readonly type?: string;
-  readonly trigger?: { event?: string; on?: unknown };
+  readonly trigger?: {
+    event?: string;
+    on?: unknown;
+    condition?: unknown;
+    restrictions?: unknown;
+  };
   readonly effect?: unknown;
   readonly condition?: unknown;
   readonly restrictions?: unknown;
@@ -23,9 +28,13 @@ interface ConquerAbility {
 
 /**
  * rule 383.2.a.1: extra conditions ("after an attack", "if you assigned 5 or
- * more excess damage") are part of the trigger condition and are NOT treated
- * as fulfilled — only the conquer itself is. An ability carrying any such
- * extra condition is not placed on the chain.
+ * more excess damage", "a battlefield that WAS UNCONTROLLED") are part of the
+ * trigger condition and are NOT treated as fulfilled — only the conquer itself
+ * is. An ability carrying any such extra condition is not placed on the chain,
+ * whether the condition sits on the ability or inside its `trigger` (where the
+ * parser and card defs put `restrictions`, e.g. sfd-116-221 Yone, Blademaster:
+ * a hold happens at a battlefield you already controlled — rule 464.2 — so his
+ * "was uncontrolled" condition can never be met this way).
  */
 function isPlainConquerTrigger(ability: ConquerAbility): boolean {
   return (
@@ -33,7 +42,9 @@ function isPlainConquerTrigger(ability: ConquerAbility): boolean {
     ability.trigger?.event === "conquer" &&
     ability.trigger.on === "self" &&
     ability.condition === undefined &&
-    ability.restrictions === undefined
+    ability.restrictions === undefined &&
+    ability.trigger.condition === undefined &&
+    ability.trigger.restrictions === undefined
   );
 }
 
