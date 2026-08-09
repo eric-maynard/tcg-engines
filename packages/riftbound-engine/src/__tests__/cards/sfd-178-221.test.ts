@@ -179,7 +179,7 @@ describe("Blade of the Ruined King (sfd-178-221)", () => {
     expect(game.p1.resources()).toEqual({ energy: 0, power: {} });
   });
 
-  test.failing("BUG: Weaponmaster still owes the KILL (821.1.c: only [rainbow] is discounted) — with the Fodder available it dies; the Poro wears the Blade", async () => {
+  test("Weaponmaster still owes the KILL (821.1.c: only [rainbow] is discounted) — with the Fodder available it dies; the Poro wears the Blade", async () => {
     // Expected: Poro 6 with the Blade AND Fodder in the trash. Actual: Fodder survives — the kill is never paid.
     const game = await scenario()
       .resources(P1, { energy: 2 })
@@ -195,7 +195,7 @@ describe("Blade of the Ruined King (sfd-178-221)", () => {
     expect(game.zoneOf("fodder")).toBe("trash");
   });
 
-  test.failing("BUG: Weaponmaster with NO other friendly unit cannot pay the kill (821.1.c.5) — the Blade is not offered / stays unattached and the Poro is a plain 2", async () => {
+  test("Weaponmaster with NO other friendly unit cannot pay the kill (821.1.c.5) — the Blade is not offered / stays unattached and the Poro is a plain 2", async () => {
     // Expected: no eligible Equipment (or choosing it attaches nothing). Actual: Blade attaches for free → Poro 6.
     const game = await scenario().resources(P1, { energy: 2, power: { order: 1 } }).gear(P1, CARD, "botrk").hand(P1, VETERAN_PORO, "poro").build();
     await game.p1.play("poro");

@@ -743,7 +743,33 @@ export function weaponmasterEquipCost(
     energy: base.energy,
     power,
     ...(base.recycleFromTrash !== undefined ? { recycleFromTrash: base.recycleFromTrash } : {}),
+    // rule 821.1.c.3 (sfd-178-221 Blade of the Ruined King): the "Kill a
+    // friendly unit" half is not a resource, so [A] never waives it — the
+    // Weaponmaster still owes it.
+    ...(base.killFriendlyUnit === true ? { killFriendlyUnit: true } : {}),
   };
+}
+
+/**
+ * rule 818.1.c.3 / 358.1 (sfd-178-221) — the units that can pay an Equip cost's
+ * "Kill a friendly unit" half on the Weaponmaster path: friendly board units
+ * other than the one the Equipment would attach to (sacrificing the holder
+ * would undo the attach).
+ */
+function weaponmasterSacrificeOptions(
+  state: RiftboundGameState,
+  playerId: string,
+  holderUnitId: string | undefined,
+  // biome-ignore lint/suspicious/noExplicitAny: move context bag is framework-typed
+  context: any,
+): string[] {
+  return killCostCandidates(
+    state,
+    playerId,
+    holderUnitId ?? "",
+    { controller: "friendly", type: "unit" },
+    context,
+  ).filter((id) => id !== holderUnitId);
 }
 
 /** Cards currently in `playerId`'s trash, when the zone bag is available. */
@@ -773,6 +799,14 @@ function canPayWeaponmasterEquip(
   const needRecycle = cost.recycleFromTrash as number | undefined;
   if (needRecycle !== undefined && trashSize(context.zones, playerId) < needRecycle) {
     return false;
+  }
+  // rule 821.1.c.5 / 818.1.c.3 (sfd-178-221): with no friendly unit besides the
+  // Weaponmaster itself the "Kill a friendly unit" half cannot be paid, so the
+  // Equipment is never offered and nothing attaches.
+  if (cost.killFriendlyUnit === true) {
+    if (weaponmasterSacrificeOptions(state, playerId, unitId, context).length === 0) {
+      return false;
+    }
   }
   return canPayOptInCost(state, playerId, equipmentId, cost, context);
 }
@@ -1751,6 +1785,37 @@ export const pendingChoiceMoves: Partial<
           },
           { cards: context.cards, counters: context.counters, draft, zones: context.zones },
         );
+        // rule 821.1.c.3 / 818.1.c.3 (sfd-178-221 Blade of the Ruined King):
+        // [A] waives one power pip only — the "Kill a friendly unit" half of
+        // the Equip cost is still owed on the Weaponmaster path. rule 428.1.a.1
+        // — it is an Active Kill, so a token ceases to exist (186.1).
+        if (equipCost.killFriendlyUnit === true && !draft.pendingChoice) {
+          const fodder = weaponmasterSacrificeOptions(
+            draft,
+            choice.playerId,
+            choice.unitId,
+            context,
+          );
+          if (fodder.length === 1) {
+            executeEffect(
+              { target: { type: "unit" }, type: "kill" } as unknown as ExecutableEffect,
+              {
+                ...buildEffectContext(draft, choice.playerId, picked, context),
+                boundTargets: [fodder[0] as string],
+              } as EffectContext,
+            );
+          } else if (fodder.length > 1) {
+            // rule 357.2: the payer picks which friendly unit pays.
+            draft.pendingChoice = {
+              effect: { target: { type: "unit" }, type: "kill" },
+              options: fodder as never,
+              playerId: choice.playerId as never,
+              remaining: 1,
+              sourceCardId: picked as never,
+              type: "choose-target",
+            } as RiftboundGameState["pendingChoice"];
+          }
+        }
         // rule 821.1.c / 476.1 (sfd-150-221 Last Rites): the non-resource part
         // of the Equip cost — "Recycle N cards from your trash" — is paid by
         // its payer choosing which cards leave the trash.
@@ -2500,7 +2565,13 @@ export const pendingChoiceMoves: Partial<
               };
               for (const id of pickedSoFar) {
                 fireTriggers(
-                  { cardId: id, chooserId: choice.playerId, sourceType: "ability", type: "choose" },
+                  {
+                    cardId: id,
+                    chooserId: choice.playerId,
+                    sourceCardId: choice.sourceCardId as string,
+                    sourceType: "ability",
+                    type: "choose",
+                  },
                   trigCtx,
                 );
               }
@@ -2546,7 +2617,10 @@ export const pendingChoiceMoves: Partial<
               ? "spell"
               : "ability";
           for (const id of pickedSoFar) {
-            fireTriggers({ cardId: id, chooserId: choice.playerId, sourceType, type: "choose" }, trigCtx);
+            fireTriggers(
+              { cardId: id, chooserId: choice.playerId, sourceCardId: choice.sourceCardId as string, sourceType, type: "choose" },
+              trigCtx,
+            );
           }
           // rule 355.4 (unl-198-219) — the battlefield the effect had already
           // chosen ("…move a unit to THAT battlefield. Then … units there")
@@ -2589,7 +2663,10 @@ export const pendingChoiceMoves: Partial<
                 ? "spell"
                 : "ability";
             for (const id of new Set(encoded)) {
-              fireTriggers({ cardId: id, chooserId: choice.playerId, sourceType, type: "choose" }, trigCtx);
+              fireTriggers(
+              { cardId: id, chooserId: choice.playerId, sourceCardId: choice.sourceCardId as string, sourceType, type: "choose" },
+              trigCtx,
+            );
             }
             executeEffect(choice.effect as ExecutableEffect, {
               ...buildEffectContext(draft, choice.playerId, choice.sourceCardId, context),
