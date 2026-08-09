@@ -382,7 +382,31 @@ function deflectBudget(
  * that pays by exhausting one unit and moves "a DIFFERENT unit you control"
  * needs two distinct units, so the ids a `to: "exhausted-ally"` move may
  * legally carry are only those with some other ready unit left to pay.
+ *
+ * rule 355.4.a — a Move also needs a destination OTHER than the mover's
+ * current location, and here the destination IS the payer's location: a payer
+ * standing beside the mover is no legal line, so a mover whose every possible
+ * payer shares its location is not offered at all (402.3).
  */
+function exhaustedAllyPayerPool(
+  effect: unknown,
+  moverId: string,
+  resolverCtx: Parameters<typeof resolveTarget>[1],
+): string[] {
+  const e = effect as { costExhaust?: unknown } | undefined;
+  if (!e?.costExhaust) {
+    return [];
+  }
+  const zoneOf = (id: string): string | undefined =>
+    (resolverCtx as { zones?: { getCardZone: (id: CoreCardId) => string | undefined } }).zones?.getCardZone(
+      id as CoreCardId,
+    );
+  const moverZone = zoneOf(moverId);
+  return resolveTarget({ ...(e.costExhaust as TargetDescriptor), quantity: "all" }, resolverCtx).filter(
+    (p) => p !== moverId && zoneOf(p) !== moverZone,
+  );
+}
+
 function exhaustedAllyMoveTargets(
   effect: unknown,
   resolverCtx: Parameters<typeof resolveTarget>[1],
@@ -392,11 +416,27 @@ function exhaustedAllyMoveTargets(
     return undefined;
   }
   const movers = resolveTarget({ ...(e.target as TargetDescriptor), quantity: "all" }, resolverCtx);
-  const payers = resolveTarget(
-    { ...(e.costExhaust as TargetDescriptor), quantity: "all" },
-    resolverCtx,
-  );
-  return movers.filter((m) => payers.some((p) => p !== m));
+  return movers.filter((m) => exhaustedAllyPayerPool(effect, m, resolverCtx).length > 0);
+}
+
+/**
+ * rule 404.1 / 414.4 / 406.4 (unl-045-219) — "Exhaust a unit you control" is a
+ * COST, paid while the ability is finalized, so the payer is already exhausted
+ * by the time an opponent holds priority. When exactly one candidate survives
+ * the 355.4.a location filter the choice is forced, so it is settled (and paid)
+ * at activation; a genuinely ambiguous pool is still chosen at resolution.
+ */
+function exhaustedAllyForcedPayer(
+  effect: unknown,
+  moverId: string | undefined,
+  resolverCtx: Parameters<typeof resolveTarget>[1],
+): string | undefined {
+  const e = effect as { to?: unknown; costExhaust?: unknown } | undefined;
+  if (e?.to !== "exhausted-ally" || !e.costExhaust || moverId === undefined) {
+    return undefined;
+  }
+  const pool = exhaustedAllyPayerPool(effect, moverId, resolverCtx);
+  return pool.length === 1 ? pool[0] : undefined;
 }
 
 function activationChosenTarget(effect: unknown): TargetDescriptor | undefined {
@@ -2357,7 +2397,15 @@ export const activateAbility: Defs["activateAbility"] = {
       context.cards,
       context.zones,
     );
-    if (deflectOwed > 0) {
+    // rule 403 / 404.1 — the surcharge belongs to the same one-shot payment as
+    // the ability's own cost, but it is Power of ANY Domain while the printed
+    // pips name one: settle the named pips FIRST so the flexible pip can never
+    // consume the Power a named pip still needs (pool {fury:1, calm:1} paying
+    // [fury] + Deflect must end at zero, not leave the calm behind).
+    const payDeflectSurchargeNow = (): void => {
+      if (deflectOwed <= 0) {
+        return;
+      }
       deductAbilityCost(
         draft,
         playerId,
@@ -2365,7 +2413,7 @@ export const activateAbility: Defs["activateAbility"] = {
         context.zones,
         context.counters,
       );
-    }
+    };
 
     // Pay cost
     const costToPay = effectiveAbilityCost(
@@ -2399,6 +2447,9 @@ export const activateAbility: Defs["activateAbility"] = {
     // rule 356.4 (rule-id: ven-161-166) — even a costless activation is "the
     // first friendly gear activated ability played this turn".
     noteGearAbilityActivation(draft, playerId as string, cardId as string);
+    if (!costToPay) {
+      payDeflectSurchargeNow();
+    }
     if (costToPay) {
       const cost = costToPay;
       deductAbilityCost(
@@ -2409,6 +2460,7 @@ export const activateAbility: Defs["activateAbility"] = {
         context.counters,
         cardId as string,
       );
+      payDeflectSurchargeNow();
 
       // rule 135.2.e.5.a: the chosen X leaves the pool as part of paying the
       // cost — [rainbow] out of Power of any Domain, otherwise out of Energy.
@@ -2610,15 +2662,35 @@ export const activateAbility: Defs["activateAbility"] = {
     // target on the chain item at finalization so resolution uses it instead
     // of prompting.
     const targets = context.params.targets as string[] | undefined;
+    // rule 404.1 / 414.4 (unl-045-219) — "Exhaust a unit you control" is a cost:
+    // exhaust the payer NOW, before anyone gets priority (406.4), and pin it on
+    // the chain item so resolution neither re-picks nor re-pays it.
+    const costPayerId = exhaustedAllyForcedPayer(ability.effect, targets?.[0], {
+      cards: context.cards,
+      choosing: true,
+      draft,
+      playerId,
+      sourceCardId: cardId,
+      sourceZone: context.zones.getCardZone(cardId as CoreCardId),
+      zones: context.zones,
+    } as unknown as Parameters<typeof resolveTarget>[1]);
+    if (costPayerId !== undefined) {
+      context.counters.setFlag(costPayerId as CoreCardId, "exhausted", true);
+    }
     draft.interaction = addToChain(
       interaction,
       {
         cardId,
         controller: playerId,
         // rule 429.1: carry the paid X to resolution for `{variable:"x"}`.
-        effect: xPay
-          ? { ...(ability.effect as object), _variables: { x: xPay.amount } }
-          : ability.effect,
+        effect:
+          xPay || costPayerId !== undefined
+            ? {
+                ...(ability.effect as object),
+                ...(xPay ? { _variables: { x: xPay.amount } } : {}),
+                ...(costPayerId !== undefined ? { _payerId: costPayerId } : {}),
+              }
+            : ability.effect,
         ...(targets && targets.length > 0 ? { targets } : {}),
         type: "ability",
       },

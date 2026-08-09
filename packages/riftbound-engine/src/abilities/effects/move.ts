@@ -373,6 +373,18 @@ export function handle_move(effect: ExecutableEffect, ctx: EffectContext, h: Eff
     if (moverId === undefined || payerDesc === undefined) {
       return;
     }
+    const moverZone = ctx.zones.getCardZone(moverId as CoreCardId);
+    // rule 404.1 / 414.4: the cost was paid at activation — the payer is
+    // already exhausted and only fixes the destination here.
+    const paidPayerId = (effect as unknown as { _payerId?: string })._payerId;
+    if (paidPayerId !== undefined) {
+      const paidZone = ctx.zones.getCardZone(paidPayerId as CoreCardId);
+      if (paidZone === undefined || paidZone === moverZone) {
+        return;
+      }
+      arriveByEffect(ctx, [moverId], moveCardWithEvent(ctx, moverId, paidZone));
+      return;
+    }
     const payerPool = resolveTarget({ ...payerDesc, quantity: "all" }, {
       cards: ctx.cards,
       draft: ctx.draft,
@@ -380,7 +392,9 @@ export function handle_move(effect: ExecutableEffect, ctx: EffectContext, h: Eff
       sourceCardId: ctx.sourceCardId,
       sourceZone: ctx.sourceZone,
       zones: ctx.zones,
-    }).filter((id) => id !== moverId);
+      // rule 355.4.a: the payer's location IS the destination, so a payer
+      // beside the mover offers no legal Move.
+    }).filter((id) => id !== moverId && ctx.zones.getCardZone(id as CoreCardId) !== moverZone);
     let payerId: string | undefined =
       pinnedMover === undefined ? undefined : ctx.boundTargets?.[0];
     if (payerId === undefined) {
