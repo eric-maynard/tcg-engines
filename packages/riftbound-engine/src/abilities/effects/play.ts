@@ -2,6 +2,7 @@
 import type { CardId as CoreCardId, PlayerId as CorePlayerId, ZoneId as CoreZoneId } from "@tcg/core";
 import { addToChain, createInteractionState } from "../../chain";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
+import { getLKI } from "../../operations/leave-board";
 import { resolveTarget } from "../target-resolver";
 import { getOptionalPlayCost } from "../../game-definition/moves/play/cost";
 import {
@@ -622,8 +623,14 @@ function trashPlayEnergyReduction(effect: ExecutableEffect, ctx: EffectContext):
     (raw as { might?: unknown }).might === "recycled" &&
     ctx.triggerSourceId !== undefined
   ) {
-    // The recycled card already left the board, so its board state is gone —
-    // its printed Might is the Might it had when it paid the cost.
+    // rule 359.3.e.13 — look-back: the recycled card has already left the board,
+    // so the discount is the Might it LAST had there (buff, +N this turn,
+    // equipment), read from its last-known-information snapshot. Printed Might
+    // is only a fallback for a card that never had a board state.
+    const lki = getLKI(ctx.draft, ctx.triggerSourceId);
+    if (lki !== undefined) {
+      return Math.max(0, lki.might);
+    }
     return Math.max(0, getGlobalCardRegistry().getMight(ctx.triggerSourceId));
   }
   return 0;
