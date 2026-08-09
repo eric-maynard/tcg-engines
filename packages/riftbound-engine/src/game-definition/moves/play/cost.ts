@@ -3738,11 +3738,17 @@ export function computePlayResourceCost(
       named[domain] = need;
     }
   }
+  // rule 356.1.b.2 / 356.1.b.3 — "ignoring its Energy cost" waives only the
+  // CARD's own Energy component. An optional additional cost declared while
+  // playing it (Accelerate's [1][D]) is added on top of the zeroed base and is
+  // still paid in full, so the waiver may not swallow its Energy half.
+  const additionalEnergy = Math.max(0, extras.additionalCost?.energy ?? 0);
+  const ignoresBaseEnergy = extras.ignoreEnergyCost === true;
   return {
     any,
-    energy,
+    energy: ignoresBaseEnergy ? additionalEnergy : energy,
     free: false,
-    ignoreEnergy: extras.ignoreEnergyCost === true,
+    ignoreEnergy: ignoresBaseEnergy && additionalEnergy === 0,
     named,
     ...(hybridDomains && hybridNeed > 0 ? { hybrid: { domains: hybridDomains, n: hybridNeed } } : {}),
   };
