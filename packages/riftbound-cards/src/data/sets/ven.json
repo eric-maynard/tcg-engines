@@ -5423,7 +5423,29 @@
       "isChampion": false,
       "rulesText": "When you play a unit, gear, or activated ability with Energy cost [7] or more, you may exhaust me to ready up to 2 runes.",
       "abilities": [
-        null
+        {
+          "type": "triggered",
+          "trigger": {
+            "event": "play-unit-or-play-gear-or-use-activated-ability",
+            "on": "controller"
+          },
+          "condition": {
+            "type": "and",
+            "conditions": [
+              { "type": "triggering-energy-cost", "min": 7 },
+              { "type": "pay-cost", "cost": { "exhaust": true } }
+            ]
+          },
+          "optional": true,
+          "effect": {
+            "type": "ready",
+            "target": {
+              "type": "rune",
+              "controller": "friendly",
+              "quantity": { "upTo": 2 }
+            }
+          }
+        }
       ],
       "parseSuccess": true,
       "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/1790b30538781eb2a55b5baee00fff9ed08794aa-744x1039.png?accountingTag=RB",

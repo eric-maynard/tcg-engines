@@ -419,10 +419,19 @@ function activationChosenTarget(effect: unknown): TargetDescriptor | undefined {
   ) {
     return undefined;
   }
-  if (d.quantity !== undefined && d.quantity !== 1) {
+  // rule 355.5 (rule-id: ven-194-166) — an exact plural count ("Ready 2 gear")
+  // is still a caster-chosen target, just N of them; only "all"/"up to" shapes
+  // stay out of the activation-time choice.
+  if (d.quantity !== undefined && d.quantity !== 1 && typeof d.quantity !== "number") {
     return undefined;
   }
   return d;
+}
+
+/** How many objects a caster-chosen activated target names (rule 355.5). */
+function chosenTargetCount(descriptor: TargetDescriptor | undefined): number {
+  const q = (descriptor as { quantity?: unknown } | undefined)?.quantity;
+  return typeof q === "number" && q > 1 ? q : 1;
 }
 
 /**
