@@ -9,6 +9,20 @@ import { getGlobalCardRegistry } from "../operations/card-lookup";
 import type { GameEvent } from "./game-events";
 
 /**
+ * rule 383.4.d — card types an `on` descriptor may scope its subject to. Only
+ * these values of the descriptor's `type` field name a CARD TYPE (the field is
+ * also used for other descriptor shapes), so the alias never misreads one.
+ */
+const SUBJECT_CARD_TYPES: ReadonlySet<string> = new Set([
+  "battlefield",
+  "gear",
+  "legend",
+  "rune",
+  "spell",
+  "unit",
+]);
+
+/**
  * A trigger restriction (subset of @tcg/riftbound-types TriggerRestriction).
  */
 export interface TriggerRestriction {
@@ -61,6 +75,15 @@ export function turnEventCountKeys(event: GameEvent): string[] {
       keys.push(`play-${event.cardType}|p:${pid}`);
     }
   }
+  // rule 471.2.a (rule-id: ogn-292-298) — a "first time each turn … HERE"
+  // trigger counts per LOCATION: each battlefield keeps its own tally, so one
+  // spell choosing units at two Dreaming Trees is the first choice at each.
+  const bf = (event as { battlefieldId?: unknown }).battlefieldId;
+  if (typeof bf === "string") {
+    for (const key of [...keys]) {
+      keys.push(`${key}|bf:${bf}`);
+    }
+  }
   return keys;
 }
 
@@ -71,11 +94,20 @@ export function turnEventCountKeys(event: GameEvent): string[] {
  * friendly unit …") → per subject/acting player.
  */
 function turnEventCountKeyFor(
-  trigger: { readonly event: string; readonly on?: unknown },
+  trigger: { readonly event: string; readonly on?: unknown; readonly location?: string },
   event: GameEvent,
   card: CardWithAbilities,
 ): string {
   const on = trigger.on ?? "self";
+  // rule 471.2.a (rule-id: ogn-292-298) — "…HERE" anchors the tally to this
+  // battlefield: every location keeps its own "first time each turn" count, so
+  // one spell choosing units at two battlefields is a first time at each.
+  const scopedHere =
+    trigger.location === "here" ||
+    (typeof on === "object" && on !== null && (on as { location?: string }).location === "here");
+  const eventBattlefield = (event as { battlefieldId?: unknown }).battlefieldId;
+  const bf =
+    scopedHere && typeof eventBattlefield === "string" ? `|bf:${eventBattlefield}` : "";
   // rule-id: ven-068a-166 — a typed play trigger counts that card type only.
   const eventType =
     event.type === "play-card" &&
@@ -84,13 +116,13 @@ function turnEventCountKeyFor(
       ? `play-${event.cardType}`
       : event.type;
   if (on === "any" || on === "any-player" || on === "any-unit") {
-    return eventType;
+    return `${eventType}${bf}`;
   }
   if (on === "self" && "cardId" in event && typeof event.cardId === "string") {
-    return `${eventType}|c:${event.cardId}`;
+    return `${eventType}|c:${event.cardId}${bf}`;
   }
   const pid = "owner" in event ? event.owner : "playerId" in event ? event.playerId : card.owner;
-  return `${eventType}|p:${pid}`;
+  return `${eventType}|p:${pid}${bf}`;
 }
 
 /**
@@ -832,7 +864,16 @@ function triggerMatchesEvent(
     }
     // rule 383.4.d — a card-type-scoped subject ("a friendly UNIT"): read the
     // type off the event when it names one, else off the subject's definition.
-    if (typeof desc.cardType === "string") {
+    // The parser writes the scope as `cardType` on some patterns and as `type`
+    // on others (ogn-143-298 "when you ready a friendly unit"); both mean the
+    // subject's card type, so a gear or a rune readying is not "a unit".
+    const wantedCardType =
+      typeof desc.cardType === "string"
+        ? desc.cardType
+        : typeof desc.type === "string" && SUBJECT_CARD_TYPES.has(desc.type)
+          ? desc.type
+          : undefined;
+    if (wantedCardType !== undefined) {
       const subjectId = "cardId" in event ? event.cardId : undefined;
       const subjectType =
         "cardType" in event && typeof event.cardType === "string"
@@ -840,7 +881,7 @@ function triggerMatchesEvent(
           : typeof subjectId === "string"
             ? (getGlobalCardRegistry().get(subjectId) as { cardType?: string } | undefined)?.cardType
             : undefined;
-      if (subjectType !== undefined && subjectType !== desc.cardType) {
+      if (subjectType !== undefined && subjectType !== wantedCardType) {
         return false;
       }
     }

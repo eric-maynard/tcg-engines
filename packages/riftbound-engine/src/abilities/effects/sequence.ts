@@ -239,7 +239,19 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
       // sequence instead of routing it to the first slot only.
       const sharedBattlefield =
         slots !== undefined && slots.length > 0 && slots.every((s) => isAllAtOneBattlefield(s));
-      if (slots && !sharedBattlefield && slots.length >= 2 && ctx.boundTargets.length <= slots.length) {
+      // rule 355.14.b (rule-id: unl-192-219) — a sequence containing a SPLIT
+      // damage step owns a variable-length pick ([reference, …split targets]),
+      // so its bound ids can never be sliced one-per-slot: hand them to the
+      // steps whole and let the damage handler read the reference off index 0.
+      const hasSplitDamage =
+        findSplitDamageEffect(seq as unknown as SpellEffectTargetShape) !== undefined;
+      if (
+        slots &&
+        !sharedBattlefield &&
+        !hasSplitDamage &&
+        slots.length >= 2 &&
+        ctx.boundTargets.length <= slots.length
+      ) {
         seqSlots = { bound: ctx.boundTargets, slots: slots as Record<string, unknown>[] };
       }
       // rule-id: sfd-107-221 (rule 355.8 / 355.14.a) — a sequence that names a
