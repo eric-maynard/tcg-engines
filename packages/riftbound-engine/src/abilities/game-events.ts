@@ -116,6 +116,18 @@ export type GameEvent =
       to?: string;
       cause: "banish" | "recycle" | "bounce" | "replaced";
     }
+  // rule 446.2 (unl-214-219) — a card RETURNED TO HAND, fired by
+  // `effects/return-to-hand.ts` right after the generic `leave-board` event.
+  // `owner` is the player whose hand it went to (rule 108/124 — the OWNER, not
+  // the controller) and `from` its origin zone, so "when a unit here is
+  // returned to a player's hand" can scope itself to this battlefield.
+  | {
+      type: "return-to-hand";
+      cardId: string;
+      owner: string;
+      controller?: string;
+      from?: string;
+    }
   // rule-id: unl-133-219 — `owner` = moved unit's controller, `movedBy` = the
   // player whose action/effect moved it ("When you move an enemy unit").
   | { type: "move"; cardId: string; from: string; to: string; owner?: string; movedBy?: string }
@@ -144,7 +156,16 @@ export type GameEvent =
   // rule-id: unl-055-219 — `owner` = stunned unit's controller, `stunnedBy` =
   // the player whose effect stunned it, `battlefieldId` set when the stunned
   // unit is at a battlefield ("When you [Stun] an enemy unit at a battlefield").
-  | { type: "stun"; cardId: string; owner?: string; stunnedBy?: string; battlefieldId?: string }
+  // rule 423.1 (ogn-261-298) — `batchIndex` = position within ONE stun action,
+  // so "when you stun one or more enemy units" fires once for the whole action.
+  | {
+      type: "stun";
+      cardId: string;
+      owner?: string;
+      stunnedBy?: string;
+      battlefieldId?: string;
+      batchIndex?: number;
+    }
   | { type: "grant-keyword"; cardId: string; keyword: string }
   // rule 466.3.a — emitted once per surviving unit of the winning player;
   // `playerId` is that player, so "When you win a combat" (on: "controller")

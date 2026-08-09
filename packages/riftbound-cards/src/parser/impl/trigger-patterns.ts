@@ -20,12 +20,23 @@ export interface TriggerPatternSubject {
   readonly filter?: string | readonly string[];
   readonly excludeSelf?: boolean;
   readonly location?: "here" | "from-here" | "battlefield" | "other-battlefield";
+  /**
+   * rule 423.1 — "one or more": ONE game action over several subjects is a
+   * SINGLE trigger, so only the first event of the batch matches.
+   */
+  readonly batched?: boolean;
 }
 
 export const TRIGGER_PATTERNS: {
   pattern: RegExp;
   event: string;
   on?: string | TriggerPatternSubject;
+  /**
+   * rule 471.2.a — a trigger printed "… HERE" is anchored to the battlefield
+   * the printing card IS (or sits at); emitted as `trigger.location` for any
+   * pattern whose `on` subject does not already carry it.
+   */
+  location?: "here" | "from-here" | "battlefield" | "other-battlefield";
   restrictions?: readonly { type: string; count?: number }[];
   /**
    * rule-id: sfd-075-221 — card type the acting SOURCE must have ("an
@@ -37,6 +48,12 @@ export const TRIGGER_PATTERNS: {
    * attack; matched against the event's `afterAttack` flag.
    */
   afterAttack?: boolean;
+  /**
+   * rule 190.6.c — the text names the affected player ("THAT PLAYER may …"),
+   * so the Chain item belongs to that player rather than to the controller of
+   * the card printing it.
+   */
+  controllerFromEvent?: boolean;
 }[] = [
   // rule-id: ogn-067-298 — "to a battlefield" is captured (group 1) so the
   // parser can gate the trigger on a while-at-battlefield condition.
@@ -236,11 +253,18 @@ export const TRIGGER_PATTERNS: {
   { event: "play-token-unit", on: "controller", pattern: /^When you play a token unit,\s*/i },
   // "When you ready a friendly unit, ..."
   { event: "ready", on: "friendly-units", pattern: /^When you ready a friendly unit,\s*/i },
-  // "When you stun an/one or more enemy unit(s), ..."
+  // "When you stun one or more enemy units, ..." — rule 423.1: one stun action
+  // over several units is ONE trigger; rule 411.4: only stuns YOU perform count.
   {
     event: "stun",
-    on: "enemy-units",
-    pattern: /^When you stun (?:an|one or more) enemy units?,\s*/i,
+    on: { actor: "controller", batched: true, controller: "enemy", type: "unit" },
+    pattern: /^When you stun one or more enemy units,\s*/i,
+  },
+  // "When you stun an enemy unit, ..." — rule 411.4: performed by you.
+  {
+    event: "stun",
+    on: { actor: "controller", controller: "enemy", type: "unit" },
+    pattern: /^When you stun an enemy unit,\s*/i,
   },
   // "When you buff me, ..."
   { event: "buff", on: "self", pattern: /^When you buff me,\s*/i },
@@ -376,7 +400,11 @@ export const TRIGGER_PATTERNS: {
   },
   // "When a unit here is returned to a player's hand, ..." (Ripper's Bay)
   {
+    // rule 190.6.c / 108 — "THAT PLAYER" is the hand's owner, so the item and
+    // its pay-[1] prompt belong to them, not to the battlefield's controller.
+    controllerFromEvent: true,
     event: "return-to-hand",
+    location: "here",
     on: "any",
     pattern: /^When a unit here is returned to a player's hand,\s*/i,
   },

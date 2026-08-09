@@ -178,6 +178,23 @@ export function parseTriggeredAbilityInner(text: string): TriggeredAbility | und
           optional = true;
           effectText = effectText.slice(mayAfterCondition[0].length);
         }
+        // rule 383.3.b (rule-id: ven-162-166) — "…, you may pay [1] to draw 1":
+        // the opt-in COST sits behind the gating clause too. The clause is the
+        // trigger's gate (383.2.a.1) and the cost rides alongside it, so the
+        // engine charges it on opt-in instead of drawing for free.
+        const payAfterCondition = optional
+          ? effectText.match(
+              /^pay\s+((?::rb_(?:energy_\d+|rune_(?:fury|calm|mind|body|chaos|order|rainbow)):)+)(\s+and exhaust (?:this|me|myself))?\s+to\s+/i,
+            )
+          : null;
+        if (payAfterCondition) {
+          const paidCost = parseCost(payAfterCondition[1]);
+          condition = {
+            ...(condition as Record<string, unknown>),
+            cost: payAfterCondition[2] ? { ...paidCost, exhaust: true } : paidCost,
+          } as unknown as { type: string };
+          effectText = effectText.slice(payAfterCondition[0].length);
+        }
       }
     }
 
@@ -277,7 +294,19 @@ export function parseTriggeredAbilityInner(text: string): TriggeredAbility | und
       restrictions?: readonly { type: string; count?: number }[];
       sourceType?: string;
       afterAttack?: boolean;
+      controllerFromEvent?: boolean;
     } = { event: tp.event };
+    // rule 190.6.c (unl-214-219) — a trigger whose text names the acting/
+    // affected player ("THAT PLAYER may …") belongs to that player, not to the
+    // controller of the card printing it.
+    if (tp.controllerFromEvent) {
+      trigger.controllerFromEvent = true;
+    }
+    // rule 471.2.a — a pattern printed "… here" anchors its trigger to this
+    // battlefield; `on: "controller-here"` sets the same field below.
+    if (tp.location) {
+      trigger.location = tp.location;
+    }
     // rule-id: ven-177-166 — "becomes N or more": the captured number is the
     // Might threshold the event must cross upward.
     if (tp.event === "might-becomes" && match[1]) {

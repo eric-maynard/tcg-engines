@@ -76,7 +76,7 @@ describe("Ripper's Bay (unl-214-219)", () => {
   // BUG (parse) — expected: the trigger is scoped to units HERE (like every other "…here" battlefield
   // trigger, e.g. `{ event, location: "here", … }`). Actual: `{ event: "return-to-hand", on: "any" }`
   // with no location at all, so — once the event exists — a bounce anywhere would fire it.
-  test.failing("BUG: parsed trigger drops 'here' — it must carry a location restriction to this battlefield", async () => {
+  test("parsed trigger drops 'here' — it must carry a location restriction to this battlefield", async () => {
     const def = (await loadDefaultCardPool()).get(CARD);
     expect(def?.abilities?.[0]).toMatchObject({ trigger: { location: "here" } });
   });
@@ -85,7 +85,7 @@ describe("Ripper's Bay (unl-214-219)", () => {
   // Bay" item is pending and P2 — "that player" — is asked to pay [1]; accepting deducts 1 from P2 and,
   // on resolution, P2 has one more rune and it is EXHAUSTED (430.2). P1 (caster, card owner) pays and
   // channels nothing. Actual: Rebuke resolves and the game returns to P1's open main phase; no trigger.
-  test.failing("BUG: Rebuke on the enemy unit here → its owner (P2) may pay [1] and channels 1 rune exhausted; the caster gets nothing", async () => {
+  test("Rebuke on the enemy unit here → its owner (P2) may pay [1] and channels 1 rune exhausted; the caster gets nothing", async () => {
     const game = await rebukeBoard(2).build();
     await game.p1.cast("rebuke", { targets: "squatter" });
     await passUntilPrompt(game);
@@ -105,7 +105,7 @@ describe("Ripper's Bay (unl-214-219)", () => {
 
   // BUG — expected: the same prompt appears and P2 declines → no energy spent, no rune. Actual: no prompt
   // is ever raised (the decline outcome happens to coincide, but the clause is untestable without it).
-  test.failing("BUG: declining the Bay's offer costs that player nothing and channels nothing (383.3.a)", async () => {
+  test("declining the Bay's offer costs that player nothing and channels nothing (383.3.a)", async () => {
     const game = await rebukeBoard(2).build();
     await game.p1.cast("rebuke", { targets: "squatter" });
     await passUntilPrompt(game);
@@ -136,7 +136,7 @@ describe("Ripper's Bay (unl-214-219)", () => {
   // BUG — expected: Retreat returns Mine to P1's hand and P1 channels 1 exhausted (Retreat's own text);
   // the Bay then offers P1 one more for [1] → P1 ends on 2 runes, both exhausted, with 3 − 1 − 1 = 1
   // energy. Actual: only Retreat's rune arrives (1 exhausted rune, 2 energy left).
-  test.failing("BUG: partner Retreat on your own unit here — Retreat's exhausted rune PLUS the Bay's paid one = two exhausted runes", async () => {
+  test("partner Retreat on your own unit here — Retreat's exhausted rune PLUS the Bay's paid one = two exhausted runes", async () => {
     const game = await scenario()
       .resources(P1, { energy: 3 })
       .battlefield("bay", { controller: P1, def: CARD, inert: false, owner: P2 })
@@ -206,7 +206,7 @@ describe("Ripper's Bay (unl-214-219)", () => {
   // BUG — expected (108 / 190.6.c): the unit returns to its OWNER's hand, so the owner (P2) is "that
   // player" even though P1 controlled the unit and controls the Bay: P2 is asked, pays, channels.
   // Actual: no trigger at all.
-  test.failing("BUG: owner ≠ controller — a P2-owned unit under P1's control bounced from the Bay makes P2 'that player'", async () => {
+  test("owner ≠ controller — a P2-owned unit under P1's control bounced from the Bay makes P2 'that player'", async () => {
     const game = await scenario()
       .resources(P1, { energy: 2, power: { chaos: 2 } })
       .resources(P2, { energy: 1 })

@@ -53,7 +53,7 @@ async function conquer(game: Game): Promise<void> {
 }
 
 describe("Protective Sands (ven-162-166)", () => {
-  test.failing("BUG: registry payload — an optional conquer-here trigger gated on ≤4 runes whose effect is 'pay [1] → draw 1' (parser produced a raw/unimplemented effect)", async () => {
+  test("registry payload — an optional conquer-here trigger gated on ≤4 runes whose effect is 'pay [1] → draw 1' (parser produced a raw/unimplemented effect)", async () => {
     // Expected: a structured pay-then-draw effect (cf. Sunken Temple sfd-218-221: pay-cost {energy:1} + draw 1).
     // Actual: `effect: { type: "raw", text: "pay :rb_energy_1: to draw 1." }`.
     await scenario().build();
@@ -79,7 +79,7 @@ describe("Protective Sands (ven-162-166)", () => {
     expect(game.p1.energy()).toBe(2);
   });
 
-  test.failing("BUG: accepting pays exactly [1] and draws exactly 1, then play returns to P1's main phase (engine's raw effect does nothing)", async () => {
+  test("accepting pays exactly [1] and draws exactly 1, then play returns to P1's main phase (engine's raw effect does nothing)", async () => {
     // Expected: energy 2 → 1, hand +1. Actual: yes/no is asked but resolving changes nothing.
     const game = await board({ energy: 2, runes: 4 }).build();
     const hand0 = game.p1.hand().length;
@@ -134,7 +134,7 @@ describe("Protective Sands (ven-162-166)", () => {
     expect(game.decision()).toMatchObject({ kind: "yes-no", seat: P1 });
   });
 
-  test.failing("BUG: with 0 energy the [1] base cost (383.3.b/383.3.b.1) cannot be paid — the opt-in must not be acceptable (or not offered) and no card is ever drawn for free", async () => {
+  test("with 0 energy the [1] base cost (383.3.b/383.3.b.1) cannot be paid — the opt-in must not be acceptable (or not offered) and no card is ever drawn for free", async () => {
     // Expected: `canAccept === false` (or no yes/no at all). Actual: canAccept is true (and the effect is a no-op anyway).
     const game = await board({ energy: 0, exhausted: true, runes: 4 }).build();
     const hand0 = game.p1.hand().length;

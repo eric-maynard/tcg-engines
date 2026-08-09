@@ -29,13 +29,33 @@ function bounceToHand(cardIds: readonly string[], ctx: EffectContext): void {
   if (bounced.length === 0) {
     return;
   }
-  removeFromBoard(
+  const results = removeFromBoard(
     ctx,
     bounced,
     "hand",
     { by: ctx.playerId, kind: "bounce", source: ctx.sourceCardId },
     ctx.fireTriggers,
   );
+  // rule 446.2 (unl-214-219) — a bounce is a zone change, not a Move, and the
+  // generic `leave-board` event does not say WHERE the card went. Publish the
+  // dedicated event so "when a unit here is returned to a player's hand" texts
+  // can read the unit's origin (`from`) and the hand it went to (`owner`, rule 108).
+  const fire = ctx.fireTriggers;
+  if (fire === undefined) {
+    return;
+  }
+  for (const r of results) {
+    if (!r.left) {
+      continue;
+    }
+    fire({
+      cardId: r.cardId,
+      controller: r.lki.controller,
+      from: r.lki.zone,
+      owner: r.lki.owner,
+      type: "return-to-hand",
+    });
+  }
 }
 
 export function handle_returnToHand(effect: ExecutableEffect, ctx: EffectContext, _h: EffectHelpers): void {
