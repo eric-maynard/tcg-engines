@@ -74,12 +74,16 @@ describe("Back-Alley Bar (ogn-277-298)", () => {
     expect(game.state("ganker").might).toBe(3);
   });
 
-  test.failing("BUG: Ganking Bar → bf2 is a move from here — the 2-Might Ganker fights as 3, kills the 2-Might defender, survives and conquers (810, 446.1)", async () => {
-    // Expected: trigger resolves inside the showdown before combat damage; Ganker (3) takes 2 and lives,
-    // Defender takes 3 and dies; P1 conquers bf2 for 1 point. Actual: a plain 2v2 trade — both die, no conquer.
+  test("Ganking Bar → bf2 is a move from here — the 2-Might Ganker fights as 3, kills the 2-Might defender, survives and conquers (810, 446.1)", async () => {
+    // Ganker (3 after the Bar's +1) takes 2 and lives, Defender takes 3 and dies, P1 conquers bf2 for 1 point.
     const game = await board().build();
     await game.p1.gank("ganker", "bf2");
-    expect(game.state("ganker").combatRole).toBe("attacker");
+    // rule 401.1: the Bar's move trigger goes on the chain as a Pending Item, which is a Closed State, and
+    // rule 323.13 only begins a Staged Combat from a Neutral Open State — so Attacker/Defender are NOT yet
+    // designated (464.2) here; the Combat stays Staged until the chain empties. Asserting combatRole
+    // immediately after the gank over-reaches: the roles land during settle, after the +1 has resolved.
+    expect(game.chain()).toEqual([expect.objectContaining({ cardId: "bar", triggered: true })]);
+    expect(game.state("ganker").combatRole).toBeNull();
     await game.settle();
     expect(game.zoneOf("def")).toBe("trash");
     expect(game.zoneOf("ganker")).toBe("battlefield-bf2");
