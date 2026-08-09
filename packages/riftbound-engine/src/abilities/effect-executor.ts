@@ -136,6 +136,9 @@ export interface EffectContext {
     // effects that move one off-board must be able to delete it right away
     // instead of waiting for the state-based token sweep.
     removeCardFromGame?: (params: { cardId: CoreCardId }) => void;
+    // rule 438.7: the board can grow during play — a battlefield that arrives
+    // in a new slot needs its unit/facedown zones minted before anything moves.
+    createZone?: (params: { zoneId: CoreZoneId; config?: Record<string, unknown> }) => void;
   };
   readonly cards: {
     getCardOwner: (cardId: CoreCardId) => string | undefined;
