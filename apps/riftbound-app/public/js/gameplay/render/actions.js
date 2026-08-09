@@ -44,11 +44,38 @@ function humanizeCondition(c) {
   return "";
 }
 
+/**
+ * English noun phrase for a target payload, honouring `quantity` — rule 355.5: a
+ * chain item must say how many it affects ("up to 4 friendly runes", not "a friendly rune").
+ * Quantity is `number | "all" | "any" | { upTo | atLeast | exactly }`.
+ */
+function targetNoun(t) {
+  if (!t || typeof t !== "object") return "";
+  const q = t.quantity;
+  const kind = t.type ?? "target";
+  const where = t.location === "battlefield" ? " at a battlefield" : t.location === "base" ? " in a base" : "";
+  const who = t.controller === "friendly" ? "friendly " : t.controller === "enemy" ? "enemy " : "";
+  const article = t.controller === "enemy" ? "an " : "a ";
+  let count = null;
+  let prefix = null;
+  if (typeof q === "number") count = q;
+  else if (q === "all") prefix = "all ";
+  else if (q === "any") prefix = "any number of ";
+  else if (q && typeof q === "object") {
+    if (typeof q.exactly === "number") count = q.exactly;
+    else if (typeof q.upTo === "number") { count = q.upTo; prefix = `up to ${q.upTo} `; }
+    else if (typeof q.atLeast === "number") { count = q.atLeast; prefix = `at least ${q.atLeast} `; }
+  }
+  const plural = prefix === "all " || prefix === "any number of " || (count != null && count !== 1);
+  const head = prefix ?? (count != null && count !== 1 ? `${count} ` : article);
+  return `${head}${who}${kind}${plural ? "s" : ""}${where}`;
+}
+
 /** Minimal English rendering of an effect payload (label fallback only). */
 function humanizeEffect(e) {
   if (!e || typeof e !== "object") return "";
   const t = e.target && typeof e.target === "object" ? e.target : null;
-  const noun = t ? `${t.controller === "friendly" ? "a friendly " : t.controller === "enemy" ? "an enemy " : "a "}${t.type ?? "target"}${t.location === "battlefield" ? " at a battlefield" : t.location === "base" ? " in a base" : ""}` : "";
+  const noun = targetNoun(t);
   const n = typeof e.amount === "number" ? e.amount : null;
   const turn = e.duration === "turn" ? " this turn" : "";
   switch (e.type) {
@@ -69,7 +96,13 @@ function humanizeEffect(e) {
     case "ready": return `Ready ${noun || "a permanent"}`;
     case "exhaust": return `Exhaust ${noun || "a permanent"}`;
     case "modify-might": return `Give ${noun || "a unit"} ${n != null && n >= 0 ? "+" : ""}${n ?? ""} Might${turn}`;
-    case "return-to-hand": return `Return ${noun || "a unit"} to its owner's hand`;
+    // rule 385.2: an ability that functions from the trash must say where the card
+    // is returned FROM, and target:"self" names the source card, not "a unit".
+    case "return-to-hand": {
+      const self = e.target === "self";
+      const from = e.from === "trash" ? " from your trash" : e.from === "battlefield" ? " from the battlefield" : e.from === "base" ? " from your base" : "";
+      return `Return ${self ? "this" : noun || "a unit"}${from} to ${self ? "your" : "its owner's"} hand`;
+    }
     case "recycle": return `Recycle ${noun || "cards"}`;
     case "discard": return `${e.player === "opponent" ? "Opponent discards" : "Discard"} ${n ?? 1}`;
     case "channel": return `Channel ${n ?? 1} rune${n === 1 ? "" : "s"}${e.exhausted ? " exhausted" : ""}`;
