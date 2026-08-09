@@ -808,6 +808,24 @@ const JSON_CARD_ENGINE_FLAGS: Record<string, Record<string, unknown>> = {
   "ven-004-166": {
     abilities: [{ effect: { keyword: "Tank", type: "ignore-keyword" }, type: "static" }],
   },
+  // rule 356.2 / 355.2 — Dragon Roost: "Any player may pay [rainbow][rainbow] as
+  // an additional cost to play a Dragon. If they do, they play it to this
+  // battlefield." The generator emits `abilities: []` and the parser has no
+  // shape for a battlefield-sourced optional additional cost that overrides the
+  // play LOCATION, so the static is declared here. `controller: "any"` because
+  // the permission is offered to every player, not just the Roost's controller.
+  "ven-157-166": {
+    abilities: [
+      {
+        effect: {
+          additionalCost: { power: ["rainbow", "rainbow"] },
+          appliesTo: { controller: "any", tag: "Dragon" },
+          type: "play-to-here-permission",
+        },
+        type: "static",
+      },
+    ],
+  },
   // rule 363 / 356.3 / 811.6 — Mystic Vortex: "During showdowns here, cards with
   // [Reaction] cost [rainbow] more to play." The generator emits `abilities: []`.
   // It names no "you", so the audience is EVERY player's cards (`controller:

@@ -42,6 +42,7 @@ import {
   battlefieldIsOpen,
   opponentsRestrictedToBase,
   battlefieldForbidsUnitPlay,
+  battlefieldRedirectPowerFor,
   playOnlyToConqueredBattlefield,
   getBuffSpendCost,
   getKillAnyNumberCost,
@@ -521,6 +522,35 @@ function buffSpendSubsets(ids: readonly string[]): string[][] {
 }
 
 /**
+ * rule 356.2 (ven-157-166) — the extra pips a destination battlefield charges
+ * for THIS play, or undefined when nothing extra is due. The additional cost is
+ * what buys the location, so it is charged whenever the destination would not
+ * otherwise be a legal one for the player (355.2.a: their own battlefield is);
+ * a controller electing the paid variant explicitly pays it too.
+ */
+function chargedRedirectPower(
+  state: RiftboundGameState,
+  playerId: string,
+  cardId: string,
+  location: string | undefined,
+  paidAdditionalCost: boolean,
+): readonly string[] | undefined {
+  if (!location || !isBattlefieldZone(location)) {
+    return undefined;
+  }
+  const bfId = extractBattlefieldId(location);
+  if (!bfId) {
+    return undefined;
+  }
+  const pips = battlefieldRedirectPowerFor(bfId, cardId);
+  if (!pips) {
+    return undefined;
+  }
+  const controlsIt = state.battlefields?.[bfId]?.controller === playerId;
+  return controlsIt && !paidAdditionalCost ? undefined : pips;
+}
+
+/**
  * Play a unit to Base (rule 554)
  */
 export const playUnit: Defs["playUnit"] = {
@@ -720,6 +750,17 @@ export const playUnit: Defs["playUnit"] = {
       // rule 355.2 / 740.2.a (unl-117-219): "can be played to an occupied
       // battlefield if an enemy unit is alone there" — printed on the card or
       // granted to friendly units by a permanent on the board.
+    } else if (
+      targetIsBattlefield &&
+      Boolean(targetBfId) &&
+      (standardTimingOk || reactionTimingOk) &&
+      battlefieldRedirectPowerFor(targetBfId as string, context.params.cardId as string) !== undefined
+    ) {
+      // rule 356.2 / 355.2 (ven-157-166): the BATTLEFIELD offers any player an
+      // optional additional cost that plays a matching card to itself — the
+      // permission comes from the destination, not from the played card, and it
+      // does not care who controls the battlefield. The extra pips are charged
+      // in the affordability gate below and by the reducer.
     } else if (targetIsBattlefield && !hasAmbush) {
       return false;
     } else if (targetIsBattlefield) {
@@ -999,6 +1040,30 @@ export const playUnit: Defs["playUnit"] = {
                 ? { additionalCost: { energy: -killDiscount.energy }, waivePower: killDiscount.power }
                 : {}),
             },
+        createMetaAccessor(context.cards),
+        getPotentialRuneEnergy(context.zones, context.counters, context.params.playerId),
+      )
+    ) {
+      return false;
+    }
+
+    // rule 356.2 (ven-157-166): the destination battlefield's optional
+    // additional cost is paid ON TOP of the printed cost, so a Dragon whose
+    // controller cannot spare the pips may not be played here at all.
+    const redirectPips = chargedRedirectPower(
+      state,
+      context.params.playerId as string,
+      context.params.cardId as string,
+      location,
+      context.params.paidAdditionalCost === true,
+    );
+    if (
+      redirectPips &&
+      !canAffordCard(
+        state,
+        context.params.playerId,
+        context.params.cardId,
+        { additionalCost: { power: redirectPips }, board, ...(altCost ? { altCost } : {}) },
         createMetaAccessor(context.cards),
         getPotentialRuneEnergy(context.zones, context.counters, context.params.playerId),
       )
@@ -1586,6 +1651,37 @@ export const playUnit: Defs["playUnit"] = {
         }
       }
 
+      // rule 356.2 / 355.2 (ven-157-166): a battlefield whose own text offers
+      // an optional additional cost to play a matching card HERE is a legal
+      // destination for any player who can pay the extra pips on top.
+      if (standardTiming || reactionWindow) {
+        for (const bfId of Object.keys(state.battlefields ?? {})) {
+          const bfZoneId = getBattlefieldZoneId(bfId) as string;
+          if (results.some((r) => r.cardId === (cardId as string) && r.location === bfZoneId)) {
+            continue;
+          }
+          const pips = battlefieldRedirectPowerFor(bfId, cardId as string);
+          if (
+            !pips ||
+            !canAffordCard(
+              state,
+              context.playerId as string,
+              cardId as string,
+              { additionalCost: { power: pips }, board },
+              metaForAfford,
+              potential,
+            )
+          ) {
+            continue;
+          }
+          results.push({
+            cardId: cardId as string,
+            location: bfZoneId,
+            playerId: context.playerId as string,
+          });
+        }
+      }
+
       // rule 355.2 (unl-120-219): offer any battlefield holding enemy units
       // when the card grants CanPlayToEnemyBattlefield.
       if (canPlayToEnemyOccupiedBattlefield(cardId as string)) {
@@ -1867,6 +1963,15 @@ export const playUnit: Defs["playUnit"] = {
       { board, ...(altCostSpec ? { altCost: altCostSpec } : {}) },
       createMetaAccessor(context.cards),
     );
+    // rule 356.2 (ven-157-166): the destination battlefield's optional
+    // additional cost rides on top of the printed cost.
+    const redirectPips = chargedRedirectPower(
+      draft,
+      playerId as string,
+      cardId as string,
+      location as string | undefined,
+      paidAdditionalCost === true,
+    );
     deductCost(
       draft,
       playerId,
@@ -1874,7 +1979,14 @@ export const playUnit: Defs["playUnit"] = {
       {
         board,
         ...(altCostSpec ? { altCost: altCostSpec } : {}),
-        ...(energyDiscount > 0 ? { additionalCost: { energy: -energyDiscount } } : {}),
+        ...(energyDiscount > 0 || redirectPips
+          ? {
+              additionalCost: {
+                ...(energyDiscount > 0 ? { energy: -energyDiscount } : {}),
+                ...(redirectPips ? { power: redirectPips } : {}),
+              },
+            }
+          : {}),
         ...(waivePower ? { waivePower } : {}),
       },
       createMetaAccessor(context.cards),

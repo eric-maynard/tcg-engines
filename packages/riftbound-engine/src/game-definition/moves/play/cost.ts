@@ -649,6 +649,52 @@ export function battlefieldForbidsUnitPlay(battlefieldId: string): boolean {
 }
 
 /**
+ * rule 356.2 / 355.2 (rule-id: ven-157-166 Dragon Roost) — a Battlefield may
+ * offer ANY player an OPTIONAL ADDITIONAL cost that redirects a matching play
+ * to itself ("Any player may pay [rainbow][rainbow] as an additional cost to
+ * play a Dragon. If they do, they play it to this battlefield."). Read off the
+ * battlefield's own static; its instance id doubles as its card id.
+ * Returns the extra pips when the redirect applies to `cardId`.
+ */
+export function battlefieldRedirectPowerFor(
+  battlefieldId: string,
+  cardId: string,
+): readonly string[] | undefined {
+  for (const ability of getGlobalCardRegistry().getAbilities(battlefieldId) ?? []) {
+    if (ability?.type !== "static") {
+      continue;
+    }
+    const effect = (
+      ability as {
+        effect?: {
+          additionalCost?: { power?: readonly string[] };
+          appliesTo?: { tag?: string };
+          type?: string;
+        };
+      }
+    ).effect;
+    if (effect?.type !== "play-to-here-permission") {
+      continue;
+    }
+    const power = effect.additionalCost?.power;
+    if (!power?.length) {
+      continue;
+    }
+    const tag = effect.appliesTo?.tag;
+    if (tag) {
+      // rule 763.1: the redirect is gated on the printed tag of the played card.
+      const tags =
+        (getGlobalCardRegistry().get(cardId) as { tags?: readonly string[] } | undefined)?.tags ?? [];
+      if (!tags.some((t) => t.toLowerCase() === tag.toLowerCase())) {
+        continue;
+      }
+    }
+    return power;
+  }
+  return undefined;
+}
+
+/**
  * rule 419.1 / rule-id: ven-022-166 — a permanent this player controls that
  * reads "You may play cards from your trash" extends the legal play zone: the
  * trash becomes a play-from zone for its controller. Recognised either as an
