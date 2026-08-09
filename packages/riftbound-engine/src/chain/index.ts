@@ -5,6 +5,7 @@
 export {
   addToChain,
   allPlayersPassed,
+  breakPassSequence,
   collapseTriggerBatch,
   createInteractionState,
   endShowdown,

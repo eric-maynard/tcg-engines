@@ -9,7 +9,7 @@ import type {
   GameMoveDefinitions,
 } from "@tcg/core";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../../types";
-import { createInteractionState, getTurnState } from "../../../chain";
+import { breakPassSequence, createInteractionState, getTurnState } from "../../../chain";
 import { hasKeyword } from "../movement/helpers";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
 import {
@@ -340,5 +340,15 @@ export const playGear: Defs["playGear"] = {
       { cards: context.cards, counters: context.counters, draft, zones },
       { cardId: cardId as string, entryZone: "base", from: "hand", playerId: playerId as string, via: "hand" },
     );
+
+    // rule 339.1 — playing the gear is "adding an item" even though it resolves
+    // the instant it is finalized (337.2), so the run of passes restarts and
+    // this player keeps Priority (337.1.a).
+    if (draft.interaction) {
+      (draft as { interaction?: RiftboundGameState["interaction"] }).interaction = breakPassSequence(
+        draft.interaction,
+        playerId as string,
+      );
+    }
   },
 };

@@ -343,6 +343,32 @@ export function collapseTriggerBatch(
 // ============================================================================
 
 /**
+ * rule 339.1 / 553.4.a — a Chain resolves (and a showdown ends) only when all
+ * Relevant Players pass IN SEQUENCE *without adding an item*. Anything a player
+ * does that adds an item breaks that sequence, including an item that resolves
+ * the instant it is finalized and so never sits on the Chain (a Gear — 337.2).
+ * `addToChain` does this for items that stay on the Chain; this is the same
+ * reset for the immediate-resolution plays, which take a different path.
+ * The acting player keeps Priority afterwards (337.1.a).
+ */
+export function breakPassSequence(
+  state: TurnInteractionState,
+  playerId: string,
+): TurnInteractionState {
+  const activeShowdown = getActiveShowdown(state);
+  let showdownStack = state.showdownStack;
+  if (activeShowdown) {
+    const top = showdownStack.length - 1;
+    showdownStack = [...showdownStack.slice(0, top), { ...showdownStack[top], passedPlayers: [] }];
+  }
+  return {
+    ...state,
+    chain: state.chain ? { ...state.chain, activePlayer: playerId, passedPlayers: [] } : state.chain,
+    showdownStack,
+  };
+}
+
+/**
  * Start a new chain or add to an existing chain (rule 537).
  *
  * @param state - Current interaction state

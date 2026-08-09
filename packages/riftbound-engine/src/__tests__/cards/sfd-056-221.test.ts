@@ -132,7 +132,7 @@ describe("Sterak's Gage (sfd-056-221)", () => {
     expect(game.turnPlayer()).toBe(P2);
   });
 
-  test.failing("BUG: after I add the Gage to their chain, 'all passed in sequence WITHOUT adding an item' (339.1) is broken — my pass must hand priority back to P2 before the bolt resolves", async () => {
+  test("after I add the Gage to their chain, 'all passed in sequence WITHOUT adding an item' (339.1) — my pass hands priority back to P2 before the bolt resolves", async () => {
     // Expected: P2 pass → P1 plays Gage (an added, immediately-resolved item) → P1 pass → P2 holds
     // priority again with the bolt still on the chain (they may want a second bolt now). Actual: P2's
     // earlier pass still counts, so P1's pass resolves the bolt straight away.
@@ -292,7 +292,7 @@ describe("Sterak's Gage (sfd-056-221)", () => {
     expect(game.violations()).toEqual([]);
   });
 
-  test.failing("BUG: 'a unit you CONTROL' (108.2 / 718.5.e): a unit P1 controls but P2 owns is a legal wearer alongside P1's own; P2's units never are", async () => {
+  test("'a unit you CONTROL' (108.2 / 718.5.e): a unit P1 controls but P2 owns is a legal wearer alongside P1's own; P2's units never are", async () => {
     // Expected: the Quick-Draw attach offers ["mine", "stolen"] and the Gage can sit on the stolen
     // unit (5 Might). Actual: candidates are filtered by OWNER, so only "mine" qualifies, it is locked
     // in without a prompt, and the controlled-but-not-owned unit can never be equipped.

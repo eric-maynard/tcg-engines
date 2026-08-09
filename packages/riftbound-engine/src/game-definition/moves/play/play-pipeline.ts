@@ -273,11 +273,23 @@ export function enterPlayedPermanent(io: PlayIO, spec: EnterPlayedPermanentSpec)
     // rule 819.1.d (sfd-054-221) — [Quick-Draw]: "When you play it, attach it
     // to a unit you control": forced with one friendly unit, prompted with more.
     const zoneIds = ["base", ...Object.keys(draft.battlefields ?? {}).map((bf) => `battlefield-${bf}`)];
+    // rule 108.2 / 718.5.e — "a unit you CONTROL": a unit this player controls
+    // but another player owns is a legal wearer; one they own but do not
+    // control is not. Scan every player's board zones, filter by CONTROLLER.
+    const controllerOfUnit = (id: string) =>
+      (cards.getCardController?.(id as CoreCardId) ?? cards.getCardOwner(id as CoreCardId)) as
+        | string
+        | undefined;
     const units: string[] = [];
-    for (const zoneId of zoneIds) {
-      for (const id of zones.getCardsInZone(zoneId as CoreZoneId, playerId as CorePlayerId)) {
-        if (registry.get(id as string)?.cardType === "unit") {
-          units.push(id as string);
+    for (const pid of Object.keys(draft.players ?? {})) {
+      for (const zoneId of zoneIds) {
+        for (const id of zones.getCardsInZone(zoneId as CoreZoneId, pid as CorePlayerId)) {
+          if (
+            registry.get(id as string)?.cardType === "unit" &&
+            controllerOfUnit(id as string) === playerId
+          ) {
+            units.push(id as string);
+          }
         }
       }
     }
