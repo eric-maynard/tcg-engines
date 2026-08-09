@@ -747,9 +747,13 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
     // won it, so their "When I win a combat" triggers fire. A tie (740.3.a)
     // has no winner, so nothing fires.
     if (winner !== "tie") {
-      for (const unitId of winner === "attacker" ? attackersLeft : defendersLeft) {
+      // rule 466.3.a — it is the PLAYER who wins the combat, so the batch index
+      // lets "when YOU win a combat" fire once however many units survived.
+      const winningUnits = winner === "attacker" ? attackersLeft : defendersLeft;
+      for (const [batchIndex, unitId] of winningUnits.entries()) {
         fireTriggers(
           {
+            batchIndex,
             battlefieldId,
             cardId: unitId as string,
             playerId:
