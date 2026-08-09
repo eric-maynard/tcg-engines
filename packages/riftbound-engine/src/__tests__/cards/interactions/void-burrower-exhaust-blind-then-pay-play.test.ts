@@ -21,8 +21,9 @@
  *  (a) Which "you may" is finalization vs resolution? Is the legend exhausted before P1 sees the cards,
  *      and does P2 get a window in between?  → exhaust = blind finalization cost; P2 reacts after the
  *      exhaust and before the reveal; "banish one" is chosen on resolution.
- *  (b) Must P1 pay to play the chosen card? Banishing the unaffordable 5-cost?  → full cost; a card you
- *      cannot pay for is simply lost to banishment (play undone), the other card recycled.
+ *  (b) Must P1 pay to play the chosen card? Banishing the unaffordable 5-cost?  → full cost; and since
+ *      the text is "banish one, then PLAY it" (not "then you may play it") the play is mandatory, so a
+ *      card P1 cannot pay for is not an eligible pick at all (419.2.a / 419.3.c) — nothing is banished.
  *  (c) Banishing the 1-cost: where can it go, does Rek'Sai give it Accelerate, can P1 add [1][fury]?
  *      → base or any controlled battlefield (incl. the fresh conquest); yes (non-hand play); only with
  *      2 energy + 1 fury — with 1+1 it enters exhausted (or P1 plays nothing).
@@ -178,36 +179,32 @@ describe("Void Burrower × Rek'Sai, Breacher — blind exhaust at finalization, 
     expect(game.p1.banishment()).toEqual([]);
   });
 
-  // Expected (383.3.a.3 + 419.3.b, 357 / 358.5 / 444.2.a): "You may banish one" is its own instruction —
-  // Big Void IS a legal choice; banishing it then puts a play on the chain that fails at pay-costs, the
-  // play is undone and Big Void stays in BANISHMENT (neither drawn nor recycled — "recycle the rest" only
-  // covers Skitter). Actual: the engine pre-filters the reveal pick to affordable cards, so Big Void is
-  // never offered and pick("big") is rejected.
-  test.failing("BUG: (b) P1 may banish the unaffordable 5-cost Big Void — it is then simply lost to banishment (play undone), nothing enters play, energy untouched, Skitter recycled (358.5 / 444.2.a)", async () => {
+  // ADJUDICATED — 419.2.a beats a "the banish stands on its own" reading, because the printed text is
+  // "You may banish one, THEN PLAY IT", not "then you may play it": the play is mandatory once the banish
+  // is taken. A card whose full cost P1 cannot pay is therefore no legal line at all — taking it would
+  // force a Play that fails Check Legality at "all costs were paid" (358.2) and is undone (358.5 /
+  // 444.2.a), leaving an instruction that cannot be carried out. Under 419.2.a ("as long as a player has
+  // the resources to pay the costs … they may Play cards") / 419.3.c ("no ELIGIBLE cards to Play →
+  // nothing happens") only a payable card is an eligible pick, so the 5-cost Big Void is never offered
+  // and nothing is banished. Contrast Void Rush (sfd-188-221) / Reinforce (ogn-062-298), which print a
+  // discount: there the same gate is applied to the REDUCED cost.
+  test("(b) 419.2.a — the unaffordable 5-cost Big Void is not an eligible pick at all ('then play it' is mandatory): only Skitter is offered, picking Big Void is rejected, and nothing reaches banishment", async () => {
     const game = await board().build();
     const d = await toRevealPick(game);
-    expect(cardsOf(d).sort()).toEqual(["big", "skitter"]);
-    await game.p1.pick("big");
-    for (let i = 0; i < 10; i++) {
-      const cur = game.decision();
-      if (!cur || (cur.kind === "action" && cur.context === "main")) {
-        break;
-      }
-      if (cur.kind === "action" && cur.passKey) {
-        await game.acting().pass();
-      } else if (cur.kind === "yes-no" && cur.seat === P1) {
-        await game.p1.no();
-      } else if (cur.kind === "pick" && cur.seat === P1 && cur.allowDecline) {
-        await game.p1.decline();
-      } else {
-        break;
-      }
+    expect(cardsOf(d)).toEqual(["skitter"]);
+    expect((await game.p1.try((p) => p.pick("big"))).ok).toBe(false);
+    expect(game.zoneOf("big")).toBe("mainDeck");
+    await game.p1.decline();
+    for (let i = 0; i < 6 && game.decision()?.kind === "action" && (game.decision() as { context?: string }).context !== "main"; i++) {
+      await game.acting().pass();
     }
-    expect(game.zoneOf("big")).toBe("banishment");
+    // Neither card was banished; both are recycled to the bottom, energy untouched.
+    expect(game.p1.banishment()).toEqual([]);
     expect(game.p1.units()).not.toContain("big");
     expect(game.p1.energy()).toBe(1);
+    expect(game.zoneOf("big")).toBe("mainDeck");
     expect(game.zoneOf("skitter")).toBe("mainDeck");
-    expect(game.p1.deck().at(-1)).toBe("skitter");
+    expect(new Set(game.p1.deck().slice(-2))).toEqual(new Set(["big", "skitter"]));
     expect(game.p1.deck()[0]).toBe("third");
     expect(game.p1.hand()).toEqual([]);
   });
