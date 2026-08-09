@@ -1304,8 +1304,16 @@ export const revealHidden: Defs["revealHidden"] = {
 
     // rule-id: ogn-167-298 — rule 811.1.c.3: revealing a facedown card is
     // playing it "from [Hidden]" (units, gear and equipment alike).
+    // rule 811.1.d.2 — "(here)": carry the facedown battlefield on the event so
+    // the trigger's own targets are scoped to it (sfd-139-221).
     fireTriggers(
-      { cardId, playerId, type: "play-from-hidden", ...(cardType ? { cardType } : {}) },
+      {
+        cardId,
+        playerId,
+        type: "play-from-hidden",
+        ...(cardType ? { cardType } : {}),
+        ...(battlefieldId ? { fromHiddenAt: battlefieldId } : {}),
+      },
       { cards, counters, draft, zones },
     );
   },

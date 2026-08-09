@@ -543,6 +543,18 @@ export function executeResolvedItem(
   if (typeof trigEvt?.from === "string") {
     (baseCtx as { triggerFrom?: string }).triggerFrom = trigEvt.from;
   }
+  // rule 469.1 / 469.2 (unl-199-219) — "when you conquer or hold, … THERE":
+  // the battlefield that was Scored is the trigger's location. A source that
+  // sits at a battlefield already has its own "here" (rule 359.3.f), so only
+  // off-board sources (legends, base units) borrow the event's battlefield.
+  const scoringEvent = (trigEvt as { type?: string } | undefined)?.type;
+  if (
+    (scoringEvent === "conquer" || scoringEvent === "hold") &&
+    typeof trigEvt?.battlefieldId === "string" &&
+    baseCtx.sourceZone?.startsWith("battlefield-") !== true
+  ) {
+    (baseCtx as { sourceZone?: string }).sourceZone = `battlefield-${trigEvt.battlefieldId}`;
+  }
   const triggerZones = trigEvt
     ? [trigEvt.from, trigEvt.to].filter((z): z is string => typeof z === "string")
     : undefined;
@@ -550,8 +562,13 @@ export function executeResolvedItem(
   const triggerSourceId = typeof trigEvt?.cardId === "string" ? trigEvt.cardId : undefined;
   // rule-id: ogn-097-298 — Rule 723.1.d (811.1.d.2): a card played from Hidden
   // may only choose targets at the battlefield it was facedown at.
+  // The scope belongs to the card BEING PLAYED: another permanent's "when a
+  // player plays a card from face down" (unl-023-219) chooses freely.
   const hiddenZone =
-    typeof trigEvt?.fromHiddenAt === "string" ? `battlefield-${trigEvt.fromHiddenAt}` : undefined;
+    typeof trigEvt?.fromHiddenAt === "string" &&
+    (trigEvt.cardId === undefined || trigEvt.cardId === resolved.cardId)
+      ? `battlefield-${trigEvt.fromHiddenAt}`
+      : undefined;
   // rule 811.1 (unl-042-219) — played from Hidden, not from hand: collapse any
   // "if you played this from your hand" gate to its `else` branch now.
   if (hiddenZone !== undefined) {
@@ -1224,6 +1241,8 @@ function fireFromHiddenTrigger(
     {
       cardId: resolved.cardId,
       cardType: "spell",
+      // rule 811.1.d.2 — "(here)" on the trigger means the facedown battlefield.
+      fromHiddenAt: (resolved.triggerEvent as { fromHiddenAt?: string }).fromHiddenAt,
       playerId: resolved.controller,
       type: "play-from-hidden",
     },

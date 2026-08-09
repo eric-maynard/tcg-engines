@@ -988,6 +988,12 @@ export function hiddenChoiceIsPulledIn(effect: SpellEffectTargetShape | undefine
   if (!effect) return false;
   if (effect.type === "move") {
     const to = (effect as { to?: unknown; optional?: boolean }).to;
+    // rule 811.1.d.2.a (unl-141-219) — "move an enemy unit AT A DIFFERENT
+    // LOCATION to my battlefield": "here" names the destination, so the moved
+    // object is chosen from anywhere exactly like the named-battlefield form.
+    if (to === "here") {
+      return true;
+    }
     return (
       (effect as { optional?: boolean }).optional !== true &&
       to !== null &&

@@ -42,7 +42,18 @@ export type GameEvent =
   // rule-id: ogn-167-298 — rule 811.1.c.3: playing a card from facedown IS
   // playing a card; cards that key off it specifically ("When you play a card
   // from [Hidden]") need their own event alongside play-self / play-card.
-  | { type: "play-from-hidden"; cardId: string; playerId: string; cardType?: string }
+  | {
+      type: "play-from-hidden";
+      cardId: string;
+      playerId: string;
+      cardType?: string;
+      /**
+       * rule 811.1.d.2 — the battlefield the card was facedown at. "(here)" on
+       * a from-Hidden play trigger means that battlefield, so its targets are
+       * scoped to it exactly like a from-Hidden spell's.
+       */
+      fromHiddenAt?: string;
+    }
   // rule-id: ogn-060-298 — `owner` = the attacking/defending unit's controller
   // so "When a friendly unit attacks/defends" subject matchers can resolve.
   // `alone` (rule 740.2.a) = no OTHER unit its controller controls is at that
@@ -251,4 +262,13 @@ export type GameEvent =
   // resolves first. `cardId` is the HOST whose ability was used, `sourceType`
   // its card type (Equipment normalises to "gear", rule 151: Equipment is a
   // kind of gear and [Equip] is an activated ability).
-  | { type: "use-activated-ability"; cardId: string; playerId: string; sourceType?: string };
+  // rule 206.1 (rule-id: ven-192-166) — `energyCost` is the ability's own
+  // printed Energy cost, so "an activated ability with Energy cost [7] or more"
+  // can be judged without re-finding which ability of the host was used.
+  | {
+      type: "use-activated-ability";
+      cardId: string;
+      playerId: string;
+      sourceType?: string;
+      energyCost?: number;
+    };
