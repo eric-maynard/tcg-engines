@@ -13,7 +13,9 @@ const abilities: Ability[] = [
     effect: {
       from: "trash",
       ignoreCost: "energy",
-      target: { controller: "friendly", type: "unit" },
+      // rule 355.5.b / 355.10.a — the unit is a TARGET of this trigger, chosen
+      // when the trigger is finalized, so the descriptor must name the trash.
+      target: { controller: "friendly", location: "trash", type: "unit" },
       type: "play",
     },
     optional: true,

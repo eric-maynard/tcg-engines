@@ -87,8 +87,12 @@ describe("Soulgorger (ogn-196-298)", () => {
     expect(game.p1.resources()).toEqual({ energy: 0, power: { chaos: 0, fury: 0 } });
   });
 
-  test("without the matching Power the Wurm cannot be played from trash (only the Skulker is offered)", async () => {
-    // Expected: with no fury in the pool the Wurm is not a legal pick. Actual: no pick is offered at all.
+  test("without the matching Power the Wurm may still be NAMED but never reaches the board (355.5.b, 356.1.b.2)", async () => {
+    // rule 355.5.b / 355.10.a: the unit is a target of the trigger, chosen when the
+    // trigger is finalized — being able to PAY for it is not part of a target's
+    // legality (power can still be added in response), so both trash units are
+    // offered. rule 419.2.a: the play itself simply does not happen if, when the
+    // trigger resolves, its Power cost cannot be paid.
     const game = await board({ chaos: 2 }).build();
     await game.p1.play("sg");
     await game.settle();
@@ -96,7 +100,11 @@ describe("Soulgorger (ogn-196-298)", () => {
     await game.settle();
     const d = game.decision();
     expect(d?.kind).toBe("pick");
-    const keys = d?.kind === "pick" ? d.options.map((o) => o.key) : [];
-    expect(keys).toEqual(["skulker"]);
+    const keys = d?.kind === "pick" ? d.options.map((o) => o.key).sort() : [];
+    expect(keys).toEqual(["skulker", "wurm"]);
+    await game.p1.pick("wurm");
+    await game.settle();
+    expect(game.zoneOf("wurm")).toBe("trash");
+    expect(game.p1.resources()).toEqual({ energy: 0, power: { chaos: 0 } });
   });
 });

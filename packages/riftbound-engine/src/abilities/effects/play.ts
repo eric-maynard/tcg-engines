@@ -314,11 +314,19 @@ function offerPileCandidates(eff: PlayEffectShape, ctx: EffectContext, pile: "tr
     }
     return;
   }
-  // A board pick bound by the chain resolver is meaningless here; only a pick
-  // among the pile's candidates counts.
-  const chosen = ctx.boundTargets?.find((id) => candidates.includes(id));
-  if (chosen !== undefined) {
-    beginPlay(io, { ...template, cardId: chosen });
+  // rule 355.5 / 355.10.a — when the instruction's target was locked as the
+  // card was played or the trigger finalized (a descriptor naming the pile),
+  // THAT object is the play: if it can no longer be played the instruction just
+  // does nothing more — a different card in the pile is never substituted for
+  // it. A board pick bound by the chain resolver is meaningless here, so only
+  // bindings that name a card in this pile count.
+  const boundInPile = ctx.boundTargets?.filter((id) => cards.includes(id)) ?? [];
+  if (boundInPile.length > 0) {
+    for (const id of boundInPile) {
+      if (candidates.includes(id)) {
+        beginPlay(io, { ...template, cardId: id });
+      }
+    }
     return;
   }
   if (candidates.length === 0 || ctx.draft.pendingChoice) {
