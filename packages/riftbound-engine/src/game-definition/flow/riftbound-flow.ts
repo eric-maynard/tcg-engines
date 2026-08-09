@@ -35,6 +35,7 @@ import { clearDamage, getDamage } from "../../operations/damage-store";
 import { type LeaveBoardContext, removeFromBoard } from "../../operations/leave-board";
 import { emptyRunePoolInPlace } from "../../operations/riftbound-operations";
 import { resetPlaysThisTurn } from "../../operations/plays-this-turn";
+import { relocateAttachedEquipment } from "../moves/movement/helpers";
 import {
   beginAdditionalTurn,
   dequeueExtraTurn,
@@ -425,15 +426,23 @@ function runExpirationStep(context: FlowStepContext): void {
           if (expiring.some((e) => e.recallOnExpiry === true)) {
             const from = context.zones.getCardZone?.(cardId);
             context.zones.moveCard({ cardId, targetZoneId: "base" as CoreZoneId });
+            // rule 719.3.a — a recall changes the Top-Most card's LOCATION, so
+            // every card attached to it changes location with it.
+            relocateAttachedEquipment(cardId as string, "base", context.cards, {
+              getCardZone: (id) => context.zones.getCardZone?.(id) as string | undefined,
+              moveCard: (args) => context.zones.moveCard(args),
+            });
             // rule 323.6 / 190.4.c — a battlefield left without a unit
             // its controller controls is lost immediately (the Ending
-            // Step is an Open State).
+            // Step is an Open State). Only UNITS are a presence there: a gear
+            // left at the battlefield never keeps control (rule 190.3).
             if (from?.startsWith("battlefield-")) {
               const bf = context.state.battlefields[from.slice("battlefield-".length)];
               const stillThere = context.zones
                 .getCardsInZone(from as CoreZoneId)
                 .some(
                   (id) =>
+                    getGlobalCardRegistry().getCardType(id as string) === "unit" &&
                     (context.cards.getCardController?.(id) ??
                       context.cards.getCardOwner?.(id)) === bf?.controller,
                 );

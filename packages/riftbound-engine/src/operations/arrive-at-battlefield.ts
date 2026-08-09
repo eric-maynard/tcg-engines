@@ -88,14 +88,21 @@ export function toBattlefieldId(zoneOrBattlefieldId: string): string | undefined
   return zoneOrBattlefieldId;
 }
 
+/**
+ * rule 190.3 / 323.6 — presence at a battlefield is a UNIT's business: gear
+ * standing loose there, or an Equipment riding along on a unit its controller
+ * does not control (718.5.e), is neither a combatant nor a side. Ids with no
+ * registered card type (harness inline cards) count as units.
+ */
+export function isPresenceUnit(cardId: string): boolean {
+  const type = getGlobalCardRegistry().getCardType(cardId);
+  return type === undefined || type === "unit";
+}
+
 /** Units at the battlefield (gear standing loose there is not a combatant). */
 function unitsAt(io: ArrivalIO, battlefieldId: string): string[] {
-  const registry = getGlobalCardRegistry();
   return (io.zones.getCardsInZone(`battlefield-${battlefieldId}` as CoreZoneId) as readonly string[]).filter(
-    (id) => {
-      const type = registry.getCardType(id as string);
-      return type === undefined || type === "unit";
-    },
+    (id) => isPresenceUnit(id as string),
   ) as string[];
 }
 

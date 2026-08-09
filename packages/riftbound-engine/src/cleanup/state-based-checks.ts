@@ -27,6 +27,7 @@ import type {
 import { runDieBatch } from "../abilities/die-replacement-batch";
 import { recalculateStaticEffects } from "../abilities/static-abilities";
 import { fireTriggers, type TriggerRunnerContext } from "../abilities/trigger-runner";
+import { isPresenceUnit } from "../operations/arrive-at-battlefield";
 import { getGlobalCardRegistry } from "../operations/card-lookup";
 import { getDamage } from "../operations/damage-store";
 import { collectAnyDamageLethalPlayers } from "../operations/lethal-damage";
@@ -639,8 +640,13 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
     // rules 181/182 / 323.2.b — two SIDES make a battlefield contested, and a
     // side is a controller: a stolen unit standing among its owner's units is
     // the thief's presence there.
+    // rule 190.3 / 323.6 — only UNITS are a presence: an Equipment the opponent
+    // controls, riding along on someone else's unit (718.5.e), is not a side.
     const sides = new Set<string>();
     for (const unitId of unitsAtBf) {
+      if (!isPresenceUnit(unitId as string)) {
+        continue;
+      }
       const side =
         (ctx.cards.getCardController?.(unitId) ?? ctx.cards.getCardOwner(unitId)) ?? "";
       if (side) {

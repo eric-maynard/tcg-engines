@@ -19,6 +19,7 @@ import type {
   ZoneId as CoreZoneId,
 } from "@tcg/core";
 import { getActiveShowdown } from "../chain/chain-state";
+import { KEYWORD_DEFINITIONS } from "../keywords/keyword-effects";
 import { getGlobalCardRegistry } from "../operations/card-lookup";
 import { additionalCostWasPaid } from "../operations/additional-costs-paid";
 import type { GrantedKeyword, RiftboundCardMeta, RiftboundGameState } from "../types";
@@ -1062,7 +1063,14 @@ function applyStaticEffect(
     // aura gives to an ATTACHED Equipment ("Your Equipment each give
     // [Assault]") functions on its equipped unit, and each Equipment grants its
     // own instance, so stackable keywords sum (807.2).
+    // rule 819.3 / 718.2 — but a keyword that governs how the CARD ITSELF is
+    // played ([Quick-Draw], [Reaction], [Ambush], …) is a characteristic of the
+    // Equipment and never reaches the bearer: only keywords a unit can use are
+    // appended to it (718.3).
     const recipients = targetIds.map((id) => {
+      if (!keywordFunctionsOnBearer(keyword)) {
+        return id;
+      }
       const attachedTo = (
         ctx.cards.getCardMeta(id as CoreCardId) as { attachedTo?: string } | undefined
       )?.attachedTo;
@@ -1368,4 +1376,17 @@ export function recalculateStaticEffects(ctx: StaticAbilityContext): boolean {
   }
 
   return anyApplied;
+}
+
+/**
+ * rule 718.3 / 819.3 — a keyword granted to an ATTACHED Equipment functions on
+ * its bearer only when a unit can use it (combat / trigger / state keywords).
+ * Play-speed keywords describe how the Equipment card is played and stay on the
+ * gear ([Quick-Draw] is not in KEYWORD_DEFINITIONS, so it is named explicitly).
+ */
+function keywordFunctionsOnBearer(keyword: string): boolean {
+  if (keyword === "Quick-Draw") {
+    return false;
+  }
+  return KEYWORD_DEFINITIONS[keyword]?.category !== "play";
 }

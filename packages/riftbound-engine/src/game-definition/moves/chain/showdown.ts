@@ -15,6 +15,7 @@ import {
   type ArrivalIO,
   beginShowdownAt,
   beginStagedShowdowns,
+  isPresenceUnit,
 } from "../../../operations/arrive-at-battlefield";
 import { fireTriggers } from "../../../abilities/trigger-runner";
 import { cleanupAndFireDeaths, type PostMoveCleanupContext } from "../../../cleanup/post-move-cleanup";
@@ -77,6 +78,7 @@ export function turnPlayerMustChooseStagedCombat(
     const zone = `battlefield-${battlefieldId}` as CoreZoneId;
     const controllers = context.zones
       .getCardsInZone(zone)
+      .filter((id) => isPresenceUnit(id as string))
       .map((id) => context.cards.getCardController?.(id as never) ?? context.cards.getCardOwner(id));
     const attacker = bf.contestedBy as string;
     if (!controllers.includes(attacker)) {
@@ -166,8 +168,14 @@ export const passShowdownFocus: Defs["passShowdownFocus"] = {
           // rule 469.1 / 477.1.a: Control of a battlefield is established (and the
           // point scored) by the CONTROLLER of the units left there — a borrowed
           // unit conquers for the player controlling it, never for its owner.
+          // rule 190.3 / 323.6: only UNITS establish control — an Equipment the
+          // opponent controls, worn by the sole unit here (718.5.e), is not a
+          // second side and must not deny the conquer.
           const owners = new Set<string>();
           for (const cid of context.zones.getCardsInZone(bfZone)) {
+            if (!isPresenceUnit(cid as string)) {
+              continue;
+            }
             const o = context.cards.getCardController?.(cid as never) ?? context.cards.getCardOwner(cid);
             if (o) owners.add(o as string);
           }
