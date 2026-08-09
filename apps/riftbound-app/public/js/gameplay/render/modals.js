@@ -52,6 +52,12 @@ function promptName(id) {
  * shared by the modal and the sidebar so neither falls back to "Choose a card"
  * for a yes/no, an X amount or a damage split.
  */
+// Prompt headlines carry the same cost tokens as rules text ("[rainbow]", "[2]"),
+// so they render through iconify() — which escapes internally — never raw esc().
+function promptTitleHtml(text) {
+  return typeof iconify === "function" ? iconify(text ?? "") : esc(text ?? "");
+}
+
 function pendingChoiceTitle(pending) {
   const src = findCard(pending.sourceCardId)?.name;
   switch (pending.type) {
@@ -183,7 +189,7 @@ function renderPendingChoiceModal() {
 
   const title = pendingChoiceTitle(pending);
 
-  let html = `<div class="chain-title">${esc(title)}</div>`;
+  let html = `<div class="chain-title">${promptTitleHtml(title)}</div>`;
   // Rule 356.1 (unl-135-219): a pick that costs something must say so before
   // the player commits — Decline is always the free way out.
   const pickCostText = describeOptInCost(pending.pickCost);
@@ -296,7 +302,7 @@ function renderCompositeChoice(pending, box) {
     executeMove("resolvePendingChoice", exact ? exact.params : { playerId: me, ...params }, exact ? exact.playerId : me);
   };
   const title = pendingChoiceTitle(pending);
-  let html = `<div class="chain-title">${esc(title)}</div>`;
+  let html = `<div class="chain-title">${promptTitleHtml(title)}</div>`;
 
   if (pending.type === "order" || pending.type === "order-cards") {
     const items = pending.type === "order"

@@ -24,6 +24,26 @@ function modeOptionText(pending, idx) {
   return humanizeEffect(opt?.effect) || `Option ${Number(idx) + 1}`;
 }
 
+/** Short English rendering of a condition payload ("" when it can't be described). */
+function humanizeCondition(c) {
+  if (!c || typeof c !== "object") return "";
+  if (typeof c.text === "string" && c.text.trim()) return c.text;
+  if (c.type === "count") {
+    const t = c.target && typeof c.target === "object" ? c.target : {};
+    const cmp = c.comparison && typeof c.comparison === "object" ? c.comparison : {};
+    const [op, val] = Object.entries(cmp)[0] ?? [];
+    if (typeof val !== "number") return "";
+    const who = t.controller === "enemy" ? "the opponent has" : "you have";
+    const noun = `${t.type ?? "card"}${val === 1 ? "" : "s"}`;
+    const where = t.location === "hand" ? " in hand" : t.location === "battlefield" ? " at a battlefield" : t.location === "base" ? " in base" : t.location === "trash" ? " in the trash" : "";
+    if (op === "lte" || op === "gte") return `${who} ${val} or ${op === "lte" ? "fewer" : "more"} ${noun}${where}`;
+    if (op === "lt" || op === "gt") return `${who} ${op === "lt" ? "fewer" : "more"} than ${val} ${noun}${where}`;
+    if (op === "eq") return `${who} exactly ${val} ${noun}${where}`;
+    return "";
+  }
+  return "";
+}
+
 /** Minimal English rendering of an effect payload (label fallback only). */
 function humanizeEffect(e) {
   if (!e || typeof e !== "object") return "";
@@ -57,6 +77,15 @@ function humanizeEffect(e) {
     case "empower": return `Empower ${noun || "a unit"}${turn}`;
     case "disempower": return `Disempower ${noun || "a unit"}${turn}`;
     case "sequence": return (e.effects ?? []).map(humanizeEffect).filter(Boolean).join(", then ");
+    // rule 355.5 — a chain item must say what it will do: describe the body of a
+    // conditional effect (plus its condition), never the raw "conditional" type.
+    case "conditional": {
+      const body = humanizeEffect(e.then ?? e.effect);
+      const cond = humanizeCondition(e.condition);
+      const alt = humanizeEffect(e.else);
+      if (!body) return alt ? `Otherwise ${alt}` : "";
+      return `${body}${cond ? ` if ${cond}` : ""}${alt ? `, otherwise ${alt}` : ""}`;
+    }
     case "raw": return String(e.text ?? "");
     default: {
       const verb = String(e.type ?? "effect").replace(/-/g, " ");
@@ -360,8 +389,10 @@ function renderActions() {
       : pending.type === "opt-in"
       ? `Decide: use ${findCard(pending.sourceCardId)?.name ?? "optional"} ability`
       : "Choose a card";
+    // Prompt headlines carry cost tokens ("[rainbow]") — render them as icons, not literal text.
+    const verbHtml = typeof promptTitleHtml === "function" ? promptTitleHtml(verb) : esc(verb);
     html += `<div class="action-section-title" data-pending-type="${esc(pending.type ?? "")}" style="background:#3a2a4a;color:#ffd070;padding:6px;border-radius:3px;">
-      ${mine ? "⚠ " + esc(verb) : "Waiting for opponent: " + esc(verb)}
+      ${mine ? "⚠ " + verbHtml : "Waiting for opponent: " + verbHtml}
     </div>`;
     // rule-729 (ogn-174-298): reveal-and-pick from a hidden zone (deck/hand)
     // must show the revealed card(s) so the prompter can see what they are
