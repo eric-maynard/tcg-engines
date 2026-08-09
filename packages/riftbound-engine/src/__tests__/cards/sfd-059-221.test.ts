@@ -119,7 +119,7 @@ describe("Svellsongur (sfd-059-221)", () => {
     expect(game.zoneOf("poro")).toBe("trash");
   });
 
-  test.failing("BUG: the copy doubles a triggered ability — an equipped Stellacorn Herder ('When I move, draw 1') draws 2 on one move", async () => {
+  test("the copy doubles a triggered ability — an equipped Stellacorn Herder ('When I move, draw 1') draws 2 on one move", async () => {
     // Expected: two "When I move" triggers → hand +2. Actual: hand +1 (the copy is not appended to the wearer).
     const game = await board().build();
     await equip(game, "herder");
@@ -141,7 +141,7 @@ describe("Svellsongur (sfd-059-221)", () => {
     expect(game.p1.hand()).toHaveLength(before + 1);
   });
 
-  test.failing("BUG: the appended copy is the WEARER's text (136.2.c/d) — Kingpin's copied '[Exhaust]: +3 Might' is paid by exhausting Kingpin, so once Kingpin is exhausted no second activation exists on either card", async () => {
+  test("the appended copy is the WEARER's text (136.2.c/d) — Kingpin's copied '[Exhaust]: +3 Might' is paid by exhausting Kingpin, so once Kingpin is exhausted no second activation exists on either card", async () => {
     // Expected: after Kingpin uses its own ability (exhausted, 6 Might) neither card offers another activation.
     // Actual: the engine hosts the copied ability on Svellsongur itself and lets the gear's own exhaustion pay for a second use.
     const game = await scenario()

@@ -137,6 +137,75 @@ function chosenEnemyRestrictionUnmet(
   return !(state.turnEvents?.[playerId] ?? []).includes("chose-enemy-unit");
 }
 
+/**
+ * rule 377.2.b (sfd-197-221 Emperor of the Sands) — "Use only if you've played
+ * an Equipment this turn": read this turn's play log for the activating player
+ * and look for a piece of Equipment. rule 208.3 / 476.1: a gear printing the
+ * [Equip] ability IS Equipment even when its set data types it plainly as gear.
+ */
+function playedEquipmentRestrictionUnmet(
+  state: { cardsPlayedIdsThisTurn?: Record<string, readonly string[]> },
+  restrictions: readonly { type: string }[] | undefined,
+  playerId: string,
+): boolean {
+  if (!restrictions?.some((r) => r.type === "played-equipment-this-turn")) {
+    return false;
+  }
+  const registry = getGlobalCardRegistry();
+  const played = state.cardsPlayedIdsThisTurn?.[playerId] ?? [];
+  return !played.some((id) => {
+    const def = registry.get(id);
+    return (
+      def?.cardType === "equipment" ||
+      (def?.cardType === "gear" && registry.hasKeyword(id, "Equip"))
+    );
+  });
+}
+
+/**
+ * rule 136.2.c/d (sfd-059-221 Svellsongur) — text copied onto an Equipment from
+ * the unit it is attached to IS the WEARER's text: an `[Exhaust]` in that copy
+ * is paid by exhausting the wearer, never the gear. Every other shape (own,
+ * inherited, granted) is paid by the host card itself.
+ */
+export function exhaustPayerCardId(
+  hostCardId: string,
+  sourceCardId: string | undefined,
+  getCardMeta: (cardId: CoreCardId) => Partial<RiftboundCardMeta> | undefined,
+): string {
+  if (!sourceCardId || sourceCardId === hostCardId) {
+    return hostCardId;
+  }
+  const meta = getCardMeta(hostCardId as CoreCardId) as
+    | { copiedFromCardId?: string }
+    | undefined;
+  return meta?.copiedFromCardId === sourceCardId ? sourceCardId : hostCardId;
+}
+
+/**
+ * rule 377.2.b (sfd-199-221 Prodigal Explorer) — "Use only if you've chosen
+ * enemy units and/or gear twice this turn with spells or unit abilities": a
+ * COUNTED history restriction. `fireTriggers` logs one `chose-enemy-object`
+ * per qualifying choice (enemy unit or gear, chosen by a spell or a UNIT
+ * ability); `turnEvents` is cleared at the turn boundary, so last turn's
+ * choices never carry over.
+ */
+function chosenEnemyObjectsRestrictionUnmet(
+  state: { turnEvents?: Record<string, readonly string[]> },
+  restrictions: readonly { type: string }[] | undefined,
+  playerId: string,
+): boolean {
+  const rule = restrictions?.find((r) => r.type === "chosen-enemy-objects-this-turn") as
+    | { count?: number }
+    | undefined;
+  if (!rule) {
+    return false;
+  }
+  const needed = rule.count ?? 1;
+  const log = state.turnEvents?.[playerId] ?? [];
+  return log.filter((e) => e === "chose-enemy-object").length < needed;
+}
+
 function normalizeRecycleCost(raw: unknown): { amount: number; cardType?: string } | undefined {
   if (typeof raw === "number") {
     return raw > 0 ? { amount: raw } : undefined;
@@ -1152,7 +1221,14 @@ export const activateAbility: Defs["activateAbility"] = {
       return false;
     }
     // rule 377.2.b: "Use only if you've chosen an enemy unit this turn."
+    if (chosenEnemyObjectsRestrictionUnmet(state, abilityRestrictions, playerId as string)) {
+      return false;
+    }
     if (chosenEnemyRestrictionUnmet(state, abilityRestrictions, playerId as string)) {
+      return false;
+    }
+    // rule 377.2.b: "Use only if you've played an Equipment this turn."
+    if (playedEquipmentRestrictionUnmet(state, abilityRestrictions, playerId as string)) {
       return false;
     }
     // Rule 827.1.c.1: [Empower] carries an implicit "Play only if not
@@ -1302,13 +1378,19 @@ export const activateAbility: Defs["activateAbility"] = {
       // Exhaust always applies to the host card (`cardId`), even for
       // Inherited abilities where the source differs (e.g., Heimerdinger).
       if (cost.exhaust) {
+        // rule 136.2.c/d: a copied (Svellsongur) ability exhausts the WEARER.
+        const payer = exhaustPayerCardId(
+          cardId as string,
+          sourceCardId as string | undefined,
+          (m) => context.cards.getCardMeta(m),
+        ) as CoreCardId;
         const {getFlag} = (
           context.counters as { getFlag?: (c: CoreCardId, f: string) => boolean }
         );
-        if (getFlag && getFlag(cardId as CoreCardId, "exhausted")) {
+        if (getFlag && getFlag(payer, "exhausted")) {
           return false;
         }
-        const hostMeta = context.cards.getCardMeta(cardId as CoreCardId) as
+        const hostMeta = context.cards.getCardMeta(payer) as
           | { exhausted?: boolean }
           | undefined;
         if (hostMeta?.exhausted === true) {
@@ -1615,7 +1697,14 @@ export const activateAbility: Defs["activateAbility"] = {
           continue;
         }
         // rule 377.2.b: "Use only if you've chosen an enemy unit this turn."
+        if (chosenEnemyObjectsRestrictionUnmet(state, abilityRestrictions, playerId as string)) {
+          continue;
+        }
         if (chosenEnemyRestrictionUnmet(state, abilityRestrictions, playerId as string)) {
+          continue;
+        }
+        // rule 377.2.b: "Use only if you've played an Equipment this turn."
+        if (playedEquipmentRestrictionUnmet(state, abilityRestrictions, playerId as string)) {
           continue;
         }
         // Rule 827.1.c.1: [Empower] — skip when the host is already Empowered.
@@ -1722,7 +1811,12 @@ export const activateAbility: Defs["activateAbility"] = {
           // Is already exhausted. `entry.hostCardId` is the card that
           // Would pay the exhaust (the unit holding the ability).
           if (cost.exhaust) {
-            const hostCardId = entry.hostCardId as CoreCardId;
+            // rule 136.2.c/d: a copied (Svellsongur) ability exhausts the WEARER.
+            const hostCardId = exhaustPayerCardId(
+              entry.hostCardId as string,
+              entry.sourceCardId,
+              (m) => context.cards.getCardMeta(m),
+            ) as CoreCardId;
             const {getFlag} = (
               context.counters as { getFlag?: (c: CoreCardId, f: string) => boolean }
             );
@@ -2076,7 +2170,14 @@ export const activateAbility: Defs["activateAbility"] = {
       // Handle exhaust cost — always exhaust the host card, never the
       // Source (Heimerdinger exhausts himself for an inherited ability).
       if (cost.exhaust) {
-        context.counters.setFlag(cardId as CoreCardId, "exhausted", true);
+        // rule 136.2.c/d: a copied (Svellsongur) ability exhausts the WEARER.
+        context.counters.setFlag(
+          exhaustPayerCardId(cardId as string, sourceCardId as string | undefined, (m) =>
+            context.cards.getCardMeta(m),
+          ) as CoreCardId,
+          "exhausted",
+          true,
+        );
       }
 
       // rule 702.2.b (ogn-164-298 Sett): spending a buff removes it; Might
@@ -2252,7 +2353,14 @@ export const activateAbility: Defs["activateAbility"] = {
       const trigCtx = { cards: context.cards, counters: context.counters, draft, zones: context.zones };
       for (const targetId of targets) {
         fireTriggers(
-          { cardId: targetId, chooserId: playerId, sourceType: "ability", type: "choose" },
+          {
+            cardId: targetId,
+            chooserId: playerId,
+            // rule-id: sfd-199-221 — the ability's host card.
+            sourceCardId: cardId as string,
+            sourceType: "ability",
+            type: "choose",
+          },
           trigCtx,
         );
       }

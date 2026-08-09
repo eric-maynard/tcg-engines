@@ -129,6 +129,44 @@ function delayedTriggerAbilitiesFrom(
   return out;
 }
 
+/**
+ * rule 136.2.c / 719.1 (sfd-059-221 Svellsongur) — an Equipment that copies its
+ * wearer's text appends that text back onto the WEARER, so the unit has each of
+ * its triggered abilities twice while the copy is attached.
+ */
+function copiedAttachmentAbilities(
+  cardId: string,
+  meta: Partial<RiftboundCardMeta> | undefined,
+  ctx: TriggerRunnerContext,
+  printed: readonly TriggerableAbility[],
+  event?: GameEvent,
+): TriggerableAbility[] {
+  const equipped = meta?.equippedWith;
+  if (!equipped || equipped.length === 0) {
+    return [];
+  }
+  const registry = getGlobalCardRegistry();
+  const out: TriggerableAbility[] = [];
+  for (const equipId of equipped) {
+    if (registry.get(equipId as string)?.copyAttachedUnitText !== true) {
+      continue;
+    }
+    // rule 370.1.a.2 — the copy exists only once the attachment is done, so it
+    // is not a second attachment event for the attach that created it.
+    if (
+      event?.type === "attach-equipment" &&
+      (event as { equipmentId?: string }).equipmentId === (equipId as string)
+    ) {
+      continue;
+    }
+    if (ctx.cards.getCardMeta(equipId as CoreCardId)?.copiedFromCardId !== cardId) {
+      continue;
+    }
+    out.push(...printed.filter((a) => a.type === "triggered"));
+  }
+  return out;
+}
+
 function grantedKeywordAbilities(
   meta: Partial<RiftboundCardMeta> | undefined,
 ): TriggerableAbility[] {
@@ -1153,7 +1191,10 @@ function evaluateControlCondition(
  * Build the list of cards on the board with their abilities.
  * Scans base, battlefield, and legendZone zones, looks up abilities from the card definition registry.
  */
-export function getBoardCards(ctx: TriggerRunnerContext): CardWithAbilities[] {
+export function getBoardCards(
+  ctx: TriggerRunnerContext,
+  event?: GameEvent,
+): CardWithAbilities[] {
   const boardCards: CardWithAbilities[] = [];
   // rule-id: sfd-109-221 (Akshan / Dazzling Aurora) — "your" on a permanent's
   // trigger refers to its current CONTROLLER, not its owner, so a
@@ -1164,7 +1205,11 @@ export function getBoardCards(ctx: TriggerRunnerContext): CardWithAbilities[] {
   const abilitiesOf = (cardId: CoreCardId): TriggerableAbility[] => {
     const printed = toTriggerableAbilities(cardId as string);
     const meta = ctx.cards.getCardMeta(cardId);
-    const granted = [...grantedKeywordAbilities(meta), ...delayedTriggerAbilities(meta)];
+    const granted = [
+      ...grantedKeywordAbilities(meta),
+      ...delayedTriggerAbilities(meta),
+      ...copiedAttachmentAbilities(cardId as string, meta, ctx, printed, event),
+    ];
     return granted.length > 0 ? [...printed, ...granted] : printed;
   };
 
@@ -1492,6 +1537,26 @@ export function fireTriggers(rawEvent: GameEvent, ctx: TriggerRunnerContext): nu
       draft.turnEvents ??= {};
       (draft.turnEvents[chooser] ??= []).push("chose-enemy-unit");
     }
+    // rule 377.2.b (sfd-199-221) — "chosen enemy units and/or gear … with
+    // spells or unit abilities": enemy units AND gear both count, but only
+    // when the chooser is a spell or an ability hosted on a UNIT (a gear or
+    // legend ability's choice never qualifies).
+    const subjectType = getGlobalCardRegistry().getCardType(event.cardId as string);
+    if (
+      subjectOwner !== undefined &&
+      subjectOwner !== chooser &&
+      (subjectType === "unit" || subjectType === "gear" || subjectType === "equipment")
+    ) {
+      const source = event as { sourceType?: string; sourceCardId?: string };
+      const hostType = source.sourceCardId
+        ? getGlobalCardRegistry().getCardType(source.sourceCardId)
+        : undefined;
+      if (source.sourceType === "spell" || hostType === undefined || hostType === "unit") {
+        const draft = ctx.draft as { turnEvents?: Record<string, string[]> };
+        draft.turnEvents ??= {};
+        (draft.turnEvents[chooser] ??= []).push("chose-enemy-object");
+      }
+    }
   }
   // rule-id: ogn-019-298 — "If you've discarded a card this turn" statics read a
   // per-player log of this turn's events; every discard flows through here.
@@ -1552,7 +1617,7 @@ export function fireTriggers(rawEvent: GameEvent, ctx: TriggerRunnerContext): nu
       zones: ctx.zones,
     });
   }
-  const boardCards = getBoardCards(ctx);
+  const boardCards = getBoardCards(ctx, event);
   // Rule ogn-006-298 (Flame Chompers): a card that reads "When you discard
   // me…" is in the trash by the time the discard event is processed. Include
   // the discarded card itself in the scan so its self-trigger can match.

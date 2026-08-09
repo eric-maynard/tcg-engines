@@ -438,6 +438,23 @@ export function parseActivatedAbilityInner(text: string): ActivatedAbility | und
     remaining = remaining.replace(useOnlyChosenEnemy[0], " ").trim();
   }
 
+  // rule 377.2.b (sfd-199-221 Prodigal Explorer): "Use only if you've chosen
+  // enemy units and/or gear twice this turn with spells or unit abilities." —
+  // a COUNTED history restriction whose qualifying choosers are spells and
+  // unit abilities only (a gear/legend ability's choice does not count).
+  const useOnlyChosenEnemyObjects = remaining.match(
+    /\s*Use only if you(?:'ve|’ve| have)\s+chosen enemy units and\/or gear (twice|once|three times) this turn(?:\s+with spells or unit abilities)?\.?/i,
+  );
+  if (useOnlyChosenEnemyObjects) {
+    const word = (useOnlyChosenEnemyObjects[1] ?? "twice").toLowerCase();
+    const count = word === "once" ? 1 : word === "three times" ? 3 : 2;
+    restrictions = [
+      ...(restrictions ?? []),
+      { count, type: "chosen-enemy-objects-this-turn" } as { type: string },
+    ];
+    remaining = remaining.replace(useOnlyChosenEnemyObjects[0], " ").trim();
+  }
+
   // rule 377.2.b — "(Use) only once each turn", either as its own trailing
   // sentence or hung off a preceding restriction with "and".
   const onlyOnceEachTurn = remaining.match(/\s*(?:and\s+)?(?:Use\s+)?only once each turn\.?\s*$/i);
