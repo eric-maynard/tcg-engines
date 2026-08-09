@@ -80,6 +80,28 @@ describe("Ekko, Recurrent (ogn-110-298)", () => {
     expect(game.p1.energy()).toBe(3); // readying runes adds no energy by itself
   });
 
+  test("[Deathknell] 'Recycle me' is the trigger's BASE COST — paid on finalization, not on resolution", async () => {
+    // rule 383.3.b (Ekko is the printed example) + 383.3.b.1 / 740.4.a.2: a cost written at the
+    // start of a trigger's instructions must be PAID to finalize the item onto the Chain, and the
+    // payoff happens only because it was paid. So while the item sits on the Chain, Ekko has
+    // already left the trash for the deck — and the runes are still exhausted.
+    const game = await scenario()
+      .battlefield("bf1", { controller: P1 })
+      .unit(P1, "bf1", CARD, "ekko")
+      .runes(P1, "mind", 2)
+      .hand(P1, BOLT, "bolt")
+      .build();
+    await game.p1.tapRunes(2);
+    await game.p1.cast("bolt", { targets: "ekko" });
+    await game.p1.passPriority();
+    await game.p2.passPriority(); // Bolt resolves, Ekko dies, Deathknell is finalized
+    expect(game.chain()).toEqual([expect.objectContaining({ cardId: "ekko", triggered: true })]);
+    expect(game.zoneOf("ekko")).toBe("mainDeck"); // base cost already paid
+    expect(game.p1.runes({ ready: true })).toHaveLength(0); // payoff waits for resolution
+    await game.settle();
+    expect(game.p1.runes({ ready: true })).toHaveLength(2);
+  });
+
   test("[Deathknell] also triggers when he dies in combat (rule 323.4 / 808)", async () => {
     // Expected: 5-Might Ekko attacks a 6-Might defender, takes lethal damage → Deathknell → recycled,
     // runes readied.

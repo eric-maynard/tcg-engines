@@ -228,11 +228,20 @@ function parseSimpleEffect(text: string): Effect | undefined {
   }
 
   // Try "Recycle me to EFFECT." compound
+  // rule 383.3.b / 740.4.a.2 (rule-id: ogn-110-298 Ekko, Recurrent) — a cost
+  // written at the START of a triggered ability's instructions ("Recycle me TO
+  // ready your runes") is the trigger's BASE COST: it is paid when the item is
+  // finalized onto the Chain, and (rule 383.3.b.1) an unpaid/unpayable cost
+  // means the payoff never happens. `costStep: true` is what both the
+  // finalization path and the sequence resolver read to enforce that.
   const recycleToMatch = cleanText.match(/^Recycle me to (.+?)\.?$/i);
   if (recycleToMatch) {
     const thenEffect = parseSimpleEffect(recycleToMatch[1].trim() + ".");
     if (thenEffect) {
-      return { effects: [{ target: "self", type: "recycle" }, thenEffect], type: "sequence" };
+      return {
+        effects: [{ costStep: true, target: "self", type: "recycle" }, thenEffect],
+        type: "sequence",
+      };
     }
   }
 

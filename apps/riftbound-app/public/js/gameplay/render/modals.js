@@ -397,8 +397,28 @@ function describePlayVariant(m, card) {
   return { label: `${out.label} ${where}`, detail: `${out.detail} — played ${where}` };
 }
 
+/**
+ * rule 402.1: a card's play cost is its energy cost AND its power cost — render
+ * both ("5 energy + 1 mind"), never energy alone, or a card with a power
+ * requirement reads as cheaper than it is. Repeated domains are counted
+ * ("fury","fury" -> "2 fury").
+ */
+function formatCostTokens(energy, power) {
+  const parts = [];
+  const e = Number(energy) || 0;
+  if (e) parts.push(`${e} energy`);
+  const counts = new Map();
+  for (const p of Array.isArray(power) ? power : []) {
+    const d = String(p);
+    counts.set(d, (counts.get(d) ?? 0) + 1);
+  }
+  for (const [domain, n] of counts) parts.push(`${n} ${domain}`);
+  return parts.length ? parts.join(" + ") : "0 energy";
+}
+
 function describePlayVariantBase(m, card) {
-  const baseCost = card?.energyCost ?? 0;
+  const basePower = Array.isArray(card?.powerCost) ? card.powerCost : [];
+  const baseCost = formatCostTokens(card?.energyCost ?? 0, basePower);
   // Rule ogn-193-298: location-only variants (base vs open battlefield) must
   // name their destination or they render as identical buttons.
   const loc = m.params?.location;
@@ -413,10 +433,10 @@ function describePlayVariantBase(m, card) {
     if (repeatCount > 0) {
       return {
         label: `Play ${where} + Repeat x${repeatCount}`,
-        detail: `${baseCost} energy + ${repeatCount} extra Repeat cost`,
+        detail: `${baseCost} + ${repeatCount} extra Repeat cost`,
       };
     }
-    return { label: `Play ${where}`, detail: `${baseCost} energy` };
+    return { label: `Play ${where}`, detail: `${baseCost}` };
   }
   const spec = m.params.additionalCostSpec;
   // Rule ogn-231-298: the "kill any number" additional cost enumerates one
@@ -432,7 +452,7 @@ function describePlayVariantBase(m, card) {
     const name = findCard(m.params.discardId)?.name ?? m.params.discardId;
     return {
       label: `Play + discard ${name}`,
-      detail: `${baseCost} energy — discard ${name} as an additional cost`,
+      detail: `${baseCost} — discard ${name} as an additional cost`,
     };
   }
   if (sacIds) {
@@ -440,12 +460,12 @@ function describePlayVariantBase(m, card) {
     const list = names.join(" + ");
     return {
       label: `Play + sacrifice ${list}`,
-      detail: `${baseCost} energy — kill ${list} as an additional cost`,
+      detail: `${baseCost} — kill ${list} as an additional cost`,
     };
   }
   const parts = [];
   if (spec?.energy) parts.push(`${spec.energy} energy`);
-  if (spec?.power?.length) parts.push(spec.power.join(" + "));
+  if (spec?.power?.length) parts.push(formatCostTokens(0, spec.power));
   if (spec?.xp) parts.push(`${spec.xp} XP`);
   const extra = parts.length ? parts.join(" + ") : "additional cost";
   // Rule unl-164-219: only the Accelerate cost makes the unit enter ready; an
@@ -454,7 +474,7 @@ function describePlayVariantBase(m, card) {
   if (spec?.xp && !spec.energy && !spec.power?.length) {
     return {
       label: `Play + pay ${spec.xp} XP`,
-      detail: `${baseCost} energy + ${spec.xp} XP as an additional cost`,
+      detail: `${baseCost} + ${spec.xp} XP as an additional cost`,
     };
   }
   // rule 805.2 / 717: only [Accelerate] makes the unit enter ready. The
@@ -466,23 +486,29 @@ function describePlayVariantBase(m, card) {
     || (Array.isArray(card?.keywords)
       && card.keywords.some(k => String(k?.name ?? k).toLowerCase() === "accelerate"));
   if (hasAccelerate && (spec?.energy || spec?.power?.length)) {
+    // Show the TOTAL the player will actually pay (base + Accelerate), power
+    // included — "5 + 1 energy + mind" hid both the base mind and the real sum.
+    const total = formatCostTokens(
+      (Number(card?.energyCost) || 0) + (Number(spec?.energy) || 0),
+      [...basePower, ...(Array.isArray(spec?.power) ? spec.power : [])],
+    );
     return {
       label: `Play + Accelerate`,
-      detail: `${baseCost} + ${extra} — enters ready`,
+      detail: `${total} total — enters ready`,
     };
   }
   // sfd-079-221 (Bard): the exhaust-a-legend cost ships no spec at all.
   if (!parts.length && /exhaust\s+(your|my)\s+legend/i.test(text)) {
     return {
       label: `Play + exhaust legend`,
-      detail: `${baseCost} energy — exhaust your legend as an additional cost`,
+      detail: `${baseCost} — exhaust your legend as an additional cost`,
     };
   }
   return {
     label: parts.length ? `Play + pay ${extra}` : `Play + additional cost`,
     detail: parts.length
-      ? `${baseCost} energy + ${extra} as an additional cost`
-      : `${baseCost} energy + an additional cost`,
+      ? `${baseCost} + ${extra} as an additional cost`
+      : `${baseCost} + an additional cost`,
   };
 }
 
