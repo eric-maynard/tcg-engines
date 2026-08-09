@@ -49,6 +49,7 @@ import { buildEffectContext } from "../chain/effect-context";
 import {
   type CostExtras,
   type OptionalPlayCost,
+  battlefieldRedirectPowerFor,
   boardEntersReadyGrantApplies,
   canPayResourceCost,
   computePlayResourceCost,
@@ -543,11 +544,34 @@ function abortEffectPlay(io: PlayIO, item: PendingPlayItem): void {
   }
 }
 
+/**
+ * rule 356.2 / 355.2.b (ven-157-166 Dragon Roost) — the extra pips a
+ * DESTINATION battlefield charges to make itself a Valid location for this
+ * play. The permission comes from the battlefield, not the played card, so it
+ * applies to an effect-play exactly as it does to a hand play (419.3.b); a
+ * battlefield the performer already controls is Valid for free (355.2.a).
+ */
+function redirectPipsFor(
+  draft: RiftboundGameState,
+  spec: EffectPlaySpec,
+  location: string | undefined,
+): readonly string[] | undefined {
+  if (!location || !isBattlefieldZone(location)) {
+    return undefined;
+  }
+  const bfId = extractBattlefieldId(location);
+  if (!bfId || draft.battlefields?.[bfId]?.controller === spec.playerId) {
+    return undefined;
+  }
+  return battlefieldRedirectPowerFor(bfId, spec.cardId);
+}
+
 /** rule 356.1.a / 356.1.b / 356.5.a — the instruction's cost mode as `CostExtras`. */
 function costExtrasFor(
   io: PlayIO,
   spec: EffectPlaySpec,
   optional?: OptionalCostOffer | null,
+  location?: string,
 ): { extras: CostExtras; free: boolean } {
   const board =
     typeof io.zones?.getCardsInZone === "function" && typeof io.cards?.getCardOwner === "function"
@@ -588,6 +612,15 @@ function costExtrasFor(
     extras.additionalCost = {
       energy: (extras.additionalCost?.energy ?? 0) + optional.energy,
       power: [...(extras.additionalCost?.power ?? []), ...optional.power],
+    };
+  }
+  // rule 356.2.b.1 — the destination's own additional cost is added AFTER the
+  // base cost is fixed, so a base discounted to 0 still pays it.
+  const redirect = free ? undefined : redirectPipsFor(io.draft, spec, location);
+  if (redirect) {
+    extras.additionalCost = {
+      energy: extras.additionalCost?.energy ?? 0,
+      power: [...(extras.additionalCost?.power ?? []), ...redirect],
     };
   }
   return { extras, free };
@@ -712,7 +745,10 @@ function locationOptionsFor(io: PlayIO, spec: EffectPlaySpec): string[] {
     return lki && isBoardZoneId(lki) ? playDestinationOptions(draft, spec.playerId, spec.cardId, { only: [lki] }) : [];
   }
   if (loc === "prompt") {
-    return playDestinationOptions(draft, spec.playerId, spec.cardId);
+    return [
+      ...playDestinationOptions(draft, spec.playerId, spec.cardId),
+      ...affordableRedirectDestinations(io, spec),
+    ];
   }
   if ("fixed" in loc) {
     return playDestinationOptions(draft, spec.playerId, spec.cardId, { only: [loc.fixed] });
@@ -720,7 +756,43 @@ function locationOptionsFor(io: PlayIO, spec: EffectPlaySpec): string[] {
   if ("only" in loc) {
     return playDestinationOptions(draft, spec.playerId, spec.cardId, { only: loc.only });
   }
-  return playDestinationOptions(draft, spec.playerId, spec.cardId, { extra: loc.extra });
+  return [
+    ...playDestinationOptions(draft, spec.playerId, spec.cardId, { extra: loc.extra }),
+    ...affordableRedirectDestinations(io, spec),
+  ];
+}
+
+/**
+ * rule 355.2.b / 356.2 (ven-157-166) — battlefields that make THEMSELVES Valid
+ * destinations for this play in exchange for an optional additional cost, kept
+ * only while the performer can still pay the whole cost (357.3 — never offer an
+ * election that makes the play illegal).
+ */
+function affordableRedirectDestinations(io: PlayIO, spec: EffectPlaySpec): string[] {
+  const { draft } = io;
+  const out: string[] = [];
+  for (const bfId of Object.keys(draft.battlefields ?? {})) {
+    const zone = `battlefield-${bfId}`;
+    if (!redirectPipsFor(draft, spec, zone) || battlefieldForbidsUnitPlays(bfId)) {
+      continue;
+    }
+    const { extras, free } = costExtrasFor(io, spec, undefined, zone);
+    if (!free && draft.runePools[spec.playerId] !== undefined) {
+      const meta = typeof io.cards?.getCardMeta === "function" ? createMetaAccessor(io.cards) : undefined;
+      if (
+        !canPayResourceCost(
+          draft,
+          spec.playerId,
+          spec.cardId,
+          computePlayResourceCost(draft, spec.playerId, spec.cardId, extras, meta, false),
+        )
+      ) {
+        continue;
+      }
+    }
+    out.push(zone);
+  }
+  return out;
 }
 
 /**
@@ -731,7 +803,11 @@ function locationOptionsFor(io: PlayIO, spec: EffectPlaySpec): string[] {
  * `undefined` when the card has none, its gate is unmet, or it is unpayable
  * together with the rest of the cost.
  */
-function payableOptionalCost(io: PlayIO, spec: EffectPlaySpec): OptionalCostOffer | undefined {
+function payableOptionalCost(
+  io: PlayIO,
+  spec: EffectPlaySpec,
+  location?: string,
+): OptionalCostOffer | undefined {
   const { draft, cards, zones } = io;
   const board =
     typeof zones?.getCardsInZone === "function" && typeof cards?.getCardOwner === "function"
@@ -769,7 +845,7 @@ function payableOptionalCost(io: PlayIO, spec: EffectPlaySpec): OptionalCostOffe
     power: raw?.power ?? [],
   };
   const optional = { energy: discounted.energy, entersReady, id, power: [...discounted.power] };
-  const { extras, free } = costExtrasFor(io, spec, optional);
+  const { extras, free } = costExtrasFor(io, spec, optional, location);
   if (free || draft.runePools[spec.playerId] === undefined) {
     return optional;
   }
@@ -828,10 +904,12 @@ export function beginPlay(
   );
   const from = (io.zones.getCardZone?.(spec.cardId as CoreCardId) as string | undefined) ?? "hand";
   const itemId = appendPendingPlayItem(io.draft, spec, from);
-  // rule 354.1 / 108.6.c — the Pending Item on the Chain IS the play; a card
-  // leaving a PRIVATE zone (hand, deck, facedown) waits in the `chain` zone,
-  // one already in a public holding zone (banishment, trash) waits there.
-  if (from === "hand" || from === "mainDeck" || from.startsWith("facedown")) {
+  // rule 354 step 1 / 354.2 — beginning the play MOVES the card out of the zone
+  // it was in and onto the Chain: while Pending it is a Chain item, no longer a
+  // card sitting in the trash (or in the hand/deck it left). A card in
+  // banishment still waits there — that pile is where an effect that banished
+  // it goes looking if the play is aborted.
+  if (from === "hand" || from === "mainDeck" || from === "trash" || from.startsWith("facedown")) {
     io.zones.moveCard({ cardId: spec.cardId as CoreCardId, targetZoneId: "chain" as CoreZoneId });
   }
   if (opts?.immediate === true && !olderPending && !io.draft.pendingChoice) {
@@ -935,7 +1013,8 @@ export function continueEffectPlay(io: PlayIO, item: PendingPlayItem): "prompted
   // performer's to elect (never for a spell here: its riders are play params).
   let optional = progress.optional;
   if (!isSpell && optional === undefined) {
-    const offer = spec.offerOptionalCosts === false ? undefined : payableOptionalCost(io, spec);
+    const offer =
+      spec.offerOptionalCosts === false ? undefined : payableOptionalCost(io, spec, location);
     if (offer && progress.offered === undefined) {
       patchPlayItem(draft, item.id, { offered: offer });
       const free = spec.costMode.kind === "ignore-any-and-all";
@@ -964,7 +1043,7 @@ export function continueEffectPlay(io: PlayIO, item: PendingPlayItem): "prompted
 
   // rule 357 — pay: resources through the ONE cost computation, then the
   // mandatory object cost through its effect (a real kill / bounce — 357.2.a).
-  const { extras, free } = costExtrasFor(io, spec, optional ?? undefined);
+  const { extras, free } = costExtrasFor(io, spec, optional ?? undefined, location);
   const meta = typeof io.cards?.getCardMeta === "function" ? createMetaAccessor(io.cards) : undefined;
   if (!free && draft.runePools[spec.playerId] !== undefined) {
     const cost = computePlayResourceCost(draft, spec.playerId, spec.cardId, extras, meta, false);
