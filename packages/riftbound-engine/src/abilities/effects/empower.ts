@@ -31,24 +31,47 @@ export function handle_empower(effect: ExecutableEffect, ctx: EffectContext, _h:
     // than once scale off HOW MANY times ("+2 [Might] for each time I'm
     // [Empowered]"), so the status carries a count alongside the flag.
     const priorCount = priorMeta?.empowerCount ?? (wasEmpowered ? 1 : 0);
-    // rule 517.2.b: "Disempower it at end of turn" rides along as a duration —
-    // the flag is read by the Ending Step cleanup.
+    // rule 392 / 383.3 (rule-id: ven-035-166, ven-099-166) — "Disempower it at
+    // end of turn" (and its mirror "Empower it at end of turn") is a DELAYED
+    // TRIGGERED ability, not a silent duration: at rule 317.1 it goes on the
+    // chain under the controller of the effect that installed it, ordered
+    // against every other end-of-turn trigger (rule 383.3.d) and respondable,
+    // rather than lapsing unseen in the Expiration Step.
     const turnDuration = (effect as { duration?: string }).duration === "turn";
-    const untilEndOfTurn = effect.type === "empower" && turnDuration;
-    // rule 517.2.b (rule-id: ven-035-166) — the mirror wording "Empower it at
-    // end of turn" on a Disempower: the status comes BACK in the Ending Step.
-    const reEmpowerAtEndOfTurn = effect.type === "disempower" && turnDuration;
     ctx.cards.updateCardMeta?.(
       targetId as CoreCardId,
       {
         empowered: effect.type === "empower",
         empowerCount: effect.type === "empower" ? priorCount + 1 : 0,
-        ...(untilEndOfTurn ? { empoweredUntilEndOfTurn: true } : {}),
-        ...(effect.type === "disempower"
-          ? { disempoweredUntilEndOfTurn: reEmpowerAtEndOfTurn, empoweredUntilEndOfTurn: false }
-          : {}),
       } as unknown as Record<string, unknown>,
     );
+    if (turnDuration) {
+      const existing =
+        (priorMeta as { delayedTriggers?: readonly unknown[] } | undefined)?.delayedTriggers ?? [];
+      ctx.cards.updateCardMeta?.(
+        targetId as CoreCardId,
+        {
+          delayedTriggers: [
+            ...existing,
+            {
+              // rule 392 — the installer controls the delayed ability even when
+              // it hangs on an opponent's permanent.
+              controllerId: ctx.playerId,
+              duration: "turn",
+              effect: {
+                // "it" is this permanent, frozen at install time.
+                target: { filter: { idIn: [targetId] }, type: "permanent" },
+                type: effect.type === "empower" ? "disempower" : "empower",
+              },
+              sourceCardId: ctx.sourceCardId,
+              // "at end of turn" = the Ending Step of the turn in progress,
+              // whoever's turn that is.
+              trigger: { event: "end-of-turn", on: "any-player" },
+            },
+          ],
+        } as unknown as Record<string, unknown>,
+      );
+    }
     // A repeat Empower (441.1.c.1) leaves the flag alone but raises the count,
     // and per-empower statics have to be recomputed for it too.
     if (wasEmpowered !== (effect.type === "empower") || effect.type === "empower") {
