@@ -355,6 +355,9 @@ export const TRIGGER_PATTERNS: {
   { event: "play-unit", on: "any-player", pattern: /^When a player plays a unit here,\s*/i },
   // "When you conquer or hold, ..."
   { event: "conquer-or-hold", on: "controller", pattern: /^When you conquer or hold,\s*/i },
+  // "When I conquer or hold, ..." — the self half (Hunt's printed form; also
+  // appended to a bearer by an Equipment's Effect Text, rule 718.3 / 724).
+  { event: "conquer-or-hold", on: "self", pattern: /^When I conquer or hold,\s*/i },
   // "When I win a combat, ..." (already have "When I win a combat," - make sure it exists)
   // "When you play me or when I hold, ..."
   {

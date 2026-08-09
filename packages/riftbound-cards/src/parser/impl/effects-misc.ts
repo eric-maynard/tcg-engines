@@ -45,7 +45,9 @@ export function parsePlayEffect(text: string): Effect | undefined {
     } as Effect;
   }
 
-  const match = text.match(/^play a (\w+) from your (trash|hand|deck)(?:\s+.*)$/i);
+  // The trailing clause (cost bounds, "without paying its Energy cost", …) is
+  // optional — a bare "play a unit from your trash." is the same effect unfiltered.
+  const match = text.match(/^play a (\w+) from your (trash|hand|deck)(?:\s+.*)?\.?$/i);
   if (!match) {
     return undefined;
   }

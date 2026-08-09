@@ -72,11 +72,19 @@ async function answerRecycle(game: Game, keys: string[]): Promise<void> {
 }
 
 describe("Last Rites (sfd-150-221)", () => {
-  test("registry payload: 3-cost Chaos equipment, +2 bonus; one ability — [Equip] costed one [chaos] pip PLUS recycle 2", async () => {
+  test("registry payload: 3-cost Chaos equipment, +2 bonus; [Equip] costed one [chaos] pip PLUS recycle 2, then the Effect Text trigger", async () => {
     const def = (await loadDefaultCardPool()).get(CARD);
     expect(def).toMatchObject({ cardType: "equipment", domain: "chaos", energyCost: 3, mightBonus: 2, name: "Last Rites" });
     expect(def?.powerCost ?? []).toEqual([]);
-    expect(def?.abilities).toEqual([{ cost: { power: ["chaos"], recycle: 2 }, keyword: "Equip", type: "keyword" }]);
+    expect(def?.abilities?.[0]).toMatchObject({ cost: { power: ["chaos"], recycle: 2 }, keyword: "Equip", type: "keyword" });
+    // rule 718.3 / 724: the Effect Text becomes a triggered ability on the bearer once attached
+    expect(def?.abilities?.[1]).toMatchObject({
+      effect: { from: "trash", target: { type: "unit" }, type: "play" },
+      optional: true,
+      trigger: { event: "conquer-or-hold", on: "self" },
+      type: "triggered",
+    });
+    expect(def?.abilities).toHaveLength(2);
   });
 
   test("PLAY: exactly 3 energy, no power, no trash requirement — it lands unattached in base with an EMPTY trash; 2 energy is short", async () => {
