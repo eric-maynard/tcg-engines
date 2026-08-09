@@ -53,6 +53,11 @@ function targetNoun(t) {
   if (!t || typeof t !== "object") return "";
   const q = t.quantity;
   const kind = t.type ?? "target";
+  // Target-DSL selectors that name an already-known object rather than a class of
+  // cards: phrase them as pronouns, never as "a trigger-source" (rule 355.5 — the
+  // chain item must read as English).
+  if (kind === "trigger-source" || kind === "trigger-target") return "it";
+  if (kind === "self" || kind === "source") return "this";
   // Card defs write the location either singular ("battlefield") or plural
   // ("battlefields", e.g. Tibbers ogs-018-024) — both name the same zone, so
   // normalise before phrasing or the qualifier silently vanishes.
@@ -84,6 +89,43 @@ function targetNoun(t) {
   return `${head}${who}${kind}${plural ? "s" : ""}${where}`;
 }
 
+const COUNT_WORDS = ["zero", "one", "two", "three", "four", "five"];
+
+/** Numeric count behind a `quantity` payload, or null for "all"/"any"/absent. */
+function quantityCount(q) {
+  if (typeof q === "number") return q;
+  if (q && typeof q === "object") {
+    if (typeof q.exactly === "number") return q.exactly;
+    if (typeof q.upTo === "number") return q.upTo;
+    if (typeof q.atLeast === "number") return q.atLeast;
+  }
+  return null;
+}
+
+/**
+ * rule 428.1.a.1 — `player: "each"` makes EVERY player perform the effect on the
+ * cards they control, and it is mandatory for anyone able to. Phrase it that way
+ * ("Each player kills one of their gear") instead of the caster-relative
+ * "Kill up to 1 friendly gear", which both drops the other player and reads as
+ * optional. Returns "" when the shape isn't one we can phrase.
+ */
+function eachPlayerEffect(e, n) {
+  const t = e.target && typeof e.target === "object" ? e.target : null;
+  const ownTargets = !t || t.controller == null || t.controller === "friendly";
+  const c = quantityCount(t?.quantity);
+  const kind = t?.type ?? "card";
+  const noun = c != null && c !== 1
+    ? `${COUNT_WORDS[c] ?? c} of their ${kind}${kind.endsWith("s") ? "" : "s"}`
+    : `one of their ${kind}`;
+  switch (e.type) {
+    case "kill": return ownTargets ? `Each player kills ${noun}` : "";
+    case "recycle": return ownTargets ? `Each player recycles ${noun}` : "";
+    case "discard": return `Each player discards ${n ?? 1}`;
+    case "draw": return `Each player draws ${n ?? 1}`;
+    default: return "";
+  }
+}
+
 /** Minimal English rendering of an effect payload (label fallback only). */
 function humanizeEffect(e) {
   if (!e || typeof e !== "object") return "";
@@ -91,6 +133,10 @@ function humanizeEffect(e) {
   const noun = targetNoun(t);
   const n = typeof e.amount === "number" ? e.amount : null;
   const turn = e.duration === "turn" ? " this turn" : "";
+  if (e.player === "each") {
+    const each = eachPlayerEffect(e, n);
+    if (each) return each;
+  }
   switch (e.type) {
     case "damage": return `Deal ${n ?? "damage"} to ${noun || "a unit"}`;
     case "draw": return `Draw ${n ?? 1}`;
