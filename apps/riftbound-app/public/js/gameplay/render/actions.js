@@ -53,7 +53,10 @@ function targetNoun(t) {
   if (!t || typeof t !== "object") return "";
   const q = t.quantity;
   const kind = t.type ?? "target";
-  const where = t.location === "battlefield" ? " at a battlefield" : t.location === "base" ? " in a base" : "";
+  // Card defs write the location either singular ("battlefield") or plural
+  // ("battlefields", e.g. Tibbers ogs-018-024) — both name the same zone, so
+  // normalise before phrasing or the qualifier silently vanishes.
+  const loc = typeof t.location === "string" ? t.location.replace(/s$/, "") : t.location;
   const who = t.controller === "friendly" ? "friendly " : t.controller === "enemy" ? "enemy " : "";
   const article = t.controller === "enemy" ? "an " : "a ";
   let count = null;
@@ -68,6 +71,16 @@ function targetNoun(t) {
   }
   const plural = prefix === "all " || prefix === "any number of " || (count != null && count !== 1);
   const head = prefix ?? (count != null && count !== 1 ? `${count} ` : article);
+  const where =
+    loc === "battlefield"
+      ? plural
+        ? " at battlefields"
+        : " at a battlefield"
+      : loc === "base"
+        ? plural
+          ? " in bases"
+          : " in a base"
+        : "";
   return `${head}${who}${kind}${plural ? "s" : ""}${where}`;
 }
 
@@ -278,7 +291,14 @@ function activatedAbilitySegments(card) {
     // rule 331.1: the cost/effect divider is printed as ":" OR as an em dash
     // ("[Empower] — Discard 1"); dropping the em-dash form left every variant
     // of the move sharing one bare card-name button.
-    .filter(s => /^[^:]{1,48}:/.test(s) || /^\[[^\]]{1,24}\]\s*[—–-]\s*\S/.test(s));
+    // rule 827.1.c.1: "[Empower] [2]" is printed sugar for "[2]: Empower this"
+    // — an activated ability whose whole segment is bracket cost tokens, with
+    // no ":" and no dash. Without it Tools of Empire (ven-077-166) produced a
+    // single segment and both ability buttons wore the [Exhaust] label.
+    .filter(s =>
+      /^[^:]{1,48}:/.test(s)
+      || /^\[[^\]]{1,24}\]\s*[—–-]\s*\S/.test(s)
+      || /^\[\s*Empower\s*\]\s*(?:\[[^\]]+\]\s*,?\s*)+$/i.test(s));
 }
 
 /**
