@@ -475,6 +475,41 @@ function sacrificeDiscountedCost(card, sacIds) {
   return [energy, basePower];
 }
 
+/**
+ * rule 356.2.b (rule-id: ogn-002-298) — "you may discard 1 as an additional
+ * cost. If you do, reduce my cost by [N]." The engine applies that `ifPaid`
+ * cost-reduction (see `ADDITIONAL_COST_IDS.discard` in the engine cost model),
+ * so the discard button must quote the reduced price, not the printed one.
+ * Returns the effective cost unchanged for cards with no such rider.
+ */
+function discardDiscountedCost(card) {
+  const [effEnergy, effPower] = effectivePlayCost(card);
+  const text = String(card?.rulesText ?? "");
+  const clause = text.match(/(?:reduce my cost by|I cost)\s*\[(\d+)\](?:\s*less)?/i);
+  if (!clause) return [effEnergy, [...effPower]];
+  return [Math.max(0, effEnergy - (Number(clause[1]) || 0)), [...effPower]];
+}
+
+/**
+ * rule 356.1 (rule-id: unl-089-219) — "you may play me for [mind]" is an
+ * ALTERNATE play cost; the enumerator emits it as a bare `altCost: true`
+ * variant, so read the printed price out of the rules text or the two buttons
+ * render identically. -> [energy, powerCost[]] or null when unparseable.
+ */
+function alternatePlayCost(card) {
+  const text = String(card?.rulesText ?? "");
+  const clause = text.match(/play (?:me|this)(?:[^.\n]*?) for ((?:\[[^\]\n]+\]\s*)+)/i);
+  if (!clause) return null;
+  let energy = 0;
+  const power = [];
+  for (const tok of clause[1].match(/\[([^\]]+)\]/g) ?? []) {
+    const inner = tok.slice(1, -1).trim();
+    if (/^\d+$/.test(inner)) energy += Number(inner);
+    else power.push(inner.toLowerCase());
+  }
+  return [energy, power];
+}
+
 function describePlayVariantBase(m, card) {
   // rule 402.4: price from the server's effective cost, not the printed one.
   const [baseEnergy, basePower] = effectivePlayCost(card);
@@ -512,6 +547,18 @@ function describePlayVariantBase(m, card) {
         detail: `${baseCost} + ${repeatCount} extra Repeat cost`,
       };
     }
+    // rule 356.1 (unl-089-219): the alternate-cost variant differs from the
+    // printed-cost one only by `altCost: true` — name it and quote its price,
+    // or both buttons read "Play to base — 4 energy".
+    if (m.params?.altCost === true) {
+      const alt = alternatePlayCost(card);
+      return {
+        label: `Play ${where} (alternate cost)`,
+        detail: alt
+          ? `${formatCostTokens(alt[0], alt[1])} — instead of ${baseCost}`
+          : `alternate cost instead of ${baseCost}`,
+      };
+    }
     return { label: `Play ${where}`, detail: `${baseCost}` };
   }
   const spec = m.params.additionalCostSpec;
@@ -526,9 +573,12 @@ function describePlayVariantBase(m, card) {
   // variant per discardable card; name the card or every variant renders the same.
   if (m.params?.discardId) {
     const name = findCard(m.params.discardId)?.name ?? m.params.discardId;
+    // rule 356.2.b (ogn-002-298): paying the discard also reduces the cost, so
+    // quote the discounted price the engine will actually charge.
+    const cost = formatCostTokens(...discardDiscountedCost(card));
     return {
       label: `Play + discard ${name}`,
-      detail: `${baseCost} — discard ${name} as an additional cost`,
+      detail: `${cost} — discard ${name} as an additional cost`,
     };
   }
   if (sacIds) {
