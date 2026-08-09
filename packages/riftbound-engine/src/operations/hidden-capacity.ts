@@ -33,8 +33,23 @@ export function hiddenCapacityAt(
   ctx: HiddenCapacityContext,
 ): number {
   const bf = state.battlefields[bfId];
-  let capacity = 1 + (bf?.hiddenCapacityBonus ?? 0);
   const registry = getGlobalCardRegistry();
+  // rule 365.1 — the battlefield's own passive is live while it is in play, so
+  // derive it from the card rather than trusting the setup-time bake (a Tree
+  // that reached play another way — scenario placement, a 438.1.a swap — must
+  // grant the slot too). Setup still writes `hiddenCapacityBonus`; take the
+  // larger of the two so the two sources never stack.
+  let ownBonus = 0;
+  for (const ability of registry.getAbilities(bfId) ?? []) {
+    if (ability.type !== "static") {
+      continue;
+    }
+    const effect = ability.effect as { type?: string; amount?: number } | undefined;
+    if (effect?.type === "increase-hidden-capacity") {
+      ownBonus += effect.amount ?? 1;
+    }
+  }
+  let capacity = 1 + Math.max(bf?.hiddenCapacityBonus ?? 0, ownBonus);
   const controllerOf = (id: CoreCardId) =>
     ctx.cards.getCardController?.(id) ?? ctx.cards.getCardOwner(id);
   const candidates: CoreCardId[] = [

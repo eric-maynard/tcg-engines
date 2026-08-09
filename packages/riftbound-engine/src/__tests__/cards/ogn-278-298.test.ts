@@ -196,7 +196,7 @@ describe("Bandle Tree (ogn-278-298)", () => {
   // `battlefields[id].hiddenCapacityBonus` by the setup move (`applyBattlefieldPermanentEffects`); `hiddenCapacityAt`
   // reads permanents' statics live but never the battlefield's own, so a Tree that reaches play any other way
   // (scenario placement, a battlefield swap à la 438.1.a) grants nothing and the second Hide is refused.
-  test.failing("BUG: the extra slot should come from the live static (365.1), not a setup-time bake — scenario-placed Bandle Tree refuses the second Hide", async () => {
+  test("the extra slot comes from the live static (365.1), not a setup-time bake — a scenario-placed Bandle Tree allows the second Hide", async () => {
     const game = await scenario()
       .resources(P1, { power: { rainbow: 2 } })
       .battlefield("tree", { controller: P1, def: CARD, inert: false })
