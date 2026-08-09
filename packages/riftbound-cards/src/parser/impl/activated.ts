@@ -470,6 +470,22 @@ export function parseActivatedAbilityInner(text: string): ActivatedAbility | und
     remaining = remaining.slice(0, remaining.length - showdownEnergyOnly[0].length).trim();
   }
 
+  // rule 356.4 / 356.6 (unl-189-219 Bashful Bloom) — "This ability costs [N]
+  // less for each friendly unit with [Keyword]" is part of the ability's own
+  // cost, not prose: strip the sentence so the effect parses cleanly and hand
+  // the engine a structured, scaling cost modifier (floored at 0 by 356.6).
+  let costModifier: { condition: Record<string, unknown>; reduction: number } | undefined;
+  const scaledKeywordLess = remaining.match(
+    /\s*This ability costs :rb_energy_(\d+): less for each (?:friendly|your) units? with \[([A-Za-z ]+)\]\.?/i,
+  );
+  if (scaledKeywordLess) {
+    costModifier = {
+      condition: { keyword: scaledKeywordLess[2].trim(), type: "per-friendly-unit-with-keyword" },
+      reduction: Number.parseInt(scaledKeywordLess[1], 10),
+    };
+    remaining = remaining.replace(scaledKeywordLess[0], " ").trim();
+  }
+
   // Parse the effect
   const effect = parseEffects(remaining);
 
@@ -492,6 +508,9 @@ export function parseActivatedAbilityInner(text: string): ActivatedAbility | und
     if (restrictions) {
       (ability as { restrictions: { type: string }[] }).restrictions = restrictions;
     }
+    if (costModifier) {
+      (ability as unknown as { costModifier: unknown }).costModifier = costModifier;
+    }
     return ability;
   }
 
@@ -504,6 +523,9 @@ export function parseActivatedAbilityInner(text: string): ActivatedAbility | und
   }
   if (restrictions) {
     (ability as { restrictions: { type: string }[] }).restrictions = restrictions;
+  }
+  if (costModifier) {
+    (ability as unknown as { costModifier: unknown }).costModifier = costModifier;
   }
   return ability;
 }

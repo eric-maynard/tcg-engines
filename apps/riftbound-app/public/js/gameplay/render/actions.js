@@ -112,7 +112,7 @@ function formatMoveDescription(moveId, params) {
   // A play location is "base" or "battlefield-<bfId>" — name the battlefield.
   const loc = (v) => !v || v === "base" ? "base" : getBattlefieldName(String(v).replace(/^battlefield-/, ""));
   switch (moveId) {
-    case "playUnit": return `${r(params.cardId)} to ${loc(params.location)}`;
+    case "playUnit": return `${r(params.cardId)} to ${loc(params.location)}${costObjectSuffix(params)}`;
     case "playFromChampionZone": {
       const champ = (typeof zoneForPlayer === "function" ? zoneForPlayer("championZone", viewingPlayer)[0] : null);
       return `${champ?.name ?? "Champion"} to ${loc(params.location)}${params.paidAdditionalCost ? " (+ additional cost)" : ""}`;
@@ -121,8 +121,8 @@ function formatMoveDescription(moveId, params) {
     case "equipCard": return `${r(params.equipmentId)} → ${r(params.unitId)}`;
     case "revealHidden": return `${r(params.cardId)}`;
     // [rule:sfd-122-221 Repeat] repeatCount / paidAdditionalCost variants must be distinguishable.
-    case "playSpell": return `${r(params.cardId)}${params.repeatCount ? ` (Repeat ×${params.repeatCount})` : ""}${params.paidAdditionalCost ? " (+ additional cost)" : ""}${params.targets?.length ? " → " + r(params.targets) : ""}`;
-    case "playGear": return `${r(params.cardId)}${params.chosenTargetId ? " → " + r(params.chosenTargetId) : ""}`;
+    case "playSpell": return `${r(params.cardId)}${params.repeatCount ? ` (Repeat ×${params.repeatCount})` : ""}${params.paidAdditionalCost ? " (+ additional cost)" : ""}${costObjectSuffix(params)}${params.targets?.length ? " → " + r(params.targets) : ""}`;
+    case "playGear": return `${r(params.cardId)}${costObjectSuffix(params)}${params.chosenTargetId ? " → " + r(params.chosenTargetId) : ""}`;
     case "exhaustRune": return `${r(params.runeId)}`;
     case "recycleRune": return `${r(params.runeId)}${params.domain ? " for " + params.domain : ""}`;
     case "standardMove": return `${r(params.unitIds)} to ${bf(params.destination)}`;
@@ -144,7 +144,7 @@ function formatMoveDescription(moveId, params) {
       const shown = typeof activatedAbilityLabel === "function"
         ? activatedAbilityLabel(params.cardId, params.abilityIndex, params.sourceCardId)
         : `${r(params.cardId)}${Number.isInteger(params.abilityIndex) && params.abilityIndex > 0 ? ` — ability ${params.abilityIndex + 1}` : ""}`;
-      return `${shown}${params.targets?.length ? " → " + r(params.targets) : ""}`;
+      return `${shown}${costObjectSuffix(params)}${params.targets?.length ? " → " + r(params.targets) : ""}`;
     }
     case "resolveFullCombat": return `${bf(params.battlefieldId)}`;
     case "passChainPriority": return null;
@@ -242,7 +242,40 @@ function activatedAbilitySegments(card) {
   return text
     .split(/\n+|(?<=\.)\s+/)
     .map(s => s.trim())
-    .filter(s => /^[^:]{1,48}:/.test(s));
+    // rule 331.1: the cost/effect divider is printed as ":" OR as an em dash
+    // ("[Empower] — Discard 1"); dropping the em-dash form left every variant
+    // of the move sharing one bare card-name button.
+    .filter(s => /^[^:]{1,48}:/.test(s) || /^\[[^\]]{1,24}\]\s*[—–-]\s*\S/.test(s));
+}
+
+/**
+ * Name the OBJECTS a move pays with (rule 357.2 additional costs), so variants
+ * that differ only by which card is discarded/sacrificed/recycled read as
+ * distinct choices instead of N identical buttons.
+ */
+const COST_OBJECT_PARAM_VERBS = {
+  discardId: "discard", discardIds: "discard",
+  sacrificeId: "sacrifice", sacrificeIds: "sacrifice",
+  recycleId: "recycle", recycleIds: "recycle",
+  killId: "kill", killIds: "kill",
+  exhaustId: "exhaust", exhaustIds: "exhaust",
+  returnGearId: "return", returnCardId: "return",
+  spentBuffId: "spend buff on", spentBuffIds: "spend buff on",
+};
+
+function costObjectSuffix(params) {
+  if (!params) return "";
+  const parts = [];
+  for (const [key, verb] of Object.entries(COST_OBJECT_PARAM_VERBS)) {
+    const value = params[key];
+    if (value == null || (Array.isArray(value) && value.length === 0)) continue;
+    const names = Array.isArray(value)
+      ? value.map(resolveParamValue).join(", ")
+      : resolveParamValue(value);
+    if (names === "" || names == null) continue;
+    parts.push(`${verb} ${names}`);
+  }
+  return parts.length ? ` — ${parts.join(", ")}` : "";
 }
 
 /** rule 476.1: the printed "[Equip] [cost]" of an Equipment, e.g. "Equip [fury]" ("" when absent). */
