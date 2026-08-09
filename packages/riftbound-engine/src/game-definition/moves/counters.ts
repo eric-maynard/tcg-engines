@@ -7,7 +7,8 @@
 
 import type { CardId as CoreCardId, GameMoveDefinitions } from "@tcg/core";
 import { withPostMoveCleanup } from "../../cleanup/post-move-cleanup";
-import { addDamage, clearDamage, removeDamage } from "../../operations/damage-store";
+import { clearDamage, removeDamage } from "../../operations/damage-store";
+import { dealDamage } from "../../operations/deal-damage";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../types";
 
 /**
@@ -58,11 +59,16 @@ export const counterMoves: Partial<
   },
 
   addDamage: {
-    reducer: (_draft, context) => {
+    reducer: (draft, context) => {
       const { cardId, amount } = context.params;
-      // rule 520 / 124.1 — single damage store; the wrapper's maintenance
-      // pass reaps a lethal unit and publishes its `die`.
-      addDamage(context, cardId as string, amount);
+      // rule 417 — dealt through the damage choke point (Prevent / Double /
+      // immunity apply); the wrapper's maintenance pass reaps a lethal unit
+      // and publishes its `die`.
+      dealDamage({ cards: context.cards, counters: context.counters, draft, zones: context.zones }, {
+        amount,
+        source: { kind: "effect", player: context.playerId as string },
+        target: cardId as string,
+      });
     },
   },
 

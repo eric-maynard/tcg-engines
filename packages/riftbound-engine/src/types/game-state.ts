@@ -73,6 +73,8 @@ export interface RiftboundCardMeta {
    */
   lastDamagedBy?: PlayerId;
   lastDamageSource?: "spell" | "ability" | "combat";
+  /** rule 417 / 428.1 — the last damage event DEALT to this unit (`operations/deal-damage.ts`). */
+  lastDamage?: import("../operations/deal-damage").DamageRecord;
 
   /**
    * rule 520 — whether damage has been DEALT to this unit at any point in the
@@ -1144,6 +1146,21 @@ export type PendingResume =
       readonly playerId: PlayerId;
       readonly sourceCardId: CardId;
     }
+  /**
+   * rule 372 / 465.2.c.5 — the answer orders the damage replacements (Double /
+   * Prevent …) applying to the next damage dealt to `targetCardId`
+   * (`draft.damageReplacementOrder`). With `effect`, that Deal instruction is
+   * re-executed with `boundTargets` (spell/ability damage parked mid-effect);
+   * without it the producer (the combat damage step) simply re-runs.
+   */
+  | {
+      readonly kind: "damage-order";
+      readonly targetCardId: CardId;
+      readonly effect?: unknown;
+      readonly playerId?: PlayerId;
+      readonly sourceCardId?: CardId;
+      readonly boundTargets?: readonly string[];
+    }
   /** No follow-up (tests / producers that read the answer off `lastPendingAnswer`). */
   | { readonly kind: "none"; readonly tag?: string };
 
@@ -1168,6 +1185,10 @@ export interface OrderChoice {
   readonly prompt?: string;
   readonly defaultable?: boolean;
   readonly resume: PendingResume;
+  /** rule 372 — raised mid-sequence: the remaining steps ride on `then` (see PickManyChoice). */
+  readonly suspendsSequence?: boolean;
+  readonly then?: unknown;
+  readonly thenIsSequenceRest?: boolean;
 }
 
 /**
@@ -1573,6 +1594,16 @@ export interface RiftboundGameState {
    * of `checkReplacement` may consult this alongside board-card abilities.
    */
   activeReplacements?: unknown[];
+
+  /**
+   * rule 372 — the affected unit's controller's chosen order of the damage
+   * replacements (Double / Prevent …) for the NEXT damage dealt to it, keyed
+   * by unit id; consumed by `operations/deal-damage.ts` when that damage lands.
+   */
+  damageReplacementOrder?: Record<string, string[]>;
+
+  /** rule 417 — recent dealt-damage records (`operations/deal-damage.ts`), newest last, capped. */
+  damageLog?: import("../operations/deal-damage").DamageRecord[];
 
   /**
    * rule 359.3.f.2 (unl-192-219 Alpha Strike) — units a still-resolving

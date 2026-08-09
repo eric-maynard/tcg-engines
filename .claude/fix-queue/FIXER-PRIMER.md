@@ -121,9 +121,35 @@ Recipe — add a filter (non-token, in-base, at-a-battlefield, other, stunned…
 - 355.11.b group re-pick (Fox-Fire "total Might N or less"): `effects/kill.ts raiseGroupSubsetRepick` — bound group over the
   cap at resolution ⇒ `pick-many{semantics:"subset", min 0}` over the ORIGINAL targets only, resume `subset-repick`
   re-executes the effect with the chosen subset (`_subsetChecked`). Copy that shape for other aggregate-constrained effects.
-- Damage → death: `effects/damage.ts` writes `meta.damage` (+ `lastDamagedBy/lastDamageSource`), consults replacements;
-  the kill happens in `E/cleanup/state-based-checks.ts performCleanup` (damage ≥ effective Might) and `die` is emitted by
-  `E/events/dispatcher.ts dispatchUnitDied`. `effects/kill.ts` trashes + fires `die` itself (with `killedBy/killSource/wasStunned`).
+- DAMAGE — ONE choke point, `E/operations/deal-damage.ts` (rules 417 / 432 / 437 / 465.2.c–d / 715 / 372): `dealDamage(io,
+  {target, amount, source:{kind:"spell"|"ability"|"unit"|"combat"|"effect"|"cost", cardId?, player?}, combat?:{role,battlefieldId},
+  noBonus?})` / `dealDamageBatch(io, requests, {onNeedsOrder?})` (simultaneous: all previews before any write) / pure
+  `previewDamage(io, req)` / `damageReplacementProfile(io, target, source)`. EVERY writer routes through it: `effects/damage.ts`
+  (`dealHits`: plain, split, splash; kind spell|ability by source card type), `effects/fight.ts` ("deal damage equal to their
+  Mights to each other" — kind `unit`, source = the unit, 417.6.b.3), `moves/combat/resolve-full-combat.ts` (kind `combat`, one
+  batch), `combat/assign-damage.ts`, sandbox `moves/counters.ts addDamage`. Inside, in order: amount ≤ 0 ⇒ nothing (417.1.e);
+  `damage-immunity.ts unitIgnoresDamage` ("I don't take damage", 465.2.c.10) ⇒ 0; source-side Bonus Damage
+  (`bonus-damage.ts getBonusDamage/getLocationBonusDamage`, spells/abilities only, 715.4.a: added BEFORE any prevention);
+  a board `take-damage` replacement `{type:"redirect-damage", to}` ("…is dealt to Z instead") retargets once (370.2); then the
+  target-side chain — global "prevent all spell/ability damage" (`activeReplacements` `{replaces:"take-damage", replacement:"prevent",
+  global, amount:"all"}`), board `replacement:"prevent"` matches (Esteemed Hierophant, `sourceController`-scoped),
+  `meta.preventNextDamageInstance` (Counter Strike), `meta.damagePreventionShield: N|"all"` (Ki Barrier; written by
+  `effects/prevent-damage.ts` with `damagePreventionSource`), each `grantedKeywords DoubleIncomingDamage` (Lotus Trap) — folded by
+  pure `operations/damage-modifiers.ts applyDamageOps` (floor 0). rule 372: when the ORDER changes the result (Double + finite
+  Prevent, `damageOpsOrderMatters`) the damaged unit's CONTROLLER orders it: `effects/damage.ts parkDamageOrderPrompt` raises
+  `order {resume:{kind:"damage-order", targetCardId, effect, playerId, sourceCardId, boundTargets}, suspendsSequence}` (harness: RPL
+  `pick`, keys `double` / `prevent-shield` / `prevent-next` / `prevent-all:<src>` / `board:<src>#i`); `pending-choice.ts
+  resumePending` stores `draft.damageReplacementOrder[target]` (`recordDamageReplacementOrder`) and re-executes the effect;
+  combat asks the same question BEFORE assignment (resume without `effect`; `resolveFullCombat` re-runs). Otherwise the
+  default order is prevent-all → prevent-next → prevent-N → double. Then: shields spent (437.3), `addDamage` (damage-store) with
+  `lastDamagedBy/lastDamageSource` + `meta.lastDamage` LKI, `draft.damageLog` (capped), rule 391 "when it takes damage" effects
+  run AFTER the mark (bound `activeReplacements` Noxian Guillotine / turn-wide Imperial Decree / printed board effects), and ONE
+  `take-damage` GameEvent `{cardId, amount, original, sourceId, sourcePlayer, kind, combat, modifiedBy}` per unit actually
+  dealt damage (437.4: fully prevented ⇒ no event, no `dealtDamageThisTurn`). Returns `{dealt, amount, original, modifiedBy,
+  total, target}` — callers total the MODIFIED number. Deaths still happen in `state-based-checks.ts performCleanup` (damage ≥
+  Might) / `effects/kill.ts`; Deflect/Shield/Tank are NOT damage modifiers. Tests: `core-rules/damage-choke-point.test.ts`.
+  Recipe — new damage modifier: add a Candidate in `deal-damage.ts gather()` (op `double`|`prevent`, key, rank, `consume`),
+  nothing else; new damage SOURCE: call `dealDamage`, never `addDamage`.
 Recipe — new effect type: 1) (optional) type in `T/abilities/effect-types.ts`; 2) `E/abilities/effects/<type>.ts`
 `export function handle_x(effect, ctx, h)`; 3) register in `effects/index.ts EFFECT_HANDLERS`; 4) caster-chosen `effect.target`
 is lifted automatically by play-spell/resolve; 5) parser or explicit abilities emits `{type:"x", …}`.
@@ -347,10 +373,15 @@ Recipe — wrong total: assert `computeTotalCost(...).resources` in a unit test 
   HARNESS: an effect-staged combat now BEGINS in the Cleanup after the chain empties and `settle()` fights it through —
   to inspect the staged/begun state resolve the chain with `passPriority()`/`game.acting().pass()` instead of `settle()`.
 - Combat damage: `moves/combat/resolve-full-combat.ts resolveFullCombat` (legal when `bf.contested && bf.showdownComplete`
-  in neutral-open; harness `settle()` auto-runs it) → build `CombatUnit`s → `combat-resolver.ts resolveCombat` → write
-  `meta.damage`, heal survivors, mark `result.killed` lethal → `cleanupAndFireDeaths` (SBA deaths, Deathknell, die
-  replacements) → winner by who remains: attacker ⇒ `bf.controller`, `points.ts scoreBattlefield(…,"conquer")`, `conquer`+`score`
-  events; defender ⇒ attackers recalled; nobody ⇒ controller null; `expireCombatMight`; final `cleanupAndFireDeaths`.
+  in neutral-open; harness `settle()` auto-runs it) → build `CombatUnit`s (each with `incomingDamageOps` / `immuneToDamage` from
+  `deal-damage.ts damageReplacementProfile`; a Double+Prevent-N unit first gets the 372 `order` prompt) → 465.2.c.3 assignment
+  prompts (`combat-damage` pendingChoice; `lethalNeed`/harness bucket `lethal` = `combat-resolver.ts lethalNeed` =
+  `damage-modifiers.ts minAssignedForLethal` through the unit's ops: doubled ⇒ half, Prevent N ⇒ +N, Prevent All ⇒ never lethal
+  but assignable, 465.2.c.4.a/437.5) → `resolveCombat` (assignment only) → `dealDamageBatch` (kind `combat`, source player =
+  opposing side) → kills read off the MARKED damage vs `combatLethalMight` (Shield/Assault in role), heal survivors, force-mark
+  the dead → `cleanupAndFireDeaths` (SBA deaths, Deathknell, die replacements) → winner by who remains: attacker ⇒
+  `bf.controller`, `points.ts scoreBattlefield(…,"conquer")`, `conquer`+`score` events; defender ⇒ attackers recalled; nobody ⇒
+  controller null; `expireCombatMight`; final `cleanupAndFireDeaths`.
 - POINTS / VICTORY — ONE choke point, `E/operations/points.ts`: `awardPoints(draft, player, n, {method:"hold"|"conquer"|"effect"|
   "burn-out", battlefieldId?, sequenceIndex?}, io)` = 054.1 denial (`isPointGainDenied`, static `restriction` "can't gain points",
   condition via `static-abilities.evaluateCondition`) → 443.1.a per-method `scoring-rules.ts applyScoreReplacement` → 471.1.b Final
@@ -400,8 +431,8 @@ Recipe — stun: `effects/stun.ts` sets flag + `stun` event; zero its combat dam
   units in place and `resolveFullCombat` defers its result (`bf.combatCleanupSuspended`, like 466.2).
   Guardian Angel's appended text is modelled on the card (`C/cards/sfd/guardian-angel.ts`: kill self + heal/exhaust/recall
   trigger-source, 373.2).
-- Other call sites: damage — `effects/damage.ts` (global prevent-all, bound entries, `checkReplacement
-  ({type:"take-damage"})`) and combat `resolve-full-combat.ts killOnDamageIdx`; score — `scoring-rules.ts
+- Other call sites: damage — ONLY `operations/deal-damage.ts` (see §3 DAMAGE: every `take-damage` prevent / redirect /
+  Double / "when it takes damage" effect, spell AND combat); score — `scoring-rules.ts
   applyScoreReplacement` (called only from `points.ts awardPoints`, method-scoped); tokens — `create-token.ts applyPlayTokenReplacement`; enters-ready — `cost.ts consumeEntersReadyReplacement`.
 - Parser: `C/parser/impl/replacement.ts parseReplacementAbility` ("If … would …, … instead"), "next time" spells → effect `replacement`.
 Recipe — "if X would die / be dealt damage, instead …": 1) ability `type:"replacement"` whose `replaces` equals the string
@@ -545,7 +576,8 @@ prompt — reuse the `opt-in` pattern (`die-replacement-batch.ts offerOptionalSh
 7. Cost reduction wrong → board static matching/minimum in `static-cost-reduction.ts`; self text in
    `getSelfScaledEnergyReduction`; one-shot `meta.costModifier`; floor at 0 (or card's stated minimum).
 8. Unit survives/dies wrongly in combat → Assault/Shield raise own threshold only in role (`combat-resolver.ts lethalThreshold`);
-   stunned should deal 0; damage == might is lethal; spell damage must set `meta.damage` (`effects/damage.ts`).
+   stunned should deal 0; damage == might is lethal; ALL damage goes through `operations/deal-damage.ts dealDamage` (a
+   Double / Prevent / redirect / immunity mismatch between spell and combat damage is a choke-point bug, §3 DAMAGE).
 9. Deathknell / "when a unit dies" / die-replacement skipped → the removal used raw `moveCard` to trash (Temporary in flow
    beginning, sacrifice costs in `play-unit.ts` / `activate-ability.ts`) instead of `effects/kill.ts`-style kill + `die`
    event or lethal damage + `cleanupAndFireDeaths`. SBA replacements already run the effect with the dying unit as `trigger-source`.

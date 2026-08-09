@@ -34,17 +34,22 @@ export function handle_preventDamage(effect: ExecutableEffect, ctx: EffectContex
     for (const targetId of preventTargets) {
       ctx.cards.updateCardMeta?.(
         targetId as CoreCardId,
-        { preventNextDamageInstance: true } as unknown as Record<string, unknown>,
+        { preventNextDamageInstance: true, preventNextDamageSource: ctx.sourceCardId } as unknown as Record<string, unknown>,
       );
     }
     return;
   }
-  const preventAmount = resolveAmount(effect.amount ?? 0, ctx);
+  // rule 437.1.b.1.b — a Prevent Value of "All" on the chosen unit(s); rule
+  // 437.1.b.1.a — otherwise the numeric Prevent Value. The source is kept so
+  // the rule 372 ordering prompt can name the shield (`operations/deal-damage.ts`).
+  const preventAmount: number | "all" =
+    (effect.amount as unknown) === "all" ? "all" : resolveAmount(effect.amount ?? 0, ctx);
   for (const targetId of preventTargets) {
     ctx.cards.updateCardMeta?.(
       targetId as CoreCardId,
       {
         damagePreventionShield: preventAmount,
+        damagePreventionSource: ctx.sourceCardId,
       } as unknown as Record<string, unknown>,
     );
   }

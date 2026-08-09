@@ -195,7 +195,7 @@ describe("Bashful Bloom (unl-189-219)", () => {
     expect(second[0]).not.toBe(first);
   });
 
-  test.failing("BUG: partner Petal Pixie — the Bloom's Sprite token played to the Pixie's battlefield is a friendly [Temporary] unit there, so the Pixie should read 2 + 1 = 3; the token's keyword is invisible to the static and it stays 2", async () => {
+  test("partner Petal Pixie — the Bloom's Sprite token played to the Pixie's battlefield is a friendly [Temporary] unit there, so the Pixie should read 2 + 1 = 3; the token's keyword is invisible to the static and it stays 2", async () => {
     // Expected: Pixie 3 once the Sprite (keywords: [Temporary]) stands at bf1 — an inline Temporary
     // unit placed there DOES count. Actual: the ability-minted token is not counted (Pixie stays 2),
     // although game.state(sprite).keywords reports "Temporary".

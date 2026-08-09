@@ -19,10 +19,12 @@ import type {
 import { enumerateDamageAssignments, isLegalDamageAssignment } from "../../combat";
 import type { DamageAssignmentPlan } from "../../combat";
 import { continueKillBatch, recordDieBatchAnswer } from "../../abilities/die-replacement-batch";
+import { recordDamageReplacementOrder } from "../../operations/deal-damage";
 import { executeEffect } from "../../abilities/effect-executor";
 import type { EffectContext, ExecutableEffect } from "../../abilities/effect-executor";
 import { locationKeyOf } from "../../abilities/effects/choose-per-location";
 import { markContestedOnArrival } from "../../abilities/effects/move";
+import { recalculateStaticEffects } from "../../abilities/static-abilities";
 import { isBlockedByTwoOtherPlayers } from "./movement/helpers";
 import { contestBattlefieldOnArrival } from "./movement/contest-arrival";
 import { openPendingContestedShowdown } from "./chain/showdown";
@@ -1000,6 +1002,36 @@ function resumePending(
           rest as ExecutableEffect,
           buildEffectContext(draft, resume.playerId, resume.sourceCardId, context),
         );
+      }
+      if (!draft.pendingChoice) {
+        postChoiceCleanup(draft, context);
+      }
+      return;
+    }
+    // rule 372 / 465.2.c.5 — the damaged unit's controller ordered its damage
+    // replacements: record it for the next damage dealt to that unit, then
+    // re-run the parked Deal instruction (spell/ability damage) — the combat
+    // damage step re-runs on its own once the prompt is gone.
+    case "damage-order": {
+      const keys =
+        answer.orderedKeys && answer.orderedKeys.length > 0
+          ? answer.orderedKeys
+          : choice.type === "order"
+            ? choice.items.map((i) => i.key)
+            : [];
+      recordDamageReplacementOrder(draft, resume.targetCardId as string, keys);
+      if (resume.effect !== undefined && resume.playerId !== undefined) {
+        executeEffect(resume.effect as ExecutableEffect, {
+          ...buildEffectContext(draft, resume.playerId, resume.sourceCardId ?? "", context),
+          ...(resume.boundTargets ? { boundTargets: [...resume.boundTargets] } : {}),
+        });
+        const rest = (choice as { then?: unknown }).then;
+        if (rest !== undefined && !draft.pendingChoice) {
+          executeEffect(
+            rest as ExecutableEffect,
+            buildEffectContext(draft, resume.playerId, resume.sourceCardId ?? "", context),
+          );
+        }
       }
       if (!draft.pendingChoice) {
         postChoiceCleanup(draft, context);
@@ -2022,6 +2054,17 @@ export const pendingChoiceMoves: Partial<
             // rule 383.3.a.2 / 383.3.e.2 — considered to have not triggered.
             triggerRunner.removeUnfinalizedItem(draft, finalizeId);
           }
+          // rule 383.3.b.1 (rule-id: unl-199-219) — "discard N and … to <do X>":
+          // the payer picks the cards NOW, while the item waits on the Chain;
+          // only the payoff (the item's own effect) waits for resolution, so no
+          // `then` rides on the discard.
+          const discardCount = accepted && typeof cost?.discard === "number" ? cost.discard : 0;
+          if (discardCount > 0) {
+            executeEffect(
+              { amount: discardCount, type: "discard" } as ExecutableEffect,
+              buildEffectContext(draft, choice.playerId, choice.sourceCardId, context),
+            );
+          }
           if (!draft.pendingChoice) {
             postChoiceCleanup(draft, context);
           }
@@ -2912,6 +2955,16 @@ export const pendingChoiceMoves: Partial<
           const [next, ...rest] = choice.queue ?? [];
           if (next !== undefined) {
             draft.pendingChoice = { ...choice, cardId: next, queue: rest };
+          }
+          // rule 355.1 (unl-076-219) — the token stands at its destination now:
+          // re-evaluate continuous effects that count units there ("+1 [Might]
+          // for each of your units with [Temporary] at my battlefield").
+          if (context.cards && context.zones) {
+            recalculateStaticEffects({
+              cards: context.cards,
+              draft,
+              zones: context.zones,
+            } as unknown as Parameters<typeof recalculateStaticEffects>[0]);
           }
           return;
         }

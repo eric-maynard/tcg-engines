@@ -1,31 +1,78 @@
 // Effect handler: "damage"
 import type { CardId as CoreCardId } from "@tcg/core";
-import type { RiftboundCardMeta, RiftboundGameState } from "../../types";
-import { getBonusDamage, getLocationBonusDamage } from "../bonus-damage";
-import { checkReplacement, markReplacementConsumed } from "../replacement-effects";
+import type { RiftboundGameState } from "../../types";
 import type { TargetDescriptor } from "../target-resolver";
 import { resolveTarget } from "../target-resolver";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
-import { unitIgnoresDamage } from "../../operations/damage-immunity";
-import { addDamage } from "../../operations/damage-store";
+import {
+  type DamagePreview,
+  type DamageRequest,
+  type DamageSource,
+  dealDamageBatch,
+} from "../../operations/deal-damage";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import { type EffectHelpers, getTargetIds, getEffectiveMight, resolveAmount } from "./_helpers";
 
+/** rule 417.6.a / 417.6.b.2 — the resolving spell or ability (and its controller) is the source. */
+function damageSourceOf(ctx: EffectContext): DamageSource {
+  return {
+    cardId: ctx.sourceCardId,
+    kind: getGlobalCardRegistry().getCardType(ctx.sourceCardId) === "spell" ? "spell" : "ability",
+    player: ctx.playerId,
+  };
+}
+
 /**
- * rule 437.2 (unl-013-219 Lotus Trap) — "Double all damage that would be dealt
- * to it this turn" is modelled as a granted `DoubleIncomingDamage` keyword on
- * the chosen unit; every damage amount aimed at that unit is doubled.
+ * rule 372 — park the "order your damage replacements" question for the
+ * damaged unit's controller; the answer re-executes this effect with the same
+ * bound targets (`pending-choice.ts` resume `damage-order`). Only when no
+ * other prompt is open — otherwise the deterministic order stands.
  */
-function doubleIfMarked(amount: number, targetId: string, ctx: EffectContext): number {
-  if (amount <= 0) {
-    return amount;
+function parkDamageOrderPrompt(effect: ExecutableEffect, ctx: EffectContext, boundTargets: readonly string[] | undefined) {
+  return (preview: DamagePreview): boolean => {
+    if (ctx.draft.pendingChoice !== undefined || !preview.needsOrder) {
+      return false;
+    }
+    ctx.draft.pendingChoice = {
+      items: preview.needsOrder.items,
+      playerId: preview.needsOrder.chooser,
+      prompt: "Order the replacement effects that apply to this damage (first = applied first)",
+      resume: {
+        ...(boundTargets ? { boundTargets: [...boundTargets] } : {}),
+        effect,
+        kind: "damage-order",
+        playerId: ctx.playerId,
+        sourceCardId: ctx.sourceCardId,
+        targetCardId: preview.target,
+      },
+      sourceCardId: preview.target,
+      suspendsSequence: true,
+      type: "order",
+    } as unknown as RiftboundGameState["pendingChoice"];
+    return true;
+  };
+}
+
+/** Deal every hit of one Deal instruction as one simultaneous batch (417.1.d). */
+function dealHits(
+  effect: ExecutableEffect,
+  ctx: EffectContext,
+  hits: readonly { targetId: string; amount: number }[],
+  boundTargets: readonly string[] | undefined,
+): { dealtTo: string[]; suspended: boolean } {
+  const source = damageSourceOf(ctx);
+  const requests: DamageRequest[] = hits.map((h) => ({ amount: h.amount, source, target: h.targetId }));
+  const { results, suspended } = dealDamageBatch(ctx, requests, {
+    onNeedsOrder: parkDamageOrderPrompt(effect, ctx, boundTargets),
+  });
+  const dealtTo: string[] = [];
+  for (const r of results) {
+    noteLethalDamage(ctx, r.target, r.total, r.dealt);
+    if (r.dealt > 0) {
+      dealtTo.push(r.target);
+    }
   }
-  const meta = ctx.cards.getCardMeta?.(targetId as CoreCardId) as
-    | Partial<RiftboundCardMeta>
-    | undefined;
-  const doubled =
-    meta?.grantedKeywords?.some((gk) => gk.keyword === "DoubleIncomingDamage") ?? false;
-  return doubled ? amount * 2 : amount;
+  return { dealtTo, suspended };
 }
 
 /**
@@ -99,58 +146,11 @@ function raiseSameLocationSubsetRepick(
 
 export function handle_damage(effect: ExecutableEffect, ctx: EffectContext, h: EffectHelpers): void {
   const executeEffect = h.executeEffect;
-  // rule-id: ogn-145-298 — a global "Prevent all spell and ability damage"
-  // (rule 437) installed in activeReplacements reduces every spell/ability
-  // damage instance to 0. This handler only ever deals spell/ability damage
-  // (combat damage is applied by the combat moves), so nothing is dealt.
-  const activeRepl = ctx.draft.activeReplacements as
-    | { replaces?: string; replacement?: unknown; global?: boolean; amount?: unknown; duration?: string }[]
-    | undefined;
-  const globalPreventIdx =
-    activeRepl?.findIndex(
-      (e) =>
-        e?.replaces === "take-damage" &&
-        e.replacement === "prevent" &&
-        e.global === true &&
-        e.amount === "all",
-    ) ?? -1;
-  if (activeRepl && globalPreventIdx >= 0) {
-    if (activeRepl[globalPreventIdx]?.duration === "next") {
-      activeRepl.splice(globalPreventIdx, 1);
-    }
-    return;
-  }
-  // rule 428.5.c / 428.5.d: stamp the dealer on the damaged unit so a lethal
-  // cleanup kill is attributed to this effect's controller (spell vs ability
-  // by the source card's type — a spell's reflexive trigger still counts as the spell).
-  const damageAttribution: Partial<RiftboundCardMeta> = {
-    lastDamagedBy: ctx.playerId,
-    lastDamageSource:
-      getGlobalCardRegistry().getCardType(ctx.sourceCardId) === "spell" ? "spell" : "ability",
-  };
-  // rule 715.1: Bonus Damage the controller of this spell/ability has
-  // increases EACH instance of damage it deals.
-  const bonusDamage = getBonusDamage(ctx);
-  // rule-id: ogn-221-298 (Imperial Decree) — "When any unit takes damage this
-  // turn, kill it": a turn-wide, unbound take-damage entry in
-  // activeReplacements is a criteria reaction, not a per-unit choice. After a
-  // unit actually takes (unprevented) damage, apply its nested effect to it.
-  const reactAnyUnitDamaged = (targetId: string): void => {
-    const list = ctx.draft.activeReplacements as
-      | { replaces?: string; replacement?: unknown; duration?: string; targetCardIds?: string[] }[]
-      | undefined;
-    for (const e of list ?? []) {
-      if (
-        e?.replaces === "take-damage" &&
-        e.duration === "turn" &&
-        !e.targetCardIds &&
-        e.replacement &&
-        typeof e.replacement === "object"
-      ) {
-        executeEffect(e.replacement as ExecutableEffect, { ...ctx, boundTargets: [targetId] });
-      }
-    }
-  };
+  // rule 417 / 437 / 715 / 372 — every hit below is dealt through the damage
+  // choke point (`operations/deal-damage.ts`): Bonus Damage, the global
+  // "prevent all spell and ability damage", Double / Prevent shields and their
+  // ordering, immunity, kill attribution, "when it takes damage" effects and
+  // the `take-damage` event all live there.
   // Rule 355.14.a-c / 355.15: split damage. The caster first chooses a
   // friendly reference unit as a standard target (raised via choose-target
   // when >1 candidate), then up to N enemy units as split targets where
@@ -299,21 +299,12 @@ export function handle_damage(effect: ExecutableEffect, ctx: EffectContext, h: E
     // Rule 355.14.f/g: each chosen target takes its ≥1 mandatory point plus
     // any caster-assigned surplus; a lone target (no choice possible)
     // absorbs the whole surplus so all available damage is distributed.
+    const splitHits: { targetId: string; amount: number }[] = [];
     for (const targetId of splitTargets) {
-      // rule 465.2.c.10 (ogn-189-298) — never dealt damage.
-      if (unitIgnoresDamage(targetId, ctx.draft, (id) => ctx.cards.getCardMeta?.(id as CoreCardId) as { empowered?: boolean; combatRole?: string } | undefined)) {
-        continue;
-      }
-      const dmg = doubleIfMarked(
-        assigned[targetId] + surplus + bonusDamage + getLocationBonusDamage(targetId, ctx),
-        targetId,
-        ctx,
-      );
+      splitHits.push({ amount: assigned[targetId] + surplus, targetId });
       surplus = 0;
-      const total = addDamage(ctx, targetId, dmg, damageAttribution as Record<string, unknown>);
-      noteLethalDamage(ctx, targetId, total, dmg);
-      if (dmg > 0) reactAnyUnitDamaged(targetId);
     }
+    dealHits(effect, ctx, splitHits, ctx.boundTargets);
     return;
   }
   const rawAmount = effect.amount ?? 1;
@@ -328,10 +319,11 @@ export function handle_damage(effect: ExecutableEffect, ctx: EffectContext, h: E
   if (raiseSameLocationSubsetRepick(effect, ctx, targets)) {
     return;
   }
-  // rule 715.2 / 714: each instance is increased separately, by the dealer's
-  // own Bonus Damage plus any tied to the damaged unit's location (Void Gate).
+  // rule 715.2 / 714: each instance is increased separately (inside the choke
+  // point), by the dealer's own Bonus Damage plus any tied to the damaged
+  // unit's location (Void Gate).
   const hits: { targetId: string; amount: number }[] = targets.map((targetId) => ({
-    amount: amount > 0 ? amount + bonusDamage + getLocationBonusDamage(targetId, ctx) : amount,
+    amount,
     targetId,
   }));
   // rule-id: unl-072-219 (Crescent Strike) — "Deal N to that unit and M to
@@ -361,109 +353,13 @@ export function handle_damage(effect: ExecutableEffect, ctx: EffectContext, h: E
         (id) => !targets.includes(id) && ctx.zones.getCardZone(id as CoreCardId) === zone,
       );
       for (const id of others) {
-        hits.push({
-          amount: splashOthers + bonusDamage + getLocationBonusDamage(id, ctx),
-          targetId: id,
-        });
+        hits.push({ amount: splashOthers, targetId: id });
       }
     }
   }
-  const dealtTo: string[] = [];
-  for (const { targetId, amount: rawHitAmount } of hits) {
-    // rule 437.2 (unl-013-219 Lotus Trap) — "Double all damage that would be
-    // dealt to it": a damage-amount replacement, so it applies before any
-    // prevention or take-damage replacement is consulted.
-    const amount = doubleIfMarked(rawHitAmount, targetId, ctx);
-    // rule 465.2.c.10 (ogn-189-298) — a unit with an active "I don't take
-    // damage" restriction is dealt nothing at all.
-    if (unitIgnoresDamage(targetId, ctx.draft, (id) => ctx.cards.getCardMeta?.(id as CoreCardId) as { empowered?: boolean; combatRole?: string } | undefined)) {
-      continue;
-    }
-    // rule 437.2.a / 437.4 + 417.1.e.1 (sfd-194-221) — a single-instance
-    // "prevent it" shield replaces this whole damage event with 0. Entirely
-    // prevented damage was never dealt, so it must be consulted BEFORE any
-    // take-damage replacement: "the next time it takes damage" has not happened.
-    const shieldMeta = ctx.cards.getCardMeta?.(targetId as CoreCardId) as
-      | { preventNextDamageInstance?: boolean }
-      | undefined;
-    if (amount > 0 && shieldMeta?.preventNextDamageInstance === true) {
-      ctx.cards.updateCardMeta?.(
-        targetId as CoreCardId,
-        { preventNextDamageInstance: false } as unknown as Record<string, unknown>,
-      );
-      continue;
-    }
-    // rule-id: ogn-254-298 — a runtime take-damage replacement bound to this
-    // unit at play time ("Kill it the next time it takes damage") applies its
-    // nested effect to that unit and, being single-fire, is spent.
-    const boundRepl = ctx.draft.activeReplacements as
-      | { replaces?: string; replacement?: unknown; duration?: string; targetCardIds?: string[] }[]
-      | undefined;
-    const boundIdx =
-      boundRepl?.findIndex(
-        (e) => e?.replaces === "take-damage" && e.targetCardIds?.includes(targetId) === true,
-      ) ?? -1;
-    if (boundRepl && boundIdx >= 0) {
-      const entry = boundRepl[boundIdx];
-      if (entry?.duration === "next") {
-        boundRepl.splice(boundIdx, 1);
-      }
-      if (entry?.replacement && entry.replacement !== "prevent") {
-        executeEffect(entry.replacement as ExecutableEffect, { ...ctx, boundTargets: [targetId] });
-      }
-      continue;
-    }
-    // Check for "take-damage" replacement effects
-    const owner = ctx.cards.getCardOwner(targetId as CoreCardId) ?? "";
-    const replacementCtx = {
-      cards: {
-        getCardMeta: ctx.cards.getCardMeta ?? (() => undefined),
-        getCardOwner: ctx.cards.getCardOwner,
-      },
-      draft: ctx.draft,
-      zones: { getCardsInZone: ctx.zones.getCardsInZone },
-    };
-    const replacement = checkReplacement(
-      // rule 437.2 (ven-025-166) — this handler only ever deals spell/ability
-      // damage, so its controller is the source controller a shield scoped to
-      // "enemy spells and abilities" tests against.
-      { amount, cardId: targetId, owner, sourceController: ctx.playerId, type: "take-damage" },
-      replacementCtx as Parameters<typeof checkReplacement>[1],
-    );
-    if (replacement) {
-      // Damage was replaced (e.g., "prevent" or alternative effect)
-      if (replacement.replacement !== "prevent" && replacement.replacement) {
-        executeEffect(replacement.replacement as ExecutableEffect, ctx);
-      }
-      // Consume single-fire "next"-duration replacements so they don't
-      // Re-trigger on subsequent damage events this turn.
-      markReplacementConsumed(ctx.draft, replacement);
-      continue;
-    }
-    const priorMeta = ctx.cards.getCardMeta?.(targetId as CoreCardId) as
-      | (Partial<RiftboundCardMeta> & { damagePreventionShield?: number })
-      | undefined;
-    // rule 437.4 / 437.7: a "prevent the next N damage" shield absorbs this
-    // damage first and is spent by the amount it absorbs.
-    const shield = Math.max(0, priorMeta?.damagePreventionShield ?? 0);
-    const prevented = amount > 0 ? Math.min(shield, amount) : 0;
-    if (prevented > 0) {
-      ctx.cards.updateCardMeta?.(targetId as CoreCardId, {
-        damagePreventionShield: shield - prevented,
-      } as unknown as Record<string, unknown>);
-    }
-    const dealt = amount - prevented;
-    if (prevented > 0 && dealt <= 0) {
-      continue;
-    }
-    // rule 520 / 124.1 — one damage store: the counter and its meta mirror
-    // are written together so death checks, the end-of-turn clear and the UI agree.
-    const total = addDamage(ctx, targetId, dealt, damageAttribution as Record<string, unknown>);
-    noteLethalDamage(ctx, targetId, total, dealt);
-    if (dealt > 0) {
-      dealtTo.push(targetId);
-      reactAnyUnitDamaged(targetId);
-    }
+  const { dealtTo, suspended } = dealHits(effect, ctx, hits, ctx.boundTargets ?? (targets.length > 0 ? targets : undefined));
+  if (suspended) {
+    return;
   }
   // rule 417 / 715.4 (rule-id: unl-020-219) — a rider hanging off the Deal
   // action ("Deal 2 to a unit. ITS controller may …") runs once the damage has

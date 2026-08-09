@@ -12,6 +12,7 @@ import type { CombatUnit } from "../../../combat";
 import {
   NO_COMBAT_DAMAGE,
   PREVENT_WEAKER_ENEMY_COMBAT_DAMAGE,
+  combatLethalMight,
   planCombatDamageAssignments,
   resolveCombat,
 } from "../../../combat";
@@ -24,10 +25,15 @@ import type { PostMoveCleanupContext } from "../../../cleanup/post-move-cleanup"
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
 import { getCardEffectiveMight } from "../play/cost";
 import { collectAnyDamageLethalPlayers } from "../../../operations/lethal-damage";
-import { unitIgnoresDamage } from "../../../operations/damage-immunity";
-import { addDamage, clearDamage, getDamage, setDamage } from "../../../operations/damage-store";
+import { clearDamage, getDamage, setDamage } from "../../../operations/damage-store";
+import {
+  type DamageRequest,
+  damageReplacementProfile,
+  dealDamageBatch,
+} from "../../../operations/deal-damage";
 import type {
   GrantedKeyword,
+  PendingItem,
   RiftboundCardMeta,
   RiftboundGameState,
   RiftboundMoves,
@@ -290,6 +296,14 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
     // combat damage assignment (465.2.c.3) must use that lowered value.
     const anyDamageLethalPlayers = collectAnyDamageLethalPlayers({ cards, draft, zones });
 
+    // rule 417 / 437.5 / 465.2.c.5 — combat damage is dealt through the damage
+    // choke point; each unit's ORDERED replacement chain (Double / Prevent …)
+    // is read from it up front so lethal assignment, the kill check and the
+    // damage finally dealt agree. rule 372: a unit whose chain is
+    // order-sensitive has its controller order it before any assignment.
+    const damageIO = { cards, counters, draft, zones };
+    const damageOrderQuestions: { unitId: string; chooser: string; items: readonly PendingItem[] }[] = [];
+
     for (const cardId of unitIds) {
       // rules 181/182 — CombatUnit.owner is the SIDE this body fights for, so
       // a stolen unit is read as the thief's (its real owner still gets the
@@ -396,24 +410,20 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
         ...grantedKeywords.map((gk) => gk.keyword),
       ];
 
+      // rule 437.5.a–b / 465.2.c.4.a / 465.2.c.5 / 465.2.c.10 — this unit's
+      // damage replacement chain and immunity, as the choke point will apply them.
+      const damageProfile = damageReplacementProfile(damageIO, cardId as string, { kind: "combat" });
+      if (damageProfile.orderMatters && !damageProfile.ordered) {
+        damageOrderQuestions.push({ chooser: damageProfile.chooser, items: damageProfile.items, unitId: cardId as string });
+      }
       const unit: CombatUnit = {
         baseMight,
         currentDamage,
         id: cardId as string,
+        incomingDamageOps: damageProfile.ops,
         keywordValues: Object.keys(keywordValues).length > 0 ? keywordValues : undefined,
         keywords: allKeywords,
         owner,
-        // rule 437.5.a / 465.2.c.5: a "prevent the next N damage" shield is
-        // part of this unit's lethal-damage calculation at ASSIGNMENT time.
-        ...(((meta as { damagePreventionShield?: number } | undefined)?.damagePreventionShield ?? 0) > 0
-          ? {
-              preventValue: (meta as { damagePreventionShield?: number }).damagePreventionShield,
-            }
-          : {}),
-        ...((meta as { preventNextDamageInstance?: boolean } | undefined)
-          ?.preventNextDamageInstance === true
-          ? { preventsNextDamageInstance: true }
-          : {}),
         ...(killOnDamageIdx(cardId as string) >= 0 ? { diesOnAnyDamage: true } : {}),
         // rule 142.4.c: any damage from the opposing side is lethal to this unit.
         ...([...anyDamageLethalPlayers].some(
@@ -423,7 +433,7 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
           : {}),
         // rule 465.2.c.10 (ogn-189-298): "I don't take damage" — skipped for
         // damage assignment and never dealt lethal damage.
-        ...(unitIgnoresDamage(cardId as string, draft, () => meta as { empowered?: boolean; combatRole?: string } | undefined) ? { immuneToDamage: true } : {}),
+        ...(damageProfile.immune ? { immuneToDamage: true } : {}),
         // rule 423.1.b: a stunned unit deals no combat damage (it still takes damage).
         // Same for a unit carrying the NoCombatDamage marker ("I don't deal combat
         // damage." — sfd-082-221), printed or granted by a static.
@@ -532,6 +542,23 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
       battlefield.combatExcessDamage = excessDamage > 0 ? excessDamage : undefined;
       battlefield.combatNoDefendersAtCleanup = noDefendersAtCleanup ? true : undefined;
     };
+    // rule 372 / 465.2.c.5 — Double + Prevent N on one unit: its controller
+    // orders them (the answer lands in draft.damageReplacementOrder and this
+    // move re-runs) before either side assigns damage against that need.
+    const orderQuestion = damageOrderQuestions[0];
+    if (orderQuestion !== undefined) {
+      draft.pendingChoice = {
+        items: orderQuestion.items.map((i) => ({ ...i })),
+        playerId: orderQuestion.chooser as CorePlayerId,
+        prompt: "Order the replacement effects that apply to combat damage dealt to this unit (first = applied first)",
+        resume: { kind: "damage-order", targetCardId: orderQuestion.unitId },
+        sourceCardId: orderQuestion.unitId as CoreCardId,
+        type: "order",
+      };
+      battlefield.combatExcessDamage = excessDamage > 0 ? excessDamage : undefined;
+      battlefield.combatNoDefendersAtCleanup = noDefendersAtCleanup ? true : undefined;
+      return;
+    }
     if (battlefield.combatDamageAllocation === undefined && plans.attacker.hasChoice) {
       raiseAssignment("attacker", attackingPlayer, plans.attacker);
       return;
@@ -557,40 +584,26 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
     });
     excessDamage = result.attackerExcessDamage;
 
-    // Apply damage to each unit from damageAssignment
+    // rule 465.2.c.1.a / 465.2.d / 417.6.c — all assigned damage is DEALT
+    // simultaneously, as one batch through the damage choke point (Double /
+    // Prevent chains and their spending, immunity, "when it takes damage"
+    // effects, kill attribution 428.5.c.2, one `take-damage` event per unit).
+    const defendingSide = defenderUnits[0]?.owner;
+    const attackerIds = new Set(attackerUnits.map((u) => u.id));
+    const damageRequests: DamageRequest[] = [];
     for (const [unitId, assigned] of Object.entries(result.damageAssignment)) {
-      if (assigned > 0) {
-        // rule 437.4 / 437.7: a Prevent shield absorbs the assigned damage
-        // (fully prevented damage counts as not dealt) and is spent by it.
-        const existingMeta = cards.getCardMeta(unitId as CoreCardId) as
-          | (Partial<RiftboundCardMeta> & {
-              damagePreventionShield?: number;
-              preventNextDamageInstance?: boolean;
-            })
-          | undefined;
-        // rule 437.2.a / 437.4 (sfd-194-221): a "prevent it" shield replaces the
-        // whole assigned instance with 0 and is spent by it.
-        if (existingMeta?.preventNextDamageInstance === true) {
-          cards.updateCardMeta(unitId as CoreCardId, {
-            preventNextDamageInstance: false,
-          } as unknown as Partial<RiftboundCardMeta>);
-          continue;
-        }
-        const shield = Math.max(0, existingMeta?.damagePreventionShield ?? 0);
-        const prevented = Math.min(shield, assigned);
-        const dmg = assigned - prevented;
-        if (prevented > 0) {
-          cards.updateCardMeta(unitId as CoreCardId, {
-            damagePreventionShield: shield - prevented,
-          } as unknown as Partial<RiftboundCardMeta>);
-        }
-        if (dmg <= 0) {
-          continue;
-        }
-        // rule 520 / 124.1 — single damage store (counter + meta mirror).
-        addDamage(context, unitId, dmg);
+      if (assigned <= 0) {
+        continue;
       }
+      const isAttacker = attackerIds.has(unitId);
+      damageRequests.push({
+        amount: assigned,
+        combat: { battlefieldId, role: isAttacker ? "attacker" : "defender" },
+        source: { kind: "combat", ...((isAttacker ? defendingSide : attackingPlayer) ? { player: (isAttacker ? defendingSide : attackingPlayer) as string } : {}) },
+        target: unitId,
+      });
     }
+    dealDamageBatch(damageIO, damageRequests);
 
     // rule 466.1 (Combat Cleanup): combat deaths are ordinary deaths — reap
     // lethally-damaged units through the state-based pipeline so board die
@@ -601,18 +614,31 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
     // which the state-based check can't see — so heal the resolver's survivors
     // first (rule 466.1.a.1: combat damage never persists on survivors) and
     // hand exactly `result.killed` to the cleanup with lethal damage marked.
-    const killedSet = new Set<string>(result.killed);
+    // rule 143.2.a / 465.2.d — a combatant dies iff the damage now MARKED on
+    // it (whatever the choke point actually dealt: doubled, prevented,
+    // redirected onto it …) reaches its combat lethal Might (Shield / Assault
+    // in role, 142.4.c overrides) — read off the board, not off the plan.
+    const stillHere = new Set<string>(zones.getCardsInZone(battlefieldZoneId).map((id) => id as string));
+    const killedSet = new Set<string>();
+    for (const unit of attackerUnits) {
+      const marked = getDamage(context, unit.id);
+      if (unit.immuneToDamage !== true && marked > 0 && marked >= combatLethalMight(unit, "attacker")) {
+        killedSet.add(unit.id);
+      }
+    }
+    for (const unit of defenderUnits) {
+      const marked = getDamage(context, unit.id);
+      if (unit.immuneToDamage !== true && marked > 0 && marked >= combatLethalMight(unit, "defender")) {
+        killedSet.add(unit.id);
+      }
+    }
     for (const unit of [...attackerUnits, ...defenderUnits]) {
+      // rule 391 (ogn-254-298 / ogn-221-298) — a "when it takes damage, kill
+      // it" effect already removed this unit inside the damage batch.
+      if (!stillHere.has(unit.id)) {
+        continue;
+      }
       if (killedSet.has(unit.id)) {
-        // rule-id: ogn-254-298 — a take-damage→kill replacement fired on this
-        // unit's combat damage: it dies even to non-lethal damage, and a
-        // "next"-duration one is spent.
-        if ((result.damageAssignment[unit.id] ?? 0) > 0) {
-          const idx = killOnDamageIdx(unit.id);
-          if (activeRepl && idx >= 0 && activeRepl[idx]?.duration === "next") {
-            activeRepl.splice(idx, 1);
-          }
-        }
         // rule 428.5.c.2: a combat death is a kill by the opposing
         // combatant's controller ("When you kill a stunned enemy unit").
         const attribution = {

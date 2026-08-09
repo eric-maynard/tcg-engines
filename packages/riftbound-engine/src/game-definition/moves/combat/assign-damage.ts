@@ -3,7 +3,7 @@
  */
 
 import type { GameMoveDefinitions } from "@tcg/core";
-import { addDamage } from "../../../operations/damage-store";
+import { dealDamage } from "../../../operations/deal-damage";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../../types";
 
 type Defs = GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>;
@@ -17,9 +17,14 @@ type Defs = GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCar
  * - Must assign lethal damage before moving to next unit
  */
 export const assignDamage: Defs["assignDamage"] = {
-  reducer: (_draft, context) => {
+  reducer: (draft, context) => {
     const { targetId, amount } = context.params;
-    // rule 520 / 124.1 — single damage store (counter + meta mirror together).
-    addDamage(context, targetId as string, amount);
+    // rule 417 / 465.2.d — dealt through the damage choke point (Prevent /
+    // Double / immunity apply; one damage store underneath).
+    dealDamage({ cards: context.cards, counters: context.counters, draft, zones: context.zones }, {
+      amount,
+      source: { kind: "combat", player: context.playerId as string },
+      target: targetId as string,
+    });
   },
 };

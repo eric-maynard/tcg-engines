@@ -489,7 +489,7 @@ export function deriveFromPendingChoice(ctx: DecisionContext, pc: PendingChoice)
   // ordering is part of finalization ("FIN"); everything else resolves ("RES").
   const resumeKind = (pc as { resume?: { kind?: string } }).resume?.kind;
   const genericTiming =
-    resumeKind === "die-order" || resumeKind === "die-assign"
+    resumeKind === "die-order" || resumeKind === "die-assign" || resumeKind === "damage-order"
       ? ("RPL" as const)
       : resumeKind === "trigger-batch"
         ? ("FIN" as const)
@@ -506,7 +506,7 @@ export function deriveFromPendingChoice(ctx: DecisionContext, pc: PendingChoice)
       // rule 372 — "which replacement applies first" reads best as a pick
       // (1..n keys = the front of the order; the rest keep the listed order).
       // `seat.order([...])` is accepted for it as well.
-      if (resumeKind === "die-order") {
+      if (resumeKind === "die-order" || resumeKind === "damage-order") {
         const d: PickDecision = {
           ...base,
           allowDecline: false,
@@ -816,10 +816,13 @@ export function deriveFromPendingChoice(ctx: DecisionContext, pc: PendingChoice)
       // rule 465.2.c.3 — one allocation covering this side's whole combat damage.
       const d: DistributeDecision = {
         ...base,
+        // rule 465.2.c.4.a / 465.2.c.5 — `lethal` is the ASSIGNED amount that
+        // makes the unit lethal through its damage replacements (Double / Prevent).
         buckets: pc.options.map((id) => ({
           card: id,
           key: id,
-          label: ctx.label(id),
+          label: `${ctx.label(id)} (lethal at ${pc.lethalNeed[id] ?? "?"})`,
+          ...(pc.lethalNeed[id] !== undefined ? { lethal: pc.lethalNeed[id] } : {}),
           max: pc.total,
           min: 0,
         })),

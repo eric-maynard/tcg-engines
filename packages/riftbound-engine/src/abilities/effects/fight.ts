@@ -1,5 +1,6 @@
 // Effect handler: "fight"
-import { addDamage } from "../../operations/damage-store";
+import type { CardId as CoreCardId } from "@tcg/core";
+import { dealDamageBatch } from "../../operations/deal-damage";
 import type { TargetDescriptor } from "../target-resolver";
 import { resolveTarget } from "../target-resolver";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
@@ -53,15 +54,18 @@ export function handle_fight(effect: ExecutableEffect, ctx: EffectContext, h: Ef
       // turn buffs like Rampage's +2 count.
       const aMight = getEffectiveMight(attackerId, ctx);
       const dMight = getEffectiveMight(defenderId, ctx);
-      // rule-id: ven-083-166 (Rampage) / rule 520 — fight damage goes through
-      // the single damage store so state-based death checks, the end-of-turn
-      // clear, and the UI see it. Both amounts were read before either lands.
-      if (aMight > 0) {
-        addDamage(ctx, defenderId, aMight);
-      }
-      if (dMight > 0) {
-        addDamage(ctx, attackerId, dMight);
-      }
+      // rule-id: ven-083-166 (Rampage) / rule 417.6.b.3 — each unit is the
+      // SOURCE of the damage it deals (not the spell), its controller the
+      // responsible player (417.6.b.4); both land as one simultaneous batch
+      // through the damage choke point (Double / Prevent / immunity apply).
+      const controllerOf = (id: string): string =>
+        (ctx.cards.getCardController?.(id as CoreCardId) as string | undefined) ??
+        (ctx.cards.getCardOwner(id as CoreCardId) as string | undefined) ??
+        ctx.playerId;
+      dealDamageBatch(ctx, [
+        { amount: aMight, source: { cardId: attackerId, kind: "unit", player: controllerOf(attackerId) }, target: defenderId },
+        { amount: dMight, source: { cardId: defenderId, kind: "unit", player: controllerOf(defenderId) }, target: attackerId },
+      ]);
     }
   }
 }

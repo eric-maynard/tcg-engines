@@ -14,6 +14,7 @@
  */
 
 import { sortByBacklinePriority, sortByTankPriority } from "../keywords/keyword-effects";
+import { type DamageOp, applyDamageOps, minAssignedForLethal } from "../operations/damage-modifiers";
 
 /**
  * A unit participating in combat.
@@ -49,6 +50,15 @@ export interface CombatUnit {
    * shield: its Prevent Value is All, so no assignment is ever lethal to it.
    */
   readonly preventsNextDamageInstance?: boolean;
+  /**
+   * rule 465.2.c.4.a / 465.2.c.5 / 437.5 — the ORDERED chain of damage
+   * replacements (Double, Prevent N / All) that will apply to combat damage
+   * dealt to this unit, as computed by `operations/deal-damage.ts
+   * damageReplacementProfile`. Lethal assignment, the kill check and the
+   * damage finally dealt all fold the same chain. Supersedes `preventValue` /
+   * `preventsNextDamageInstance` when present.
+   */
+  readonly incomingDamageOps?: readonly DamageOp[];
   /**
    * rule 142.4.c (unl-118-219 Elder Dragon) — an opposing static lowered this
    * unit's lethal-damage value ("Any amount of your damage is enough to kill
@@ -119,17 +129,11 @@ function hasKeyword(unit: CombatUnit, keyword: string): boolean {
  * rule 719.1.c: Assault is likewise "+X Might while I'm an attacker", so an
  * attacking Assault unit needs base+Assault damage to die.
  */
-function lethalThreshold(unit: CombatUnit, role?: "attacker" | "defender"): number {
-  // rule 437.5.b: a Prevent Value of "All" means no amount of damage is ever
-  // lethal to this unit — but it is still assignable (465.2.c.10), so the
-  // mandatory assignment piles the whole side's damage onto it.
-  if (unit.preventsNextDamageInstance === true) {
-    return Number.MAX_SAFE_INTEGER;
-  }
+export function combatLethalMight(unit: CombatUnit, role?: "attacker" | "defender"): number {
   // rule 142.4.c: an opposing "any amount of your damage is lethal" static
   // replaces this unit's lethal-damage value outright (never raises it).
   if (unit.lethalDamageOverride !== undefined) {
-    return Math.max(0, Math.min(unit.lethalDamageOverride, unit.baseMight + (unit.preventValue ?? 0)));
+    return Math.max(0, Math.min(unit.lethalDamageOverride, unit.baseMight));
   }
   let might = unit.baseMight;
   if (role === "defender") {
@@ -137,8 +141,42 @@ function lethalThreshold(unit: CombatUnit, role?: "attacker" | "defender"): numb
   } else if (role === "attacker") {
     might += getKeywordValue(unit, "Assault");
   }
-  // rule 437.5.a: lethal damage is computed including the unit's Prevent Value.
-  return Math.max(0, might) + Math.max(0, unit.preventValue ?? 0);
+  return Math.max(0, might);
+}
+
+/**
+ * rule 437.5 / 465.2.c.5 — the damage replacement chain applying to this
+ * unit's combat damage (explicit ops, else the legacy Prevent fields).
+ */
+function incomingOps(unit: CombatUnit): readonly DamageOp[] {
+  if (unit.incomingDamageOps !== undefined) {
+    return unit.incomingDamageOps;
+  }
+  const ops: DamageOp[] = [];
+  if (unit.preventsNextDamageInstance === true) {
+    ops.push({ amount: "all", key: "prevent-next", op: "prevent" });
+  }
+  if ((unit.preventValue ?? 0) > 0) {
+    ops.push({ amount: unit.preventValue as number, key: "prevent-shield", op: "prevent" });
+  }
+  return ops;
+}
+
+/** rule 465.2.d / 437.2 — damage this unit actually takes from `assigned` combat damage. */
+export function combatDamageTaken(unit: CombatUnit, assigned: number): number {
+  return assigned > 0 ? applyDamageOps(assigned, incomingOps(unit)).amount : 0;
+}
+
+/**
+ * rule 465.2.c.3 / 465.2.c.4.a / 465.2.c.5 / 437.5.a–b / 143.2.b — the least
+ * damage that must be ASSIGNED to this unit for it to have lethal damage,
+ * taking every damage replacement on it into account (a doubled unit needs
+ * half, a Prevent N unit N more, a Prevent All unit can never be made lethal
+ * but stays assignable). Non-zero even for a 0-Might unit.
+ */
+export function lethalNeed(unit: CombatUnit, role?: "attacker" | "defender"): number {
+  const health = Math.max(1, combatLethalMight(unit, role) - unit.currentDamage);
+  return minAssignedForLethal(health, incomingOps(unit));
 }
 
 /**
@@ -221,12 +259,10 @@ export function distributeDamage(
       break;
     }
 
-    // How much damage to make this unit lethal (accounting for existing damage)
-    const effectiveHealth = lethalThreshold(unit, role) - unit.currentDamage;
-    // Must assign at least lethal damage before moving to next unit.
-    // rule 143.2.b — a unit only dies to NON-ZERO damage, so a 0-Might
-    // (debuffed) unit still costs one point to kill.
-    const lethal = Math.max(1, effectiveHealth);
+    // Must assign at least lethal damage before moving to next unit —
+    // rule 465.2.c.5: computed through the unit's damage replacements; rule
+    // 143.2.b: a 0-Might (debuffed) unit still costs one point to kill.
+    const lethal = lethalNeed(unit, role);
     const toAssign = Math.min(remaining, lethal);
 
     assignment[unit.id] = toAssign;
@@ -314,8 +350,8 @@ export function planDamageAssignment(
   const tier: Record<string, number> = {};
   for (const unit of sorted) {
     order.push(unit.id);
-    // rule 143.2.b — non-zero damage is required even at 0 Might.
-    need[unit.id] = Math.max(1, lethalThreshold(unit, role) - unit.currentDamage);
+    // rule 143.2.b / 465.2.c.5 — non-zero, replacement-aware lethal need.
+    need[unit.id] = lethalNeed(unit, role);
     // rule 465.2.c.8 — Tank AND Backline on the same unit: the assigning
     // player chooses which one to honour, so neither tier is imposed on it.
     tier[unit.id] =
@@ -565,7 +601,10 @@ export function resolveCombat(
   // rule-id: ogn-034-298 — excess = assigned beyond each defender's lethal need.
   let attackerExcessDamage = 0;
   for (const unit of defenders) {
-    const need = Math.max(0, lethalThreshold(unit, "defender") - unit.currentDamage);
+    if (unit.immuneToDamage === true) {
+      continue;
+    }
+    const need = lethalNeed(unit, "defender");
     attackerExcessDamage += Math.max(0, (attackerDamageToDefenders[unit.id] ?? 0) - need);
   }
 
@@ -587,13 +626,14 @@ export function resolveCombat(
       if (unit.immuneToDamage === true) {
         continue;
       }
-      const combatDamage = damageAssignment[unit.id] ?? 0;
+      // rule 465.2.d / 437.2 — the damage TAKEN, after Double / Prevent.
+      const combatDamage = combatDamageTaken(unit, damageAssignment[unit.id] ?? 0);
       const totalDamage = unit.currentDamage + combatDamage;
       // rule-id: ogn-254-298 — kill on any damage taken (bound replacement).
       // rule 142.4.b: lethal damage is NON-ZERO damage ≥ Might, so an
       // undamaged 0-Might unit survives a combat that assigned it nothing.
       if (
-        (totalDamage > 0 && totalDamage >= lethalThreshold(unit, role)) ||
+        (totalDamage > 0 && totalDamage >= combatLethalMight(unit, role)) ||
         (unit.diesOnAnyDamage === true && combatDamage > 0)
       ) {
         killed.push(unit.id);

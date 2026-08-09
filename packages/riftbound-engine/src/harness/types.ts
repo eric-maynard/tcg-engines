@@ -324,6 +324,8 @@ export interface DistributeBucket {
   readonly card?: CardRef;
   readonly min: number;
   readonly max: number;
+  /** rule 465.2.c.4.a — combat damage: the assigned amount that makes this unit lethal (replacement-aware). */
+  readonly lethal?: number;
 }
 
 export interface DistributeDecision extends DecisionBase {

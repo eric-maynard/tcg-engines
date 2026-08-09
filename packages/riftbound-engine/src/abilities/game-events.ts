@@ -131,6 +131,12 @@ export type GameEvent =
       to?: string;
       cause: "banish" | "recycle" | "bounce" | "replaced";
     }
+  // rule 427 — a card was put into Banishment from anywhere (board, trash,
+  // hand, deck, or off the chain when a [Flow] play banishes the spell). Fired
+  // in addition to `leave-board` when the card left the board.
+  // rule 411.4 — `playerId` is the player RESPONSIBLE for the banish ("when YOU
+  // banish"); rule 127.1 — `owner` is the card's owner ("a card you own").
+  | { type: "banish"; cardId: string; playerId: string; owner?: string; from?: string }
   // rule 446.2 (unl-214-219) — a card RETURNED TO HAND, fired by
   // `effects/return-to-hand.ts` right after the generic `leave-board` event.
   // `owner` is the player whose hand it went to (rule 108/124 — the OWNER, not
@@ -179,7 +185,10 @@ export type GameEvent =
   // rule-id: ven-177-166 — a Might increase, carrying both endpoints so
   // "when my Might becomes N or more" can be matched as a threshold crossing.
   | { type: "might-becomes"; cardId: string; owner: string; might: number; previousMight: number }
-  | { type: "empower"; cardId: string; owner: string }
+  // rule 441.3.a (rule-id: ven-153-166) — the player a Game Effect DIRECTS to
+  // empower is the one who "empowers", so `actor` (not the empowered card's
+  // `owner`) decides whether "YOU empower something".
+  | { type: "empower"; cardId: string; owner: string; actor?: string }
   | { type: "heal"; cardId: string; amount: number }
   // rule-id: unl-055-219 — `owner` = stunned unit's controller, `stunnedBy` =
   // the player whose effect stunned it, `battlefieldId` set when the stunned
