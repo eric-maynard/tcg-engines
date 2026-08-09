@@ -192,8 +192,17 @@ export function handle_look(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
       return;
     }
   }
-  const deck = ctx.zones.getCardsInZone(from as CoreZoneId, looker as CorePlayerId);
-  const topN = deck.slice(0, n).map((c) => c as string);
+  const deck = ctx.zones
+    .getCardsInZone(from as CoreZoneId, looker as CorePlayerId)
+    .map((c) => c as string);
+  // rule 354.3 / 370.1 (ogn-062-298 x ogn-194-298) — once a looked-at card has
+  // removed itself with its own "as you look at me" replacement, the rest of
+  // the looking instruction still ranges over the cards that were looked at and
+  // are still there, never over fresh cards pulled up behind them.
+  const carriedLookedAt = (effect as { lookedAtIds?: readonly string[] }).lookedAtIds;
+  const topN = carriedLookedAt
+    ? carriedLookedAt.filter((id) => deck.includes(id))
+    : deck.slice(0, n);
   if (topN.length === 0) return;
   // rule 369.1 / 370.1 (ogn-194-298 Nocturne) — "as you look at or reveal me
   // from the top of your deck, you may …": a replacement on the LOOK itself,
@@ -227,6 +236,7 @@ export function handle_look(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
         // The looking effect itself resumes after the answer either way.
         then: {
           ...(effect as object),
+          lookedAtIds: topN,
           revealOffered: handled.includes(revealedId) ? handled : [...handled, revealedId],
         },
         type: "confirm",

@@ -296,7 +296,7 @@ function enumerateSplitAllocations(
  * player chose to leave on top. A remainder that parks a prompt of its own is
  * re-deferred together with the entries behind it.
  */
-function flushDeferredSequenceRest(draft: RiftboundGameState, context: unknown): void {
+export function flushDeferredSequenceRest(draft: RiftboundGameState, context: unknown): void {
   const queue = draft.deferredSequenceRest;
   if (!queue || queue.length === 0 || draft.pendingChoice) {
     return;
@@ -1948,8 +1948,26 @@ export const pendingChoiceMoves: Partial<
             ...(choice.boundTargets ? { boundTargets: choice.boundTargets } : {}),
           });
         }
-        if (choice.then && !draft.pendingChoice) {
-          executeEffect(choice.then as ExecutableEffect, confirmCtx);
+        if (choice.then) {
+          if (draft.pendingChoice) {
+            // rule 354.3 (ogn-062-298 x ogn-194-298) — the accepted "you may"
+            // opened a prompt chain of its own (Nocturne's banish-and-play me).
+            // The suspended remainder — the rest of the LOOK that offered this
+            // replacement — is not cancelled by that: park it and run it once
+            // the nested chain has been answered.
+            draft.deferredSequenceRest = [
+              ...(draft.deferredSequenceRest ?? []),
+              {
+                effect: choice.then,
+                playerId: choice.playerId,
+                ...(choice.sourceCardId !== undefined
+                  ? { sourceCardId: choice.sourceCardId }
+                  : {}),
+              },
+            ];
+          } else {
+            executeEffect(choice.then as ExecutableEffect, confirmCtx);
+          }
         }
         if (!draft.pendingChoice) {
           postChoiceCleanup(draft, context);

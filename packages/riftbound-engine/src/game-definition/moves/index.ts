@@ -25,7 +25,7 @@ import { deckActionMoves } from "./deck-actions";
 import { discardMoves } from "./discard";
 import { equipmentMoves } from "./equipment";
 import { movementMoves } from "./movement";
-import { pendingChoiceMoves } from "./pending-choice";
+import { flushDeferredSequenceRest, pendingChoiceMoves } from "./pending-choice";
 import { resourceMoves } from "./resources";
 import { setupMoves } from "./setup";
 import { tokenMoves } from "./token";
@@ -64,6 +64,18 @@ function withStagedShowdownOpening<
         originalReducer(draft, context);
         if (!(context?.cards && context?.zones)) {
           return;
+        }
+        // rule 354.3 (ogn-062-298 Reinforce x ogn-194-298 Nocturne) — an
+        // instruction that suspended on a prompt chain ending in an
+        // effect-instructed PLAY parks its remainder in `deferredSequenceRest`.
+        // That play leaves the Chain through trigger finalization, not through
+        // `postChoiceCleanup`, so the remainder is resumed here: the
+        // interrupted instruction keeps resolving before anyone gets priority.
+        if (!draft.pendingChoice && draft.deferredSequenceRest?.length) {
+          flushDeferredSequenceRest(draft, context);
+          if (!draft.pendingChoice) {
+            finalizePendingItems(draft, context);
+          }
         }
         const began = withinMoveReducer(() =>
           openPendingContestedShowdown(draft, context as Omit<ArrivalIO, "draft">),
