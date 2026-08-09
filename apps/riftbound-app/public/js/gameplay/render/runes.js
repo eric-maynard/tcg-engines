@@ -197,7 +197,12 @@ function showResourceDelta(type, amount, label) {
   // so client-rect deltas are post-transform px; convert back to logical px.
   const scale = (boardEl.offsetWidth > 0 ? boardRect.width / boardEl.offsetWidth : 1) || 1;
   el.style.left = ((barRect.left - boardRect.left + barRect.width / 2) / scale) + "px";
-  el.style.top = ((barRect.top - boardRect.top) / scale - 8) + "px";
+  // [rule:ui-resource-delta-anchor] One action can yield two resources (recycle
+  // a ready rune: +1 Energy from the auto-tap, +1 Fury from the recycle) whose
+  // floats arrive a round-trip apart. Stack each new float above the ones still
+  // animating instead of drawing them all at the same spot.
+  const live = boardEl.querySelectorAll(".resource-delta").length;
+  el.style.top = ((barRect.top - boardRect.top) / scale - 8 - live * 22) + "px";
   // Horizontal centering (-50%) lives in the resource-delta-float keyframe so the
   // animation's transform doesn't clobber it.
 

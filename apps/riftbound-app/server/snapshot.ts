@@ -380,6 +380,15 @@ export const REWINDABLE_MOVE_IDS = new Set([
  * splices `after-replay-<i>` entries in behind replay entry i instead of
  * grouping them with the setup lines, and drops them if that move is rewound.
  */
+/** Where a public reveal was first observed in the replay history. */
+interface RevealAnchor {
+  index: number;
+  timestampMs: number;
+}
+
+/** Per-session reveal anchors; keyed weakly so finished games are collectable. */
+const revealAnchors = new WeakMap<GameSession, Map<string, RevealAnchor>>();
+
 export function anchorKeyAfterLastMove(session: GameSession, suffix = ""): string {
   let index = -1;
   try {
@@ -406,8 +415,60 @@ export function buildHistoryLog(session: GameSession): LogEntry[] {
     list.push(entry);
     anchored.set(idx, list);
   }
+  let history: ReturnType<GameSession["engine"]["getReplayHistory"]> = [];
   try {
-    const history = session.engine.getReplayHistory();
+    history = session.engine.getReplayHistory();
+  } catch { /* History not available */ }
+  // rule 424.1 — a reveal presents the card to ALL players. Reveals that park
+  // no prompt (Diana, Lunari) are invisible in the move-derived narration
+  // below, so name them from the engine's shared reveal record. The record
+  // carries no replay index, so anchor each reveal to the move that was last
+  // recorded when we first saw it and keep that anchor (and its timestamp) for
+  // every later rebuild — otherwise reveals pile up at the tail of the log
+  // with a fresh clock reading each time.
+  try {
+    const state = session.engine.getState() as unknown as {
+      publicReveals?: { playerId: string; cardIds: readonly string[]; turn?: number }[];
+    };
+    const anchors = revealAnchors.get(session) ?? new Map<string, RevealAnchor>();
+    revealAnchors.set(session, anchors);
+    const seen = new Map<string, number>();
+    const lastIndex = history.length - 1;
+    (state.publicReveals ?? []).forEach((rev, index) => {
+      const names = rev.cardIds.map((id) => {
+        const defId = String(id).replace(/^player-[12]-(?:main|rune)-\d+-/, "");
+        return registry.get(defId)?.name ?? defId;
+      });
+      if (names.length === 0) {return;}
+      // Content-keyed so the anchor survives the record's 20-entry trim (which
+      // shifts every index) — the ordinal disambiguates identical reveals.
+      const base = `${rev.turn ?? 0}|${rev.playerId}|${rev.cardIds.join(",")}`;
+      const ordinal = seen.get(base) ?? 0;
+      seen.set(base, ordinal + 1);
+      const key = `${base}|${ordinal}`;
+      let anchor = anchors.get(key);
+      // A rewind shortens the history: re-anchor anything now past its end.
+      if (!anchor || anchor.index > lastIndex) {
+        anchor = {
+          index: lastIndex,
+          timestampMs: history[lastIndex]?.timestamp ?? Date.now(),
+        };
+        anchors.set(key, anchor);
+      }
+      const entry = makeLogEntry(
+        `${actorName(rev.playerId, session.playerNames)} revealed ${names.join(", ")}.`,
+        { key: `reveal-${index}`, timestampMs: anchor.timestampMs },
+      );
+      if (anchor.index < 0) {
+        entries.push(entry);
+        return;
+      }
+      const list = anchored.get(anchor.index) ?? [];
+      list.push(entry);
+      anchored.set(anchor.index, list);
+    });
+  } catch { /* Reveal record not available */ }
+  {
     history.forEach((entry, index) => {
       const params = (entry.context?.params as Record<string, unknown>) ?? {};
       const playerId = (entry.context?.playerId as string) ?? "";
@@ -430,28 +491,7 @@ export function buildHistoryLog(session: GameSession): LogEntry[] {
         entries.push(a);
       }
     });
-  } catch { /* History not available */ }
-  // rule 424.1 — a reveal presents the card to ALL players. Reveals that park
-  // no prompt (Diana, Lunari) are invisible in the move-derived narration
-  // above, so name them from the engine's shared reveal record.
-  try {
-    const state = session.engine.getState() as unknown as {
-      publicReveals?: { playerId: string; cardIds: readonly string[] }[];
-    };
-    (state.publicReveals ?? []).forEach((rev, index) => {
-      const names = rev.cardIds.map((id) => {
-        const defId = String(id).replace(/^player-[12]-(?:main|rune)-\d+-/, "");
-        return registry.get(defId)?.name ?? defId;
-      });
-      if (names.length === 0) {return;}
-      entries.push(
-        makeLogEntry(
-          `${actorName(rev.playerId, session.playerNames)} revealed ${names.join(", ")}.`,
-          { key: `reveal-${index}` },
-        ),
-      );
-    });
-  } catch { /* Reveal record not available */ }
+  }
   return entries.slice(-80);
 }
 
