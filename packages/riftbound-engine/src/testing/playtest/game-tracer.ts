@@ -19,8 +19,38 @@ import {
   definitionIdOf,
   getCardMeta,
   getZoneCards,
+  getInternal,
   type Engine,
 } from "./game-setup";
+import { computeTotalCost } from "../../game-definition/moves/play/cost-model";
+
+/**
+ * rule 356 — the cost model's own view of what a play must pay, so the tracer
+ * invariant measures the CHARGE against the engine's computed total (board and
+ * self discounts, [Flow]/alternative costs, Repeat tiers included) instead of
+ * the printed number.
+ */
+function costModelCtx(engine: Engine): any {
+  const iv = getInternal(engine);
+  const zones = {
+    getCardZone: (id: string) => iv.cards[id]?.zone,
+    getCardsInZone: (zoneId: string, playerId?: string) =>
+      (iv.zones[zoneId]?.cardIds ?? []).filter((id) => !playerId || iv.cards[id]?.owner === playerId),
+  };
+  const cards = {
+    getCardController: (id: string) => iv.cards[id]?.controller ?? iv.cards[id]?.owner,
+    getCardMeta: (id: string) => iv.cardMetas[id],
+    getCardOwner: (id: string) => iv.cards[id]?.owner,
+  };
+  return { board: { cards, zones }, getCardMeta: cards.getCardMeta };
+}
+
+/** rule 357.1.a — ready runes may be exhausted for Energy while paying a cost. */
+function countReadyRunes(engine: Engine, playerId: string): number {
+  return getZoneCards(engine, "runePool", playerId).filter(
+    (id) => getCardMeta(engine, id)?.exhausted !== true,
+  ).length;
+}
 
 let getAllCards: (() => any[]) | undefined;
 try {
@@ -175,6 +205,28 @@ function playAndTrace(seed: string, gameIdx: number, allCards: any[]) {
             ? { moveId: "passShowdownFocus", params: { playerId: active } }
             : { moveId: "endTurn", params: { playerId: active } };
     }
+    // Snapshot what the cost model says this play owes, BEFORE the board moves.
+    const isPlayMove = /^play(Unit|Spell|Gear|FromChampionZone)$/.test(chosen.moveId);
+    let expectedCost: any;
+    let readyRunesBefore = 0;
+    if (isPlayMove && chosen.params?.cardId) {
+      readyRunesBefore = countReadyRunes(engine, active);
+      const params: any = chosen.params ?? {};
+      const selection =
+        params.costs ?? (params.viaFlow ? { alternativeId: "flow" } : {});
+      try {
+        expectedCost = computeTotalCost(
+          s as any,
+          active,
+          params.cardId,
+          selection as any,
+          costModelCtx(engine),
+        )?.resources;
+      } catch {
+        expectedCost = undefined;
+      }
+    }
+
     const result =
       chosen.moveId === "endTurn"
         ? advanceTurn(engine, ["player-1", "player-2"])
@@ -183,54 +235,61 @@ function playAndTrace(seed: string, gameIdx: number, allCards: any[]) {
             playerId: active,
           });
 
-    // Hard invariant: a play* move must have deducted at least its cost.
-    // Catches the class where enumerator/condition credit resources the reducer
-    // never charges (e.g. potential-rune-energy widened enumerator only).
+    // Hard invariant: a play* move must have CHARGED at least the cost the
+    // engine's own model computed for it. Catches the class where the
+    // enumerator/condition credit resources the reducer never charges;
+    // legitimate discounts (board statics, self-scaling text, [Flow] and other
+    // alternative costs) are already inside `expectedCost`, and runes exhausted
+    // while paying (rule 357.1.a) count as Energy actually spent.
     let costViolation: string | undefined;
-    if ((result as any)?.success && /^play(Unit|Spell|Gear|FromChampionZone)$/.test(chosen.moveId)) {
+    if ((result as any)?.success && isPlayMove && expectedCost) {
       const poolBefore = s.runePools?.[active];
       const poolAfter = engine.getState().runePools?.[active];
       const before = poolBefore?.energy ?? 0;
       const after = poolAfter?.energy ?? 0;
       const def = allCards.find((c) => chosen.params?.cardId?.endsWith(c.id));
-      const cost = def?.energyCost ?? 0;
-      if (before - after < cost && cost > 0) {
-        costViolation = `${chosen.moveId} ${def?.id} cost=${cost} but energy ${before}→${after} (deducted ${before - after})`;
+      const runesSpent = Math.max(0, readyRunesBefore - countReadyRunes(engine, active));
+      const energyPaid = before - after + runesSpent;
+      const owed = expectedCost.free || expectedCost.ignoreEnergy ? 0 : (expectedCost.energy ?? 0);
+      if (energyPaid < owed) {
+        costViolation = `${chosen.moveId} ${def?.id} owes energy=${owed} but energy ${before}→${after} (+${runesSpent} rune) = ${energyPaid}`;
       }
-      const powerCost: string[] = def?.powerCost ?? [];
-      const need: Record<string, number> = {};
-      for (const d of powerCost) need[d] = (need[d] ?? 0) + 1;
+      const need: Record<string, number> = { ...(expectedCost.named ?? {}) };
+      const anyPips = (expectedCost.any ?? 0) + (expectedCost.hybrid?.n ?? 0);
+      const totalPips = Object.values(need).reduce((a, b) => a + b, 0) + anyPips;
       const pbOf = (d: string): number => (poolBefore?.power as any)?.[d] ?? 0;
       const paOf = (d: string): number => (poolAfter?.power as any)?.[d] ?? 0;
-      // Rule 135.2.e.5.b: pooled [rainbow] Power pays a pip of any Domain, so a
-      // named-domain shortfall is fine if the rainbow pool dropped to cover it.
-      let wildSpent = pbOf("rainbow") - paOf("rainbow");
-      for (const [d, n] of Object.entries(need)) {
-        if (d === "rainbow") continue;
-        const pb = pbOf(d);
-        const pa = paOf(d);
-        const short = n - (pb - pa);
-        if (short > 0 && wildSpent >= short) {
-          wildSpent -= short;
-        } else if (short > 0) {
-          costViolation = `${costViolation ? costViolation + "; " : ""}${chosen.moveId} ${def?.id} power[${d}]=${n} but ${pb}→${pa} (deducted ${pb - pa}, rainbow pool ${pbOf("rainbow")}→${paOf("rainbow")})`;
+      if (!expectedCost.free) {
+        // Rule 135.2.e.5.b: pooled [rainbow] Power pays a pip of any Domain, so a
+        // named-domain shortfall is fine if the rainbow pool dropped to cover it.
+        let wildSpent = pbOf("rainbow") - paOf("rainbow");
+        for (const [d, n] of Object.entries(need)) {
+          if (d === "rainbow") continue;
+          const pb = pbOf(d);
+          const pa = paOf(d);
+          const short = n - (pb - pa);
+          if (short > 0 && wildSpent >= short) {
+            wildSpent -= short;
+          } else if (short > 0) {
+            costViolation = `${costViolation ? costViolation + "; " : ""}${chosen.moveId} ${def?.id} power[${d}]=${n} but ${pb}→${pa} (deducted ${pb - pa}, rainbow pool ${pbOf("rainbow")}→${paOf("rainbow")})`;
+          }
         }
-      }
-      // Rule 135.2.e.5.a: a [rainbow] cost pip is paid with Power of ANY Domain,
-      // so only the pool's total must have dropped by at least the full pip count.
-      if ((need.rainbow ?? 0) > 0) {
-        const domains = new Set([
-          ...Object.keys((poolBefore?.power as any) ?? {}),
-          ...Object.keys((poolAfter?.power as any) ?? {}),
-        ]);
-        let tb = 0;
-        let ta = 0;
-        for (const d of domains) {
-          tb += pbOf(d);
-          ta += paOf(d);
-        }
-        if (tb - ta < powerCost.length) {
-          costViolation = `${costViolation ? costViolation + "; " : ""}${chosen.moveId} ${def?.id} power[rainbow]=${need.rainbow} (total pips ${powerCost.length}) but total power ${tb}→${ta} (deducted ${tb - ta})`;
+        // Rule 135.2.e.5.a: a [rainbow] cost pip is paid with Power of ANY Domain,
+        // so only the pool's total must have dropped by at least the full pip count.
+        if (anyPips > 0) {
+          const domains = new Set([
+            ...Object.keys((poolBefore?.power as any) ?? {}),
+            ...Object.keys((poolAfter?.power as any) ?? {}),
+          ]);
+          let tb = 0;
+          let ta = 0;
+          for (const d of domains) {
+            tb += pbOf(d);
+            ta += paOf(d);
+          }
+          if (tb - ta < totalPips) {
+            costViolation = `${costViolation ? costViolation + "; " : ""}${chosen.moveId} ${def?.id} power pips=${totalPips} but total power ${tb}→${ta} (deducted ${tb - ta})`;
+          }
         }
       }
     }

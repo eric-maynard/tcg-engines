@@ -12,6 +12,9 @@ import { getGlobalCardRegistry } from "../../../operations/card-lookup";
  * turn; the caller must also check the card is actually in that player's trash.
  * Returns `undefined` when the permission is absent or currently off.
  */
+/** Keywords that are triggered abilities in disguise, never standing permissions. */
+const TRIGGER_KEYWORDS = new Set(["Deathknell", "Vision", "Hunt"]);
+
 export function getSelfTrashPlayCost(
   state: RiftboundGameState,
   playerId: string,
@@ -37,6 +40,13 @@ export function getSelfTrashPlayCost(
       continue;
     }
     const keyword = (ability as { keyword?: string }).keyword;
+    // rule 366.1 (rule-id: sfd-165-221) — [Deathknell] / [Vision] are TRIGGER
+    // keywords: "when I die, get the effect". Their play instruction runs when
+    // the trigger resolves, so it never licenses an at-will (here: free) play
+    // of the card sitting in the trash.
+    if (keyword !== undefined && TRIGGER_KEYWORDS.has(keyword)) {
+      continue;
+    }
     if (keyword === "Legion" && (state.cardsPlayedThisTurn?.[playerId] ?? 0) < 1) {
       continue;
     }

@@ -337,4 +337,16 @@ describe("Glasc Mixologist (sfd-165-221)", () => {
     // Exactly one TRIGGERED ability — the keyword entry must not become a second trigger (808.2 counts printed instances).
     expect(abilities.filter((a) => a.type === "triggered")).toHaveLength(1);
   });
+
+  // rule 366.1 (tracer loop-19): [Deathknell] is a TRIGGER keyword, not a standing "play me from
+  // your trash" permission — Glasc in the trash must never be an at-will (and free) play.
+  test("a Deathknell 'play from trash' keyword grants no at-will trash play: Glasc in the trash is not playable with an empty pool", async () => {
+    const game = await scenario()
+      .resources(P1, { energy: 0 })
+      .battlefield("bf1", { controller: P1 })
+      .trash(P1, CARD, "gm")
+      .build();
+    expect(game.p1.legal().some((o) => o.key.startsWith("playUnit:gm"))).toBe(false);
+    expect(game.zoneOf("gm")).toBe("trash");
+  });
 });
