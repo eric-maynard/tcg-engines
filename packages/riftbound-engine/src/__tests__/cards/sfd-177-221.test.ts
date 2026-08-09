@@ -26,6 +26,23 @@ import { loadDefaultCardPool, P1, P2, scenario } from "../../harness";
 const CARD = "sfd-177-221";
 const DESERTS_CALL = "sfd-031-221"; // 2 energy: Play a 2 [Might] Sand Soldier unit token.
 const SAND_SOLDIER = { might: 2, name: "Sand Soldier", tags: ["Sand Soldier"] };
+/** Reaction removal used to make Azir leave the battlefield while his trigger is still on the chain. */
+const REACTION_KILL = {
+  abilities: [{ effect: { target: { type: "unit" }, type: "kill" }, timing: "reaction", type: "spell" }],
+  cardType: "spell",
+  domain: "fury",
+  energyCost: 1,
+  name: "Test Snipe",
+  timing: "reaction",
+};
+const REACTION_RECALL = {
+  abilities: [{ effect: { target: { type: "unit" }, type: "recall" }, timing: "reaction", type: "spell" }],
+  cardType: "spell",
+  domain: "fury",
+  energyCost: 1,
+  name: "Test Flash",
+  timing: "reaction",
+};
 
 /** Azir + a ready soldier token + a printed ally in base, an exhausted soldier token holding bf2, a stunned 5-Might wall on P2's bf1. */
 function board() {
@@ -195,6 +212,36 @@ describe("Azir, Sovereign (sfd-177-221)", () => {
     }
     await game.settle();
     expect(game.locationOf("real")).toBe("base");
+  });
+
+  // rule 359.3.f.2 — "to this battlefield" is a referent read off the source as the instruction
+  // executes. Azir killed in response ⇒ no such location ⇒ the whole instruction is ignored: the
+  // controller must not even be asked which tokens to move.
+  test("Azir killed while his trigger is on the chain: 'this battlefield' has no referent — no target prompt is raised and no token moves", async () => {
+    const game = await board().resources(P1, { energy: 1 }).hand(P1, REACTION_KILL, "snipe").build();
+    await game.p1.move("azir", "bf1");
+    expect(game.chain()).toHaveLength(1);
+    await game.p1.yes();
+    await game.p1.cast("snipe", { targets: "azir" });
+    await game.settle();
+    expect(game.zoneOf("azir")).toBe("trash");
+    expect(game.decision()?.kind).not.toBe("pick");
+    expect(game.locationOf("token-s1")).toBe("base");
+    expect(game.locationOf("token-s2")).toBe("bf2");
+  });
+
+  // Same referent rule for a recall: base is not a battlefield, so the tokens must NOT be dragged to base.
+  test("Azir recalled to base while his trigger is on the chain: no target prompt and the tokens stay put (they are never pulled to base)", async () => {
+    const game = await board().resources(P1, { energy: 1 }).hand(P1, REACTION_RECALL, "flash").build();
+    await game.p1.move("azir", "bf1");
+    expect(game.chain()).toHaveLength(1);
+    await game.p1.yes();
+    await game.p1.cast("flash", { targets: "azir" });
+    await game.settle();
+    expect(game.locationOf("azir")).toBe("base");
+    expect(game.decision()?.kind).not.toBe("pick");
+    expect(game.locationOf("token-s1")).toBe("base");
+    expect(game.locationOf("token-s2")).toBe("bf2");
   });
 
   test("negative space: DEFENDING Azir does not trigger (it is an attack trigger)", async () => {

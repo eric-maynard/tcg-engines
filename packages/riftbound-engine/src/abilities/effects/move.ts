@@ -927,7 +927,9 @@ export function handle_move(effect: ExecutableEffect, ctx: EffectContext, h: Eff
     // instruction executes, not a target. If the source has left the board by
     // then (killed in response, banished, …) there is no such location and the
     // move instruction is ignored rather than dragging units into the trash.
-    if (ctx.sourceZone !== "base" && !ctx.sourceZone.startsWith("battlefield-")) {
+    // A source recalled to BASE names no battlefield either, so that case is
+    // ignored too instead of pulling the chosen units back to base.
+    if (!ctx.sourceZone.startsWith("battlefield-")) {
       return;
     }
     targetZone = ctx.sourceZone;

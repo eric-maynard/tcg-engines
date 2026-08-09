@@ -942,6 +942,14 @@ export function executeResolvedItem(
           (id) => baseCtx.zones.getCardZone(id as CoreCardId) !== destZone,
         );
       }
+      // rule 359.3.f.2 (sfd-177-221 Azir) — "to this battlefield"/"here" is a
+      // referent read off the SOURCE when the instruction executes. A source
+      // that has left the battlefield by then (killed in response, recalled to
+      // base, banished) names no location, so the move is ignored entirely —
+      // asking which units to drag would be a purely cosmetic prompt.
+      if (to === "here" && !(baseCtx.sourceZone ?? "").startsWith("battlefield-")) {
+        options = [];
+      }
     }
     // rule 809.1.c / 809.1.d (721.1.c): Deflect taxes ABILITIES as well as
     // spells — an opponent choosing a Deflect card with a triggered or
