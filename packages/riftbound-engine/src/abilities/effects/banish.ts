@@ -44,8 +44,16 @@ export function handle_banish(effect: ExecutableEffect, ctx: EffectContext, _h: 
   }
   const fromBoard: string[] = [];
   const origin = new Map<string, string>();
+  // rule 411.4 / 127.1 — "when you banish a card you own" needs the owner as it
+  // was before the card left, so capture it up front (a banished token is
+  // removed from the game outright).
+  const banishedOwner = new Map<string, string | undefined>();
   for (const targetId of targets) {
     const from = ctx.zones.getCardZone?.(targetId as CoreCardId) as string | undefined;
+    banishedOwner.set(
+      targetId,
+      ctx.cards.getCardOwner?.(targetId as CoreCardId) as string | undefined,
+    );
     if (isBoardZone(from)) {
       fromBoard.push(targetId);
       origin.set(targetId, from as string);
@@ -55,6 +63,15 @@ export function handle_banish(effect: ExecutableEffect, ctx: EffectContext, _h: 
     ctx.zones.moveCard({
       cardId: targetId as CoreCardId,
       targetZoneId: "banishment" as CoreZoneId,
+    });
+    // rule 427 — the banish itself is an observable event, wherever the card
+    // came from ("When you banish a card you own").
+    ctx.fireTriggers?.({
+      cardId: targetId as string,
+      from,
+      owner: banishedOwner.get(targetId),
+      playerId: ctx.playerId,
+      type: "banish",
     });
     // rule 186.1: a token anywhere off the board ceases to exist.
     if (getGlobalCardRegistry().isToken(targetId as string)) {
@@ -86,5 +103,16 @@ export function handle_banish(effect: ExecutableEffect, ctx: EffectContext, _h: 
     ctx.cards.updateCardMeta?.(targetId as CoreCardId, {
       banishedFrom: origin.get(targetId),
     } as unknown as Record<string, unknown>);
+  }
+  // rule 427 — the board banish is also a banish: fire it after the leave-board
+  // choke point so "when you banish a card you own" sees the finished move.
+  for (const targetId of fromBoard) {
+    ctx.fireTriggers?.({
+      cardId: targetId as string,
+      from: origin.get(targetId),
+      owner: banishedOwner.get(targetId),
+      playerId: ctx.playerId,
+      type: "banish",
+    });
   }
 }

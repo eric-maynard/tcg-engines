@@ -1396,6 +1396,21 @@ export function settleResolvedSpellCard(
     cardId: resolved.cardId as CoreCardId,
     targetZoneId: targetZone as CoreZoneId,
   });
+  // rule 427 / 829.1.b.1 (ven-191-166) — a [Flow] play (or a trash→banish
+  // replacement) banishes the spell as it leaves the chain: that is its
+  // controller banishing a card they own.
+  if (targetZone === "banishment" && draft !== undefined) {
+    fireTriggers(
+      {
+        cardId: resolved.cardId as string,
+        from: "chain",
+        owner: context.cards.getCardOwner?.(resolved.cardId as CoreCardId) as string | undefined,
+        playerId: resolved.controller as string,
+        type: "banish",
+      },
+      { cards: context.cards, counters: context.counters, draft, zones: context.zones },
+    );
+  }
 }
 
 /**

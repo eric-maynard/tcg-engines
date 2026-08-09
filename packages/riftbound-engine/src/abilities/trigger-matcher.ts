@@ -714,10 +714,18 @@ function triggerMatchesEvent(
     if ("playerId" in event && event.playerId !== card.owner) {
       return false;
     }
+    // rule 441.3.a (rule-id: ven-153-166) — when the event names the player the
+    // effect DIRECTED to act (`actor`), that player is "you", whoever owns the
+    // subject: my Sanction empowering an enemy unit is still ME empowering.
+    const actor = "actor" in event && typeof event.actor === "string" ? event.actor : undefined;
+    if (actor !== undefined && actor !== card.owner) {
+      return false;
+    }
     // rule 464.2.c.2 (sfd-126-221) — "when YOU attack/defend" is attributed to
     // the designated player: the attack/defend event names the acting unit's
     // controller in `owner`, so an ENEMY unit defending is not "you defending".
     if (
+      actor === undefined &&
       !("playerId" in event) &&
       "owner" in event &&
       typeof event.owner === "string" &&
