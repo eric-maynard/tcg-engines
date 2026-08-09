@@ -34,6 +34,12 @@ export interface TargetDescriptor {
   /** rule-id: ogn-180-298 — union of alternative descriptors ("X or Y"). */
   readonly anyOf?: readonly TargetDescriptor[];
   readonly controller?: "friendly" | "enemy" | "any";
+  /**
+   * rule 108.2 / 127.1 (rule-id: ogn-263-298) — "a unit you OWN": ownership
+   * never changes, so a card the opponent currently CONTROLS still matches for
+   * its owner (and a card you control but don't own never does).
+   */
+  readonly owner?: "friendly" | "enemy" | "any";
   readonly location?: string;
   readonly filter?: TargetFilter | TargetFilter[];
   readonly quantity?: number | "all";
@@ -325,6 +331,19 @@ export function resolveTarget(
     });
   }
 
+  // rule 108.2 / 127.1 (rule-id: ogn-263-298) — "a unit you OWN" reads
+  // OWNERSHIP, which control changes never move.
+  if (target.owner === "friendly") {
+    filtered = filtered.filter(
+      (id) => ctx.cards.getCardOwner(id as CoreCardId) === ctx.playerId,
+    );
+  } else if (target.owner === "enemy") {
+    filtered = filtered.filter((id) => {
+      const owner = ctx.cards.getCardOwner(id as CoreCardId);
+      return owner !== undefined && owner !== ctx.playerId;
+    });
+  }
+
   // Filter by location
   if (target.location === "here" && ctx.sourceZone) {
     // Rule 350.1 / 383.2.c: on a battlefield card's own ability, "here" means
@@ -494,6 +513,11 @@ function offBoardZoneFor(location: string | undefined): string | undefined {
       return "hand";
     case "banishment":
       return "banishment";
+    // rule 355.9.a.5 (rule-id: ogn-263-298) — "… from your Champion Zone":
+    // an unplayed champion is an off-board pool of its own, never part of the
+    // board scan.
+    case "championZone":
+      return "championZone";
     case "deck":
     case "mainDeck":
       return "mainDeck";

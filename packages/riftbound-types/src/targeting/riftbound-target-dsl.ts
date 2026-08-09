@@ -324,6 +324,13 @@ export interface Target {
   /** Who controls the target */
   readonly controller?: TargetController;
 
+  /**
+   * rule 108.2 / 127.1 (rule-id: ogn-263-298) — "a unit you OWN": ownership is
+   * not control, so a card an opponent currently controls still matches
+   * `owner: "friendly"` for its owner.
+   */
+  readonly owner?: TargetController;
+
   /** Where the target is located */
   readonly location?: Location;
 

@@ -27,6 +27,7 @@ import { getBattlefieldZoneId, getFacedownZoneId } from "../../../zones/zone-con
 import {
   getCardEffectiveMight,
   getGrantedAcceleratePlayCost,
+  spendablePowerPool,
 } from "./cost";
 import { enterPlayedPermanent } from "./play-pipeline";
 import { beginRevealPairLock, beginRevealSlotLock, isSinglePickSlot } from "./reveal-target-lock";
@@ -65,22 +66,84 @@ function hasFreeHideLicence(state: RiftboundGameState, playerId: string): boolea
   return false;
 }
 
-function canAffordHide(state: RiftboundGameState, playerId: string): boolean {
+/**
+ * rule-id: ogn-263-298 — rule 723.1.b + 350.2: a static "you may pay [1] to
+ * hide a card with [Hidden] instead of [rainbow]" is an ALTERNATIVE Hide cost
+ * owned by the player, not by the card being hidden. Any permanent the player
+ * controls that statically grants `HideCostReduction` opens it.
+ */
+function hasEnergyHideAlternative(playerId: string, ctx: HideScanContext | undefined): boolean {
+  if (!ctx) {
+    return false;
+  }
+  const registry = getGlobalCardRegistry();
+  const ids: string[] = [];
+  for (const zoneId of ["legendZone", "base"]) {
+    ids.push(
+      ...ctx.zones
+        .getCardsInZone(zoneId as CoreZoneId, playerId as CorePlayerId)
+        .map((id) => id as string),
+    );
+  }
+  for (const id of ids) {
+    const grants = (registry.getAbilities(id) ?? []) as {
+      type?: string;
+      effect?: { type?: string; keyword?: string };
+    }[];
+    if (
+      grants.some(
+        (a) =>
+          a.type === "static" &&
+          a.effect?.type === "grant-keyword" &&
+          a.effect.keyword === "HideCostReduction",
+      )
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/** Minimal zone accessor the Hide-cost scan needs (condition/enumerator/reducer all supply it). */
+interface HideScanContext {
+  readonly zones: {
+    getCardsInZone: (zoneId: CoreZoneId, playerId?: CorePlayerId) => readonly CoreCardId[];
+  };
+}
+
+function canAffordHide(
+  state: RiftboundGameState,
+  playerId: string,
+  ctx?: HideScanContext,
+): boolean {
   if (hasFreeHideLicence(state, playerId)) {
+    return true;
+  }
+  // rule-id: ogn-263-298 — the alternative [1] is enough on its own.
+  if (
+    (state.runePools[playerId]?.energy ?? 0) >= HIDE_POWER_COST &&
+    hasEnergyHideAlternative(playerId, ctx)
+  ) {
     return true;
   }
   const pool = state.runePools[playerId];
   if (!pool) {
     return false;
   }
+  // rule 811.1.c.1 / 429.4 (sfd-189-221) — hiding a card is not playing it, so
+  // Power earmarked "use only to play …" can never pay the [rainbow] Hide cost.
   let total = 0;
-  for (const v of Object.values(pool.power)) {
+  for (const v of Object.values(spendablePowerPool(state, playerId, undefined))) {
     total += typeof v === "number" && v > 0 ? v : 0;
   }
   return total >= HIDE_POWER_COST;
 }
 
-function deductHideCost(draft: RiftboundGameState, playerId: string): void {
+function deductHideCost(
+  draft: RiftboundGameState,
+  playerId: string,
+  ctx?: HideScanContext,
+): void {
   // rule-id: ogn-264-298 — the licence waives the [rainbow] entirely.
   if (hasFreeHideLicence(draft, playerId)) {
     return;
@@ -91,11 +154,18 @@ function deductHideCost(draft: RiftboundGameState, playerId: string): void {
   }
   // Pay from whichever domain has the most Power left (mirrors [rainbow]
   // payment in chain-moves).
-  const key = Object.entries(pool.power)
+  // rule 429.4: spend only Power the earmark leaves free.
+  const key = Object.entries(spendablePowerPool(draft, playerId, undefined))
     .filter(([, v]) => (v ?? 0) > 0)
     .sort(([, a], [, b]) => (b ?? 0) - (a ?? 0))[0]?.[0] as keyof typeof pool.power | undefined;
   if (key !== undefined) {
     pool.power[key] = Math.max(0, (pool.power[key] ?? 0) - HIDE_POWER_COST);
+    return;
+  }
+  // rule-id: ogn-263-298 — no Power left to spend: the alternative [1] pays
+  // instead ("you MAY pay [1] … instead", so exactly one of the two is spent).
+  if (pool.energy >= HIDE_POWER_COST && hasEnergyHideAlternative(playerId, ctx)) {
+    pool.energy -= HIDE_POWER_COST;
   }
 }
 
@@ -410,7 +480,7 @@ export const hideCard: Defs["hideCard"] = {
     }
 
     // rule-id: ogn-121-298 — Rule 723.1.b: hiding costs [C] (1 Power).
-    if (!canAffordHide(state, context.params.playerId)) {
+    if (!canAffordHide(state, context.params.playerId, context)) {
       return false;
     }
 
@@ -429,7 +499,7 @@ export const hideCard: Defs["hideCard"] = {
       return [];
     }
     // rule-id: ogn-121-298 — Rule 723.1.b: hiding costs [C] (1 Power).
-    if (!canAffordHide(state, context.playerId as string)) {
+    if (!canAffordHide(state, context.playerId as string, context)) {
       return [];
     }
     const registry = getGlobalCardRegistry();
@@ -479,7 +549,7 @@ export const hideCard: Defs["hideCard"] = {
     const { zones, counters, cards } = context;
 
     // rule-id: ogn-121-298 — Rule 723.1.b: pay [C] (1 Power) to hide.
-    deductHideCost(_draft, context.params.playerId);
+    deductHideCost(_draft, context.params.playerId, context);
 
     const facedownZoneId = getFacedownZoneId(battlefieldId);
 

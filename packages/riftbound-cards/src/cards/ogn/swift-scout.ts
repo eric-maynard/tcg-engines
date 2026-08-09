@@ -22,9 +22,15 @@ const abilities: Ability[] = [
     cost: { energy: 1, exhaust: true },
     effect: {
       target: {
-        controller: "friendly",
+        // rule 108.2 / 127.1 — "you own" is ownership, not control; rule
+        // 355.9.a.5 — the Champion Zone is an off-board pool the board scan
+        // never visits, so it is unioned in as its own branch.
+        anyOf: [
+          { filter: { tag: "Teemo" }, location: "anywhere", owner: "friendly", type: "unit" },
+          { filter: { tag: "Teemo" }, location: "championZone", owner: "friendly", type: "unit" },
+        ],
         filter: { tag: "Teemo" },
-        location: "anywhere",
+        owner: "friendly",
         type: "unit",
       },
       type: "return-to-hand",
