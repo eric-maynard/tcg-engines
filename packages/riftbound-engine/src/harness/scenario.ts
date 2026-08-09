@@ -203,6 +203,9 @@ export interface BuiltScenario {
  */
 export function buildScenarioEngine(spec: ScenarioSpec, pool: CardPool): BuiltScenario {
   setGlobalCardRegistry(new CardDefinitionRegistry());
+  // rule 762: nameable cards come from the format-legal card pool, not from the
+  // card instances this scenario happens to place.
+  getGlobalCardRegistry().setNameCatalog(pool.all());
   const engine: HarnessEngine = new RuleEngine<RiftboundGameState, RiftboundMoves, unknown, RiftboundCardMeta>(
     riftboundDefinition,
     spec.players.map((id) => ({ id, name: id })),

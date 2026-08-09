@@ -102,6 +102,25 @@ describe("Fallen Feline (ven-132-166)", () => {
     expect(game.decision()).toMatchObject({ context: "main", kind: "action", seat: P1 });
   });
 
+  // rule 762: the naming vocabulary is the format-legal card pool, not whatever card instances happen
+  // to be registered for this game — a spell in neither deck (Block) is nameable; non-spells never are.
+  test("rule 762: the vocabulary is the format-legal spell pool, not just the spells present in this game", async () => {
+    const game = await scenario()
+      .resources(P1, { energy: 2, power: { order: 1 } })
+      .hand(P1, CARD, "feline")
+      .hand(P2, CLEAVE, "cleave")
+      .build();
+    await game.p1.play("feline");
+    const d = await toPrompt(game);
+    const vocab = d?.kind === "name" ? d.vocabulary : [];
+    expect(vocab).toContain("Block"); // legal spell, nowhere in this game
+    expect(vocab).toContain("Discipline");
+    expect(vocab).not.toContain("Shipyard Skulker"); // units are not spells
+    expect(vocab.length).toBeGreaterThan(50);
+    await game.p1.name("Block");
+    expect(game.state("feline").meta.namedCard).toBe("Block");
+  });
+
   test("while Feline is AT A BATTLEFIELD the opponent cannot play either copy of the named spell, but a differently-named spell is fine", async () => {
     const game = await locked("bf1").build();
     expect(game.p2.can("cast", "cleave")).toBe(false);

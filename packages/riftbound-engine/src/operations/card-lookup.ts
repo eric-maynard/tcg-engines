@@ -123,12 +123,25 @@ export interface CardDefinitionLookup {
 /**
  * Card definition registry — maps card instance IDs to their definitions.
  */
+/**
+ * One entry of the format-legal card pool (rule 762). Only the fields a
+ * naming prompt needs — the pool is a catalog of printed cards, not of the
+ * card instances in this game.
+ */
+export interface NameCatalogEntry {
+  readonly name?: string;
+  readonly cardType?: string;
+  readonly tags?: readonly string[];
+}
+
 export class CardDefinitionRegistry {
   private readonly definitions = new Map<string, CardDefinitionLookup>();
   /** Pre-copy definitions of instances currently copying another card (rule 477.1.b). */
   private readonly copyOriginals = new Map<string, CardDefinitionLookup>();
   /** Instance being copied, per copying instance (rule 477.1.b) — lets snapshots render the copy. */
   private readonly copySources = new Map<string, string>();
+  /** rule 762 — the format-legal card pool used to enumerate nameable cards/tags. */
+  private nameCatalog: NameCatalogEntry[] | null = null;
 
   /**
    * rule 477.1.b: `holderId` becomes a copy of `sourceId` — its traits (name,
@@ -473,13 +486,30 @@ export class CardDefinitionRegistry {
   }
 
   /**
-   * List distinct card names known to this registry, optionally filtered by
-   * card type. Used by rule-762 "name a card" effects to enumerate legal
-   * choices for the current game.
+   * rule 762 — a named card is any card in the format's legal card pool, not
+   * merely one that happens to be in this game. `definitions` holds one entry
+   * per card INSTANCE of the two loaded decks (plus leftovers from earlier
+   * games in a long-lived process), so enumerating it both omits legal names
+   * and leaks the opponent's deck list. Game setup installs the real pool here.
+   */
+  setNameCatalog(defs: readonly NameCatalogEntry[] | undefined): void {
+    this.nameCatalog = defs && defs.length > 0 ? [...defs] : null;
+  }
+
+  /**
+   * List distinct card names in the format-legal pool (rule 762), optionally
+   * filtered by card type. Falls back to the registered instances when no pool
+   * catalog was installed.
    */
   listNames(cardType?: string): string[] {
     const names = new Set<string>();
-    for (const def of this.definitions.values()) {
+    // Cards actually in play are legal names too (and cover ad-hoc definitions
+    // the pool does not know about); the pool supplies everything else.
+    const source: Iterable<{ name?: string; cardType?: string }> = [
+      ...(this.nameCatalog ?? []),
+      ...this.definitions.values(),
+    ];
+    for (const def of source) {
       if (cardType && def.cardType !== cardType) continue;
       if (def.name) names.add(def.name);
     }
@@ -487,13 +517,17 @@ export class CardDefinitionRegistry {
   }
 
   /**
-   * List distinct tags printed on cards known to this registry. Used by
-   * rule-762 "name a tag" effects to enumerate legal choices.
+   * List distinct tags printed on cards in the format-legal pool (rule 762).
+   * Falls back to the registered instances when no catalog was installed.
    */
   listTags(): string[] {
     const tags = new Set<string>();
-    for (const def of this.definitions.values()) {
-      for (const tag of (def as { tags?: string[] }).tags ?? []) {
+    const source: Iterable<{ tags?: readonly string[] }> = [
+      ...(this.nameCatalog ?? []),
+      ...this.definitions.values(),
+    ];
+    for (const def of source) {
+      for (const tag of def.tags ?? []) {
         if (tag) tags.add(tag);
       }
     }

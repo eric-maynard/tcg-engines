@@ -105,6 +105,11 @@ export function createGameFromDecks(
   );
 
   const cardReg = getGlobalCardRegistry();
+  // rule 762: "name a card" enumerates the format-legal pool. The registry is
+  // keyed by card INSTANCE and is never cleared between games on this server,
+  // so without this the nameable set would be both decks (leaking the
+  // opponent's list) plus leftovers from earlier games.
+  cardReg.setNameCatalog(allCards as unknown as { name?: string; cardType?: string; tags?: readonly string[] }[]);
   const internal = getInternalSnapshot(engine);
   const log: LogEntry[] = [];
 

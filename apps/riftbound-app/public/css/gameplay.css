@@ -519,6 +519,30 @@
     .card--attached { outline: 2px solid rgba(185,140,255,0.7); outline-offset: -2px; }
     .card--equipped { outline: 2px dashed rgba(185,140,255,0.55); outline-offset: -2px; }
 
+    /* rule 762: the card a board card has NAMED (Fallen Feline) drives its
+       ongoing restriction, so it must be readable on the card itself. Sits just
+       above the printed-name strip so it never collides with .card-attach. */
+    .card-named {
+      position: absolute;
+      bottom: 18px;
+      left: 3px;
+      right: 3px;
+      padding: 1px 3px;
+      border-radius: 4px;
+      background: rgba(45,20,10,0.85);
+      border: 1px solid #ffb56b;
+      color: #ffe2c2;
+      font-size: 9px;
+      font-weight: 600;
+      line-height: 1.2;
+      text-align: center;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      z-index: 6;
+      pointer-events: none;
+    }
+
     /* Hand cards — large, image-only; min-width prevents unreadable compression.
        All owned hand cards are clickable (for cost payment, card selection, etc.),
        so they all show cursor:pointer. Playable cards also get a green pulse glow. */
