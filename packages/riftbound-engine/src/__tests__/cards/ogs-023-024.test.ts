@@ -150,7 +150,7 @@ describe("Might of Demacia - Starter (ogs-023-024)", () => {
   // BUG — expected: only units at the CONQUERED battlefield count ("at that battlefield"). Actual: the condition counts
   // friendly units at ANY battlefield (a friend parked at bf2 makes 3 + 1 = 4 and P1 draws 2); units in base are
   // correctly ignored (previous test).
-  test.failing("BUG: 'at THAT battlefield' — a fourth friendly unit at a DIFFERENT battlefield (bf2) must not count: three conquer bf1 → no draw", async () => {
+  test("'at THAT battlefield' — a fourth friendly unit at a DIFFERENT battlefield (bf2) must not count: three conquer bf1 → no draw", async () => {
     const game = await board(3).unit(P1, "bf2", { might: 2, name: "Elsewhere" }, "elsewhere").build();
     await march(game, squad(3));
     expect(game.p1.units("bf1")).toHaveLength(3);
@@ -197,7 +197,7 @@ describe("Might of Demacia - Starter (ogs-023-024)", () => {
 
   // BUG — same root cause as above: the second conquer counts the four still standing at bf1 (4 + 3 at battlefields)
   // and draws again. Expected: bf3 was conquered with three units → no second draw.
-  test.failing("BUG: a second conquer the same turn is judged on ITS battlefield: four take bf1 (draw 2), then three fresh units take empty bf3 → still just the 2 cards, 2 points", async () => {
+  test("a second conquer the same turn is judged on ITS battlefield: four take bf1 (draw 2), then three fresh units take empty bf3 → still just the 2 cards, 2 points", async () => {
     const game = await board(7).battlefield("bf3", { controller: null }).build();
     await march(game, squad(4), "bf1");
     expect(game.p1.hand()).toHaveLength(2);

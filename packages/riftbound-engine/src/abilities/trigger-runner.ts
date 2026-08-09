@@ -305,7 +305,11 @@ export function extractPayCost(condition: unknown): Record<string, unknown> | un
     return undefined;
   }
   const c = condition as { type?: string; cost?: unknown; conditions?: unknown[] };
-  if (c.type === "pay-cost" && c.cost && typeof c.cost === "object") {
+  // rule 383.3.b (rule-id: ven-162-166) — a GATING clause may carry the opt-in
+  // cost alongside it ("if you control 4 or fewer runes, you may pay [1] to
+  // draw 1"): the clause still gates the trigger (383.2.a.1), the `cost` is
+  // charged on opt-in exactly as a bare `pay-cost` condition is.
+  if (c.cost && typeof c.cost === "object") {
     return c.cost as Record<string, unknown>;
   }
   if (c.type === "and" && Array.isArray(c.conditions)) {
@@ -664,6 +668,22 @@ export function evaluateTriggerCondition(
     }
     return true;
   }
+  if (c.type === "while-control-battlefield" && ctx) {
+    // rule 470.1 / 383.2.a.1 (rule-id: unl-211-219, Forgotten Library) — a
+    // battlefield card's "While you control this battlefield" gates the trigger
+    // on the CURRENT controller of that battlefield. An uncontrolled
+    // battlefield functions for nobody (the trigger scan attributes such a card
+    // to its owner, which is not control).
+    let bfId: string | undefined = sourceCardId;
+    if (bfId !== undefined && ctx.draft.battlefields?.[bfId] === undefined) {
+      const zone = ctx.zones.getCardZone?.(bfId as CoreCardId) as string | undefined;
+      bfId = zone?.startsWith("battlefield-") === true ? zone.slice("battlefield-".length) : undefined;
+    }
+    if (bfId === undefined) {
+      return true;
+    }
+    return ctx.draft.battlefields?.[bfId]?.controller === controllerId;
+  }
   if (c.type === "exists-here" && ctx) {
     // rule-id: ven-138-166 (Shen, Leader of the Kinkou Order) — "if there is
     // exactly one other unit you control here" counts matching units at the
@@ -691,22 +711,17 @@ export function evaluateTriggerCondition(
       hereZone,
     );
   }
-  // rule 383.2.a.1 — an `and` compound gates the trigger on every clause it
-  // holds, but only the clauses understood here may veto it; the rest stay
-  // permissive, exactly as they are on their own. (`pay-cost` is never a gate:
-  // it is charged at opt-in time — see `extractPayCost`.)
-  if (c.type === "and" && ctx && Array.isArray((c as { conditions?: unknown[] }).conditions)) {
+  // rule 383.2.a.1 — an `and` compound gates the trigger on EVERY clause it
+  // holds: each clause is evaluated exactly as it would be on its own (unknown
+  // shapes stay permissive there, so this cannot drop more than the clause
+  // itself would). (`pay-cost` is never a gate: it is charged at opt-in time —
+  // see `extractPayCost`.)
+  if (c.type === "and" && Array.isArray((c as { conditions?: unknown[] }).conditions)) {
     for (const sub of (c as { conditions: unknown[] }).conditions) {
-      if (
-        (sub as { type?: string } | undefined)?.type === "has-at-least" &&
-        !evaluateHasAtLeastCondition(sub as { type?: string }, ctx, controllerId, event, sourceCardId)
-      ) {
-        return false;
+      if ((sub as { type?: string } | undefined)?.type === "pay-cost") {
+        continue;
       }
-      if (
-        (sub as { type?: string } | undefined)?.type === "has-exactly" &&
-        !evaluateHasExactlyCondition(sub as { type?: string }, ctx, controllerId)
-      ) {
+      if (!evaluateTriggerCondition(sub, state, controllerId, event, ctx, sourceCardId)) {
         return false;
       }
     }
@@ -817,7 +832,18 @@ function evaluateHasAtLeastCondition(
 
   const zoneIds: string[] = [];
   const baseOwners: string[] = [];
-  if (target.location === "here") {
+  if (target.location === "trigger-battlefield") {
+    // rule-id: ogs-023-024 (rule 383.2.a.1) — "if you have 4+ units at THAT
+    // battlefield": the count is taken at the battlefield the event names, not
+    // across every battlefield. The source (a Legend) may be off the board, so
+    // there is no "here" to fall back on: an event without a battlefield leaves
+    // the clause permissive.
+    const bfId = (event as { battlefieldId?: unknown }).battlefieldId;
+    if (typeof bfId !== "string") {
+      return true;
+    }
+    zoneIds.push(`battlefield-${bfId}`);
+  } else if (target.location === "here") {
     const bfId = (event as { battlefieldId?: unknown }).battlefieldId;
     if (typeof bfId === "string") {
       zoneIds.push(`battlefield-${bfId}`);
@@ -1630,10 +1656,13 @@ export function fireTriggers(rawEvent: GameEvent, ctx: TriggerRunnerContext): nu
     boardCards.push({
       abilities: [
         {
+          // rule 392 — a floating delayed ability: mark it so finalization
+          // knows no source object is holding its choices.
+          delayed: true,
           effect: pdt.effect as never,
           trigger: { event: pdt.trigger.event, on: pdt.trigger.on ?? "controller" },
           type: "triggered",
-        },
+        } as never,
       ],
       id: pdt.sourceCardId,
       owner: pdt.playerId,
@@ -1739,6 +1768,11 @@ export function fireTriggers(rawEvent: GameEvent, ctx: TriggerRunnerContext): nu
         {
           cardId: match.cardId,
           controller: triggerControllerFor(match),
+          // rule 392 (ogn-289-298) — a floating delayed ability chooses its
+          // objects at finalization; carry the marker onto the item.
+          ...((match.ability as { delayed?: boolean }).delayed === true
+            ? { delayed: true }
+            : {}),
           effect,
           // rule-id: sfd-119-221 — "you may pay [N] to …": carry the cost so
           // the opt-in prompt charges it instead of resolving for free.

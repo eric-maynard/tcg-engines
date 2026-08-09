@@ -125,7 +125,7 @@ describe("Forgotten Library (unl-211-219)", () => {
     expect(game.violations()).toEqual([]);
   });
 
-  test.failing("BUG: a spell you spent only [3] on does NOT Predict — Bolt 3 resolves and play goes straight back to the main phase (engine Predicts on any own spell)", async () => {
+  test("a spell you spent only [3] on does NOT Predict — Bolt 3 resolves and play goes straight back to the main phase (engine Predicts on any own spell)", async () => {
     // Expected: threshold not met → no Library item, no reveal-and-pick. Actual: the `spell-energy-spent`
     // clause nested in the `and` condition is never evaluated, so a Predict prompt appears.
     const game = await board().hand(P1, bolt(3), "bolt3").build();
@@ -138,7 +138,7 @@ describe("Forgotten Library (unl-211-219)", () => {
     expect(game.decision()).toMatchObject({ context: "main", kind: "action", seat: P1 });
   });
 
-  test.failing("BUG: [4] means ENERGY — a spell paid [3] + one power pip spent only [3] and does not Predict (engine Predicts)", async () => {
+  test("[4] means ENERGY — a spell paid [3] + one power pip spent only [3] and does not Predict (engine Predicts)", async () => {
     const game = await board().hand(P1, bolt(3, ["mind"]), "bolt3p").build();
     await game.p1.cast("bolt3p", { targets: "dummy" });
     expect(game.p1.resources()).toMatchObject({ energy: 3, power: { mind: 1 } });
@@ -224,7 +224,7 @@ describe("Forgotten Library (unl-211-219)", () => {
     expect(game.p1.deck().slice(0, 2)).toEqual(["a", "b"]);
   });
 
-  test.failing("BUG: an UNCONTROLLED Library does nothing even for the player who brought the card — P1 (owner, not controller) casts Bolt 4 → no Predict (engine falls back to the owner and Predicts)", async () => {
+  test("an UNCONTROLLED Library does nothing even for the player who brought the card — P1 (owner, not controller) casts Bolt 4 → no Predict (engine falls back to the owner and Predicts)", async () => {
     // Expected: "While you control this battlefield" is false for everybody → no trigger. Actual: with
     // controller null the trigger scan attributes the card to its owner P1 and the Predict prompt appears.
     const game = await scenario()
