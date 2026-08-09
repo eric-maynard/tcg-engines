@@ -673,6 +673,31 @@ function makeDeflectAffordable(
     budget;
 }
 
+/**
+ * rule 355.8 / 517.2.b (rule-id: ogn-157-298) — the modes of a "choose one
+ * you've not chosen this turn" menu that the source already spent THIS turn.
+ * The record is turn-stamped on the source's meta by whoever finalizes the
+ * choice (`play-time-modes.ts`, `chain/resolve.ts`, `effects/choice.ts`), so a
+ * stale stamp from an earlier turn excludes nothing.
+ */
+function modesAlreadyChosenThisTurn(
+  effect: SpellEffectTargetShape,
+  ctx: Parameters<typeof resolveTarget>[1],
+): readonly number[] {
+  if ((effect as { notChosenThisTurn?: boolean }).notChosenThisTurn !== true) {
+    return [];
+  }
+  const source = ctx.sourceCardId as string | undefined;
+  if (source === undefined) {
+    return [];
+  }
+  const meta = ctx.cards.getCardMeta?.(source as Parameters<typeof ctx.zones.getCardZone>[0]) as
+    | { modesChosenThisTurn?: number[]; modesChosenTurn?: number }
+    | undefined;
+  const currentTurn = (ctx.draft as { turn?: { number?: number } }).turn?.number ?? 0;
+  return meta?.modesChosenTurn === currentTurn ? (meta.modesChosenThisTurn ?? []) : [];
+}
+
 export function spellEffectHasLegalTargets(
   effect: SpellEffectTargetShape | undefined,
   ctx: Parameters<typeof resolveTarget>[1],
@@ -724,7 +749,14 @@ export function spellEffectHasLegalTargets(
     // pay for is therefore not a mode they can legally choose (355.8); when no
     // mode survives, the spell has no legal play at all.
     const modeAffordable = affordable ?? makeDeflectAffordable(ctx);
-    return effect.options.some((opt) => spellEffectHasLegalTargets(opt?.effect, ctx, modeAffordable));
+    // rule 355.8 / 402.3 (rule-id: ogn-157-298) — "Choose one you've not chosen
+    // this turn": a mode already chosen this turn is not a choice any more, so
+    // once every mode is spent the source has no legal play/activation at all.
+    const spent = modesAlreadyChosenThisTurn(effect, ctx);
+    return effect.options.some(
+      (opt, index) =>
+        !spent.includes(index) && spellEffectHasLegalTargets(opt?.effect, ctx, modeAffordable),
+    );
   }
   // rule 355.5 / 355.8 (ogn-108-298) — "Choose a friendly unit … ANOTHER
   // friendly unit": a role-slot pair needs a legal PAIR, not merely one
