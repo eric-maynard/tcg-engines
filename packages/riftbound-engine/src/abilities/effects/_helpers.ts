@@ -16,6 +16,8 @@ import type { TargetDescriptor } from "../target-resolver";
 import { boundBattlefieldZone, combatRoleMightBonus, resolveTarget } from "../target-resolver";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import { findAllReplacements } from "../replacement-effects";
+import type { SpellEffectTargetShape } from "../../game-definition/moves/play/targeting";
+import { hiddenChoiceIsPulledIn } from "../../game-definition/moves/play/targeting";
 
 /**
  * rule 370.1.a.1 — a death that a replacement effect replaces never happens,
@@ -83,6 +85,20 @@ export type EffectHandler = (
 /**
  * Resolve targets for an effect using the target resolver.
  */
+/**
+ * rule 811.1.d.2 / 811.1.d.2.a — the battlefield a from-Hidden play scopes its
+ * choices to, or `undefined` when the effect pulls its object in from anywhere.
+ */
+function hiddenScopeFor(effect: ExecutableEffect, ctx: EffectContext): string | undefined {
+  const hiddenZone = (ctx as unknown as { hiddenZone?: string }).hiddenZone;
+  if (hiddenZone === undefined) {
+    return undefined;
+  }
+  return hiddenChoiceIsPulledIn(effect as unknown as SpellEffectTargetShape)
+    ? undefined
+    : hiddenZone;
+}
+
 export function getTargetIds(effect: ExecutableEffect, ctx: EffectContext): string[] {
   // rule-id: ogs-002-024 — "all enemy units at A battlefield": a bound
   // battlefield id names the chosen LOCATION, not the affected cards; resolve
@@ -104,6 +120,14 @@ export function getTargetIds(effect: ExecutableEffect, ctx: EffectContext): stri
     battlefieldZone,
     cards: ctx.cards,
     draft: ctx.draft,
+    // rule 811.1.d.2 (sfd-139-221) — a card played from Hidden chooses only at
+    // the battlefield it was facedown at ("attach it to a unit you control
+    // (here)"); the resolver applies the scope when it is threaded through.
+    // rule 811.1.d.2.a (unl-141-219) — except when the effect PULLS its chosen
+    // object into that battlefield: it is then chosen freely from anywhere.
+    ...(hiddenScopeFor(effect, ctx) === undefined
+      ? {}
+      : { hiddenZone: hiddenScopeFor(effect, ctx) }),
     playerId: ctx.playerId,
     sameZone: ctx.sameZone,
     sourceCardId: ctx.sourceCardId,

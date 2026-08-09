@@ -204,7 +204,7 @@ describe("Spinning Axe (sfd-186-221)", () => {
     expect(game.chain()).toEqual([]);
   });
 
-  test.failing("BUG: an ATTACHED Axe is not killed by [Temporary] — attached rules text is Inactive (718.2 / 721.2; reminder: 'if this is unattached'), so it stays on its holder through P1's Beginning Phase", async () => {
+  test("an ATTACHED Axe is not killed by [Temporary] — attached rules text is Inactive (718.2 / 721.2; reminder: 'if this is unattached'), so it stays on its holder through P1's Beginning Phase", async () => {
     // Expected: after P2's turn ends, no Temporary item for the attached Axe; it is still attached, holder still 5 Might.
     // Actual: the Beginning-Phase step queues the kill for every Temporary permanent regardless of attachment → Axe trashed.
     const game = await scenario()

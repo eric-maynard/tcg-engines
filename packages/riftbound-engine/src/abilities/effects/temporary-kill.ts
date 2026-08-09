@@ -26,11 +26,13 @@ export function handle_temporaryKill(
   }
   const registry = getGlobalCardRegistry();
   const meta = ctx.cards.getCardMeta?.(cardId as CoreCardId) as
-    | { grantedKeywords?: readonly { keyword: string }[] }
+    | { grantedKeywords?: readonly { keyword: string }[]; attachedTo?: string }
     | undefined;
-  const stillTemporary =
-    registry.hasKeyword(cardId, "Temporary") ||
-    (meta?.grantedKeywords ?? []).some((gk) => gk.keyword === "Temporary");
+  const grantedTemporary = (meta?.grantedKeywords ?? []).some((gk) => gk.keyword === "Temporary");
+  // rule 718.2 / 721.2 — a printed [Temporary] is Inactive while the card is
+  // attached (it got equipped in response): the item then does nothing.
+  const printedTemporary = registry.hasKeyword(cardId, "Temporary") && meta?.attachedTo === undefined;
+  const stillTemporary = printedTemporary || grantedTemporary;
   if (!stillTemporary) {
     return;
   }

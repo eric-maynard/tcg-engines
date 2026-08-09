@@ -106,6 +106,7 @@ export type SimpleFilter =
   | "attacking" // Is currently attacking
   | "defending" // Is currently defending
   | "in-combat" // Has a combat designation (rule 740.2.c)
+  | "in-showdown" // At a battlefield with an ongoing showdown (rule 341 / 316.8)
   | "alone" // Only unit at location
   | "facedown"; // Is face down (hidden)
 

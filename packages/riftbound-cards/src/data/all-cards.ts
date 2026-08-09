@@ -808,6 +808,50 @@ const JSON_CARD_ENGINE_FLAGS: Record<string, Record<string, unknown>> = {
   "ven-004-166": {
     abilities: [{ effect: { keyword: "Tank", type: "ignore-keyword" }, type: "static" }],
   },
+  // rule 827 / 806.1.c.2 / 341 — Rogue Assassin: "[Empower] [3][rainbow] /
+  // [Action][>] [Exhaust]: If it's your turn, move a friendly unit in a
+  // showdown to base and if I'm [Empowered], ready it." The generator emits
+  // `abilities: []` and the parser files line 2 as raw text (a your-turn gate
+  // over a targeted move whose follow-up readies the SAME unit), so both lines
+  // are declared here. `filter: "in-showdown"` is rule 341/316.8 — only units
+  // at a battlefield with an ongoing showdown may be chosen.
+  "ven-139-166": {
+    abilities: [
+      {
+        cost: { energy: 3, power: ["rainbow"] },
+        effect: { target: "self", type: "empower" },
+        restrictions: [{ type: "not-empowered" }],
+        type: "activated",
+      },
+      {
+        cost: { exhaust: true },
+        effect: {
+          condition: { type: "your-turn" },
+          then: {
+            effects: [
+              {
+                target: { controller: "friendly", filter: "in-showdown", type: "unit" },
+                to: "base",
+                type: "move",
+              },
+              {
+                condition: { target: "self", type: "empowered" },
+                then: {
+                  target: { controller: "friendly", filter: "in-showdown", type: "unit" },
+                  type: "ready",
+                },
+                type: "conditional",
+              },
+            ],
+            type: "sequence",
+          },
+          type: "conditional",
+        },
+        timing: "action",
+        type: "activated",
+      },
+    ],
+  },
   // rule 356.2 / 355.2 — Dragon Roost: "Any player may pay [rainbow][rainbow] as
   // an additional cost to play a Dragon. If they do, they play it to this
   // battlefield." The generator emits `abilities: []` and the parser has no

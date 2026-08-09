@@ -311,9 +311,10 @@ function runExpirationStep(context: FlowStepContext): void {
 
           // rule-id: ven-126-166 — a "this turn" numeric Prevent shield (rule 437.1.b.1.a)
           // expires unused in the Expiration Step (rule 517.2.b).
-          if (((meta as { damagePreventionShield?: number }).damagePreventionShield ?? 0) > 0) {
+          if ((meta as { damagePreventionShield?: unknown }).damagePreventionShield !== undefined) {
             context.cards.updateCardMeta(cardId, {
               damagePreventionShield: undefined,
+              damagePreventionSource: undefined,
             } as unknown as Partial<RiftboundCardMeta>);
           }
 
@@ -864,6 +865,13 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
 
                 const hasTemp = tempRegistry.hasKeyword(cardId as string, "Temporary");
                 const meta = context.cards.getCardMeta(cardId);
+                // rule 718.2 / 721.2 — an ATTACHED card's rules text is Inactive,
+                // so a printed [Temporary] on equipment does not trigger while it
+                // is attached ("if this is unattached"). A granted [Temporary]
+                // comes from an active outside effect and still applies.
+                if (hasTemp && meta?.attachedTo) {
+                  continue;
+                }
                 const grantedTemp = (meta?.grantedKeywords ?? []).some(
                   (gk: { keyword: string }) => gk.keyword === "Temporary",
                 );

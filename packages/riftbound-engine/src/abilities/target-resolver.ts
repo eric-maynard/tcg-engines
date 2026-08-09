@@ -774,6 +774,29 @@ function isTokenCard(cardId: string, def: unknown): boolean {
   );
 }
 
+/**
+ * rule 341 / 316.8 — a card is "in a showdown" while it sits at a battlefield
+ * that has an active showdown on the showdown stack.
+ */
+function isAtShowdownBattlefield(cardId: string, ctx: TargetResolverContext): boolean {
+  const stack =
+    (
+      ctx.draft as {
+        interaction?: { showdownStack?: readonly { active?: boolean; battlefieldId?: string }[] };
+      }
+    ).interaction?.showdownStack ?? [];
+  const live = stack.filter((s) => s?.active !== false && s?.battlefieldId);
+  if (live.length === 0) {
+    return false;
+  }
+  const zone = ctx.zones.getCardZone?.(cardId as CoreCardId) as string | undefined;
+  if (typeof zone !== "string" || !zone.startsWith("battlefield-")) {
+    return false;
+  }
+  const bfId = zone.slice("battlefield-".length);
+  return live.some((s) => s.battlefieldId === bfId);
+}
+
 function matchesFilter(cardId: string, filter: TargetFilter, ctx: TargetResolverContext): boolean {
   const registry = getGlobalCardRegistry();
   const def = registry.get(cardId);
@@ -796,6 +819,11 @@ function matchesFilter(cardId: string, filter: TargetFilter, ctx: TargetResolver
       // rule 740.2.c: "in combat" = has a combat designation (attacker or defender)
       case "in-combat":
         return meta?.combatRole === "attacker" || meta?.combatRole === "defender";
+      // rule 341 / 316.8 — "in a showdown" = at a battlefield where a showdown
+      // is ongoing (combat or not). A unit in base, or at a quiet battlefield,
+      // is never in a showdown.
+      case "in-showdown":
+        return isAtShowdownBattlefield(cardId, ctx);
       case "mighty":
         return effectiveMight(def, meta) >= MIGHTY_THRESHOLD;
       case "damaged":
