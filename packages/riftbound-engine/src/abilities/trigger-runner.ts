@@ -1669,7 +1669,11 @@ export function fireTriggers(rawEvent: GameEvent, ctx: TriggerRunnerContext): nu
       zone: "floating",
     });
   }
-  const allMatches = findMatchingTriggers(event, boardCards, ctx.draft);
+  const allMatches = findMatchingTriggers(event, boardCards, ctx.draft, {
+    // rule 708 — subject-state filters ("a [Mighty] unit") read current Might.
+    getCardMeta: (id: string) =>
+      ctx.cards.getCardMeta(id as CoreCardId) as Record<string, unknown> | undefined,
+  });
 
   // Rule 724 (Legion) and other conditional triggers: filter matches by
   // Their ability.condition before executing. Conditions are evaluated
@@ -1755,6 +1759,10 @@ export function fireTriggers(rawEvent: GameEvent, ctx: TriggerRunnerContext): nu
         interaction: NonNullable<RiftboundGameState["interaction"]>;
       }).interaction = createInteractionState();
     }
+    // rule 383.3.d — everything appended by THIS pass triggered simultaneously
+    // (one event, or one event of a batch — see `orderBatchTriggersByTurnOrder`).
+    // The next chain-item id is a monotonic, state-free batch stamp.
+    const triggerBatch = `batch-${ctx.draft.interaction?.nextChainItemId ?? 0}`;
     for (const match of matches) {
       if (isImmediateAdd(match)) {
         continue;
@@ -1789,6 +1797,7 @@ export function fireTriggers(rawEvent: GameEvent, ctx: TriggerRunnerContext): nu
           status: "pending",
           // rule-id: ven-021-166 — carry the firing event so "moved to or from"
           // target qualifiers can resolve against its from/to zones.
+          triggerBatch,
           triggerEvent: match.event,
           triggered: true,
           type: "ability",

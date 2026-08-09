@@ -179,7 +179,7 @@ describe("Frozen Fortress (unl-212-219)", () => {
     expect(game.gameState.battlefields.fort?.controller).toBe(P1);
   });
 
-  test.failing("BUG: 190.6.a — the Fortress's CONTROLLER controls its trigger even during the other player's Beginning Phase; the engine hands the chain item to the turn player", async () => {
+  test("190.6.a — the Fortress's CONTROLLER controls its trigger even during the other player's Beginning Phase; the engine hands the chain item to the turn player", async () => {
     // Expected: with P1 controlling the Fortress, the item that appears at the start of P2's turn is
     // controlled by P1 (and vice versa: P2's Fortress pings on P1's turn under P2's control).
     // Actual: controller is always the turn player.

@@ -178,7 +178,7 @@ describe("The Candlelit Sanctum (ogn-291-298)", () => {
     expect(game.p1.deck().slice(0, 2)).toEqual(["c2", "c3"]);
   });
 
-  test.failing("BUG: 'When you conquer HERE' fires when the Sanctum's controller conquers a DIFFERENT battlefield (471.2.a — only the conquered battlefield's abilities trigger)", async () => {
+  test("'When you conquer HERE' does not fire when the Sanctum's controller conquers a DIFFERENT battlefield (471.2.a — only the conquered battlefield's abilities trigger)", async () => {
     // Expected: conquering plain bf2 scores 1 and opens no look prompt; P1's deck untouched.
     // Actual: the Sanctum (bf1, merely controlled by P1) puts its look-2 prompt up for the bf2 conquer.
     const game = await scenario()

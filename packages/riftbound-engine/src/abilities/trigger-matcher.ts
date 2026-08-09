@@ -208,6 +208,8 @@ const EVENT_MAP: Record<string, string> = {
   ready: "ready",
   // rule-id: ogn-235-298 — recycle-to-main-deck trigger event.
   recycle: "recycle",
+  // rule 446.2 (unl-214-219) — "returned to a player's hand" (a bounce).
+  "return-to-hand": "return-to-hand",
   // rule 468 — "When a player / an opponent scores" (Hold or Conquer).
   score: "score",
   "showdown-begin": "showdown-begin",
@@ -380,6 +382,46 @@ function restrictionSatisfied(
 }
 
 /**
+ * Optional board readers the matcher needs for subject-state filters
+ * (rule 708 — "Mighty" is the subject's CURRENT Might, statics included).
+ */
+export interface TriggerMatcherDeps {
+  readonly getCardMeta?: (cardId: string) => Record<string, unknown> | undefined;
+}
+
+/** rule 708 — a unit is Mighty while its CURRENT Might is 5 or more. */
+const MIGHTY_THRESHOLD = 5;
+
+/**
+ * rule 708 / 710 — current Might of a subject card: printed (or overridden)
+ * base plus buffs, this-turn modifiers, static bonuses and attached Equipment.
+ */
+function subjectCurrentMight(cardId: string, deps?: TriggerMatcherDeps): number {
+  const registry = getGlobalCardRegistry();
+  const def = registry.get(cardId) as { might?: number } | undefined;
+  const meta = deps?.getCardMeta?.(cardId) as
+    | {
+        baseMightOverride?: number;
+        buffed?: boolean;
+        extraBuffs?: number;
+        mightModifier?: number;
+        staticMightBonus?: number;
+        equippedWith?: readonly string[];
+      }
+    | undefined;
+  const base = meta?.baseMightOverride ?? def?.might ?? 0;
+  const buff = (meta?.buffed ? 1 : 0) + (meta?.extraBuffs ?? 0);
+  let equip = 0;
+  for (const equipId of meta?.equippedWith ?? []) {
+    equip += registry.getMightBonus(equipId);
+  }
+  return Math.max(
+    0,
+    base + buff + (meta?.mightModifier ?? 0) + (meta?.staticMightBonus ?? 0) + equip,
+  );
+}
+
+/**
  * Check if a trigger matches a game event.
  */
 function triggerMatchesEvent(
@@ -387,6 +429,7 @@ function triggerMatchesEvent(
   event: GameEvent,
   card: CardWithAbilities,
   state?: TriggerMatcherState,
+  deps?: TriggerMatcherDeps,
 ): boolean {
   // Event type must match. Compound trigger events ("choose-or-ready",
   // "play-self-or-play-gear") match if the fired event is any of the parts.
@@ -438,6 +481,20 @@ function triggerMatchesEvent(
   ) {
     return false;
   }
+  // rule 471.2.a (unl-214-219) — "When a unit HERE is returned to a player's
+  // hand" is the `return-to-hand` event narrowed by ORIGIN to this
+  // battlefield: a bounce from base or from another battlefield fires nothing.
+  if (event.type === "return-to-hand" && trigger.location === "here") {
+    const own =
+      card.zone === "battlefieldRow"
+        ? card.id
+        : card.zone.startsWith("battlefield-")
+          ? card.zone.slice("battlefield-".length)
+          : undefined;
+    if (own === undefined || (event as { from?: string }).from !== `battlefield-${own}`) {
+      return false;
+    }
+  }
   // rule-id: ogn-091-298 — a typed play trigger ("When you play a gear /
   // unit") is the `play-card` event narrowed by the played card's type. Spells
   // already get a dedicated `play-spell` event on resolution — don't double-fire.
@@ -483,6 +540,22 @@ function triggerMatchesEvent(
       if (eventBattlefield !== cardBattlefield) {
         return false;
       }
+    }
+  }
+
+  // rule 471.2.a (ogn-291-298) — a BATTLEFIELD card's own abilities only see
+  // events that happened at THAT battlefield, whatever the trigger's `on`
+  // subject says: its controller conquering/holding somewhere else is not
+  // "here". A trigger explicitly scoped elsewhere ("another battlefield") opts
+  // out by naming its own `location`.
+  if (
+    card.zone === "battlefieldRow" &&
+    !("cardId" in event) &&
+    (trigger.location === undefined || trigger.location === "here")
+  ) {
+    const where = (event as { battlefieldId?: string }).battlefieldId;
+    if (typeof where === "string" && where !== card.id) {
+      return false;
     }
   }
 
@@ -665,7 +738,14 @@ function triggerMatchesEvent(
       tag?: string;
       filter?: string | readonly string[];
       actor?: "controller" | "opponent" | "any";
+      batched?: boolean;
     };
+    // rule 423.1 (ogn-261-298) — "when you stun ONE OR MORE enemy units": one
+    // game action over several units is a single trigger, so every event after
+    // the first of that batch is ignored.
+    if (desc.batched === true && (("batchIndex" in event ? event.batchIndex : 0) ?? 0) > 0) {
+      return false;
+    }
     // rule-id: sfd-142-221 — "When you choose ME with a SPELL": `filter`
     // tokens `self` (subject must be this card) and `spell` (choose events
     // must be spell-sourced; unknown source → deny).
@@ -675,6 +755,32 @@ function triggerMatchesEvent(
     }
     if (filters.includes("spell") && event.type === "choose" && event.sourceType !== "spell") {
       return false;
+    }
+    // rule 708 (ogn-249-298) — "when you play a [Mighty] unit": Mighty is the
+    // subject's CURRENT Might (5+) as it is played, so a printed 4 entering
+    // under a +1 aura qualifies (710) and a plain 4 does not.
+    if (filters.includes("mighty")) {
+      const subjectId = "cardId" in event ? event.cardId : undefined;
+      if (
+        typeof subjectId !== "string" ||
+        subjectCurrentMight(subjectId, deps) < MIGHTY_THRESHOLD
+      ) {
+        return false;
+      }
+    }
+    // rule 383.4.d — a card-type-scoped subject ("a friendly UNIT"): read the
+    // type off the event when it names one, else off the subject's definition.
+    if (typeof desc.cardType === "string") {
+      const subjectId = "cardId" in event ? event.cardId : undefined;
+      const subjectType =
+        "cardType" in event && typeof event.cardType === "string"
+          ? event.cardType
+          : typeof subjectId === "string"
+            ? (getGlobalCardRegistry().get(subjectId) as { cardType?: string } | undefined)?.cardType
+            : undefined;
+      if (subjectType !== undefined && subjectType !== desc.cardType) {
+        return false;
+      }
     }
     // rule 383.4.b (sfd-144-221) — "When YOU choose a friendly unit" is
     // attributed to the chooser, exactly like the `on:"self"` form above: an
@@ -896,11 +1002,25 @@ export function abilityFunctionsFromTrash(ability: TriggerableAbility): boolean 
  * owner — an uncontrolled battlefield has no controller of its own.
  */
 function subjectPlayerForTrigger(
-  trigger: TriggerableAbility["trigger"],
+  ability: TriggerableAbility,
   event: GameEvent,
   card: CardWithAbilities,
 ): string {
+  const trigger = ability.trigger;
   if (trigger.on !== "any-player" || card.zone !== "battlefieldRow") {
+    return card.owner;
+  }
+  // rule 190.6.a — a turn-structure trigger ("At the start of EACH PLAYER's
+  // Beginning Phase") names a moment, not an owner: unless its effect is
+  // directed at that player ("… that player gains 1 point"), the battlefield's
+  // CONTROLLER controls it, on whosever turn it fires. An effect that acts on
+  // the board instead (deal 1 to each unit here) stays with the controller.
+  const phaseEvent =
+    trigger.event === "beginning-phase" ||
+    trigger.event === "start-of-turn" ||
+    trigger.event === "end-of-turn";
+  const target = (ability.effect as { target?: { type?: string } } | undefined)?.target;
+  if (phaseEvent && target !== undefined && target.type !== "player") {
     return card.owner;
   }
   const pid = "playerId" in event ? event.playerId : "owner" in event ? event.owner : undefined;
@@ -911,6 +1031,7 @@ export function findMatchingTriggers(
   rawEvent: GameEvent,
   boardCards: CardWithAbilities[],
   state?: TriggerMatcherState,
+  deps?: TriggerMatcherDeps,
 ): MatchedTrigger[] {
   const matches: MatchedTrigger[] = [];
 
@@ -966,11 +1087,11 @@ export function findMatchingTriggers(
         continue;
       }
 
-      if (triggerMatchesEvent(ability.trigger, event, card, state)) {
+      if (triggerMatchesEvent(ability.trigger, event, card, state, deps)) {
         matches.push({
           ability,
           cardId: card.id,
-          cardOwner: subjectPlayerForTrigger(ability.trigger, event, card),
+          cardOwner: subjectPlayerForTrigger(ability, event, card),
           event,
         });
       }
