@@ -477,6 +477,12 @@ export interface MoveEffect {
    * which of their units answers.
    */
   readonly chosenBy?: "opponent";
+  /**
+   * rule-id: ogn-259-298 (rule 355.4) — "to or from its base": the destination
+   * is chosen, but only across the mover's own base boundary. A unit in base
+   * may go to any battlefield; a unit at a battlefield may only go to base.
+   */
+  readonly toOrFromBase?: boolean;
 }
 
 /**

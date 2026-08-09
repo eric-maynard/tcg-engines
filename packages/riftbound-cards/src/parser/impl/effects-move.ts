@@ -255,6 +255,27 @@ export function parseMoveEffect(text: string): MoveEffect | undefined {
     return effect;
   }
 
+  // rule-id: ogn-259-298 (rule 355.4) — "Move a friendly unit TO OR FROM ITS
+  // BASE": the destination is a choice, but only across the unit's own base
+  // boundary. A unit at a battlefield may only go to base, never sideways to
+  // another battlefield.
+  const toOrFromBaseMatch = text.match(
+    /^Move (?:(another)\s+)?(?:a|an)\s+(friendly |enemy )?units?\s+to or from (?:its|their) base\.?$/i,
+  );
+  if (toOrFromBaseMatch) {
+    const target: { type: "unit"; controller?: "friendly" | "enemy"; excludeSelf?: boolean } = {
+      type: "unit",
+    };
+    const controllerStr = toOrFromBaseMatch[2]?.trim().toLowerCase();
+    if (controllerStr === "friendly" || controllerStr === "enemy") {
+      target.controller = controllerStr;
+    }
+    if (toOrFromBaseMatch[1]) {
+      target.excludeSelf = true;
+    }
+    return { target: target as AnyTarget, to: "choose", toOrFromBase: true, type: "move" } as MoveEffect;
+  }
+
   // Flexible fallback for sentences that have extra trailing clauses
   // E.g., "Move a unit you control to a battlefield you control..."
   const flexMoveMatch = text.match(

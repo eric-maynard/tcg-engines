@@ -26,6 +26,7 @@ interface DestinationShape {
   readonly from?: unknown;
   readonly deferredMoverId?: string;
   readonly extraDestinations?: readonly string[];
+  readonly toOrFromBase?: boolean;
 }
 
 /**
@@ -86,6 +87,14 @@ export function moveDestinationOptions(
     // resolution-time prompt: sfd-200-221.)
     if (!onBoard) {
       return undefined;
+    }
+    // rule-id: ogn-259-298 (rule 355.4) — "to or FROM ITS BASE" only crosses
+    // the mover's own base boundary: a unit at a battlefield may go to base and
+    // nowhere else, never sideways to another battlefield.
+    if (e.toOrFromBase === true) {
+      return currentZone === "base"
+        ? battlefields.map(([bfId]) => `battlefield-${bfId}`)
+        : ["base"];
     }
     return ["base", ...battlefields.map(([bfId]) => `battlefield-${bfId}`)].filter((z) => z !== currentZone);
   }
