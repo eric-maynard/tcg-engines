@@ -1,7 +1,7 @@
 // Effect handler: "reveal"
 import type { CardId as CoreCardId, PlayerId as CorePlayerId, ZoneId as CoreZoneId } from "@tcg/core";
-import { addToChain, createInteractionState } from "../../chain";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
+import { beginPlay, type PlayIO } from "../../game-definition/moves/play/play-pipeline";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import { findAllReplacements, type ReplacementContext } from "../replacement-effects";
 import { type EffectHelpers, recordPublicReveal } from "./_helpers";
@@ -207,18 +207,19 @@ export function handle_reveal(effect: ExecutableEffect, ctx: EffectContext, _h: 
         cardId: hit as CoreCardId,
         targetZoneId: "banishment" as CoreZoneId,
       });
-      const owner = ctx.cards.getCardOwner(hit as CoreCardId) ?? actor;
-      ctx.draft.interaction = addToChain(
-        ctx.draft.interaction ?? createInteractionState(),
-        {
-          cardId: hit,
-          controller: owner,
-          effect: { target: hit, to: "choose", type: "move" },
-          triggered: true,
-          type: "ability",
-        },
-        Object.keys(ctx.draft.players),
-      );
+      const owner = (ctx.cards.getCardOwner(hit as CoreCardId) as string | undefined) ?? actor;
+      // rule 419.3 / 355.2 — "banish it. Play it, ignoring its cost" is a real
+      // play, so it runs through the ONE play pipeline: the card's own play
+      // permissions ("You may play me to an occupied enemy battlefield",
+      // ogn-161-298) are offered as destinations and its play triggers fire.
+      beginPlay(ctx as unknown as PlayIO, {
+        cardId: hit,
+        costMode: { kind: "ignore-all" },
+        location: "prompt",
+        playerId: owner,
+        sourceCardId: ctx.sourceCardId,
+        via: "effect",
+      });
     }
     for (const cardId of rest) {
       ctx.zones.moveCard({

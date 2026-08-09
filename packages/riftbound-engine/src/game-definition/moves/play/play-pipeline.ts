@@ -51,9 +51,15 @@ import { executeResolvedItem } from "../chain/resolve";
 import {
   type CostExtras,
   type OptionalPlayCost,
+  battlefieldIsAttackedBy,
+  battlefieldIsOccupiedEnemy,
+  battlefieldIsOpen,
   battlefieldRedirectPowerFor,
   boardEntersReadyGrantApplies,
   canPayResourceCost,
+  canPlayToAttackedBattlefield,
+  canPlayToOccupiedEnemyBattlefield,
+  canPlayToOpenBattlefield,
   computePlayResourceCost,
   consumeEntersReadyReplacement,
   createMetaAccessor,
@@ -844,7 +850,9 @@ function locationOptionsFor(io: PlayIO, spec: EffectPlaySpec): string[] {
   }
   if (loc === "prompt") {
     return [
-      ...playDestinationOptions(draft, spec.playerId, spec.cardId),
+      ...playDestinationOptions(draft, spec.playerId, spec.cardId, {
+        extra: selfGrantedPlayLocations(io, spec),
+      }),
       ...affordableRedirectDestinations(io, spec),
     ];
   }
@@ -855,9 +863,47 @@ function locationOptionsFor(io: PlayIO, spec: EffectPlaySpec): string[] {
     return playDestinationOptions(draft, spec.playerId, spec.cardId, { only: loc.only });
   }
   return [
-    ...playDestinationOptions(draft, spec.playerId, spec.cardId, { extra: loc.extra }),
+    ...playDestinationOptions(draft, spec.playerId, spec.cardId, {
+      extra: [...loc.extra, ...selfGrantedPlayLocations(io, spec)],
+    }),
     ...affordableRedirectDestinations(io, spec),
   ];
+}
+
+/**
+ * rule 355.2.b (ogn-161-298 Deadbloom Predator) — "You may play me to an
+ * occupied enemy battlefield" is a property of the CARD, not of the hand play,
+ * so an effect that plays it (Dazzling Aurora's end-of-turn dig) offers the
+ * same extra locations the `playUnit` enumerator does. Gear stays base-only
+ * (rule 149.2).
+ */
+function selfGrantedPlayLocations(io: PlayIO, spec: EffectPlaySpec): string[] {
+  const { draft, zones } = io;
+  // Occupancy needs a real zone reader; a caller that supplies none (unit-test
+  // stubs) simply gets the default destinations.
+  if (
+    getGlobalCardRegistry().getCardType(spec.cardId) !== "unit" ||
+    typeof zones?.getCardsInZone !== "function"
+  ) {
+    return [];
+  }
+  const openOk = canPlayToOpenBattlefield(draft, zones, spec.cardId, spec.playerId);
+  const enemyOk = canPlayToOccupiedEnemyBattlefield(spec.cardId);
+  const attackedOk = canPlayToAttackedBattlefield(spec.cardId);
+  if (!openOk && !enemyOk && !attackedOk) {
+    return [];
+  }
+  const out: string[] = [];
+  for (const bfId of Object.keys(draft.battlefields ?? {})) {
+    if (
+      (openOk && battlefieldIsOpen(draft, zones, bfId)) ||
+      (enemyOk && battlefieldIsOccupiedEnemy(draft, zones, bfId, spec.playerId)) ||
+      (attackedOk && battlefieldIsAttackedBy(draft, bfId, spec.playerId))
+    ) {
+      out.push(`battlefield-${bfId}`);
+    }
+  }
+  return out;
 }
 
 /**
