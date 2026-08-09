@@ -25,6 +25,64 @@ function decodeCardText(card: Card): Card {
 }
 
 /**
+ * rule 383.2.a.1 — "When X, if COND, EFFECT" is an INTERVENING IF: the clause
+ * sits immediately after the trigger condition, so it is part of the TRIGGER —
+ * while it is false the ability does not trigger at all. It therefore belongs
+ * on the ability's `condition` (answered before the item is created), never on
+ * a resolution-time `conditional` effect, which would put the item on the Chain
+ * and open a priority window that should never exist.
+ *
+ * Hand-authored and scraped `abilities` (the VEN JSON set) still carry the
+ * resolution-only shape for some cards, so normalise them here against the
+ * printed text rather than card by card. A trailing "…, EFFECT if COND" has no
+ * intervening clause (383.2.a.1's Loose Cannon counter-example) and is left
+ * alone; so is an "If X, A. Otherwise, B." body, which keeps its `else`.
+ */
+const INTERVENING_IF_LINE = /^(?:When|Whenever|At)\b[^,]*,\s*if\b/i;
+
+function hasInterveningIfLine(rulesText: string | undefined): boolean {
+  return (rulesText ?? "")
+    .split("\n")
+    .some((line) => INTERVENING_IF_LINE.test(line.trim()));
+}
+
+function hoistInterveningIfConditions<T>(
+  abilities: readonly T[],
+  rulesText: string | undefined,
+): readonly T[] {
+  if (!hasInterveningIfLine(rulesText)) {
+    return abilities;
+  }
+  let changed = false;
+  const out = abilities.map((ability) => {
+    const a = ability as {
+      type?: string;
+      condition?: unknown;
+      effect?: { type?: string; condition?: unknown; then?: unknown; else?: unknown };
+    };
+    if (a.type !== "triggered" || a.condition !== undefined) {
+      return ability;
+    }
+    const effect = a.effect;
+    if (
+      effect?.type !== "conditional" ||
+      effect.condition === undefined ||
+      effect.then === undefined ||
+      effect.else !== undefined
+    ) {
+      return ability;
+    }
+    changed = true;
+    return {
+      ...(ability as object),
+      condition: effect.condition,
+      effect: effect.then,
+    } as T;
+  });
+  return changed ? out : abilities;
+}
+
+/**
  * Enrich a single card with parsed abilities.
  * If the card already has abilities or has no rulesText, returns as-is.
  *
@@ -50,9 +108,13 @@ function enrichCard(raw: Card): Card {
       card.abilities as Parameters<typeof expandHuntKeywords>[0],
       { skipKeywords: ["Vision"] },
     );
-    return expanded.length === card.abilities.length
+    const hoisted = hoistInterveningIfConditions(
+      expanded as readonly unknown[],
+      card.rulesText,
+    );
+    return expanded.length === card.abilities.length && hoisted === expanded
       ? card
-      : ({ ...card, abilities: expanded } as Card);
+      : ({ ...card, abilities: hoisted } as Card);
   }
   if (!card.rulesText || card.rulesText.trim().length === 0) {
     return card;
@@ -74,9 +136,12 @@ function enrichCard(raw: Card): Card {
   }
 
   // ParseAbilities returns Ability[] directly
-  const abilities = unwrapSpellWrappedAbilities(
-    mergeRepeatedSpellAbilities(result.abilities),
-    card.cardType,
+  const abilities = hoistInterveningIfConditions(
+    unwrapSpellWrappedAbilities(
+      mergeRepeatedSpellAbilities(result.abilities),
+      card.cardType,
+    ),
+    card.rulesText,
   );
 
   // Return a new card object with abilities attached

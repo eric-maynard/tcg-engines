@@ -19,6 +19,7 @@ import type { RiftboundCardMeta, RiftboundGameState } from "../types";
 import type { DelayedTrigger } from "../types/game-state";
 import type { EffectContext, ExecutableEffect } from "./effect-executor";
 import { executeEffect } from "./effect-executor";
+import { evaluateEffectCondition } from "./effects/_helpers";
 import type { GameEvent } from "./game-events";
 import { evaluateLegionCondition } from "./legion-conditions";
 import { recalculateStaticEffects } from "./static-abilities";
@@ -584,6 +585,20 @@ export function evaluateTriggerCondition(
     ).length;
     const amount = (c as { amount?: number }).amount ?? 0;
     return c.type === "runes-at-most" ? runes <= amount : runes >= amount;
+  }
+  if (c.type === "count" && ctx) {
+    // rule 383.2.a.1 — a counting intervening-if ("if you control 4 or fewer
+    // runes") gates the trigger, so it must answer here and not only when the
+    // item resolves. Delegate to the ONE counting implementation the effect
+    // conditions use so both readings agree.
+    return evaluateEffectCondition(c as Record<string, unknown>, {
+      cards: ctx.cards,
+      counters: ctx.counters,
+      draft: ctx.draft,
+      playerId: controllerId,
+      sourceCardId,
+      zones: ctx.zones,
+    } as unknown as EffectContext);
   }
   if (c.type === "fewer-runes-than-opponent" && ctx) {
     // rule-id: ven-005-166 (Forsaken Baccai) — compare rune pool sizes; the
