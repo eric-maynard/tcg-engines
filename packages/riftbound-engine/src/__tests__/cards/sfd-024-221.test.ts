@@ -35,6 +35,7 @@ const DORANS_BLADE = "sfd-095-221"; // Equipment, 2 energy, +2, Equip [body]
 const SKYFALL = "sfd-030-221"; // Equipment, 3 energy, +2
 const LONG_SWORD = "sfd-022-221"; // Equipment, 2 energy + [fury], +2, Quick-Draw
 const HEART = "sfd-052-221"; // Heart of Dark Ice — a NON-equipment gear
+const HAND_HAMMER = "ven-027-166"; // VEN gear with printed [Equip], 2 energy, +1
 
 function attack(foeMight = 5) {
   return scenario()
@@ -176,6 +177,20 @@ describe("Rell, Magnetic (sfd-024-221)", () => {
     expect(game.state("sword").attachedTo).toBe("rell");
     expect(game.state("rell").might).toBe(6);
     expect(game.zoneOf("foe")).toBe("trash");
+  });
+
+  test("rule 208.3 / 476.1 — a VEN gear with printed [Equip] IS Equipment: Hand Hammer (typed 'gear', 2 energy) is an eligible choice", async () => {
+    const game = await attack(3).hand(P1, HAND_HAMMER, "hammer").hand(P1, DORANS_BLADE, "blade").build();
+    await attackToPrompt(game);
+    await game.p1.yes();
+    await game.settle();
+    const d = game.decision();
+    expect(d?.kind).toBe("pick");
+    expect(d?.kind === "pick" ? d.options.map((o) => o.card ?? o.key) : []).toContain("hammer");
+    await finishChoosing(game, "hammer");
+    expect(game.state("hammer").attachedTo).toBe("rell");
+    expect(game.state("rell").attachments).toContain("hammer");
+    expect(game.p1.resources()).toEqual({ energy: 0, power: {} });
   });
 
   test("negative space: with only a non-Equipment gear (and plenty of resources) in hand, nothing is played or attached whatever P1 answers", async () => {
