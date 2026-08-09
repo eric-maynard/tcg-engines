@@ -923,7 +923,14 @@ function matchesFilter(cardId: string, filter: TargetFilter, ctx: TargetResolver
     return ctx.referenceMight === undefined || effectiveMight(def, meta) < ctx.referenceMight;
   }
   if ("might" in filter) {
-    return matchesComparison(effectiveMight(def, meta), filter.might);
+    // rule 719 / 807.1.c (ogn-169-298 Gust) — a "with N [Might] or less"
+    // requirement reads the unit's CURRENT Might, which includes the
+    // combat-role bonus: an attacking Assault 3 unit is out of range from the
+    // moment it is designated Attacker, before anyone gets a spell window.
+    return matchesComparison(
+      effectiveMight(def, meta) + combatRoleMightBonus(cardId, meta),
+      filter.might,
+    );
   }
   // rule 206 / rule-id: ven-080-166 — "with Energy cost no more than my Might":
   // the ceiling is the SOURCE's Might as it reads when the ability resolves,

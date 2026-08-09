@@ -758,7 +758,14 @@ export function legacyParamsFromSelection<P extends LegacyCostParams>(cardId: st
       case ADDITIONAL_COST_IDS.exhaust: {
         out.paidAdditionalCost = true;
         if (objects[0] && getGlobalCardRegistry().getCardType(cardId) === "spell") {
-          out.targets = [objects[0], ...(params.targets ?? [])];
+          // rule 355.6 / 352.10.c (ogn-048-298) — the exhausted permanent is a
+          // COST object, not a target; it rides as `targets[0]` only so the
+          // reducer can find and strip it. The enumerated variant already
+          // carries it there, so never list it twice: a duplicate survives the
+          // strip and is then treated as a chosen spell target (firing
+          // Targeting Effects like The Dreaming Tree).
+          const rest = params.targets ?? [];
+          out.targets = rest[0] === objects[0] ? [...rest] : [objects[0], ...rest];
         }
         break;
       }
