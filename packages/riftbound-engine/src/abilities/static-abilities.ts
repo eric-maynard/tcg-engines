@@ -1022,7 +1022,17 @@ function applyStaticEffect(
     // that already prints the keyword gets nothing, so values never sum.
     const onlyIfMissing = effect.ifMissing === true;
     const keywordRegistry = onlyIfMissing ? getGlobalCardRegistry() : undefined;
-    for (const targetId of targetIds) {
+    // rule 137.3 / 718 (sfd-183-221) — an Equipment is not a unit: a keyword an
+    // aura gives to an ATTACHED Equipment ("Your Equipment each give
+    // [Assault]") functions on its equipped unit, and each Equipment grants its
+    // own instance, so stackable keywords sum (807.2).
+    const recipients = targetIds.map((id) => {
+      const attachedTo = (
+        ctx.cards.getCardMeta(id as CoreCardId) as { attachedTo?: string } | undefined
+      )?.attachedTo;
+      return attachedTo ?? id;
+    });
+    for (const targetId of recipients) {
       if (keywordRegistry?.hasKeyword(targetId, keyword)) {
         continue;
       }
