@@ -399,6 +399,14 @@ export interface BattlefieldState {
   combatCleanupSuspended?: boolean;
 
   /**
+   * rule 466.4 — the combat result (466.3) has been determined and the
+   * "win a combat" triggers it produced are on the chain. The Resolution Step
+   * is parked until they resolve; only then does 466.5 Establish Control (and
+   * its Conquer) run. Stops the re-run from reading the result twice.
+   */
+  combatWinTriggersFired?: boolean;
+
+  /**
    * rule 465.2.c.3 — the attacking player's chosen assignment of its combat
    * damage onto the defenders here, recorded by the `combat-damage` prompt and
    * consumed by the next `resolveFullCombat` pass.

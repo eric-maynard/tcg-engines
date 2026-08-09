@@ -490,10 +490,14 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
                 (registry.get(id as string)?.might ?? 0) > 0),
           ).length === 0;
     }
+    // rule 466.4 — the result was read on an earlier pass and its "win a
+    // combat" triggers have now resolved; resume at 466.5 without re-reading it.
+    const winTriggersAlreadyFired = battlefield.combatWinTriggersFired === true;
     battlefield.combatDamageDone = undefined;
     battlefield.combatExcessDamage = undefined;
     battlefield.combatNoDefendersAtCleanup = undefined;
     battlefield.combatCleanupSuspended = undefined;
+    battlefield.combatWinTriggersFired = undefined;
     if (!damageAlreadyDone && attackerUnits.length > 0 && defenderUnits.length > 0) {
     // rule 465.2.c.3 / 465.2.c.7 — each side's player chooses which opposing
     // unit is made lethal first whenever more than one legal assignment
@@ -772,7 +776,7 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
     // rule 466.3.a — the units still here on the side that carried the combat
     // won it, so their "When I win a combat" triggers fire. A tie (740.3.a)
     // has no winner, so nothing fires.
-    if (winner !== "tie") {
+    if (winner !== "tie" && !winTriggersAlreadyFired) {
       // rule 466.3.a — it is the PLAYER who wins the combat, so the batch index
       // lets "when YOU win a combat" fire once however many units survived.
       const winningUnits = winner === "attacker" ? attackersLeft : defendersLeft;
@@ -789,6 +793,19 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
           },
           { cards, counters, draft, zones },
         );
+      }
+      // rule 466.4: the chain items the combat RESULT produced resolve before
+      // rule 466.5 Establish Control — so a "when I win a combat" point is
+      // scored before the Conquer point is even attempted (and the Conquer
+      // then meets the Final-Point check, 471.1.b.1, at the higher total).
+      // Park the Resolution Step exactly like the 466.2 deferral above; this
+      // move re-runs once the chain empties.
+      if (draft.interaction?.chain?.active === true) {
+        battlefield.combatDamageDone = true;
+        battlefield.combatExcessDamage = excessDamage;
+        battlefield.combatNoDefendersAtCleanup = noDefendersAtCleanup;
+        battlefield.combatWinTriggersFired = true;
+        return;
       }
     }
 

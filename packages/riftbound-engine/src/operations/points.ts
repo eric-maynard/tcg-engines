@@ -241,6 +241,17 @@ export function checkVictory(
   if (!opts.immediate && isResolvingChainItem()) {
     return null;
   }
+  // rule 466.4 / 466.5 — a combat Resolution Step parked on the chain items its
+  // result produced has not Established Control yet. No Cleanup interrupts a
+  // step in progress (320 / 321), so the victory check waits for 466.5 to run:
+  // a "when I win a combat" point must not end the game before the Conquer that
+  // follows it is even attempted.
+  if (
+    !opts.immediate &&
+    Object.values(draft.battlefields ?? {}).some((bf) => bf?.combatWinTriggersFired === true)
+  ) {
+    return null;
+  }
   const winner = findWinner(draft, opts.io);
   if (winner) {
     (draft as { status: string }).status = "finished";
