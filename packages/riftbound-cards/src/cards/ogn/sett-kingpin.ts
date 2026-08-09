@@ -7,6 +7,10 @@ import { createCardId } from "@tcg/riftbound-types/cards";
  * battlefield": the parser only emits a flat +1 with a `per` phrase, so the
  * count is spelled out as a target descriptor. `location: "battlefield"`
  * scopes it to Sett's own battlefield and yields nothing while he is in base.
+ *
+ * rule 740.1.a / 740.2.a — "friendly" only means "shares my controller", so a
+ * buffed Sett counts himself; the rules say "other friendly units" when the
+ * source is meant to be excluded, and this line does not.
  */
 const abilities: Ability[] = [
   { keyword: "Tank", type: "keyword" },
@@ -15,7 +19,6 @@ const abilities: Ability[] = [
       amount: {
         count: {
           controller: "friendly",
-          excludeSelf: true,
           filter: "buffed",
           location: "battlefield",
           type: "unit",

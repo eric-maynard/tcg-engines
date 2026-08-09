@@ -64,11 +64,22 @@ describe("Ancient Henge (sfd-117-221)", () => {
 
   test("[Exhaust] + Add: activation exhausts the Henge, creates no chain item and P1 is straight back in an open main phase (429.2)", async () => {
     const game = await scenario().resources(P1, { energy: 2 }).gear(P1, CARD, "henge").build();
-    await game.p1.activate("henge", 0);
+    await activateX(game.p1, "henge", 1);
     expect(game.state("henge").isExhausted).toBe(true);
     expect(game.chain()).toHaveLength(0);
     expect(game.decision()).toMatchObject({ context: "main", kind: "action", seat: P1 });
     expect(game.p1.can("activate", "henge")).toBe(false);
+  });
+
+  test("the activation is offered once per legal X (0..Energy held) so a client can pick the amount (444.2)", async () => {
+    // rule 444.2 / 135.2.e.5.a — X is chosen when the ability is activated. Enumerating a single
+    // variant with no xAmount leaves every surface stuck on the silent X = 0.
+    const game = await scenario().resources(P1, { energy: 3 }).gear(P1, CARD, "henge").build();
+    const opt = game.p1.option("activate", "henge");
+    const offered = (opt?.variants ?? [])
+      .map((v) => v.params.xAmount)
+      .filter((x): x is number => typeof x === "number");
+    expect([...new Set(offered)].sort((a, b) => a - b)).toEqual([0, 1, 2, 3]);
   });
 
   test("pay X Energy → Add exactly X [rainbow] (X=3 of 3: energy 3→0, rainbow 0→3)", async () => {
@@ -123,7 +134,7 @@ describe("Ancient Henge (sfd-117-221)", () => {
   test("whatever the amount, the produced [rainbow] does unlock a [body] pip right away (universal power)", async () => {
     const game = await scenario().resources(P1, { energy: 5 }).gear(P1, CARD, "henge").hand(P1, DAUNTLESS_VANGUARD, "dv").build();
     expect(game.p1.can("play", "dv")).toBe(false);
-    await game.p1.activate("henge", 0);
+    await activateX(game.p1, "henge", 1);
     expect(game.p1.power("rainbow")).toBeGreaterThanOrEqual(1);
     expect(game.p1.can("play", "dv")).toBe(true);
     await game.p1.play("dv", { to: "base" });
@@ -149,7 +160,7 @@ describe("Ancient Henge (sfd-117-221)", () => {
     expect(game.actingSeat()).toBe(P1);
     expect((game.decision() as ActionDecision).context).toBe("chain");
     expect(game.p1.can("activate", "henge")).toBe(true);
-    await game.p1.activate("henge", 0);
+    await activateX(game.p1, "henge", 1);
     expect(game.state("henge").isExhausted).toBe(true);
     expect(game.chain().map((c) => c.cardId)).toEqual(["cleave"]);
     expect(game.actingSeat()).toBe(P1);
@@ -167,7 +178,7 @@ describe("Ancient Henge (sfd-117-221)", () => {
     await game.p1.move("runner", "bf1");
     expect((game.decision() as ActionDecision).context).toBe("showdown");
     expect(game.p1.can("activate", "henge")).toBe(true);
-    await game.p1.activate("henge", 0);
+    await activateX(game.p1, "henge", 1);
     expect(game.chain()).toHaveLength(0);
     expect((game.decision() as ActionDecision).context).toBe("showdown");
     expect(game.actingSeat()).toBe(P1); // Focus did not pass (429.2.a)
@@ -175,7 +186,7 @@ describe("Ancient Henge (sfd-117-221)", () => {
 
   test("unspent [rainbow] is lost in the Expiration Step (317.2.d); the Henge stays exhausted on P2's turn and readies at your Awaken", async () => {
     const game = await scenario().resources(P1, { energy: 2 }).gear(P1, CARD, "henge").build();
-    await game.p1.activate("henge", 0);
+    await activateX(game.p1, "henge", 1);
     expect(game.p1.power("rainbow")).toBeGreaterThanOrEqual(1);
     await game.advanceTurn();
     expect(game.p1.resources()).toEqual({ energy: 0, power: {} });

@@ -70,7 +70,7 @@ describe("Hextech Anomaly (sfd-083-221)", () => {
 
   test("[Exhaust] + Add: activating exhausts it, opens no chain item and leaves P1 in an open main phase (429.2)", async () => {
     const game = await scenario().resources(P1, { power: { mind: 2 } }).gear(P1, CARD, "anom").build();
-    await game.p1.activate("anom", 0);
+    await activateX(game.p1, "anom", 1);
     expect(game.state("anom").isExhausted).toBe(true);
     expect(game.chain()).toHaveLength(0);
     expect(game.decision()).toMatchObject({ context: "main", kind: "action", seat: P1 });
@@ -130,7 +130,7 @@ describe("Hextech Anomaly (sfd-083-221)", () => {
     expect(game.actingSeat()).toBe(P1);
     expect((game.decision() as ActionDecision).context).toBe("chain");
     expect(game.p1.can("activate", "anom")).toBe(true);
-    await game.p1.activate("anom", 0);
+    await activateX(game.p1, "anom", 1);
     expect(game.state("anom").isExhausted).toBe(true);
     expect(game.chain().map((c) => c.cardId)).toEqual(["cleave"]);
     expect(game.actingSeat()).toBe(P1);

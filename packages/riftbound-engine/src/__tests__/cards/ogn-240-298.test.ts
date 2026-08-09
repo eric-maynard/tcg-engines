@@ -61,6 +61,22 @@ describe("Sett, Kingpin (ogn-240-298)", () => {
     expect(game.state("sett").might).toBe(7);
   });
 
+  test("a buffed Sett counts HIMSELF — 'friendly' is not 'other friendly' (740.1.a/740.2.a)", async () => {
+    // rule 740.1.a: friendly = shares my controller, so the source qualifies; rule 740.2.a shows
+    // the rules spell out "other friendly units" when the source is excluded — this line does not.
+    const game = await scenario()
+      .battlefield("bf1", { controller: P1 })
+      .unit(P1, "bf1", CARD, "sett", { buffed: true })
+      .unit(P1, "bf1", { might: 2 }, "ally", { buffed: true })
+      .build();
+    expect(game.state("sett").might).toBe(8); // 5 + his own buff + (buffed Sett + buffed ally)
+    const alone = await scenario()
+      .battlefield("bf1", { controller: P1 })
+      .unit(P1, "bf1", CARD, "settAlone", { buffed: true })
+      .build();
+    expect(alone.state("settAlone").might).toBe(7); // 5 + his own buff + himself
+  });
+
   test("no bonus in base, from unbuffed allies, buffed units elsewhere, or buffed ENEMY units — he stays 5", async () => {
     // Expected: only buffed FRIENDLY units AT HIS battlefield count → 5 in every case here. Actual:
     // once statics are recalculated (any play does it) the engine adds an unconditional +1 → 6.

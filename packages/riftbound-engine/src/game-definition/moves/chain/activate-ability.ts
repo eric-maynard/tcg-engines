@@ -295,6 +295,9 @@ function eligibleRecycleCards(
 /** Cap the recycle fan-out so a deep trash can't explode the move list. */
 const MAX_RECYCLE_VARIANTS = 60;
 
+/** Cap the "pay any amount of X" fan-out so a huge pool can't explode the move list. */
+const MAX_X_VARIANTS = 20;
+
 /**
  * rule 416.5 — every N-card selection the controller may make to pay a
  * "Recycle N from your trash" cost, oldest-first so the first variant matches
@@ -1751,6 +1754,7 @@ export const activateAbility: Defs["activateAbility"] = {
       sacrificeId?: string;
       discardId?: string;
       targets?: string[];
+      xAmount?: number;
     }[] = [];
 
     // Collect cards on base, battlefields, legendZone, battlefieldRow, and championZone
@@ -2197,6 +2201,7 @@ export const activateAbility: Defs["activateAbility"] = {
           targets?: string[];
           recycleIds?: string[];
           costOptionIndex?: number;
+          xAmount?: number;
         } = {
           abilityIndex: entry.abilityIndex,
           cardId: entry.hostCardId,
@@ -2250,6 +2255,33 @@ export const activateAbility: Defs["activateAbility"] = {
         if (costOptionIndices) {
           bases = bases.flatMap((base) =>
             costOptionIndices.map((costOptionIndex) => ({ ...base, costOptionIndex })),
+          );
+        }
+        // rule 444.2 / 135.2.e.5.a (rule-id: sfd-117-221) — "Pay any amount of
+        // Energy/[rainbow] to [Add] that much": X is the controller's choice at
+        // activation, so offer one activation per legal amount. Without these
+        // variants the only reachable activation is the silent X = 0.
+        const xSpec = (effectiveCost as { x?: { resource?: string } } | undefined)?.x;
+        if (xSpec) {
+          const pool = state.runePools[playerId];
+          const alreadySpent =
+            xSpec.resource === "energy"
+              ? ((effectiveCost?.energy as number) ?? 0)
+              : ((effectiveCost?.power as string[] | undefined)?.length ?? 0);
+          const available =
+            xSpec.resource === "energy"
+              ? (pool?.energy ?? 0) +
+                readyRuneEnergy(
+                  context.zones,
+                  context.counters as {
+                    getFlag: (c: CoreCardId, f: string) => boolean | undefined;
+                  },
+                  playerId,
+                )
+              : Object.values(pool?.power ?? {}).reduce<number>((a, b) => a + (b ?? 0), 0);
+          const maxX = Math.max(0, Math.min(available - alreadySpent, MAX_X_VARIANTS));
+          bases = bases.flatMap((base) =>
+            Array.from({ length: maxX + 1 }, (_, xAmount) => ({ ...base, xAmount })),
           );
         }
         if (discardOptions) {
