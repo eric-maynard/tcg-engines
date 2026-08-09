@@ -298,6 +298,34 @@ export function optInIsPerformable(
         return false;
       }
     }
+    // rule 355.8 / 563.2.c (rule-id: ogn-199-298 Tideturner) — "you may choose a
+    // unit you control at ANOTHER location" and swap: the partner pool lives in
+    // `partner`, not `target`, and excludes the source and anything sharing its
+    // location. With every friendly unit at the source's own location there is no
+    // legal partner, so the controller is never asked.
+    if (leadEffect?.type === "move" && (leadEffect as { swap?: unknown }).swap === true) {
+      const swapCtx = buildEffectContext(draft, resolved.controller, resolved.cardId, context);
+      const selfZone = context.zones.getCardZone(resolved.cardId as CoreCardId) as
+        | string
+        | undefined;
+      if (selfZone !== undefined) {
+        const partnerDescriptor = ((leadEffect as { partner?: TargetDescriptor }).partner ?? {
+          controller: "friendly",
+          type: "unit",
+        }) as TargetDescriptor;
+        const partners = resolveTarget({ ...partnerDescriptor, quantity: "all" }, {
+          ...swapCtx,
+          choosing: true,
+        } as Parameters<typeof resolveTarget>[1]).filter(
+          (id) =>
+            id !== resolved.cardId &&
+            context.zones.getCardZone(id as CoreCardId) !== (selfZone as never),
+        );
+        if (partners.length === 0) {
+          return false;
+        }
+      }
+    }
     // rule 355.8 — an ability that must choose a Game Object with no legal
     // candidate does nothing, so a "you may" version offers no prompt either.
     // rule-id: unl-205-219 (Abandoned Hall) — "they may give a unit they

@@ -187,6 +187,47 @@ describe("Void Hatchling (sfd-018-221)", () => {
     expect(game.zoneOf("p2top")).toBe("mainDeck");
   });
 
+  test("declining the optional recycle does NOT cancel the reveal it replaced — Void Rush still reveals the top 2 (rule 359.3.e / 424)", async () => {
+    // "You may recycle it. THEN reveal those cards." — declining only skips the recycle;
+    // the replaced reveal-and-pick must still happen, with the untouched top two cards.
+    const VOID_RUSH = "sfd-188-221";
+    const game = await scenario()
+      .resources(P1, { energy: 9, power: { rainbow: 1 } })
+      .unit(P1, "base", CARD, "vh")
+      .hand(P1, VOID_RUSH, "vr")
+      .deck(P1, [UNIT, UNIT, UNIT], ["top", "second", "third"])
+      .build();
+    await game.p1.cast("vr");
+    let sawLook = false;
+    let offered: (string | undefined)[] = [];
+    for (let i = 0; i < 12; i++) {
+      const d = game.decision();
+      if (!d || (d.kind === "action" && d.context === "main")) {
+        break;
+      }
+      if (d.kind === "action") {
+        await game.seat(d.seat).pass();
+      } else if (d.kind === "yes-no" && d.seat === P1) {
+        sawLook = true;
+        await game.p1.no();
+      } else if (d.kind === "pick" && d.seat === P1) {
+        if (d.semantics === "from-revealed" && d.options.length >= 2) {
+          offered = d.options.map((o) => o.card);
+          await game.p1.decline();
+        } else {
+          sawLook = true;
+          await game.p1.decline();
+        }
+      } else {
+        break;
+      }
+    }
+    expect(sawLook).toBe(true);
+    expect(offered).toEqual(["top", "second"]);
+    expect(game.p1.hand().sort()).toEqual(["second", "top"]);
+    expect(game.p1.deck()[0]).toBe("third");
+  });
+
   test("one-card deck — look at it, recycle it (it is still the top card), then reveal it: Smith draws the lone gear, no burn out", async () => {
     const game = await scenario()
       .fillDecks(false)

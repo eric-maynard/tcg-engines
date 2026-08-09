@@ -53,6 +53,23 @@ describe("Tideturner (ogn-199-298)", () => {
     expect(game.locationOf("near")).toBe("base");
   });
 
+  test("no legal partner (every friendly unit shares my location) — rule 355.8: the 'you may' is never offered at all", async () => {
+    const game = await scenario()
+      .resources(P1, { energy: 2 })
+      .battlefield("bf1", { controller: P1 })
+      .unit(P1, "base", { might: 3, name: "Near1" }, "n1")
+      .unit(P1, "base", { might: 2, name: "Near2" }, "n2")
+      .unit(P2, "bf1", { might: 2, name: "Foe" }, "foe")
+      .hand(P1, CARD, "tt")
+      .build();
+    await game.p1.play("tt", { to: "base" });
+    await game.settle();
+    expect(game.decision()?.kind).toBe("action");
+    expect(game.locationOf("tt")).toBe("base");
+    expect(game.locationOf("n1")).toBe("base");
+    expect(game.locationOf("n2")).toBe("base");
+  });
+
   test("accepting → choose a unit YOU control at ANOTHER location (only 'far'), then swap: Tideturner → bf1, Far → base", async () => {
     // After "yes" (asked while the trigger is finalized, rule 402.1) and both passes, P1 picks among
     // own units not at Tideturner's location (far; not near, not the enemy foe); Tideturner moves to
