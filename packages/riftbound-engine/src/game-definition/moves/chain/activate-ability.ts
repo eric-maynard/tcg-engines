@@ -31,6 +31,7 @@ import {
   consumeRestrictedEnergyForPurpose,
   getDeflectSurcharge,
   lockedEnergyForPurpose,
+  spendablePowerPool,
 } from "../play/cost";
 import type { PlayCostSelection } from "@tcg/riftbound-types";
 import type { SpellEffectTargetShape } from "../play/targeting";
@@ -1171,6 +1172,20 @@ function lockedAbilityEnergy(
   return lockedEnergyForPurpose(state, playerId, abilityEarmarkPurpose(hostCardId));
 }
 
+/**
+ * rule 429.4 / 444.1 (ogn-247-298 Daughter of the Void) — the Power half of the
+ * same gate: pips earmarked "use only to play spells" cannot be REMOVED from
+ * the pool to pay a gear ability's activation cost, so every affordability read
+ * on this path sees the pool minus the pips this activation may not touch.
+ */
+function spendableAbilityPower(
+  state: RiftboundGameState,
+  playerId: string,
+  hostCardId: string,
+): Record<string, number | undefined> {
+  return spendablePowerPool(state, playerId, abilityEarmarkPurpose(hostCardId));
+}
+
 export function deductAbilityCost(
   draft: RiftboundGameState,
   playerId: string,
@@ -1544,13 +1559,15 @@ export const activateAbility: Defs["activateAbility"] = {
         return false;
       }
 
+      // rule 429.4 — Power earmarked for another purpose cannot pay here.
+      const spendablePower = spendableAbilityPower(state, playerId as string, cardId as string);
       const powerCost = cost.power as string[] | undefined;
       if (powerCost) {
         const needed: Record<string, number> = {};
         for (const d of powerCost) {
           needed[d] = (needed[d] ?? 0) + 1;
         }
-        if (!canAffordPower(pool.power, needed)) {
+        if (!canAffordPower(spendablePower, needed)) {
           return false;
         }
       }
@@ -1568,7 +1585,7 @@ export const activateAbility: Defs["activateAbility"] = {
             return false;
           }
         } else {
-          const totalPower = Object.values(pool.power).reduce<number>((a, b) => a + (b ?? 0), 0);
+          const totalPower = Object.values(spendablePower).reduce<number>((a, b) => a + (b ?? 0), 0);
           if (totalPower < xPay.amount + (powerCost?.length ?? 0)) {
             return false;
           }
@@ -2042,7 +2059,13 @@ export const activateAbility: Defs["activateAbility"] = {
             for (const d of powerCost) {
               needed[d] = (needed[d] ?? 0) + 1;
             }
-            if (!canAffordPower(pool.power, needed)) {
+            // rule 429.4 — Power earmarked for another purpose cannot pay here.
+            if (
+              !canAffordPower(
+                spendableAbilityPower(state, playerId as string, entry.hostCardId as string),
+                needed,
+              )
+            ) {
               continue;
             }
           }
@@ -2336,7 +2359,10 @@ export const activateAbility: Defs["activateAbility"] = {
                   },
                   playerId,
                 )
-              : Object.values(pool?.power ?? {}).reduce<number>((a, b) => a + (b ?? 0), 0);
+              : // rule 429.4 — pips earmarked for another purpose fund no X here.
+                Object.values(
+                  spendableAbilityPower(state, playerId as string, entry.hostCardId as string),
+                ).reduce<number>((a, b) => a + (b ?? 0), 0);
           const maxX = Math.max(0, Math.min(available - alreadySpent, MAX_X_VARIANTS));
           bases = bases.flatMap((base) =>
             Array.from({ length: maxX + 1 }, (_, xAmount) => ({ ...base, xAmount })),

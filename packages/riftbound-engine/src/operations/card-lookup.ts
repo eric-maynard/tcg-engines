@@ -157,7 +157,18 @@ export class CardDefinitionRegistry {
     if (!this.copyOriginals.has(holderId)) {
       this.copyOriginals.set(holderId, current);
     }
-    this.definitions.set(holderId, { ...source, id: holderId });
+    // rule 477.1.b.1.a: Cost is a copyable value, so the copy is priced as the
+    // SOURCE, never as its own printing. rule 185.3.a.1: a token has no cost —
+    // it is treated as 0 for all purposes — so a card copying a token reads as
+    // costing 0. Both halves are written explicitly because every reader falls
+    // back to the printed card when the definition omits the field.
+    const copiedFromToken = this.isToken(sourceId);
+    this.definitions.set(holderId, {
+      ...source,
+      energyCost: copiedFromToken ? 0 : (source.energyCost ?? 0),
+      id: holderId,
+      powerCost: copiedFromToken ? [] : (source.powerCost ?? []),
+    });
     this.copySources.set(holderId, sourceId);
   }
 
