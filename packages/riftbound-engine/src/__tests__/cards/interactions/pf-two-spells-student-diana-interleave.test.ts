@@ -212,17 +212,21 @@ describe("Promising Future flips two Stupefys × Ravenbloom Student / Diana — 
     expect(at.stupP2).not.toBe("trash");
   });
 
-  // BUG — expected (340.1): Student-trig(PF) is the newest item and resolves FIRST — Student is already 3 before
-  // either Stupefy resolves. Actual: it is the oldest item and resolves last (Student is still 2 when P1's
-  // Stupefy resolves).
-  test.failing("BUG: (d) Student-trig(PF) resolves before either Stupefy — Student is 3 at the moment P1's Stupefy resolves", async () => {
+  // rule 340.1: Student-trig(PF) is the NEWEST item, so it resolves first — Student is already 3 while both
+  // Stupefys still sit on the chain. Read one step BEFORE P1's Stupefy hits the trash: that resolution at once
+  // appends a FRESH Student trigger (next case), so the only window with no Student item on the chain is
+  // between the PF trigger resolving and P1's Stupefy resolving.
+  test("(d) Student-trig(PF) resolves before either Stupefy — Student is 3 at the moment P1's Stupefy resolves", async () => {
     const game = await board().build();
     await castAndBanish(game);
     const log = await playOut(game);
-    const at = log.find((s) => s.stupP1 === "trash");
-    expect(at).toBeDefined();
-    expect(at!.student).toBe(3);
-    expect(at!.chain.some((c) => c.cardId === "student" && c.triggered)).toBe(false); // already gone
+    const i1 = log.findIndex((s) => s.stupP1 === "trash");
+    expect(i1).toBeGreaterThan(0);
+    expect(log[i1]!.student).toBe(3);
+    const before = log[i1 - 1]!;
+    expect(before.student).toBe(3); // the PF trigger already resolved
+    expect(before.chain.some((c) => c.cardId === "student" && c.triggered)).toBe(false); // already gone
+    expect(before.chain.map((c) => c.cardId)).toEqual(["stupP2", "stupP1"]);
   });
 
   // BUG — expected (419.4.a): P1's Stupefy finishing = P1 played a spell → a NEW Student trigger (P1's) becomes

@@ -158,7 +158,7 @@ describe("Emperor's Dais × Vayne, Hunter — cost-time return vs effect-time re
   // payment: the first P1 prompt is either an ordering decision over {vayne, dais} or already about the
   // Dais. Actual: the engine finalizes in board-scan order and asks Vayne's "pay [1]?" first, offering a
   // (soft) reorder only after both are finalized — too late for order-dependent finalization costs.
-  test.failing("BUG: (a) P1 chooses which of its two triggers to finalize first — the Dais trigger can be taken up before Vayne's payment is decided (383.3.d)", async () => {
+  test("(a) P1 chooses which of its two triggers to finalize first — the Dais trigger can be taken up before Vayne's payment is decided (383.3.d)", async () => {
     const game = await board(1).build();
     await conquerDais(game);
     const d = game.decision();
@@ -252,6 +252,11 @@ describe("Emperor's Dais × Vayne, Hunter — cost-time return vs effect-time re
   test("(b) Vayne's trigger accepted first: the [1] is paid AT ONCE (energy 1 → 0) but Vayne herself stays on the Dais — 'return me' is the EFFECT, still waiting on the chain", async () => {
     const game = await board(1).build();
     await conquerDais(game);
+    // 383.3.d: both triggers carry a base cost, so P1 is offered their order first (soft, defaultable —
+    // accepting the listed order keeps Vayne's trigger as the one finalized first).
+    if (game.decision()?.kind === "order") {
+      await game.acceptTriggerOrder();
+    }
     const d = game.decision();
     expect(d).toMatchObject({ canAccept: true, kind: "yes-no", seat: P1, source: { cardId: "vayne" } });
     await game.p1.yes();

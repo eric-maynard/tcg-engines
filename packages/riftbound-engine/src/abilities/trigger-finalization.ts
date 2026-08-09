@@ -636,6 +636,62 @@ function offerTriggerOrder(draft: RiftboundGameState, ctx: FinalizationContext):
   if (fresh.length < 2) {
     return;
   }
+  raiseTriggerOrderPrompt(draft, ctx, fresh);
+}
+
+/**
+ * rule 383.3.d + 383.3.b.1 — when two simultaneous triggers of ONE controller
+ * each carry a finalization (base) cost, their order is not cosmetic: the first
+ * one taken up spends resources and cost objects the other may still need (the
+ * Emperor's Dais returning the very Vayne whose own trigger then wants paying).
+ * So the choice is offered BEFORE the sweep finalizes them, while every item is
+ * still Pending. It stays the same soft `order` prompt — ignoring it keeps the
+ * listed order — and the batch is marked seen so the post-finalization offer
+ * does not ask a second time.
+ */
+function offerPendingCostTriggerOrder(draft: RiftboundGameState, ctx: FinalizationContext): boolean {
+  if (draft.pendingTriggerOrder !== undefined) {
+    return false;
+  }
+  const items = chainItems(draft) ?? [];
+  const d = draft as RiftboundGameState & { triggerBatchSeen?: string[] };
+  const seen = new Set(d.triggerBatchSeen ?? []);
+  const costed = items.filter(
+    (it) =>
+      it.triggered === true &&
+      it.status === "pending" &&
+      it.countered !== true &&
+      it.optInCost !== undefined &&
+      !seen.has(it.id),
+  );
+  if (costed.length < 2) {
+    return false;
+  }
+  // Two copies of ONE ability (two Icevale Archers' "you may pay [1]") pay the
+  // same cost for the same effect — nothing depends on which is taken up first,
+  // so the pre-finalization offer stays out of the way. Only genuinely different
+  // costed abilities (Emperor's Dais vs. Vayne) are ordered up front.
+  const distinct = costed.filter((it) =>
+    costed.some(
+      (other) =>
+        other.controller === it.controller &&
+        (other.triggerBatch ?? "") === (it.triggerBatch ?? "") &&
+        JSON.stringify(other.effect ?? null) !== JSON.stringify(it.effect ?? null),
+    ),
+  );
+  if (distinct.length < 2 || !raiseTriggerOrderPrompt(draft, ctx, distinct)) {
+    return false;
+  }
+  d.triggerBatchSeen = [...(d.triggerBatchSeen ?? []), ...distinct.map((it) => it.id)];
+  return true;
+}
+
+/** Shared 383.3.d chooser/grouping for `fresh` candidate items; true when a prompt was raised. */
+function raiseTriggerOrderPrompt(
+  draft: RiftboundGameState,
+  ctx: FinalizationContext,
+  fresh: readonly ChainItem[],
+): boolean {
   const turnOrder = Object.keys(draft.players ?? {});
   const start = Math.max(0, turnOrder.indexOf(draft.turn?.activePlayer ?? ""));
   const rank = (pid: string): number => {
@@ -677,7 +733,7 @@ function offerTriggerOrder(draft: RiftboundGameState, ctx: FinalizationContext):
     .filter((pid) => orderableGroup(byController.get(pid) ?? []) !== undefined)
     .sort((a, b) => rank(a) - rank(b))[0];
   if (chooser === undefined) {
-    return;
+    return false;
   }
   const mine = orderableGroup(byController.get(chooser) as ChainItem[]) as ChainItem[];
   const nameOf = (cardId: string): string =>
@@ -692,6 +748,7 @@ function offerTriggerOrder(draft: RiftboundGameState, ctx: FinalizationContext):
     resume: { itemIds: mine.map((it) => it.id), kind: "trigger-batch" },
     type: "order",
   };
+  return true;
 }
 
 /**
@@ -744,6 +801,11 @@ export function finalizePendingItems(draftLike: unknown, ctx: FinalizationContex
         buildEffectContext(draft, it.controller as string, it.cardId as string, toResolveContext(ctx)),
       )
     ) {
+      return;
+    }
+    // rule 383.3.d — two costed triggers of one controller: their controller
+    // orders them BEFORE the first base cost is paid (383.3.b.1).
+    if (offerPendingCostTriggerOrder(draft, ctx)) {
       return;
     }
     const items = chainItems(draft);
