@@ -93,13 +93,24 @@ export function handle_reveal(effect: ExecutableEffect, ctx: EffectContext, _h: 
   // revealed cards on resolution, so this names no play-time board target.
   if (revEff.from === "opponent-decks") {
     const revealed: string[] = [];
+    const revealedFromDeckOf: Record<string, string> = {};
     for (const pid of Object.keys(ctx.draft.players)) {
       if (pid === actor) continue;
       const top = ctx.zones.getCardsInZone("mainDeck" as CoreZoneId, pid as CorePlayerId)[0];
-      if (top !== undefined) revealed.push(top as string);
+      if (top !== undefined) {
+        revealed.push(top as string);
+        revealedFromDeckOf[top as string] = pid;
+      }
     }
     if (revealed.length === 0) return;
     recordPublicReveal(ctx, actor, revealed);
+    // rule 370.1.b.1 / 166.1 (sfd-175-221 Undertitan) — "As I'm revealed from
+    // YOUR deck" belongs to the player whose deck was turned over, not to the
+    // opponent who caused the reveal; the rider resolves on the spot into that
+    // player's pool (429.2), with no chain item and no priority.
+    for (const revealedId of revealed) {
+      fireMandatoryRevealAbilities([revealedId], revealedFromDeckOf[revealedId] ?? actor, ctx, _h);
+    }
     ctx.draft.pendingChoice = {
       onPicked: "play",
       onRest: "recycle",

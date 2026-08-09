@@ -169,6 +169,30 @@ function copiedAttachmentAbilities(
 }
 
 /**
+ * rule 323.4 / 808.1.d.2 (sfd-059-221 Svellsongur) — the death path reads the
+ * dying unit off its last-known information: the Equipment is already detached
+ * (and its `copiedFromCardId` cleared), so the text-copy doubling has to be
+ * recovered from the LKI attachment list instead of live meta.
+ */
+function copiedAttachmentAbilitiesFromLKI(
+  printed: readonly TriggerableAbility[],
+  attachments: readonly string[] | undefined,
+): TriggerableAbility[] {
+  if (!attachments || attachments.length === 0) {
+    return [];
+  }
+  const registry = getGlobalCardRegistry();
+  const out: TriggerableAbility[] = [];
+  for (const equipId of attachments) {
+    if (registry.get(equipId)?.copyAttachedUnitText !== true) {
+      continue;
+    }
+    out.push(...printed.filter((a) => a.type === "triggered"));
+  }
+  return out;
+}
+
+/**
  * rule 150.2 / 718.3 / 724 (sfd-090-221 The Zero Drive) — an Equipment's Effect
  * Text is appended to the Top-Most unit it is attached to, so it is the
  * WEARER's ability: it triggers off what happens to the wearer, and its source
@@ -1727,6 +1751,14 @@ export function fireTriggers(rawEvent: GameEvent, ctx: TriggerRunnerContext): nu
         ...attachedEffectTextAbilities({
           equippedWith: lki?.attachments as RiftboundCardMeta["equippedWith"],
         }),
+        // rule 136.2.c / 719.1 / 808.1.d.2 (sfd-059-221 Svellsongur) — a
+        // text-copying Equipment gives the wearer a SECOND instance of each of
+        // its triggered abilities (808.2), and a Deathknell noted while the
+        // Equipment was still attached survives the detach that death causes.
+        ...copiedAttachmentAbilitiesFromLKI(
+          toTriggerableAbilities(lki?.copyOfCardId ?? event.cardId),
+          lki?.attachments,
+        ),
       ],
       id: event.cardId,
       owner: (event as { controller?: string }).controller ?? lki?.controller ?? event.owner,
