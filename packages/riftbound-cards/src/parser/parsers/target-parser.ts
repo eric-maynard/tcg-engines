@@ -157,6 +157,19 @@ export function parseTarget(text: string): AnyTarget {
       }
     }
 
+    // rule 355.5 (rule-id: ven-194-166) — a leading count ("Ready 2 gear") is a
+    // quantity on the choice, not a tribal tag: the chooser names exactly N.
+    const countStr = tagStr?.trim().toLowerCase();
+    const explicitCount =
+      countStr === undefined || countStr.length === 0
+        ? undefined
+        : (NUMBER_WORD_VALUES[countStr] ??
+          (/^\d+$/.test(countStr) ? Number.parseInt(countStr, 10) : undefined));
+    if (explicitCount !== undefined && explicitCount > 1) {
+      result.quantity = explicitCount;
+      return result as Target;
+    }
+
     // Handle tag (e.g., "Mech" in "another friendly Mech") or a state adjective
     // ("[Mighty] units" — rule 710) which is a filter, not a tribal tag.
     if (tagStr && tagStr.length > 0) {
@@ -196,6 +209,14 @@ export function parseTarget(text: string): AnyTarget {
   // Default to unit target
   return { type: "unit" };
 }
+
+/** Spelled-out counts a target phrase may carry ("Ready two gear"). */
+const NUMBER_WORD_VALUES: Record<string, number> = {
+  five: 5,
+  four: 4,
+  three: 3,
+  two: 2,
+};
 
 /** Adjectives that describe a unit's state rather than a tribal tag. */
 const STATE_ADJECTIVE_FILTERS: Record<string, string> = {

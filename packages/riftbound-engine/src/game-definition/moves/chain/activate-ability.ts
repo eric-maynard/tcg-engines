@@ -428,6 +428,22 @@ function activationChosenTarget(effect: unknown): TargetDescriptor | undefined {
   return d;
 }
 
+/**
+ * rule 828.1.b.1 (rule-id: ven-194-166) — an ability granted by an
+ * "[Empowered][>] …" line carries a `while-empowered` condition: the host only
+ * has it while Empowered. Composed `and` conditions count too.
+ */
+function requiresEmpowered(condition: unknown): boolean {
+  const c = condition as { type?: string; conditions?: unknown[] } | undefined;
+  if (!c || typeof c !== "object") {
+    return false;
+  }
+  if (c.type === "while-empowered") {
+    return true;
+  }
+  return c.type === "and" && (c.conditions ?? []).some((sub) => requiresEmpowered(sub));
+}
+
 /** How many objects a caster-chosen activated target names (rule 355.5). */
 function chosenTargetCount(descriptor: TargetDescriptor | undefined): number {
   const q = (descriptor as { quantity?: unknown } | undefined)?.quantity;
@@ -1311,6 +1327,15 @@ export const activateAbility: Defs["activateAbility"] = {
     if (abilityCondition?.type === "legion" && !evaluateLegionCondition(state, playerId)) {
       return false;
     }
+    // rule 828.1.b.1 (rule-id: ven-194-166) — "[Empowered][>] <ability>" is an
+    // ability the host HAS only while it is Empowered.
+    if (
+      requiresEmpowered(abilityCondition) &&
+      (context.cards.getCardMeta(cardId as CoreCardId) as { empowered?: boolean } | undefined)
+        ?.empowered !== true
+    ) {
+      return false;
+    }
 
     // Rule 580.3 (unl-160-219): "Use this ability only while I'm at a
     // battlefield" attaches a self-at-battlefield restriction to the
@@ -1682,7 +1707,14 @@ export const activateAbility: Defs["activateAbility"] = {
           zones: context.zones,
         },
       );
-      if (boundTargets.length !== 1 || !options.includes(boundTargets[0] as string)) {
+      // rule 355.5 (rule-id: ven-194-166) — "Ready 2 gear" names N distinct
+      // objects (fewer only when the board holds fewer), each of them legal.
+      const wanted = Math.min(chosenTargetCount(chosen), options.length);
+      if (
+        boundTargets.length !== wanted ||
+        new Set(boundTargets).size !== boundTargets.length ||
+        boundTargets.some((id) => !options.includes(id))
+      ) {
         return false;
       }
       // rule 809.1.c (rule-id: sfd-120-221) — an opponent's Deflect object may
@@ -1798,6 +1830,18 @@ export const activateAbility: Defs["activateAbility"] = {
         // rule 812.1.c (ogn-253-298): [Legion] gates the activation itself —
         // skip it until a card has been played this turn.
         if (abilityCondition?.type === "legion" && !evaluateLegionCondition(state, playerId)) {
+          continue;
+        }
+        // rule 828.1.b.1 (rule-id: ven-194-166) — an "[Empowered][>] <ability>"
+        // line is only on the card while the host is Empowered.
+        if (
+          requiresEmpowered(abilityCondition) &&
+          (
+            context.cards.getCardMeta(entry.hostCardId as CoreCardId) as
+              | { empowered?: boolean }
+              | undefined
+          )?.empowered !== true
+        ) {
           continue;
         }
 
@@ -2166,12 +2210,18 @@ export const activateAbility: Defs["activateAbility"] = {
           : [result];
         if (targetOptions) {
           const withTargets: (typeof result)[] = [];
+          // rule 355.5 (rule-id: ven-194-166) — "Ready 2 gear" names N objects
+          // in one activation: enumerate every N-sized selection (as many as
+          // exist when the board holds fewer than N).
+          const wanted = chosenTargetCount(chosen);
           for (const base of bases) {
-            for (const targetId of targetOptions) {
-              if (targetId === base.sacrificeId) {
-                continue;
-              }
-              withTargets.push({ ...base, targets: [targetId] });
+            const eligible = targetOptions.filter((id) => id !== base.sacrificeId);
+            const size = Math.min(wanted, eligible.length);
+            if (size <= 0) {
+              continue;
+            }
+            for (const combo of recycleSubsets(eligible, size)) {
+              withTargets.push({ ...base, targets: combo });
             }
           }
           bases = withTargets;

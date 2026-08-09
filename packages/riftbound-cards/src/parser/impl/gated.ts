@@ -179,7 +179,10 @@ export function parseEmpoweredGatedAbilities(
     if (!line) {
       continue;
     }
-    const m = line.match(/^\[Empowered\]\s*[>.:\s]*/i);
+    // The `[>]` arrow is already stripped by normalizeTokens, so a gated body
+    // can start with a `:rb_…:` token — the marker eater must not swallow that
+    // leading colon ("[Empowered] :rb_energy_1:, :rb_exhaust:: Ready 2 gear.").
+    const m = line.match(/^\[Empowered\]\s*(?:\[>\]|[>.\s]|:(?!rb_))*/i);
     if (m) {
       gated.push(line.slice(m[0].length).trim());
     } else {
