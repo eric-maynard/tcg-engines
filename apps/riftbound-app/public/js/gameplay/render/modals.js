@@ -416,6 +416,37 @@ function formatCostTokens(energy, power) {
   return parts.length ? parts.join(" + ") : "0 energy";
 }
 
+/**
+ * rule 356.4 (rule-id: unl-170-219) — "you may kill a friendly unit as an
+ * additional cost to play me. If you do, I cost [1] less for each Energy it
+ * costs and [D] less for each Power it costs." Prices the played card after
+ * the kill: each victim waives its printed Energy, and each of its Power pips
+ * (of ANY domain) waives one [D] pip. Returns the printed cost unchanged for
+ * cards without that clause. -> [energy, powerCost[]]
+ */
+function sacrificeDiscountedCost(card, sacIds) {
+  const basePower = Array.isArray(card?.powerCost) ? [...card.powerCost] : [];
+  let energy = Number(card?.energyCost) || 0;
+  const clause = String(card?.rulesText ?? "").match(
+    /\[1\]\s*less for each Energy it costs and \[([a-z]+)\]\s*less for each Power it costs/i,
+  );
+  if (!clause) return [energy, basePower];
+  const domain = clause[1].toLowerCase();
+  for (const id of sacIds) {
+    const victim = findCard(id);
+    if (!victim) continue;
+    energy = Math.max(0, energy - (Number(victim.energyCost) || 0));
+    let pips = Array.isArray(victim.powerCost) ? victim.powerCost.length : 0;
+    while (pips > 0) {
+      const at = basePower.findIndex(p => String(p).toLowerCase() === domain);
+      if (at < 0) break;
+      basePower.splice(at, 1);
+      pips--;
+    }
+  }
+  return [energy, basePower];
+}
+
 function describePlayVariantBase(m, card) {
   const basePower = Array.isArray(card?.powerCost) ? card.powerCost : [];
   const baseCost = formatCostTokens(card?.energyCost ?? 0, basePower);
@@ -426,6 +457,22 @@ function describePlayVariantBase(m, card) {
     ? "to base"
     : `to ${getBattlefieldName(String(loc).replace(/^battlefield-/, ""))}`;
   if (!m.params?.paidAdditionalCost) {
+    // rule 356.1.b (sfd-084-221): a granted "you may play a gear ignoring its
+    // Energy cost" permission is optional, so the enumerator emits both prices
+    // as variants differing only by `useEnergyWaiver` — say which one spends
+    // the permission or the two buttons render identically.
+    const waiver = m.params?.useEnergyWaiver;
+    if (waiver !== undefined) {
+      return waiver
+        ? {
+            label: `Play ${where} (ignore Energy cost)`,
+            detail: `${formatCostTokens(0, basePower)} — spends the free-play permission`,
+          }
+        : {
+            label: `Play ${where} (pay full cost)`,
+            detail: `${baseCost} — saves the free-play permission`,
+          };
+    }
     // rule 573 (sfd-078-221): a Repeat variant carries `repeatCount` and no
     // paidAdditionalCost, so it must name the Repeat or it renders as a second
     // identical "Play" button that silently charges the extra cost.
@@ -458,9 +505,15 @@ function describePlayVariantBase(m, card) {
   if (sacIds) {
     const names = sacIds.map(id => findCard(id)?.name ?? id);
     const list = names.join(" + ");
+    // rule 356.4 (unl-170-219 Atakhan): when paying the kill discounts the
+    // card, the button must quote the price the engine will actually charge —
+    // the printed cost read as "10 energy + 3 order" while 7 + 2 was paid.
+    const cost = formatCostTokens(
+      ...sacrificeDiscountedCost(card, sacIds),
+    );
     return {
       label: `Play + sacrifice ${list}`,
-      detail: `${baseCost} — kill ${list} as an additional cost`,
+      detail: `${cost} — kill ${list} as an additional cost`,
     };
   }
   const parts = [];

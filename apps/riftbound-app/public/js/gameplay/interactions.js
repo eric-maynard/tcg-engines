@@ -1282,12 +1282,29 @@ function showBattlefieldCardActionBar(cardName, gankMoves, recallMoves) {
   bar.classList.remove("hidden");
 }
 
-/** Get a display name for a battlefield */
+/** Owner ("player-1"/"player-2") encoded in a battlefield instance id, if any */
+function battlefieldOwner(bfId, card) {
+  const m = /^(player-[12])-/.exec(String(bfId));
+  return m ? m[1] : (card?.owner ?? card?.controller ?? null);
+}
+
+/**
+ * Get a display name for a battlefield. Both players can hold a battlefield
+ * printed from the same card (e.g. two copies of Back-Alley Bar), and the
+ * printed name alone then labels two distinct move destinations identically —
+ * so an ambiguous name is qualified with whose side it is on.
+ */
 function getBattlefieldName(bfId) {
   if (!gameState?.zones) return bfId;
   const bfRowCards = gameState.zones["battlefieldRow"] || [];
-  for (const c of bfRowCards) {
-    if (c.id === bfId) return c.name || bfId;
+  const self = bfRowCards.find(c => c.id === bfId);
+  if (self) {
+    const name = self.name || bfId;
+    const ambiguous = bfRowCards.some(c => c.id !== bfId && (c.name || c.id) === name);
+    if (!ambiguous) return name;
+    const owner = battlefieldOwner(bfId, self);
+    if (!owner) return name;
+    return `${name} (${owner === viewingPlayer ? "yours" : "opponent's"})`;
   }
   return bfId.replace(/^ogn-|^sfd-|^unl-/g, "").replace(/-\d+$/, "");
 }
