@@ -352,6 +352,13 @@ export function optInIsPerformable(
         // A BATTLEFIELD": either player's, but battlefields are fully public, so
         // an empty candidate set here is just as unambiguous as a friendly one.
         (optTarget.controller === undefined && optTarget.location === "battlefield") ||
+        // rule 402.4 / 355.8 (rule-id: ven-115-166 Ocean Drake) — "a non-Dragon
+        // unit": neither controller- nor location-restricted, i.e. every unit in
+        // play. Units in play are fully public, so an empty candidate set is
+        // unambiguous and the trigger leaves the Chain without a Yes/No prompt.
+        (optTarget.controller === undefined &&
+          optTarget.location === undefined &&
+          optTarget.type === "unit") ||
         (optTarget.controller === "enemy" &&
           optTarget.location === "here" &&
           // rule 383.3.a (unl-105-219) — while the source is still on the board
@@ -871,8 +878,20 @@ export function executeResolvedItem(
     effect.type === "fight" && typeof (effect as { attacker?: unknown }).attacker === "string"
       ? ((effect as { defender?: unknown }).defender as TargetDescriptor | undefined)
       : undefined;
+  // rule 402.2 / 355.15 (rule-id: ogn-199-298 Tideturner, sfd-050-221 Azir) —
+  // a swap's partner ("choose a unit you control at another location. Move me
+  // to its location and it to my original location") is the item's single
+  // caster-chosen object; it lives in `partner`, not `target`, so lift it and
+  // let the shared planning name it while the item is FINALIZED. The choice is
+  // then locked: a partner bounced in response makes the instruction fizzle
+  // instead of silently re-picking someone else.
+  const swapPartner =
+    effect.type === "move" && (effect as { swap?: unknown }).swap === true
+      ? ((effect as { partner?: unknown }).partner as TargetDescriptor | undefined)
+      : undefined;
   const target = (effect.target ??
     fightDefender ??
+    swapPartner ??
     findSequenceLeadTarget(effect as unknown as SpellEffectTargetShape)) as
     | TargetDescriptor
     | string
@@ -893,9 +912,15 @@ export function executeResolvedItem(
     // your trash": neither zone is a board zone the resolver scans, so a
     // board-wide prompt here would offer the wrong cards. The play handler
     // gathers candidates from that private zone itself (rule 355.10).
+    // rule 355.10.a / 355.5.b — EXCEPT when the descriptor names the trash
+    // itself ("play a unit from your trash", ogn-196-298): the trash is a
+    // PUBLIC zone, so that unit IS a target — chosen as the item is finalized
+    // and locked onto it, not re-picked as the instruction resolves.
     !(
       effect.type === "play" &&
-      ((effect as { from?: unknown }).from === "hand" || (effect as { from?: unknown }).from === "trash")
+      ((effect as { from?: unknown }).from === "hand" ||
+        ((effect as { from?: unknown }).from === "trash" &&
+          (target as { location?: unknown }).location !== "trash"))
     ) &&
     // rule 355.14 (ogn-041-298): split damage picks its targets together with
     // the distribution in the damage handler, not as a single-target prompt.
@@ -939,12 +964,32 @@ export function executeResolvedItem(
         zones: baseCtx.zones,
       },
     );
+    // rule 350.1 / 455 (rule-id: ogn-199-298) — a swap partner must stand at
+    // ANOTHER location, so the source itself and anything sharing its zone are
+    // never candidates (same pool as `effects/move.ts handleSwapLocations`).
+    if (swapPartner !== undefined) {
+      const swapSelfZone =
+        (baseCtx.zones.getCardZone(resolved.cardId as CoreCardId) as string | undefined) ??
+        baseCtx.sourceZone;
+      options = options.filter(
+        (id) =>
+          id !== resolved.cardId &&
+          (baseCtx.zones.getCardZone(id as CoreCardId) as string | undefined) !== swapSelfZone,
+      );
+    }
     // rule-id: ogn-097-298 — Rule 723.1.d (811.1.d.2): played-from-Hidden
     // targets must be at the associated battlefield.
     // rule 811.1.d.2.a (ven-034-166) — except when the spell PULLS its chosen
     // object into that battlefield: the battlefield is then the destination and
     // the object is chosen freely from anywhere.
-    if (hiddenZone && !hiddenChoiceIsPulledIn(effect as SpellEffectTargetShape)) {
+    // rule 811.1.d.2 (rule-id: ogn-199-298 Tideturner — the CR's own example):
+    // a swap partner is exempt, since "at another location" can never be met at
+    // the Hidden battlefield itself.
+    if (
+      hiddenZone &&
+      swapPartner === undefined &&
+      !hiddenChoiceIsPulledIn(effect as SpellEffectTargetShape)
+    ) {
       options = options.filter(
         (id) => baseCtx.zones.getCardZone(id as CoreCardId) === hiddenZone,
       );

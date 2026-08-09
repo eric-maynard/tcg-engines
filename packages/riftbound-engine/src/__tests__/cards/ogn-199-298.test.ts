@@ -71,20 +71,15 @@ describe("Tideturner (ogn-199-298)", () => {
   });
 
   test("accepting → choose a unit YOU control at ANOTHER location (only 'far'), then swap: Tideturner → bf1, Far → base", async () => {
-    // After "yes" (asked while the trigger is finalized, rule 402.1) and both passes, P1 picks among
-    // own units not at Tideturner's location (far; not near, not the enemy foe); Tideturner moves to
-    // bf1 and Far moves to base.
+    // After "yes" (asked while the trigger is finalized, rule 402.1) the partner is named right
+    // there (rule 402.2): the only unit of P1's at another location is 'far' (not near, not the
+    // enemy foe), so it is bound onto the item; both pass and the swap happens.
     const game = await board().build();
     await game.p1.play("tt", { to: "base" });
     await game.settle();
     await game.p1.yes();
-    // rule 402: the item resolves after both pass; the swap partner is picked as it resolves.
+    expect(game.chain()).toMatchObject([{ cardId: "tt", targets: ["far"], triggered: true }]);
     await game.acting().passPriority();
-    await game.acting().passPriority();
-    const d = game.decision();
-    expect(d).toMatchObject({ kind: "pick", seat: P1 });
-    expect(d?.kind === "pick" && d.options.map((o) => o.card).sort()).toEqual(["far"]);
-    await game.p1.pick("far");
     await game.settle();
     expect(game.locationOf("tt")).toBe("bf1");
     expect(game.locationOf("far")).toBe("base");
@@ -113,9 +108,8 @@ describe("Tideturner (ogn-199-298)", () => {
   });
 
   test("played from facedown at bf1, the swap partner may be a unit in base (811.1.d.2 example): Tideturner → base, Near → bf1", async () => {
-    // Expected: the Hidden targeting restriction does not apply (impossible at own battlefield), so
-    // 'near' (in base) is offered; after the swap Tideturner is in base and Near is at bf1.
-    // Actual: the swap never prompts / moves anything (see above).
+    // The Hidden targeting restriction does not apply (impossible at own battlefield), so 'near'
+    // (in base) is the partner; after the swap Tideturner is in base and Near is at bf1.
     const game = await board().build();
     await game.p1.hide("tt", "bf1");
     await game.advanceTurn();
@@ -123,12 +117,8 @@ describe("Tideturner (ogn-199-298)", () => {
     await game.p1.reveal("tt");
     await game.settle();
     await game.p1.yes();
-    // rule 402: opt-in at finalization; the swap partner is picked as the item resolves.
-    await game.acting().passPriority();
-    await game.acting().passPriority();
-    const d = game.decision();
-    expect(d?.kind === "pick" && d.options.map((o) => o.card).sort()).toEqual(["near"]);
-    await game.p1.pick("near");
+    // rule 402.2: opt-in and the partner are both settled while the item is finalized.
+    expect(game.chain()).toMatchObject([{ cardId: "tt", targets: ["near"], triggered: true }]);
     await game.settle();
     expect(game.locationOf("tt")).toBe("base");
     expect(game.locationOf("near")).toBe("bf1");
