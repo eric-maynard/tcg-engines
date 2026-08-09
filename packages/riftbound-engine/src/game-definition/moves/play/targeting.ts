@@ -669,7 +669,8 @@ function makeDeflectAffordable(
     }
   }
   return (cardId: string): boolean =>
-    getDeflectSurcharge(ctx.draft as never, playerId ?? "", [cardId], ctx.cards) <= budget;
+    getDeflectSurcharge(ctx.draft as never, playerId ?? "", [cardId], ctx.cards, undefined, ctx.zones) <=
+    budget;
 }
 
 export function spellEffectHasLegalTargets(
@@ -830,6 +831,20 @@ export function spellEffectHasLegalTargets(
     );
     if (branches.length > 0) {
       return branches.every((b) => spellEffectHasLegalTargets(b, ctx, affordable));
+    }
+    // rule 355.8 (rule-id: ven-139-166) — "If it's your turn, move a friendly
+    // unit in a showdown to base": the turn test is checked on resolution, but
+    // the object is still named as the ability is activated, so with no legal
+    // candidate there is no legal activation at all. Only the one-sided form
+    // is gated — an `else` branch gives the ability something else to do.
+    const cond = (effect as { condition?: { type?: string } }).condition;
+    const thenBranch = (effect as { then?: SpellEffectTargetShape }).then;
+    if (
+      cond?.type === "your-turn" &&
+      (effect as { else?: unknown }).else === undefined &&
+      thenBranch !== undefined
+    ) {
+      return spellEffectHasLegalTargets(thenBranch, ctx, affordable);
     }
   }
   // rule 355.8 (rule-id: ven-154-166) — a reference-pair spell needs a legal

@@ -165,7 +165,7 @@ describe("Rogue Assassin (ven-139-166)", () => {
     expect(game.gameState.battlefields.bf1?.controller).toBe(P2);
   });
 
-  test.failing("BUG: Empowered rescue READIES the pulled unit — B comes home ready and can Standard-Move again this turn to take the open bf2", async () => {
+  test("Empowered rescue READIES the pulled unit — B comes home ready and can Standard-Move again this turn to take the open bf2", async () => {
     // Expected: B in base READY; after the bf1 combat ends, B moves to empty bf2 and conquers it (1 point).
     // Actual: nothing is moved or readied.
     const game = await attackWithTwo({ empowered: true });
@@ -251,7 +251,7 @@ describe("Rogue Assassin (ven-139-166)", () => {
     expect(game.p2.points()).toBe(1);
   });
 
-  test.failing("BUG: with no showdown anywhere there is no 'friendly unit in a showdown' to target — the [Action] line must not be activatable in a quiet open state (355.8)", async () => {
+  test("with no showdown anywhere there is no 'friendly unit in a showdown' to target — the [Action] line must not be activatable in a quiet open state (355.8)", async () => {
     // Expected: not offered (no legal target). Actual: offered — it just exhausts the legend for nothing.
     const game = await legend().unit(P1, "base", { might: 3 }, "a").build();
     expect(game.decision()).toMatchObject({ context: "main", kind: "action", seat: P1 });

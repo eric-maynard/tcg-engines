@@ -32,6 +32,54 @@ const isSameLocationTarget = (t: SubTarget): boolean =>
   typeof t === "object" && t.location === "same";
 
 /**
+ * rule 354.2 (rule-id: ven-139-166) — true when every remaining step of a
+ * sequence names the SAME object the step just prompted for ("…move a friendly
+ * unit in a showdown to base and if I'm [Empowered], ready IT"). Steps nested in
+ * a `conditional` / `optional` / inner sequence are inspected too, since the
+ * pronoun commonly sits inside the condition's branch. A step naming a
+ * different descriptor (or the source itself) means the remainder chooses for
+ * itself, so it must NOT inherit this pick.
+ */
+function remainderIsAnaphoric(
+  rest: readonly ExecutableEffect[],
+  lead: Record<string, unknown> | undefined,
+): boolean {
+  if (lead === undefined || typeof lead !== "object") {
+    return false;
+  }
+  let sawRestatement = false;
+  const walk = (effects: readonly unknown[]): boolean => {
+    for (const raw of effects) {
+      const sub = raw as
+        | { effects?: unknown[]; effect?: unknown; else?: unknown; target?: SubTarget; then?: unknown }
+        | undefined;
+      if (sub === undefined || sub === null) continue;
+      const t = sub.target;
+      if (typeof t === "string") return false;
+      if (t !== undefined) {
+        const desc = t as Record<string, unknown>;
+        const type = desc.type as string | undefined;
+        if (type === "self" || type === "player" || type === "pending-value") {
+          // names its own object, never this prompt's pick
+        } else if (
+          isRestatementOf(lead as { type: string }, desc as { type: string }) &&
+          isRestatementOf(desc as { type: string }, lead as { type: string })
+        ) {
+          sawRestatement = true;
+        } else {
+          return false;
+        }
+      }
+      const nested = [sub.then, sub.else, sub.effect].filter((x) => x !== undefined);
+      if (nested.length > 0 && !walk(nested)) return false;
+      if (Array.isArray(sub.effects) && !walk(sub.effects)) return false;
+    }
+    return true;
+  };
+  return walk(rest) && sawRestatement;
+}
+
+/**
  * rule 477.3.b — `increase-might-to`/`swap-might` whose `target1` is the source
  * itself: the single caster choice is `target2`, so the sequence prompts for it
  * like an ordinary `target` step and binds it as boundTargets[0].
@@ -650,8 +698,17 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
             type: "choose-target",
             // The remainder makes its OWN choices — it must not inherit the id
             // this prompt just bound, or the next step would re-hit that card.
+            // rule 354.2 (rule-id: ven-139-166) — UNLESS every remaining step
+            // is an anaphoric restatement of this one ("…move a friendly unit
+            // in a showdown to base and … ready IT"): "it" is the card just
+            // chosen, so the remainder keeps this pick instead of re-scanning
+            // the board (which would name a different unit).
             ...(rest.length > 0
-              ? { then: { effects: rest, independentExecution: true, type: "sequence" } }
+              ? {
+                  then: remainderIsAnaphoric(rest, subTarget as Record<string, unknown>)
+                    ? { effects: rest, type: "sequence" }
+                    : { effects: rest, independentExecution: true, type: "sequence" },
+                }
               : {}),
           } as typeof ctx.draft.pendingChoice;
           carryBattlefieldZone();
