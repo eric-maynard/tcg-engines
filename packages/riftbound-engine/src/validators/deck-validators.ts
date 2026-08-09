@@ -71,6 +71,12 @@ const MIN_MAIN_DECK_SIZE = 40;
 /** Maximum copies of a single named card (rule 103.2.b) */
 const MAX_COPIES_PER_NAME = 3;
 
+/** Maximum copies of a card printing [Unique] (rule 825.3.a) */
+const MAX_UNIQUE_COPIES = 1;
+
+/** The [Unique] keyword's printed name */
+const UNIQUE_KEYWORD = "Unique";
+
 /** Maximum total signature cards with champion tag (rule 103.2.d) */
 const MAX_SIGNATURE_CARDS = 3;
 
@@ -227,9 +233,53 @@ const validateCopyLimit = (mainDeck: Card[]): DeckValidationError[] => {
 };
 
 /**
+ * Does this card print the [Unique] keyword? Keywords live either flat on
+ * `keywords` or as `{ type: "keyword" }` abilities.
+ */
+const isUnique = (card: Card): boolean => {
+  const flat = (card as { keywords?: string[] }).keywords ?? [];
+  if (flat.includes(UNIQUE_KEYWORD)) {
+    return true;
+  }
+  const abilities = (card as { abilities?: { keyword?: string; type?: string }[] }).abilities ?? [];
+  return abilities.some((a) => a.type === "keyword" && a.keyword === UNIQUE_KEYWORD);
+};
+
+/**
+ * Validate the [Unique] deck-construction limit.
+ *
+ * rule 825.3.a: a deck may contain only ONE card with the name of a Unique card.
+ * rule 825.4: Unique has no effect during gameplay — construction only.
+ */
+const validateUniqueLimit = (mainDeck: Card[]): DeckValidationError[] => {
+  const errors: DeckValidationError[] = [];
+  const uniqueNames = new Set<string>();
+  const nameCounts = new Map<string, number>();
+
+  for (const card of mainDeck) {
+    nameCounts.set(card.name, (nameCounts.get(card.name) ?? INITIAL_COUNT) + COUNT_INCREMENT);
+    if (isUnique(card)) {
+      uniqueNames.add(card.name);
+    }
+  }
+
+  for (const name of uniqueNames) {
+    const count = nameCounts.get(name) ?? INITIAL_COUNT;
+    if (count > MAX_UNIQUE_COPIES) {
+      errors.push({
+        code: "TOO_MANY_UNIQUE_COPIES",
+        message: `Card "${name}" is [Unique]: a deck may contain only ${MAX_UNIQUE_COPIES} card with that name, but has ${count}`,
+      });
+    }
+  }
+
+  return errors;
+};
+
+/**
  * Validate chosen champion matches legend's champion tag (rule 103.2.a.2)
  */
-const validateChosenChampion = (champion: UnitCard, legend: LegendCard): DeckValidationError[] => {
+const validateChosenChampion =(champion: UnitCard, legend: LegendCard): DeckValidationError[] => {
   const errors: DeckValidationError[] = [];
 
   if (!champion.isChampion) {
@@ -446,6 +496,7 @@ const collectMainDeckErrors = (
 ): DeckValidationError[] => [
   ...validateMainDeckSize(config.mainDeck),
   ...validateCopyLimit(config.mainDeck),
+  ...validateUniqueLimit(config.mainDeck),
   ...validateChosenChampion(config.chosenChampion, config.legend),
   ...validateMainDeckDomainIdentity(config.mainDeck, legendDomains),
   ...validateSignatureLimit(config.mainDeck, config.legend),
