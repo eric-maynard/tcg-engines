@@ -493,6 +493,32 @@
       z-index: 6;
     }
 
+    /* rule 1004 (sfd-008-221): attachment link badge — shown on the Equipment
+       (holder's name) and on the holding unit (its Equipment names) so the two
+       loose board cards read as one attached pair. */
+    .card-attach {
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      right: 3px;
+      padding: 1px 3px;
+      border-radius: 4px;
+      background: rgba(20,10,45,0.85);
+      border: 1px solid #b98cff;
+      color: #e6d8ff;
+      font-size: 9px;
+      font-weight: 600;
+      line-height: 1.2;
+      text-align: center;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      z-index: 6;
+      pointer-events: none;
+    }
+    .card--attached { outline: 2px solid rgba(185,140,255,0.7); outline-offset: -2px; }
+    .card--equipped { outline: 2px dashed rgba(185,140,255,0.55); outline-offset: -2px; }
+
     /* Hand cards — large, image-only; min-width prevents unreadable compression.
        All owned hand cards are clickable (for cost payment, card selection, etc.),
        so they all show cursor:pointer. Playable cards also get a green pulse glow. */
@@ -1751,11 +1777,26 @@
       text-align: left;
       cursor: pointer;
       transition: border-color .12s, transform .08s;
+      /* Fixed footprint: late text swaps (VS Claude availability) never
+         reflow the menu. */
+      min-height: 84px;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
     }
     .mode-card:hover:not(:disabled) { border-color: #6a50c0; transform: translateY(-1px); }
     .mode-card:disabled { opacity: .45; cursor: not-allowed; }
     .mode-card-title { color: #e0dced; font-size: 15px; font-weight: 600; margin-bottom: 4px; }
-    .mode-card-desc { color: #8a82a6; font-size: 11px; }
+    .mode-card-desc {
+      color: #8a82a6;
+      font-size: 11px;
+      line-height: 14px;
+      height: 28px;
+      overflow: hidden;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+    }
 
     .hidden { display: none !important; }
 

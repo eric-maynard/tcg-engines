@@ -233,10 +233,33 @@ function renderCardElement(card, isFacedown = false, zone = "") {
     ? `<div class="card-might" title="Effective Might">${effMight}</div>`
     : "";
 
+  // rule 1004 (sfd-008-221): an attached Equipment and its holder are one
+  // physical unit on the table. The snapshot already carries the link
+  // (`meta.attachedTo` on the gear, `meta.equippedWith` on the unit) but the
+  // board renders both as loose cards, so name the partner on each side.
+  const attachedToId = card.meta?.attachedTo || "";
+  const equippedWith = Array.isArray(card.meta?.equippedWith) ? card.meta.equippedWith : [];
+  const shortName = (id) => {
+    const found = typeof findCard === "function" ? findCard(id) : null;
+    return String(found?.name || id).replace(/^player-[12]-/, "");
+  };
+  let attachBadge = "";
+  if (attachedToId) {
+    classes.push("card--attached");
+    const holder = shortName(attachedToId);
+    attachBadge = `<div class="card-attach" title="Attached to ${esc(holder)}">&#128279; ${esc(holder)}</div>`;
+  } else if (equippedWith.length > 0) {
+    classes.push("card--equipped");
+    const names = equippedWith.map(shortName).join(", ");
+    attachBadge = `<div class="card-attach card-attach--holder" title="Equipped with ${esc(names)}">&#128279; ${esc(names)}</div>`;
+  }
+
   const imgLoad = _cardImgLoadAttrs(imgId); // [rule:design-no-blank-cards]
 
   return `
     <div class="${classes.join(" ")}"
+         ${attachedToId ? `data-attached-to="${esc(attachedToId)}"` : ""}
+         ${equippedWith.length ? `data-equipped-with="${esc(equippedWith.join(" "))}"` : ""}
          data-card-id="${esc(card.id)}"
          data-def-id="${esc(defId)}"
          data-zone="${esc(zone)}"
@@ -254,6 +277,7 @@ function renderCardElement(card, isFacedown = false, zone = "") {
       </div>
       ${card.meta?.damage > 0 ? `<div class="card-damage">${card.meta.damage}</div>` : ""}
       ${mightBadge}
+      ${attachBadge}
       ${hideBtn}
       <div class="card-name">${esc(card.name || "")}</div>
     </div>

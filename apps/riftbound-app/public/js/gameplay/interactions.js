@@ -490,6 +490,21 @@ function updateTargetBanner() {
       buttons.push({ label: additionalCostLabel(m), move: m });
     }
   }
+  // rule 355.7 (unl-106-219): a counter spell targets an item on the chain, and
+  // no renderer draws the "chain" zone as a [data-card-id] node — such a target
+  // cannot be clicked at all. Offer every unclickable valid target as an
+  // explicit banner button, routed through onCardClick so multi-pick / Repeat
+  // handling stays in one place.
+  for (const id of interaction.validTargets || []) {
+    if (document.querySelector(`[data-card-id="${CSS.escape(id)}"]`)) continue;
+    const nm = String(
+      findCard(id)?.name
+      || (typeof resolveChainCard === "function" ? resolveChainCard(String(id)) : "")
+      || id,
+    ).replace(/^player-[12]-/, "");
+    buttons.push({ label: `Target ${nm}`, pick: id });
+  }
+
   const chosenNames = chosen.map(id => (findCard(id)?.name || id).replace(/^player-[12]-/, ""));
   const text = chosen.length === 0
     ? `Choose a target for ${name} — Esc to cancel`
@@ -516,6 +531,11 @@ function showTargetBanner(text, buttons) {
     btn.textContent = b.label;
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
+      // A `pick` button stands in for clicking an unclickable target (chain zone).
+      if (b.pick) {
+        onCardClick(b.pick);
+        return;
+      }
       executeMove(b.move.moveId, b.move.params, b.move.playerId);
       cancelInteraction();
     });

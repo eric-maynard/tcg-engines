@@ -406,6 +406,16 @@ function describePlayVariantBase(m, card) {
     ? "to base"
     : `to ${getBattlefieldName(String(loc).replace(/^battlefield-/, ""))}`;
   if (!m.params?.paidAdditionalCost) {
+    // rule 573 (sfd-078-221): a Repeat variant carries `repeatCount` and no
+    // paidAdditionalCost, so it must name the Repeat or it renders as a second
+    // identical "Play" button that silently charges the extra cost.
+    const repeatCount = Number(m.params?.repeatCount) || 0;
+    if (repeatCount > 0) {
+      return {
+        label: `Play ${where} + Repeat x${repeatCount}`,
+        detail: `${baseCost} energy + ${repeatCount} extra Repeat cost`,
+      };
+    }
     return { label: `Play ${where}`, detail: `${baseCost} energy` };
   }
   const spec = m.params.additionalCostSpec;
