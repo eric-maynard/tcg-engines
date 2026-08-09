@@ -192,6 +192,21 @@ export function getKeywordTotalValue(cardId: string, keyword: string, ctx: Effec
 }
 
 /**
+ * rule 394-397 (rule-id: unl-181-219) — the cards a Linked ability banished
+ * "with" its source: `meta.exiledByThis` (written by `effects/banish.ts` for a
+ * `trackLinked` banish) narrowed to those still in banishment.
+ */
+export function linkedBanishedIds(ctx: EffectContext): string[] {
+  const meta = ctx.cards.getCardMeta?.(ctx.sourceCardId as CoreCardId) as
+    | Partial<RiftboundCardMeta>
+    | undefined;
+  const tracked = (meta?.exiledByThis ?? []) as readonly string[];
+  return tracked.filter(
+    (id) => ctx.zones.getCardZone?.(id as CoreCardId) === "banishment",
+  ) as string[];
+}
+
+/**
  * Resolve an AmountExpression to a numeric value.
  *
  * Handles dynamic amounts like "equal to this unit's Might",
@@ -544,6 +559,27 @@ export function evaluateEffectCondition(
       if (String(turn?.phase ?? "").toLowerCase() !== wanted) return false;
       return condition.whose === "you" ? turn?.activePlayer === ctx.playerId : true;
     }
+    // rule 319 (ven-139-166 Rogue Assassin) — "If it's your turn": the effect's
+    // controller must be the turn player as the instruction executes.
+    case "your-turn": {
+      const turn = ctx.draft.turn as { activePlayer?: string } | undefined;
+      return turn?.activePlayer === ctx.playerId;
+    }
+    // rule 442.1.a — "if I'm [Empowered]", checked on resolution. Without an
+    // explicit target it asks about the effect's own source.
+    case "empowered":
+    case "not-empowered": {
+      const subject =
+        (condition.target as { type?: string } | undefined)?.type === "self" ||
+        condition.target === undefined ||
+        condition.target === "self"
+          ? ctx.sourceCardId
+          : (ctx.boundTargets?.[0] ?? ctx.sourceCardId);
+      const meta = subject
+        ? (ctx.cards.getCardMeta?.(subject as CoreCardId) as { empowered?: boolean } | undefined)
+        : undefined;
+      return (meta?.empowered === true) === (condType === "empowered");
+    }
     case "has-xp": {
       const threshold = (condition.threshold as number) ?? 1;
       const player = ctx.draft.players[ctx.playerId];
@@ -581,6 +617,15 @@ export function evaluateEffectCondition(
       if (target && (target as { type?: string }).type === "rune") {
         n = ctx.zones.getCardsInZone("runePool" as CoreZoneId, ctx.playerId as CorePlayerId)
           .length;
+      } else if (
+        target &&
+        (target as { location?: string }).location === "banishment" &&
+        (target as { linkedToSource?: boolean }).linkedToSource === true
+      ) {
+        // rule 397 (rule-id: unl-181-219) — "if there are four spells banished
+        // WITH ME" counts only the cards this ability banished (the source's
+        // `exiledByThis` link list), never cards exiled by anything else.
+        n = linkedBanishedIds(ctx).length;
       } else if (target && (target as { location?: string }).location === "hand") {
         // rule-id: ogn-251-298 (Loose Cannon) / rule 383.2.a.1 — hand is not a
         // board zone, so resolveTarget can't count it; count the zone directly.

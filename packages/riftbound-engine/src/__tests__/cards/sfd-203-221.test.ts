@@ -186,12 +186,12 @@ describe("Battle Mistress (sfd-203-221)", () => {
     expect(game.p1.power("body")).toBe(3);
   });
 
-  test.failing("BUG: recycling a MAIN-DECK card (Called Shot: 'draw one and recycle the other') is not recycling a rune, yet the Mistress asks to exhaust", async () => {
+  test("recycling a MAIN-DECK card (Called Shot: 'draw one and recycle the other') is not recycling a rune, yet the Mistress asks to exhaust", async () => {
     // Expected: after the Called Shot pick nothing from Battle Mistress — no yes/no, no chain item, no Gold.
     // Actual: the generic `recycle` event matches her trigger; the `filter: "rune"` is ignored.
     const game = await scenario()
       .legend(P1, CARD, "bm")
-      .resources(P1, { energy: 0 })
+      .resources(P1, { energy: 0, power: { chaos: 1 } })
       .hand(P1, CALLED_SHOT, "shot")
       .deck(P1, [FILLER, FILLER], ["top1", "top2"])
       .build();

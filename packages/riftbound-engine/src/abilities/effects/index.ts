@@ -65,6 +65,7 @@ import { handle_reveal } from "./reveal";
 import { handle_revealHand } from "./reveal-hand";
 import { handle_preventDamage } from "./prevent-damage";
 import { handle_takeControl } from "./take-control";
+import { handle_linkedBanishedToTrash } from "./linked-banished-to-trash";
 import { handle_trashFacedown } from "./trash-facedown";
 import { handle_enterReady } from "./enter-ready";
 import { handle_costReduction } from "./cost-reduction";
@@ -163,6 +164,7 @@ export const EFFECT_HANDLERS: Record<string, EffectHandler> = {
   "reveal-hand": handle_revealHand,
   "prevent-damage": handle_preventDamage,
   "take-control": handle_takeControl,
+  "linked-banished-to-trash": handle_linkedBanishedToTrash,
   "trash-facedown": handle_trashFacedown,
   "enter-ready": handle_enterReady,
   "cost-reduction": handle_costReduction,
