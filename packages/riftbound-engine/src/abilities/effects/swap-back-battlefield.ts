@@ -52,6 +52,7 @@ export function handle_swapBackBattlefield(
   }
   ctx.zones.moveCard({ cardId: replacedId as CoreCardId, targetZoneId: "battlefieldRow" as CoreZoneId });
   const units = [...(ctx.zones.getCardsInZone(`battlefield-${slotKey}` as CoreZoneId) ?? [])];
+  const facedown = [...(ctx.zones.getCardsInZone(`facedown-${slotKey}` as CoreZoneId) ?? [])];
   const newKey = replacedId;
   if (newKey !== slotKey && draft.battlefields) {
     draft.battlefields[newKey] = { ...slot, id: replacedId };
@@ -71,6 +72,16 @@ export function handle_swapBackBattlefield(
         cardId: unit,
         targetZoneId: `battlefield-${newKey}` as CoreZoneId,
       });
+    }
+    // 438.7.b / 652.2.b — a card still facedown here rides along with the slot:
+    // it stays in a Facedown Zone (no zone change, so no 421.4 reveal) and keeps
+    // the hidden permissions it was hidden with (421.3). Only its anchor is re-keyed.
+    for (const hid of facedown) {
+      ctx.zones.moveCard({
+        cardId: hid,
+        targetZoneId: `facedown-${newKey}` as CoreZoneId,
+      });
+      ctx.cards.updateCardMeta?.(hid as CoreCardId, { hiddenAt: newKey } as unknown as Record<string, unknown>);
     }
   }
   // 186.1 — the battlefield token ceases to exist once it leaves the row.

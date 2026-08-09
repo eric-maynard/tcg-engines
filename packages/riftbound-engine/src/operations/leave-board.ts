@@ -34,6 +34,7 @@ import type { RiftboundCardMeta, RiftboundGameState } from "../types";
 import type { DelayedTrigger } from "../types/game-state";
 import { getGlobalCardRegistry } from "./card-lookup";
 import { clearDamage, getDamage } from "./damage-store";
+import { recordPublicReveal } from "./public-reveal";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -722,6 +723,11 @@ export function leaveBoard(
   }
 
   const dest = destinationZone(finalTo);
+  // rule 421.4 — a facedown card that changes zones is revealed to all players
+  // by its owner as it leaves the Facedown Zone (bounce, trash, banish alike).
+  if (lki.zone !== undefined && lki.zone.startsWith("facedown-")) {
+    recordPublicReveal(ctx, lki.owner ?? ownerOf(ctx, cardId) ?? "", [cardId]);
+  }
   ctx.zones.moveCard({
     cardId: cardId as CoreCardId,
     targetZoneId: dest.zoneId as CoreZoneId,

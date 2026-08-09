@@ -9,6 +9,7 @@ import type {
 } from "@tcg/core";
 import type { RiftboundCardMeta } from "../../types";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
+import { recordPublicReveal } from "../../operations/public-reveal";
 import { additionalCostWasPaid } from "../../operations/additional-costs-paid";
 import { effectiveTags } from "../card-tags";
 import { scoreWithinConditionMet } from "../../operations/score-within";
@@ -43,28 +44,13 @@ function dieWouldBeReplaced(cardId: string, ctx: EffectContext): boolean {
   return matches.some((m) => (m.condition as { type?: string } | undefined)?.type !== "pay-cost");
 }
 
-/** How many past reveals the shared record keeps (rule 424.1 is about the moment, not a permanent log). */
-const PUBLIC_REVEAL_HISTORY = 20;
-
 /**
- * rule 424.1 — a reveal presents the card to ALL players. Every reveal path
- * goes through here so the identity is on the state for the log / UI / a
- * spectator to name, whether or not the reveal parks a prompt.
+ * rule 424.1 — a reveal presents the card to ALL players. The recorder lives in
+ * `operations/public-reveal` so zone-change code (rule 421.4) can write the same
+ * record without importing the effect-handler graph; re-exported here because
+ * effect handlers import it from the helpers.
  */
-export function recordPublicReveal(
-  ctx: EffectContext,
-  playerId: string,
-  cardIds: readonly string[],
-): void {
-  if (cardIds.length === 0) return;
-  const draft = ctx.draft as unknown as {
-    publicReveals?: { playerId: string; cardIds: readonly string[]; turn: number }[];
-    turn?: { number?: number };
-  };
-  const entries = draft.publicReveals ?? [];
-  entries.push({ cardIds: [...cardIds], playerId, turn: draft.turn?.number ?? 0 });
-  draft.publicReveals = entries.slice(-PUBLIC_REVEAL_HISTORY);
-}
+export { recordPublicReveal };
 
 export interface EffectHelpers {
   readonly executeEffect: (effect: ExecutableEffect, ctx: EffectContext) => void;
