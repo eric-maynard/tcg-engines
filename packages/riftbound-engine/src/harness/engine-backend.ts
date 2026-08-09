@@ -218,7 +218,10 @@ export class EngineBackend implements GameBackend {
       seq: this.seqNo,
     });
 
-    if (this.engine.getState().status !== "playing") {
+    const status = this.engine.getState().status;
+    // rule 117: the pregame mulligan is answerable through the Decision/Answer
+    // protocol, so a seat may act during `setup` while a setup decision is open.
+    if (status !== "playing" && !(status === "setup" && this.decision() !== null)) {
       return fail({ code: "GAME_OVER", message: "The game has ended" });
     }
 
@@ -293,6 +296,23 @@ export class EngineBackend implements GameBackend {
       }
       const args = answer.args ?? {};
       return this.resolveNarrow(seat, option, args, target.id, narrowVariants(this.ctx(), option, args), 0, answer);
+    }
+
+    // rule 117 / 117.1: the pregame mulligan prompt is not an engine
+    // pendingChoice — its answer is the set-aside list of the `mulligan` move.
+    if (status === "setup" && target.source?.moveId === "mulligan") {
+      if (answer.kind !== "pick" && answer.kind !== "decline") {
+        return fail({
+          code: "WRONG_ANSWER_KIND",
+          message: `The mulligan needs a pick (up to two cards) or decline, got ${answer.kind}`,
+        });
+      }
+      const keepCards = answer.kind === "pick" ? answer.keys.map(String) : [];
+      return this.execute(seat, target, answer, {
+        moveId: "mulligan",
+        params: { keepCards, playerId: seat },
+        playerId: seat,
+      });
     }
 
     const resolved = resolvePendingAnswer(this.ctx(), target, answer);

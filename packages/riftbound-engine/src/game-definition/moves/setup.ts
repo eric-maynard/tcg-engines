@@ -464,6 +464,14 @@ export const setupMoves: Partial<
     condition: (state, context) => {
       const playerId = context.params.playerId as string;
 
+      // rule 117 / 118: the Mulligan is a step of the setup sequence (110–118);
+      // once play has begun there is no such action any more. The setup record
+      // is cleared by `transitionToPlay`, so an ABSENT record must deny the
+      // move rather than wave it through.
+      if (state.status !== "setup" || !state.setup) {
+        return false;
+      }
+
       // rule 117.1: the set-aside cards must be "cards in their hand" — a card
       // in any other zone, or another player's hand card, is not a legal choice
       // (hand is a shared zone, so the lookup is owner-scoped).
