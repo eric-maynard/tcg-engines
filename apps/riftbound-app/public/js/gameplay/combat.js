@@ -214,7 +214,17 @@ function detectCombatResult(prevState, newState) {
       } else if (attackerKilled.length > 0 && defenderKilled.length === 0) {
         showCombatOutcome("defend", bfName, pName(defendingPlayer));
       } else {
+        // Both sides lost units. "Mutual Destruction" only fits when neither
+        // side is left holding the battlefield — a surviving defender (or an
+        // attacking force wiped out entirely) is a successful defense, and the
+        // battlefield flipping to the attacker is a conquer.
+        const attackersLeft = newUnits.filter(u => u.owner === attackingPlayer).length;
+        const defendersLeft = newUnits.filter(u => u.owner !== attackingPlayer).length;
         if (newBf?.controller === attackingPlayer && prevBf?.controller !== attackingPlayer) {
+          showCombatOutcome("conquer", bfName, pName(attackingPlayer));
+        } else if (defendersLeft > 0 || attackersLeft === 0) {
+          showCombatOutcome("defend", bfName, pName(defendingPlayer));
+        } else if (defendersLeft === 0 && attackersLeft > 0) {
           showCombatOutcome("conquer", bfName, pName(attackingPlayer));
         } else {
           showCombatOutcome("tie", bfName, "");

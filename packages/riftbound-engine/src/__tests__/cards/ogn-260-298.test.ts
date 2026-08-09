@@ -71,6 +71,20 @@ describe("Last Breath (ogn-260-298)", () => {
     expect(game.state("homeFoe").damage).toBe(0);
   });
 
+  test("rule 417.6.b.3 — the READIED UNIT is the source of the damage, not the spell", async () => {
+    const game = await board().build();
+    const viaTargets = await game.p1.try((p) => p.cast("lb", { targets: ["ally", "foe"] }));
+    if (!viaTargets.ok) {
+      await game.p1.cast("lb", { targets: "ally" });
+    }
+    await game.settle({ policy: "first" });
+    expect((game.gameState.damageLog ?? []).filter((r) => r.target === "foe")).toEqual([
+      expect.objectContaining({
+        source: expect.objectContaining({ cardId: "ally", kind: "unit", player: P1 }),
+      }),
+    ]);
+  });
+
   test("damage equal to Might is lethal — a 5-Might striker kills the 5-Might enemy at the battlefield", async () => {
     // Expected: foe (5 Might) takes 5 → killed → trash. Actual: no damage clause, foe untouched.
     const game = await scenario()

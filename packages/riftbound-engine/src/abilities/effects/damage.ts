@@ -14,8 +14,42 @@ import { getBonusDamage } from "../bonus-damage";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import { type EffectHelpers, getTargetIds, getEffectiveMight, resolveAmount } from "./_helpers";
 
-/** rule 417.6.a / 417.6.b.2 — the resolving spell or ability (and its controller) is the source. */
-function damageSourceOf(ctx: EffectContext): DamageSource {
+/**
+ * rule 417.6.b.3 — when the instruction names a UNIT as the dealer ("It deals
+ * damage equal to its Might"), that unit is the source, not the spell/ability.
+ * The named unit is exactly the `amount.might` referent: the sequence's pending
+ * value ("It" = the unit an earlier step acted on) or the caster-chosen
+ * reference locked at boundTargets[0] (see `_helpers.resolveAmount`).
+ */
+function mightReferenceUnit(effect: ExecutableEffect, ctx: EffectContext): string | undefined {
+  const raw = (effect.amount as { might?: unknown } | undefined)?.might;
+  const pending = (ctx as { pendingSequenceValue?: readonly string[] }).pendingSequenceValue?.[0];
+  if (raw === "pending-value") {
+    return pending;
+  }
+  if (typeof raw === "object" && raw !== null) {
+    return pending ?? ctx.boundTargets?.[0];
+  }
+  return undefined;
+}
+
+/**
+ * rule 417.6.a / 417.6.b.2 — the resolving spell or ability (and its
+ * controller) is the source; rule 417.6.b.3 / 417.6.b.4 — unless the effect
+ * names a unit as the dealer, in which case that unit is the source and its
+ * controller is the responsible player.
+ */
+function damageSourceOf(ctx: EffectContext, unitId?: string): DamageSource {
+  if (unitId !== undefined) {
+    return {
+      cardId: unitId,
+      kind: "unit",
+      player:
+        (ctx.cards.getCardController?.(unitId as CoreCardId) as string | undefined) ??
+        (ctx.cards.getCardOwner(unitId as CoreCardId) as string | undefined) ??
+        ctx.playerId,
+    };
+  }
   return {
     cardId: ctx.sourceCardId,
     kind: getGlobalCardRegistry().getCardType(ctx.sourceCardId) === "spell" ? "spell" : "ability",
@@ -60,9 +94,9 @@ function dealHits(
   ctx: EffectContext,
   hits: readonly { targetId: string; amount: number }[],
   boundTargets: readonly string[] | undefined,
-  opts?: { noSourceBonus?: boolean },
+  opts?: { noSourceBonus?: boolean; sourceUnitId?: string },
 ): { dealtTo: string[]; suspended: boolean } {
-  const source = damageSourceOf(ctx);
+  const source = damageSourceOf(ctx, opts?.sourceUnitId ?? mightReferenceUnit(effect, ctx));
   const requests: DamageRequest[] = hits.map((h) => ({
     amount: h.amount,
     source,
@@ -316,7 +350,12 @@ export function handle_damage(effect: ExecutableEffect, ctx: EffectContext, h: E
       splitHits.push({ amount: assigned[targetId] + surplus, targetId });
       surplus = 0;
     }
-    dealHits(effect, ctx, splitHits, ctx.boundTargets, { noSourceBonus: true });
+    dealHits(effect, ctx, splitHits, ctx.boundTargets, {
+      noSourceBonus: true,
+      // rule 417.6.b.3 — a Might-referencing split ("It deals damage equal to
+      // its Might split among…") is dealt BY the reference unit.
+      ...(hasRef && refId !== undefined ? { sourceUnitId: refId } : {}),
+    });
     return;
   }
   const rawAmount = effect.amount ?? 1;
