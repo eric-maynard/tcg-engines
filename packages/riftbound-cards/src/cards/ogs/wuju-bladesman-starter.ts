@@ -9,7 +9,11 @@ import { createCardId } from "@tcg/riftbound-types/cards";
  */
 const abilities: Ability[] = [
   {
-    condition: { role: "defending", type: "alone-in-combat" },
+    // rule 364.3 / 464.2.c.3 — the subject is the friendly unit, not the legend,
+    // so the combat state is checked per target ("while-unit-state"); an
+    // `alone-in-combat` condition is read against the SOURCE, which is a legend
+    // in the legend zone and therefore never defending.
+    condition: { state: "defending-alone", type: "while-unit-state" },
     effect: {
       amount: 2,
       target: {
