@@ -1732,8 +1732,9 @@ export function payDeflectSurcharge(
   playerId: string,
   targets: readonly string[],
   cards?: Parameters<typeof getDeflectSurcharge>[3],
+  zones?: Parameters<typeof getDeflectSurcharge>[5],
 ): boolean {
-  const amount = getDeflectSurcharge(draft, playerId, [...targets], cards);
+  const amount = getDeflectSurcharge(draft, playerId, [...targets], cards, undefined, zones);
   if (amount <= 0) {
     return true;
   }
@@ -1777,6 +1778,45 @@ export function sourceIgnoresDeflect(sourceCardId?: string): boolean {
   return false;
 }
 
+/**
+ * rule 765 / 766 / 767 (rule-id: ven-158-166) — a battlefield printing
+ * "Players ignore [Deflect] while paying for spells and abilities choosing
+ * something here" makes Deflect Inactive for the PAYMENT procedure only, and
+ * only for objects AT that battlefield (767); the object keeps the keyword
+ * (809.3) and Deflect elsewhere is still taxed. `players: "all"` is symmetric
+ * (105/190) — the waiver helps whoever is choosing, controller or not.
+ */
+function locationIgnoresDeflect(
+  state: RiftboundGameState,
+  targetId: string,
+  zones?: { getCardZone?: (cardId: CoreCardId) => string | undefined },
+): boolean {
+  const zone = zones?.getCardZone?.(targetId as CoreCardId);
+  if (typeof zone !== "string" || !zone.startsWith("battlefield-")) {
+    return false;
+  }
+  const bfKey = zone.slice("battlefield-".length);
+  const bfCardId = (state.battlefields?.[bfKey]?.id as string | undefined) ?? bfKey;
+  const registry = getGlobalCardRegistry();
+  for (const id of new Set([bfCardId, bfKey])) {
+    for (const ability of registry.getAbilities(id) ?? []) {
+      if (ability.type !== "static") {
+        continue;
+      }
+      const effect = (ability as { effect?: Record<string, unknown> }).effect;
+      if (
+        effect?.type === "ignore-keyword" &&
+        effect.keyword === "Deflect" &&
+        effect.procedure === "paying-costs" &&
+        (effect.location === undefined || effect.location === "here")
+      ) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 export function getDeflectSurcharge(
   _state: RiftboundGameState,
   _playerId: string,
@@ -1787,6 +1827,7 @@ export function getDeflectSurcharge(
     getCardMeta?: (cardId: CoreCardId) => unknown;
   },
   sourceCardId?: string,
+  zones?: { getCardZone?: (cardId: CoreCardId) => string | undefined },
 ): number {
   if (!_targets || _targets.length === 0 || sourceIgnoresDeflect(sourceCardId)) {
     return 0;
@@ -1794,6 +1835,11 @@ export function getDeflectSurcharge(
   const registry = getGlobalCardRegistry();
   let surcharge = 0;
   for (const targetId of _targets) {
+    // rule 766 / 767 — Deflect is Inactive for this payment while the chosen
+    // object sits at a battlefield that waives it.
+    if (locationIgnoresDeflect(_state, targetId, zones)) {
+      continue;
+    }
     const controller =
       cards?.getCardController?.(targetId as CoreCardId) ??
       cards?.getCardOwner?.(targetId as CoreCardId);
@@ -2616,13 +2662,19 @@ export function getSelfScaledEnergyReduction(
         const controller = cards?.getCardController?.(id) ?? cards?.getCardOwner(id);
         return wantEnemy ? controller !== playerId : controller === playerId;
       };
-      let found = zones
-        .getCardsInZone("base" as CoreZoneId, playerId as CorePlayerId)
-        .some(controlsEmpowered);
+      // rule 441 (rule-id: ven-195-166) — "something" is any game object you
+      // control, and a LEGEND is one: scan every per-player board zone, not
+      // just base.
+      const PLAYER_BOARD_ZONES = ["base", "legendZone", "championZone"] as const;
+      const scanPlayer = (owner: string): boolean =>
+        PLAYER_BOARD_ZONES.some((zoneId) =>
+          zones.getCardsInZone(zoneId as CoreZoneId, owner as CorePlayerId).some(controlsEmpowered),
+        );
+      let found = scanPlayer(playerId);
       if (!found && wantEnemy) {
         for (const other of Object.keys(state.players ?? {})) {
           if (other === playerId) continue;
-          if (zones.getCardsInZone("base" as CoreZoneId, other as CorePlayerId).some(controlsEmpowered)) {
+          if (scanPlayer(other)) {
             found = true;
             break;
           }
@@ -3508,7 +3560,7 @@ export function getPlayPowerDiscountOverflow(
       extras,
       mergePower(nextPlay.power ?? {}, getSelfScaledPowerReduction(state, playerId, cardId, extras)),
     ),
-    getDeflectSurcharge(state, playerId, extras.targets, extras.board?.cards, cardId),
+    getDeflectSurcharge(state, playerId, extras.targets, extras.board?.cards, cardId, extras.board?.zones),
     baseCost.power,
     pool?.power ?? {},
   );
@@ -3635,7 +3687,7 @@ export function computePlayResourceCost(
       extras,
       mergePower(nextPlay.power ?? {}, getSelfScaledPowerReduction(state, playerId, cardId, extras)),
     ),
-    getDeflectSurcharge(state, playerId, extras.targets, extras.board?.cards, cardId),
+    getDeflectSurcharge(state, playerId, extras.targets, extras.board?.cards, cardId, extras.board?.zones),
     baseCost.power,
     pool?.power ?? {},
   );

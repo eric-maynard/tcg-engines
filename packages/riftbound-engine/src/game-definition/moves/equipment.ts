@@ -313,7 +313,9 @@ export const equipmentMoves: Partial<
         deductAbilityCost(
           draft,
           playerId,
-          { energy: equipCost.energy, power: [...equipCost.power] },
+          // rule 818.1.c.3 / 730.2 (unl-158-219) — the XP half leaves on
+          // activation alongside the pips, before anyone may respond.
+          { energy: equipCost.energy, power: [...equipCost.power], xp: equipCost.xp },
           context.zones,
           context.counters,
         );
@@ -392,6 +394,26 @@ export const equipmentMoves: Partial<
         },
       );
 
+      // rule 818.1.b.1 / 383.4.b (rule-id: sfd-195-221) — the unit an [Equip]
+      // names is a TARGET, so activating it is "choosing" that unit: a
+      // Targeting Effect trigger ("when you choose a friendly unit") sees it,
+      // exactly as a spell's or another activated ability's target does. Fired
+      // after `addToChain` so the trigger sits above the [Equip] item.
+      dispatchEvent(
+        {
+          cards: context.cards,
+          counters: context.counters,
+          draft,
+          zones: context.zones,
+        },
+        {
+          cardId: unitId,
+          chooserId: playerId,
+          sourceCardId: equipmentId,
+          sourceType: "ability",
+          type: "choose",
+        },
+      );
     },
   },
 

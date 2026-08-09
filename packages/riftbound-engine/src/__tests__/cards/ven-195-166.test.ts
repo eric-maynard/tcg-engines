@@ -108,7 +108,7 @@ describe("Soul's Reflection (ven-195-166)", () => {
     expect(game.chain()).toEqual([]);
   });
 
-  test.failing("BUG: 'YOU empower something else' is about the ACTING player — my spell empowering an ENEMY unit must light up my legend", async () => {
+  test("'YOU empower something else' is about the ACTING player — my spell empowering an ENEMY unit must light up my legend", async () => {
     // Expected: after Test Empower Unit (cast by P1) empowers P2's unit, Soul's Reflection triggers and
     // ends Empowered. Actual: the empower event is attributed to the target's OWNER, so nothing fires.
     const game = await scenario().legend(P1, CARD, "soul").unit(P2, "base", { might: 2, name: "Theirs" }, "theirs").hand(P1, EMPOWER_UNIT, "emp").build();
@@ -237,7 +237,7 @@ describe("Soul's Reflection (ven-195-166)", () => {
     expect(game.violations()).toEqual([]);
   });
 
-  test.failing("BUG: partner — Shock Blast: an Empowered LEGEND is 'something you control that's Empowered' → [2] less: castable and fully paid from 1 energy + [mind]", async () => {
+  test("partner — Shock Blast: an Empowered LEGEND is 'something you control that's Empowered' → [2] less: castable and fully paid from 1 energy + [mind]", async () => {
     // Expected: the legend (a game object you control, Empowered) satisfies the discount gate → 1 + [mind]
     // casts it. Actual: the gate only scans base and battlefield zones, never the legend zone → needs 3.
     const game = await armed().resources(P1, { energy: 1, power: { mind: 1 } }).hand(P1, SHOCK_BLAST, "blast").build();

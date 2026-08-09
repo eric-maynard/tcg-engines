@@ -113,8 +113,12 @@ export function parseAdditionalCostText(text: string): Partial<Cost> {
   // hand card must have, a numeric one just counts cards.
   const discardTypeMatch = text.match(/Discard\s+(?:a|an|one|1)\s+(gear|unit|card|spell|legend)s?\b/i);
   const discardCountMatch = discardTypeMatch ? null : text.match(/Discard\s+(\d+)\b/i);
+  // rule 818.1.c.3 / 730.2 (unl-158-219) — "Spend N XP" is a non-resource cost
+  // component: it is paid in full on activation and is unpayable below N XP.
+  const xpMatch = text.match(/Spend\s+(\d+)\s+XP\b/i);
 
   return {
+    ...(xpMatch ? { xp: Number.parseInt(xpMatch[1], 10) } : undefined),
     ...(discardTypeMatch
       ? ({
           discard: { amount: 1, cardType: discardTypeMatch[1].toLowerCase() },
@@ -149,5 +153,6 @@ export function mergeCosts(base: Cost, additional: Partial<Cost>): Cost {
     recycle: additional.recycle ?? base.recycle,
     returnToHand: additional.returnToHand ?? base.returnToHand,
     spend: additional.spend ?? base.spend,
+    xp: additional.xp ?? base.xp,
   };
 }

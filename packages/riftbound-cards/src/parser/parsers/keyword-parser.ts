@@ -107,16 +107,19 @@ export function parseCostKeyword(
       // For Equip, cost appears directly after keyword or after "—"
       // Handle both "[Equip] :rb_rune_body:" and "[Equip] — :rb_rune_chaos:, Recycle 2 cards"
       const costMatch = followingText.match(EQUIP_COST_PATTERN);
-      if (costMatch) {
-        cost = parseCost(costMatch[1]);
-
-        // Check for additional costs like "Recycle N cards" or "Kill a friendly unit"
-        const additionalText = followingText.slice(costMatch[0].length);
-        if (additionalText.includes(",")) {
-          const additionalCost = parseAdditionalCostText(additionalText);
-          if (Object.keys(additionalCost).length > 0) {
-            cost = mergeCosts(cost, additionalCost);
-          }
+      // rule 818.1.c.3 (unl-158-219) — the non-resource half of an Equip cost
+      // ("Recycle N cards", "Kill a friendly unit", "Spend N XP") may be the
+      // WHOLE cost, so pips are optional. The parenthetical reminder text never
+      // carries cost words and is stripped before matching.
+      const additionalText = (
+        costMatch ? followingText.slice(costMatch[0].length) : followingText
+      ).replace(/\([^)]*\)/g, "");
+      const additionalCost = parseAdditionalCostText(additionalText);
+      const hasAdditional = Object.keys(additionalCost).length > 0;
+      if (costMatch || hasAdditional) {
+        cost = costMatch ? parseCost(costMatch[1]) : { energy: 0, power: [] };
+        if (hasAdditional) {
+          cost = mergeCosts(cost, additionalCost);
         }
       }
       break;

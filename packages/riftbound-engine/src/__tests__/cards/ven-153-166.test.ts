@@ -104,7 +104,7 @@ describe("Matriarch of War (ven-153-166)", () => {
     expect(game.chain()).toEqual([]);
   });
 
-  test.failing("BUG: 'you empower something' is about the ACTOR (441.3.a) — my Sanction empowering an ENEMY unit should empower my legend", async () => {
+  test("'you empower something' is about the ACTOR (441.3.a) — my Sanction empowering an ENEMY unit should empower my legend", async () => {
     // Expected: P1 performed the Empower → trigger → legend Empowered. Actual: the engine keys the
     // event to the empowered card's owner (P2), so nothing triggers.
     const game = await scenario()
@@ -119,7 +119,7 @@ describe("Matriarch of War (ven-153-166)", () => {
     expect(game.state("mow").isEmpowered).toBe(true);
   });
 
-  test.failing("BUG: …and the opponent's Sanction empowering MY unit is THEM empowering it — my legend must stay un-Empowered", async () => {
+  test("…and the opponent's Sanction empowering MY unit is THEM empowering it — my legend must stay un-Empowered", async () => {
     // Expected: no trigger for P1. Actual: owner-keyed matching fires Matriarch of War for P1.
     const game = await scenario()
       .active(P2)

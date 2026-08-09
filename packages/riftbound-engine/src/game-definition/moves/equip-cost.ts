@@ -28,6 +28,13 @@ export interface EquipCost {
    * with no eligible unit besides the one being equipped (358.1).
    */
   readonly killFriendlyUnit?: boolean;
+  /**
+   * rule 818.1.c.3 / 730.2 (unl-158-219 Shepherd's Heirloom) — "[Equip] — Spend
+   * 1 XP": a non-resource Equip cost paid out of the activating player's XP
+   * total. Nothing discounts it (821.1.c only waives [rainbow]) and it is
+   * unpayable below that many XP.
+   */
+  readonly xp?: number;
 }
 
 /** Cards currently in `playerId`'s trash, when the zone bag is available. */
@@ -57,6 +64,7 @@ export function printedEquipCost(equipmentId: string): EquipCost | undefined {
           power?: readonly string[];
           recycle?: number;
           kill?: unknown;
+          xp?: number;
         };
       }
     | undefined;
@@ -67,9 +75,12 @@ export function printedEquipCost(equipmentId: string): EquipCost | undefined {
   // rule 818.1.c.3 (sfd-178-221) — "Kill a friendly unit" is part of the Equip
   // cost, paid on activation alongside the pips.
   const kill = equipAbility.cost?.kill;
+  // rule 818.1.c.3 / 730.2 (unl-158-219) — "Spend N XP" is part of the Equip cost.
+  const xp = equipAbility.cost?.xp;
   return {
     energy: equipAbility.cost?.energy ?? 0,
     power: hybridizePips(equipmentId, equipAbility.cost?.power ?? []),
+    ...(typeof xp === "number" && xp > 0 ? { xp } : {}),
     ...(typeof recycle === "number" && recycle > 0 ? { recycleFromTrash: recycle } : {}),
     ...(kill !== undefined && kill !== null ? { killFriendlyUnit: true } : {}),
   };
@@ -136,6 +147,13 @@ export function canPayEquipCost(
   // is unpayable when the trash holds fewer cards than it demands.
   if (cost.recycleFromTrash !== undefined && zones !== undefined) {
     if (trashSize(zones, playerId) < cost.recycleFromTrash) {
+      return false;
+    }
+  }
+  // rule 818.1.c.3 / 730.2 (unl-158-219): the XP half is unpayable below N XP,
+  // and XP lives outside the rune pool.
+  if (cost.xp !== undefined && cost.xp > 0) {
+    if ((state.players[playerId]?.xp ?? 0) < cost.xp) {
       return false;
     }
   }

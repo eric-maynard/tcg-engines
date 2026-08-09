@@ -59,6 +59,9 @@ export function handle_empower(effect: ExecutableEffect, ctx: EffectContext, _h:
       ctx.fireTriggers?.({
         cardId: targetId,
         owner: ctx.cards.getCardOwner(targetId as CoreCardId) ?? ctx.playerId,
+        // rule 441.3.a — the player the effect DIRECTS to empower is the one who
+        // "empowers"; the empowered card's owner is irrelevant to that.
+        actor: ctx.playerId,
         type: "empower",
       });
     }

@@ -141,6 +141,13 @@ export function splitAbilityText(text: string): TextSegment[] {
           if (costTokenMatch) {
             costEnd += costTokenMatch[0].length;
           }
+          // rule 818.1.c.3 (rule-id: unl-158-219) — a cost keyword's cost need
+          // not be Power: "[Equip] — Spend 1 XP" is one keyword segment, not a
+          // keyword followed by a "Spend 1 XP" sentence.
+          const spendMatch = text.slice(costEnd).match(/^Spend\s+\d+\s+XP\b/i);
+          if (spendMatch) {
+            costEnd += spendMatch[0].length;
+          }
           // For Equip, also consume ", additional cost text"
           if (keyword === "Equip") {
             const additionalMatch = text.slice(costEnd).match(/^,\s*[^(]+/);
