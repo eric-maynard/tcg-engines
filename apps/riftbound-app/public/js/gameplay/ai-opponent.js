@@ -135,13 +135,12 @@ function _aiFillOpponentOptions() {
       ? (aiServerStatus.envKey ? "Claude seats use the server's API key." : aiServerStatus.mock ? "Server is in mock-AI mode (first legal action)." : "Claude seats use the API key saved in this browser.")
       : "Claude opponents need an Anthropic API key — add one via ⚙ Settings or the server's .env.";
   }
-  // Play-menu card mirrors availability.
+  // Play-menu card mirrors availability in its tooltip only — its visible
+  // text ships final in gameplay.html so this late pass never reflows the menu.
   const card = _aiModeCard();
   if (card) {
     card.disabled = false; // always clickable: the picker explains what is missing
-    card.title = canAi ? "Play against Claude" : "Add an API key in Settings or .env";
-    const desc = card.querySelector(".mode-card-desc");
-    if (desc) desc.textContent = canAi ? "Claude Haiku · Sonnet · Opus plays the other seat" : "Needs an Anthropic API key (⚙ Settings)";
+    card.title = canAi ? "Play against Claude" : "Play against Claude — needs an Anthropic API key (⚙ Settings or .env)";
   }
   _aiSyncPickerTitle();
 }
@@ -155,11 +154,13 @@ function _aiModeCard() {
     if (t && /^VS (AI|Claude)$/i.test(t.textContent.trim())) { card = btn; break; }
   }
   if (!card) return null;
+  // Legacy markup ("VS AI — Coming soon"): claim it. Current gameplay.html
+  // already ships id/label/onclick, so this branch is a no-op there.
   card.id = "vsAiOption";
   card.removeAttribute("disabled");
   card.disabled = false;
   const t = card.querySelector(".mode-card-title");
-  if (t) t.textContent = "VS Claude";
+  if (t && t.textContent.trim() !== "VS Claude") t.textContent = "VS Claude";
   card.onclick = () => { if (typeof showSoloDeckPicker === "function") showSoloDeckPicker("claude"); };
   return card;
 }
@@ -187,8 +188,14 @@ function aiPreparePicker(mode) {
   }
   _aiSyncPickerTitle();
   _aiFillOpponentOptions();
-  if (mode === "claude" && !aiKeyAvailable()) openAiSettings();
+  // Entered via "VS Claude" with no key: the key dialog gates the picker —
+  // dismissing it without a key returns to the Play menu (closeAiSettings).
+  _aiSettingsGatesPicker = mode === "claude" && !aiKeyAvailable();
+  if (_aiSettingsGatesPicker) openAiSettings();
 }
+
+/** True while the settings dialog was auto-opened as the gate into the VS Claude picker. */
+let _aiSettingsGatesPicker = false;
 
 // ---- Settings modal (API key) -------------------------------------------
 
@@ -274,6 +281,18 @@ function openAiSettings() {
 function closeAiSettings() {
   const el = document.getElementById("aiSettings");
   if (el) el.classList.remove("visible");
+  const gated = _aiSettingsGatesPicker;
+  _aiSettingsGatesPicker = false;
+  if (gated) {
+    if (aiKeyAvailable()) {
+      // Key arrived while gated: land on the VS Claude picker as intended.
+      aiPreparePicker("claude");
+    } else if (typeof showMenu === "function") {
+      // Dismissed without a key: back to the Play menu rather than a
+      // Goldfish-only picker the player didn't ask for.
+      showMenu();
+    }
+  }
 }
 
 function saveAiSettings() {
@@ -286,6 +305,10 @@ function saveAiSettings() {
   closeAiSettings();
   if (typeof showToast === "function") showToast(v ? "API key saved in this browser" : "Nothing to save");
 }
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && document.getElementById("aiSettings")?.classList.contains("visible")) closeAiSettings();
+});
 
 // ---- In-game: thinking pill + snapshot hooks -------------------------------
 

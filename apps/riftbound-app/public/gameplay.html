@@ -49,9 +49,11 @@
             <div class="mode-card-title">Goldfish</div>
             <div class="mode-card-desc">Practice against a passive opponent</div>
           </button>
-          <button class="mode-card" disabled title="Coming soon">
-            <div class="mode-card-title">VS AI</div>
-            <div class="mode-card-desc">Coming soon</div>
+          <!-- Rendered in its final shape so ai-opponent.js (loaded async)
+               doesn't reflow the menu when it wires the card up. -->
+          <button class="mode-card" id="vsAiOption" onclick="showSoloDeckPicker('claude')" title="Play against Claude">
+            <div class="mode-card-title">VS Claude</div>
+            <div class="mode-card-desc">Claude Haiku · Sonnet · Opus plays the other seat</div>
           </button>
         </div>
       </div>
