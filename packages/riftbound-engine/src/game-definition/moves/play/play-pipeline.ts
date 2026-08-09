@@ -282,7 +282,21 @@ export function enterPlayedPermanent(io: PlayIO, spec: EnterPlayedPermanentSpec)
       }
     }
     if (units.length === 1) {
-      attachEquipment({ cards, counters, draft, playerId, zones } as never, cardId, units[0] as string);
+      // rule 818.2 / 819.1.d — the Quick-Draw attach IS "attaching an
+      // Equipment", so it must fire attach-equipment triggers (Jax,
+      // Unrelenting) exactly as the [Equip] path does.
+      attachEquipment(
+        {
+          cards,
+          counters,
+          draft,
+          fireTriggers: (event: Parameters<typeof fireTriggers>[0]) => fireTriggers(event, trig),
+          playerId,
+          zones,
+        } as never,
+        cardId,
+        units[0] as string,
+      );
     } else if (units.length > 1 && !draft.pendingChoice) {
       draft.pendingChoice = {
         effect: { holderCandidates: units, type: "attach" },

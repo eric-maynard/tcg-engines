@@ -802,6 +802,7 @@ export function buildLeaveEvent(result: LeaveResult, batchIndex?: number): GameE
       wasBuffed: lki.buffed,
       wasMighty: lki.wasMighty,
       wasStunned: lki.stunned,
+      ...(batchIndex !== undefined ? { batchIndex } : {}),
     } as GameEvent;
   }
   if (cause.kind === "discard") {
@@ -888,8 +889,21 @@ export function emitLeaveEvents(
   const chainLenBefore = ctx.draft.interaction?.chain?.items.length ?? 0;
   try {
     let discardIndex = 0;
+    // rule 423.1 — several units dying at once is ONE game action, so a
+    // "when one or more <friendly|enemy> units die" trigger fires once. The
+    // index is per CONTROLLER (740.1.a): a trade kills one unit on each side,
+    // and each side's first death is index 0.
+    const dieIndexByController = new Map<string, number>();
     for (const r of gone) {
-      const event = buildLeaveEvent(r, r.cause.kind === "discard" ? discardIndex++ : undefined);
+      let batchIndex: number | undefined;
+      if (r.cause.kind === "discard") {
+        batchIndex = discardIndex++;
+      } else if (isKillCause(r.cause)) {
+        const side = r.lki.controller;
+        batchIndex = dieIndexByController.get(side) ?? 0;
+        dieIndexByController.set(side, batchIndex + 1);
+      }
+      const event = buildLeaveEvent(r, batchIndex);
       if (event && fire) {
         const n = fire(event);
         total += typeof n === "number" ? n : 0;

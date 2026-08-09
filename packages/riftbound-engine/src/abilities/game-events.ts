@@ -104,6 +104,10 @@ export type GameEvent =
       wasAlone?: boolean;
       attachments?: string[];
       cause?: "kill" | "sba" | "temporary" | "cost";
+      // rule 423.1 (sfd-203-221) — position among the deaths of ONE
+      // simultaneous batch that share this `controller`; "when one or more
+      // <friendly|enemy> units die" fires only for index 0 of its own side.
+      batchIndex?: number;
     }
   // rule 124.1 — a permanent left the board without dying (banish, bounce,
   // recycle). Emitted by `operations/leave-board.ts` with its LKI.
@@ -169,8 +173,16 @@ export type GameEvent =
   | { type: "grant-keyword"; cardId: string; keyword: string }
   // rule 466.3.a — emitted once per surviving unit of the winning player;
   // `playerId` is that player, so "When you win a combat" (on: "controller")
-  // only matches their cards.
-  | { type: "win-combat"; cardId: string; battlefieldId: string; playerId?: string }
+  // only matches their cards. It is the PLAYER who wins, so player-scoped
+  // triggers fire once per combat: `batchIndex` numbers the surviving units of
+  // one win and only index 0 counts as "you won a combat".
+  | {
+      type: "win-combat";
+      cardId: string;
+      battlefieldId: string;
+      playerId?: string;
+      batchIndex?: number;
+    }
   // rule 466.7.b — a combat ends as the last step of the Resolution Step.
   // Fired once per unit that WAS in that combat and is still on the board,
   // including attackers recalled home by rule 466.1.a.2 (466.7.a).
@@ -198,6 +210,10 @@ export type GameEvent =
       cardId: string;
       chooserId: string;
       owner?: string;
+      // rule-id: sfd-199-221 — the card HOSTING the chooser, so "chosen … with
+      // spells or unit abilities" can tell a unit ability from a gear/legend
+      // one (`sourceType` only says spell-vs-ability).
+      sourceCardId?: string;
       // rule-id: ogn-292-298 — where the chosen card stands, for "…here"
       // triggers. Stamped centrally in `fireTriggers`.
       battlefieldId?: string;

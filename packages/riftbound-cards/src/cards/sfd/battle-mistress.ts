@@ -33,7 +33,8 @@ const abilities: Ability[] = [
   },
   {
     effect: { target: "self", type: "ready" },
-    trigger: { event: "die", on: "enemy-units" },
+    // rule 423.1: "one or more … die" is ONE trigger per simultaneous batch.
+    trigger: { event: "die", on: { batched: true, cardType: "unit", controller: "enemy" } },
     type: "triggered",
   },
 ];

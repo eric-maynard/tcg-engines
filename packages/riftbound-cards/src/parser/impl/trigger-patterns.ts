@@ -16,10 +16,18 @@
 export interface TriggerPatternSubject {
   readonly controller?: "friendly" | "enemy" | "any";
   readonly type?: string;
+  /** rule 383.4.d — card type the event subject must have (matcher field). */
+  readonly cardType?: "unit" | "gear" | "spell" | "card";
   readonly actor?: "controller" | "opponent" | "any";
   readonly filter?: string | readonly string[];
   readonly excludeSelf?: boolean;
-  readonly location?: "here" | "from-here" | "battlefield" | "other-battlefield";
+  /** rule 190.4 — `friendly-battlefield`: the event's battlefield must be one you control. */
+  readonly location?:
+    | "here"
+    | "from-here"
+    | "battlefield"
+    | "other-battlefield"
+    | "friendly-battlefield";
   /**
    * rule 423.1 — "one or more": ONE game action over several subjects is a
    * SINGLE trigger, so only the first event of the batch matches.
@@ -132,6 +140,18 @@ export const TRIGGER_PATTERNS: {
     pattern: /^When a non-Recruit unit you control dies,\s*/i,
   },
   { event: "die", on: "enemy-units", pattern: /^When an enemy unit dies,\s*/i },
+  // rule 423.1 (sfd-203-221) — "one or more … die": however many units die in
+  // ONE simultaneous batch, the trigger fires once (per side).
+  {
+    event: "die",
+    on: { batched: true, cardType: "unit", controller: "enemy" },
+    pattern: /^When one or more enemy units die,\s*/i,
+  },
+  {
+    event: "die",
+    on: { batched: true, cardType: "unit", controller: "friendly" },
+    pattern: /^When one or more friendly units die,\s*/i,
+  },
   { event: "attack", on: "controller-here", pattern: /^When you attack here,\s*/i },
   { event: "conquer", on: "controller-here", pattern: /^When you conquer here,\s*/i },
   { event: "conquer", on: "controller", pattern: /^When you conquer,\s*/i },
@@ -322,9 +342,11 @@ export const TRIGGER_PATTERNS: {
     restrictions: [{ count: 2, type: "nth-time-each-turn" }],
   },
   // "When an enemy unit attacks a battlefield you control, ..."
+  // rule 190.4 — "a battlefield YOU control" qualifies WHERE the attack landed,
+  // so an attack on a third player's battlefield does not fire it.
   {
     event: "attack",
-    on: "enemy-units",
+    on: { controller: "enemy", location: "friendly-battlefield", type: "unit" },
     pattern: /^When an enemy unit attacks a battlefield you control,\s*/i,
   },
   // "When a player plays a spell, ..."

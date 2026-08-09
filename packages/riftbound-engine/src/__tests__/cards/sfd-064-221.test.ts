@@ -251,7 +251,7 @@ describe("Cloth Armor (sfd-064-221)", () => {
     expect(game.p1.trash()).not.toContain("cloth");
   });
 
-  test.failing("BUG: the Quick-Draw attach IS 'attaching an Equipment' (819.1.d / 818.2) — Jax, Unrelenting's 'you may pay [1] to draw 1' must trigger off it", async () => {
+  test("the Quick-Draw attach IS 'attaching an Equipment' (819.1.d / 818.2) — Jax, Unrelenting's 'you may pay [1] to draw 1' must trigger off it", async () => {
     // Expected: after the armor is Quick-Drawn onto Jax, P1 (1 energy left) is asked yes/no; yes pays 1 and draws 1.
     // Actual: the attach happens but no attach-equipment trigger fires (the [Equip]/Weaponmaster paths do fire it).
     const game = await scenario().resources(P1, { energy: 2 }).unit(P1, "base", JAX_UNRELENTING, "jax").hand(P1, CARD, "cloth").build();
