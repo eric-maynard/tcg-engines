@@ -3,6 +3,7 @@ import type { CardId as CoreCardId, ZoneId as CoreZoneId } from "@tcg/core";
 import { removeChainItem } from "../../chain";
 import { isLegalCounterTarget } from "../../chain/counter-target";
 import { canAffordPower } from "../../game-definition/moves/chain/effect-context";
+import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import { type EffectHelpers } from "./_helpers";
 
@@ -103,6 +104,18 @@ export function handle_counter(effect: ExecutableEffect, ctx: EffectContext, _h:
       const boundId = ctx.boundTargets?.[0];
       const boundOnChain =
         boundId !== undefined && items.some((it) => it && it.cardId === boundId);
+      // rule 359.3.e.2 / 359.3.e.7 (sfd-136-221) — a locked spell that has
+      // already left the chain (an earlier [Repeat] execution countered it)
+      // leaves THIS instruction with no legal target: it does nothing. It must
+      // never slide onto the next spell down, which was never named at play
+      // time (rule 355.15).
+      if (
+        boundId !== undefined &&
+        !boundOnChain &&
+        getGlobalCardRegistry().getCardType(boundId) === "spell"
+      ) {
+        return;
+      }
       for (let i = items.length - 1; i >= 0; i--) {
         const item = items[i];
         if (
@@ -119,9 +132,13 @@ export function handle_counter(effect: ExecutableEffect, ctx: EffectContext, _h:
         targetItem = item;
         break;
       }
-      // rule-id: sfd-206-221 — remember "that spell" for follow-up steps, since
-      // a countered spell no longer sits on the chain to be read back.
-      ctx.draft.lastCounterTargetId = targetItem?.cardId;
+      // rule 359.3.e.14.a (ven-015-166 × unl-190-219) — "that spell" is the
+      // spell this counter ACTUALLY countered. An ignored counter (an
+      // uncounterable or already-countered target, an unmet gate, a paid
+      // ransom) leaves it unset, so every instruction LINKED to the counter
+      // — Lullaby's "its controller can't play spells this turn", Riposte's
+      // "+Might equal to that spell's cost" — is ignored with it.
+      ctx.draft.lastCounterTargetId = undefined;
       // rule 429.3 (rule-id: ven-039-166) — a counter carrying its own gate
       // does nothing at all when the gate is false: the target resolves.
       const gate = (effect as { condition?: Record<string, unknown> }).condition;
@@ -164,6 +181,9 @@ export function handle_counter(effect: ExecutableEffect, ctx: EffectContext, _h:
       if (targetItem && !targetItem.countered && !targetItem.uncounterable) {
         // Mutate in-place (we're inside an Immer draft)
         (targetItem as { countered: boolean }).countered = true;
+        // rule-id: sfd-206-221 — remember "that spell" for follow-up steps, since
+        // a countered spell no longer sits on the chain to be read back.
+        ctx.draft.lastCounterTargetId = targetItem.cardId;
         // rule-id: unl-131-219 — "Return it to its owner's hand instead of
         // putting it in their trash": redirect where the countered spell
         // settles when it leaves the chain.
