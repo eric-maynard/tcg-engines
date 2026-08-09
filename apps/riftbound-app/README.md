@@ -54,3 +54,37 @@ index 0 / first option), which is also what `server/__tests__/ai-opponent.test.t
 
 REST clients can pass the same field to `POST /api/game/create` / `POST /api/lobby/create`:
 `opponent: {kind:"goldfish"} | {kind:"claude", model:"haiku"|"sonnet"|"opus", apiKey?}` (unknown models → 400).
+
+## Sideboarding
+
+**Rules source / assumptions.** The Core Rules do not define a sideboard (rule 103 lists Legend, Main Deck, Rune Deck,
+Battlefields; 485/486 define Bo1/Bo3) and no tournament-rules digest ships in this repo, so the app implements the
+widely published organized-play policy and states its assumptions here and at the top of `server/pregame.ts`:
+
+- A deck may register a **sideboard of up to 8 cards**, Main Deck types only (units / spells / gear — no legend,
+  champion slot, battlefields or runes). The 3-copies-per-name limit (rule 103.2.b, Chosen Champion included) is
+  counted across main deck + sideboard when building/importing, and re-checked on the post-swap main deck per swap.
+- In **both Bo1 and Bo3**, after both players' legends, chosen champions and this game's battlefields are revealed
+  (Bo1: the random pick; Bo3: after battlefield selection) and **before opening hands / mulligans**, each player may
+  swap cards **1-for-1** between main deck and sideboard (sizes never change), simultaneously and hidden — the opponent
+  sees only *Sideboarding… / Locked in*, never counts or cards. No timer: play continues when both lock in; each main
+  deck is then rebuilt from the post-swap list, shuffled with the engine RNG, and 4-card hands are drawn for the mulligan.
+- The phase appears **only if some seat has a non-empty sideboard** (starter decks have none, so default flows are
+  unchanged). Seats with nothing to swap and the practice opponent (Goldfish / Claude) lock in immediately
+  (TODO: model-driven sideboarding for the Claude seat). Swaps are per game — nothing is written to the deck DB.
+- **Bo3 between games:** `session.postSideboardDecks` holds each seat's post-swap main/side; a game-2 flow (not wired
+  end-to-end yet) should call `createGameFromDecks(post["player-1"], post["player-2"], …)` so the same phase runs
+  between games.
+
+**Try it.** Deck builder (`/builder`): turn on **Add to: Sideboard** above the Sideboard list and click cards (or
+import a list with a `Sideboard:` section — export writes it back), save, then Play with that deck. After the
+battlefield reveal the pregame overlay shows *Sideboarding*: Main deck / Sideboard columns (click a main-deck card then
+a sideboard card, or drag one onto the other, to swap; *undo* per swap), the opponent's revealed legend / champion /
+battlefield, and **Lock in**. Practice games offer a *Skip sideboarding* checkbox (remembered in `localStorage`).
+
+Wire protocol: server → client `pregame.phase === "sideboard"` with `you: {main, side, swaps, locked, …}` (own seat
+only) and `opponent: {legend, champion, battlefields, status}`; client → server `{type:"sideboard_swap", out, in}` and
+`{type:"sideboard_lock"}`. REST: `DeckConfig.sideboardCardIds` on `POST /api/game/create`; builder
+`POST /api/deck/:session/sideboard/add|remove {cardId}`; saved decks keep `zone: "sideboard"` entries.
+Tests: `server/__tests__/pregame-sideboard.test.ts`, `server/__tests__/decks.test.ts` (sideboard block), and the gated
+live test `packages/riftbound-engine/src/__tests__/harness-browser/sideboard.test.ts` (`RB_BROWSER_TESTS=1`).

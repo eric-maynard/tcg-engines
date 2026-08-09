@@ -141,8 +141,27 @@ setInterval(() => {
 // Game Engine Sessions
 // ========================================
 
+/** One card in a sideboarding list: engine instance id + card definition id. */
+export interface SideboardCardRef {
+  id: string;
+  defId: string;
+}
+
+/**
+ * Per-seat sideboarding state (server/pregame.ts "Sideboarding"). `main` /
+ * `side` are the CURRENT (post-swap) lists; a card's origin is readable from
+ * its instance id (`-main-` vs `-side-`). Never sent to the other seat.
+ */
+export interface SideboardSeatState {
+  main: SideboardCardRef[];
+  side: SideboardCardRef[];
+  locked: boolean;
+  /** The deck this seat registered (for the opponent's public reveal + Bo3 carry-over). */
+  deck: DeckConfig;
+}
+
 export interface PregameState {
-  phase: "battlefield_select" | "mulligan" | "ready";
+  phase: "battlefield_select" | "sideboard" | "mulligan" | "ready";
   gameMode: "duel" | "match";
   firstPlayer: string;
   secondPlayer: string;
@@ -161,6 +180,12 @@ export interface PregameState {
   mulliganComplete: Set<string>;
   /** Whether this is a sandbox (hotseat) game */
   sandbox: boolean;
+  /**
+   * Sideboarding (tournament policy, not Core Rules — see server/pregame.ts):
+   * present only when at least one seat registered a non-empty sideboard, in
+   * which case the opening hands are drawn when every seat has locked in.
+   */
+  sideboard?: Record<string, SideboardSeatState>;
 }
 
 export interface GameSession {
@@ -182,6 +207,12 @@ export interface GameSession {
    * passive Goldfish policy in turn.ts; kind "claude" → server/ai-opponent.ts.
    */
   opponent?: OpponentHandle;
+  /**
+   * Each seat's deck as it stands after sideboarding (main/side post-swap),
+   * recorded when the sideboard phase completes. A Bo3 follow-up game should
+   * be created from these so game 2 starts from the game-1 configuration.
+   */
+  postSideboardDecks?: Record<string, DeckConfig>;
 }
 
 /** Data attached to each WebSocket connection */
@@ -206,6 +237,12 @@ export interface DeckConfig {
   legendId?: string;
   /** Card definition ID for the Chosen Champion (placed in Champion Zone) */
   championId?: string;
+  /**
+   * Optional sideboard (up to MAX_SIDEBOARD_SIZE main-deck-type cards). A
+   * non-empty sideboard on either seat enables the pregame `sideboard` phase;
+   * absent/empty ⇒ the flow is unchanged.
+   */
+  sideboardCardIds?: string[];
 }
 
 export const gameSessions = new Map<string, GameSession>();

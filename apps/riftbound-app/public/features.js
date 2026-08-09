@@ -176,8 +176,9 @@ window.saveDeck = async function() {
     const e = cards.find(c => c.cardId === selectedChampionData.id);
     if (e) e.quantity++; else cards.push({ cardId: selectedChampionData.id, quantity: 1, zone: 'main' });
   }
+  // Sideboard lives in the builder session state (deckState.sideboard, ≤ 8).
   const sbCopies = {};
-  for (const c of window.sideboardCards) {
+  for (const c of (deckState?.sideboard || window.sideboardCards || [])) {
     sbCopies[c.id] = (sbCopies[c.id] || 0) + 1;
   }
   for (const [id, qty] of Object.entries(sbCopies)) {
@@ -291,7 +292,7 @@ window.saveProgress = function() {
     localStorage.setItem('rb_progress', JSON.stringify({
       legendId: selectedLegendData?.id,
       championId: selectedChampionData?.id,
-      sb: window.sideboardCards.map(c => c.id),
+      sb: ((typeof deckState !== 'undefined' && deckState?.sideboard) || window.sideboardCards || []).map(c => c.id),
     }));
   } catch {}
 };

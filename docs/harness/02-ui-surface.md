@@ -107,7 +107,8 @@ Hold-to-arm (hotkeys.js:33-158; click while held → `handleArmedCardClick`):
 | **Pregame** `#pregameOverlay.visible` / `#pregameContent` | `sync.pregame.phase` set | bf select: `.bf-choice` → `selectBattlefield(id)` → game WS `{type:"pregame_battlefield_select", battlefieldId}`; mulligan: `[data-mulligan-id]` toggles (max 2), `.mulligan-btn-keep`/`.mulligan-btn-redo` → `confirmMulligan()` → game WS `{type:"pregame_mulligan", sendBack:[cardIds]}` |
 | **Game over** `#gameOverOverlay.visible` | `status==="finished"` | `.go-btn` → `returnToLobby` → leave_game |
 | **Leave confirm** `#confirmLeave.visible` | Leave click | `.confirm-yes`/`.confirm-no` |
-| Help `#helpModal`, sideboard overlay (stub, sends non-existent `sideboard_swap`/`sideboard_lock_in` WS types — server ignores), emote/label wheels | | no engine effect |
+| **Sideboarding** `#pregameOverlay.visible #sbColumns` | `pregame.phase==="sideboard"` (only when a deck has a sideboard) | row click main→side (or drag) → `sideboard_swap {out,in}`; `#sbLockBtn` → `sideboard_lock`; `.sb-undo` |
+| Help `#helpModal`, emote/label wheels | | no engine effect |
 
 Concede: no dedicated UI; appears only as an `#actionsList` "Concede" button if the engine enumerates `concede`.
 
@@ -218,7 +219,7 @@ E. **Shortcuts**: `GET /play/test` (board immediately, P1 first, default decks, 
 - `standardMove` multi-unit (`unitIds` arrays >1) — UI matches any move containing the clicked unit and picks first by destination; no multi-select gesture.
 - Collapsible groups truncate at 15 variants (actions.js:401).
 - Gear drag-onto-unit synthesizes `chosenTargetId` even if engine variant had none (drag-drop.js:344).
-- `hotkeys` P (ping) doesn't ping; T/L/E are stubs; sideboard overlay sends WS types the server ignores.
+- `hotkeys` P (ping) doesn't ping; T/L/E are stubs.
 - `#endTurnBtn` missing from DOM → `onEndTurnClick` unreachable; use Space or action list.
 - D hotkey → `drawCard` is server-only → always `error`.
 - Showdown initiator/cancel eligibility is a client heuristic (showdown.js:82-116), not engine truth.

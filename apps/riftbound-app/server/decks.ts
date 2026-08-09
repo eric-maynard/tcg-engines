@@ -3,6 +3,7 @@
  * in-memory deck-builder session routes under /api/deck/*.
  */
 
+import type { Card } from "@tcg/riftbound-types/cards";
 import { DeckBuilder } from "@tcg/riftbound";
 import { getDeck } from "../src/db/deck-repo";
 import type { FullDeck } from "../src/db/deck-repo";
@@ -14,11 +15,99 @@ import type { DeckConfig, RouteCtx, RouteResult } from "./state";
 // Active deck builder sessions (in-memory, keyed by session ID)
 export const sessions = new Map<string, DeckBuilder>();
 
+/**
+ * Sideboards of the deck-builder sessions, keyed like `sessions`. Kept beside
+ * the engine's DeckBuilder (which has no sideboard slot) so the engine
+ * package stays untouched.
+ */
+export const sessionSideboards = new Map<string, Card[]>();
+
 export function getOrCreateSession(sessionId: string): DeckBuilder {
   if (!sessions.has(sessionId)) {
     sessions.set(sessionId, new DeckBuilder(allCards));
   }
   return sessions.get(sessionId)!;
+}
+
+export function getSideboard(sessionId: string): Card[] {
+  let side = sessionSideboards.get(sessionId);
+  if (!side) {
+    side = [];
+    sessionSideboards.set(sessionId, side);
+  }
+  return side;
+}
+
+/** Copies per card name across Chosen Champion + main deck + sideboard (rule 103.2.b). */
+function combinedCopyCounts(sessionId: string, builder: DeckBuilder): Record<string, number> {
+  const counts: Record<string, number> = {};
+  const state = builder.getState();
+  if (state.chosenChampion) {counts[state.chosenChampion.name] = 1;}
+  for (const c of state.mainDeck) {counts[c.name] = (counts[c.name] ?? 0) + 1;}
+  for (const c of getSideboard(sessionId)) {counts[c.name] = (counts[c.name] ?? 0) + 1;}
+  return counts;
+}
+
+/**
+ * `{state, stats}` for every builder response: the engine builder's state plus
+ * `state.sideboard`, and stats whose `copies` count main + sideboard (so the
+ * card grid's x/3 badge and the 3-copy limit cover both) plus `sideboardCount`
+ * / `sideboardMax`.
+ */
+export function builderPayload(sessionId: string, builder: DeckBuilder) {
+  const sideboard = getSideboard(sessionId);
+  return {
+    state: { ...builder.getState(), sideboard: [...sideboard] },
+    stats: {
+      ...builder.getStats(),
+      copies: combinedCopyCounts(sessionId, builder),
+      sideboardCount: sideboard.length,
+      sideboardMax: MAX_SIDEBOARD_SIZE,
+    },
+  };
+}
+
+export type SideboardAddResult =
+  | { success: true }
+  | { success: false; error: { code: string; message: string } };
+
+/**
+ * Add a card to a builder session's sideboard: main-deck card types only,
+ * within the legend's Domain Identity (rule 103.1.b), at most
+ * MAX_SIDEBOARD_SIZE cards, and at most 3 copies per name across
+ * champion + main + sideboard (rule 103.2.b).
+ */
+export function addToSideboard(sessionId: string, builder: DeckBuilder, card: Card): SideboardAddResult {
+  const state = builder.getState();
+  if (!state.legend) {
+    return { error: { code: "NO_LEGEND", message: "Select a legend first" }, success: false };
+  }
+  if (!SIDEBOARD_CARD_TYPES.has(card.cardType)) {
+    return { error: { code: "WRONG_TYPE", message: `${card.cardType} cards can't go in the sideboard` }, success: false };
+  }
+  const identity = builder.getDomainIdentity();
+  const domains = Array.isArray(card.domain) ? card.domain : card.domain ? [card.domain] : [];
+  if (identity.length > 0 && !domains.every((d) => identity.includes(d as string))) {
+    return { error: { code: "DOMAIN_MISMATCH", message: `${card.name} doesn't match domain identity` }, success: false };
+  }
+  const side = getSideboard(sessionId);
+  if (side.length >= MAX_SIDEBOARD_SIZE) {
+    return { error: { code: "SIDEBOARD_FULL", message: `Sideboard is full (${MAX_SIDEBOARD_SIZE} cards)` }, success: false };
+  }
+  if ((combinedCopyCounts(sessionId, builder)[card.name] ?? 0) >= MAX_COPIES_PER_NAME) {
+    return { error: { code: "MAX_COPIES", message: `Already have ${MAX_COPIES_PER_NAME} copies of ${card.name} (main deck + sideboard)` }, success: false };
+  }
+  side.push(card);
+  return { success: true };
+}
+
+/** Remove one copy of `cardId` from a session's sideboard; false when absent. */
+export function removeFromSideboard(sessionId: string, cardId: string): boolean {
+  const side = getSideboard(sessionId);
+  const idx = side.findIndex((c) => c.id === cardId);
+  if (idx === -1) {return false;}
+  side.splice(idx, 1);
+  return true;
 }
 
 export type RuneAdjustResult =
@@ -84,6 +173,58 @@ export function findCopyLimitViolations(mainDeckCardIds: readonly string[]): str
     if (count > MAX_COPIES_PER_NAME) {violations.push(`${name} (x${count})`);}
   }
   return violations;
+}
+
+/**
+ * Sideboard size cap. Not in the Core Rules (deck construction, rule 103,
+ * only defines Legend / Main Deck / Rune Deck / Battlefields); this follows the
+ * published organized-play policy — see the "Sideboarding" note at the top of
+ * server/pregame.ts and README.md §Sideboarding.
+ */
+export const MAX_SIDEBOARD_SIZE = 8;
+
+/** Card types that may live in a sideboard: exactly the Main Deck types (rule 103.2). */
+export const SIDEBOARD_CARD_TYPES: ReadonlySet<string> = new Set(["unit", "spell", "gear", "equipment"]);
+
+/**
+ * Return a human-readable reason the sideboard is illegal, or null when it is
+ * fine (or absent). Checks size ≤ MAX_SIDEBOARD_SIZE and that every card is a
+ * main-deck card type (no legends / battlefields / runes). When
+ * `withMainDeck` is given, the 3-copies-per-name limit (rule 103.2.b, Chosen
+ * Champion included) is enforced across main deck + sideboard combined.
+ */
+export function findSideboardViolation(
+  sideboardCardIds: readonly string[] | undefined,
+  withMainDeck?: { mainDeckCardIds: readonly string[]; championId?: string },
+): string | null {
+  const side = sideboardCardIds ?? [];
+  if (side.length === 0) {return null;}
+  if (side.length > MAX_SIDEBOARD_SIZE) {
+    return `sideboard has ${side.length} cards, at most ${MAX_SIDEBOARD_SIZE} allowed`;
+  }
+  for (const defId of side) {
+    const def = registry.get(defId);
+    if (!def) {return `unknown sideboard card ${defId}`;}
+    if (!SIDEBOARD_CARD_TYPES.has(def.cardType)) {
+      return `${def.name} is a ${def.cardType} — only units, spells and gear may be sideboarded`;
+    }
+  }
+  if (withMainDeck) {
+    // Saved decks may list the Chosen Champion inside their main entries too;
+    // count it once, and only blame names the sideboard actually contributes to.
+    const main = [...withMainDeck.mainDeckCardIds];
+    if (withMainDeck.championId) {
+      const dup = main.indexOf(withMainDeck.championId);
+      if (dup !== -1) {main.splice(dup, 1);}
+      main.push(withMainDeck.championId);
+    }
+    const sideNames = new Set(side.map((defId) => registry.get(defId)?.name ?? defId));
+    const violations = findCopyLimitViolations([...main, ...side]).filter((v) => [...sideNames].some((n) => v.startsWith(`${n} (x`)));
+    if (violations.length > 0) {
+      return `more than ${MAX_COPIES_PER_NAME} copies across main deck + sideboard: ${violations.join(", ")} (rule 103.2.b)`;
+    }
+  }
+  return null;
 }
 
 /** Build a default starter deck from the card pool — uses Fury/Chaos domain (Annie starter) */
@@ -192,12 +333,14 @@ export function savedDeckToDeckConfig(deck: FullDeck): DeckConfig | null {
   const mainDeckCardIds: string[] = [];
   const runeDeckCardIds: string[] = [];
   const battlefieldIds: string[] = [];
+  let sideboardCardIds: string[] = [];
 
   for (const entry of deck.cards) {
     // Rule 103.2: only "main" zone entries form the Main Deck — sideboard
-    // cards must not be shuffled in (that yielded a 4th copy in hand).
-    if (entry.zone === "sideboard") {continue;}
+    // cards must not be shuffled in (that yielded a 4th copy in hand). They
+    // travel separately and only enter the deck through pregame sideboarding.
     const target =
+      entry.zone === "sideboard" ? sideboardCardIds :
       entry.zone === "rune" ? runeDeckCardIds :
       (entry.zone === "battlefield" ? battlefieldIds :
       mainDeckCardIds);
@@ -264,7 +407,22 @@ export function savedDeckToDeckConfig(deck: FullDeck): DeckConfig | null {
     return null;
   }
 
-  return { battlefieldIds, championId, legendId, mainDeckCardIds, runeDeckCardIds };
+  // An illegal sideboard (oversized / wrong types / copy limit across
+  // main+side) is dropped rather than failing the deck: the main deck still plays.
+  const sideboardProblem = findSideboardViolation(sideboardCardIds, { championId, mainDeckCardIds });
+  if (sideboardProblem) {
+    console.warn(`Saved deck "${deck.name}" (${deck.id}) sideboard ignored: ${sideboardProblem}`);
+    sideboardCardIds = [];
+  }
+
+  return {
+    battlefieldIds,
+    championId,
+    legendId,
+    mainDeckCardIds,
+    runeDeckCardIds,
+    ...(sideboardCardIds.length > 0 ? { sideboardCardIds } : {}),
+  };
 }
 
 /** Load a deck config by ID, falling back to default deck on error */
@@ -326,8 +484,7 @@ export async function handleDeckBuilderRoutes(req: Request, url: URL, _ctx: Rout
     return json({
       champions: builder.getLegalChampions(),
       domainIdentity: builder.getDomainIdentity(),
-      state: builder.getState(),
-      stats: builder.getStats(),
+      ...builderPayload(sessionId, builder),
     });
   }
 
@@ -341,7 +498,7 @@ export async function handleDeckBuilderRoutes(req: Request, url: URL, _ctx: Rout
     if (!champ || champ.cardType !== "unit") {return json({ error: "Champion not found" }, 404);}
 
     const result = builder.setChampion(champ as import("@tcg/riftbound-types/cards").UnitCard);
-    return json({ result, state: builder.getState(), stats: builder.getStats() });
+    return json({ result, ...builderPayload(sessionId, builder) });
   }
 
   // POST /api/deck/:session/add — add card to main deck
@@ -353,8 +510,11 @@ export async function handleDeckBuilderRoutes(req: Request, url: URL, _ctx: Rout
     const card = registry.get(body.cardId);
     if (!card) {return json({ error: "Card not found" }, 404);}
 
-    const result = builder.addToMainDeck(card);
-    return json({ result, state: builder.getState(), stats: builder.getStats() });
+    // Rule 103.2.b counted across main deck + sideboard.
+    const result = (combinedCopyCounts(sessionId, builder)[card.name] ?? 0) >= MAX_COPIES_PER_NAME
+      ? { error: { code: "MAX_COPIES", message: `Already have ${MAX_COPIES_PER_NAME} copies of ${card.name} (main deck + sideboard)` }, success: false }
+      : builder.addToMainDeck(card);
+    return json({ result, ...builderPayload(sessionId, builder) });
   }
 
   // POST /api/deck/:session/remove — remove card from main deck
@@ -364,7 +524,27 @@ export async function handleDeckBuilderRoutes(req: Request, url: URL, _ctx: Rout
     const builder = getOrCreateSession(sessionId);
 
     builder.removeFromMainDeckById(body.cardId);
-    return json({ state: builder.getState(), stats: builder.getStats() });
+    return json({ ...builderPayload(sessionId, builder) });
+  }
+
+  // POST /api/deck/:session/sideboard/add {cardId} — add a card to the sideboard (≤ MAX_SIDEBOARD_SIZE)
+  if (pathname.match(/^\/api\/deck\/[^/]+\/sideboard\/add$/) && req.method === "POST") {
+    const sessionId = pathname.split("/")[3];
+    const body = (await req.json().catch(() => ({}))) as { cardId?: string };
+    const builder = getOrCreateSession(sessionId);
+    const card = registry.get(body.cardId ?? "");
+    if (!card) {return json({ error: "Card not found" }, 404);}
+    const result = addToSideboard(sessionId, builder, card);
+    return json({ result, ...builderPayload(sessionId, builder) });
+  }
+
+  // POST /api/deck/:session/sideboard/remove {cardId} — remove one copy from the sideboard
+  if (pathname.match(/^\/api\/deck\/[^/]+\/sideboard\/remove$/) && req.method === "POST") {
+    const sessionId = pathname.split("/")[3];
+    const body = (await req.json().catch(() => ({}))) as { cardId?: string };
+    const builder = getOrCreateSession(sessionId);
+    removeFromSideboard(sessionId, body.cardId ?? "");
+    return json({ ...builderPayload(sessionId, builder) });
   }
 
   // GET /api/deck/:session/available — get available cards for main deck
@@ -423,7 +603,7 @@ export async function handleDeckBuilderRoutes(req: Request, url: URL, _ctx: Rout
   if (pathname.match(/^\/api\/deck\/[^/]+\/state$/)) {
     const sessionId = pathname.split("/")[3];
     const builder = getOrCreateSession(sessionId);
-    return json({ state: builder.getState(), stats: builder.getStats(), validation: builder.validate() });
+    return json({ ...builderPayload(sessionId, builder), validation: builder.validate() });
   }
 
   // POST /api/deck/:session/runes/autofill — auto-fill rune deck
@@ -431,7 +611,7 @@ export async function handleDeckBuilderRoutes(req: Request, url: URL, _ctx: Rout
     const sessionId = pathname.split("/")[3];
     const builder = getOrCreateSession(sessionId);
     builder.autoFillRuneDeck();
-    return json({ state: builder.getState(), stats: builder.getStats() });
+    return json({ ...builderPayload(sessionId, builder) });
   }
 
   // POST /api/deck/:session/runes/adjust {domain, delta} — shift one rune
@@ -443,7 +623,7 @@ export async function handleDeckBuilderRoutes(req: Request, url: URL, _ctx: Rout
     const body = (await req.json()) as { domain?: string; delta?: number };
     const builder = getOrCreateSession(sessionId);
     const result = adjustRuneMix(builder, body.domain ?? "", body.delta === -1 ? -1 : 1);
-    return json({ result, state: builder.getState(), stats: builder.getStats() });
+    return json({ result, ...builderPayload(sessionId, builder) });
   }
 
   // POST /api/deck/:session/runes/set {cardIds} — replace the rune deck
@@ -459,7 +639,7 @@ export async function handleDeckBuilderRoutes(req: Request, url: URL, _ctx: Rout
         builder.addToRuneDeck(rune as import("@tcg/riftbound-types/cards").RuneCard);
       }
     }
-    return json({ state: builder.getState(), stats: builder.getStats() });
+    return json({ ...builderPayload(sessionId, builder) });
   }
 
   // POST /api/deck/:session/battlefield — add battlefield
@@ -472,7 +652,7 @@ export async function handleDeckBuilderRoutes(req: Request, url: URL, _ctx: Rout
     if (!bf) {return json({ error: "Battlefield not found" }, 404);}
 
     const result = builder.addBattlefield(bf as import("@tcg/riftbound-types/cards").BattlefieldCard);
-    return json({ result, state: builder.getState(), stats: builder.getStats() });
+    return json({ result, ...builderPayload(sessionId, builder) });
   }
 
   // GET /api/deck/:session/battlefields — available battlefields
@@ -515,6 +695,10 @@ export async function handleDeckBuilderRoutes(req: Request, url: URL, _ctx: Rout
     }
     if (state.runeDeck.length > 0) {
       sections.push(`Runes:\n${groupCards(state.runeDeck)}`);
+    }
+    const sideboard = getSideboard(sessionId);
+    if (sideboard.length > 0) {
+      sections.push(`Sideboard:\n${groupCards(sideboard)}`);
     }
 
     return new Response(sections.join("\n\n") + "\n", {
@@ -578,6 +762,7 @@ export async function handleDeckBuilderRoutes(req: Request, url: URL, _ctx: Rout
 
     // Clear and rebuild
     builder.clear();
+    getSideboard(sessionId).length = 0;
 
     // Set legend
     if (sections.Legend?.[0]) {
@@ -640,10 +825,25 @@ export async function handleDeckBuilderRoutes(req: Request, url: URL, _ctx: Rout
       }
     }
 
+    // Sideboard (after the main deck so the combined copy limit sees it)
+    for (const entry of sections.Sideboard ?? []) {
+      const card = findCard(entry.name);
+      if (!card) {
+        errors.push(`Sideboard card not found: ${entry.name}`);
+        continue;
+      }
+      for (let i = 0; i < entry.count; i++) {
+        const result = addToSideboard(sessionId, builder, card);
+        if (!result.success) {
+          errors.push(`Sideboard ${entry.name}: ${result.error.message}`);
+          break;
+        }
+      }
+    }
+
     return json({
       errors,
-      state: builder.getState(),
-      stats: builder.getStats(),
+      ...builderPayload(sessionId, builder),
       validation: builder.validate(),
     });
   }

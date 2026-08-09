@@ -1,6 +1,38 @@
 /**
  * Game creation from decks and the pregame flow (battlefield select,
- * mulligan, transition to play), including the pregame WebSocket handlers.
+ * sideboard, mulligan, transition to play), including the pregame WebSocket
+ * handlers.
+ *
+ * ## Sideboarding (assumed organized-play policy — NOT Core Rules)
+ *
+ * The Core Rules (rule 103 deck construction, 485/486 modes of play) define no
+ * sideboard, and no tournament-rules digest ships in this repo, so this
+ * implements the widely published Riftbound OP policy and documents the
+ * assumptions here (mirrored in README.md §Sideboarding):
+ *
+ * - A deck MAY register a sideboard of up to MAX_SIDEBOARD_SIZE (8) cards of
+ *   Main Deck types only (units / spells / gear — no legend, champion slot,
+ *   battlefields or runes). The 3-copies-per-name limit (rule 103.2.b, Chosen
+ *   Champion included) is counted across main deck + sideboard at deck-build /
+ *   import time, and re-checked on the post-swap main deck at swap time.
+ * - In both Bo1 and Bo3, once both players' Legends, Chosen Champions and the
+ *   battlefields for this game are revealed (Duel: the random pick, rule 485.5;
+ *   Match: after `battlefield_select`, 486.5) and BEFORE opening hands are
+ *   drawn / mulligans taken, each player may swap cards 1-for-1 between main
+ *   deck and sideboard — so main-deck size and sideboard size are invariant.
+ *   Swaps are simultaneous and hidden: the opponent learns only
+ *   choosing/locked, never counts or identities. There is no timer; play
+ *   continues when both have locked in, at which point each main deck is
+ *   rebuilt from the post-swap list, shuffled with the engine RNG, and the
+ *   opening hands are drawn (rule 116) for the mulligan (117).
+ * - The phase exists only when at least one seat has a non-empty sideboard;
+ *   otherwise the flow is exactly as before. Seats with nothing to swap, and
+ *   the sandbox opponent seat (Goldfish / Claude), lock in immediately.
+ * - Nothing is persisted: swaps are per game. `session.postSideboardDecks`
+ *   keeps the post-swap configuration for a Bo3 follow-up game (TODO: no
+ *   end-to-end Bo3 game-2 flow exists yet — when it does, create game 2 with
+ *   `createGameFromDecks(post[P1], post[P2], …)` so this same phase runs
+ *   between games).
  */
 
 import { getGlobalCardRegistry, riftboundDefinition } from "@tcg/riftbound";
@@ -11,10 +43,18 @@ import type { ServerWebSocket } from "bun";
 import { type LogEntry, actorName, makeLogEntry } from "../src/narrator";
 import { runOpponent } from "./ai-opponent";
 import { allCards, makeLookupPayload, registerCard, registry } from "./cards";
-import { MIN_MAIN_DECK_SIZE, findCopyLimitViolations } from "./decks";
+import { MAX_SIDEBOARD_SIZE, MIN_MAIN_DECK_SIZE, findCopyLimitViolations, findSideboardViolation } from "./decks";
 import { gameLogger } from "./log";
 import { buildAvailableMoves, buildGameSnapshot } from "./snapshot";
-import { type DeckConfig, type GameSession, type PregameState, type WsData, getInternalSnapshot } from "./state";
+import {
+  type DeckConfig,
+  type GameSession,
+  type PregameState,
+  type SideboardCardRef,
+  type SideboardSeatState,
+  type WsData,
+  getInternalSnapshot,
+} from "./state";
 
 /** Create a game from two deck configurations */
 export function createGameFromDecks(
@@ -46,6 +86,13 @@ export function createGameFromDecks(
     if (mainDeckSize < MIN_MAIN_DECK_SIZE) {
       throw new Error(`Illegal deck for ${pid}: main deck has ${mainDeckSize} cards, needs at least ${MIN_MAIN_DECK_SIZE} (rule 103.2)`);
     }
+    // Sideboarding policy (top of file): ≤ 8 cards, main-deck types only. The
+    // combined copy limit is a deck-building check (savedDeckToDeckConfig /
+    // builder); each swap re-checks the resulting main deck.
+    const sideboardProblem = findSideboardViolation(deck.sideboardCardIds);
+    if (sideboardProblem) {
+      throw new Error(`Illegal deck for ${pid}: ${sideboardProblem}`);
+    }
   }
 
   const engine = new RuleEngine<RiftboundGameState, RiftboundMoves, unknown, RiftboundCardMeta>(
@@ -62,6 +109,10 @@ export function createGameFromDecks(
   const log: LogEntry[] = [];
 
   const decks: [string, DeckConfig][] = [[P1, deck1], [P2, deck2]];
+  // A sideboard phase runs only if some seat brought a sideboard; then the
+  // opening hands wait until sideboarding completes (completeSideboard).
+  const sideboarding = decks.some(([, d]) => (d.sideboardCardIds?.length ?? 0) > 0);
+  const sideboardSeats: Record<string, SideboardSeatState> = {};
   for (const [pid, deck] of decks) {
     // Register and initialize main deck
     const mainDeckIds: string[] = [];
@@ -79,6 +130,21 @@ export function createGameFromDecks(
       params: { cardIds: mainDeckIds, playerId: pid },
       playerId: pid as PlayerId,
     });
+    if (sideboarding) {
+      // Sideboard cards get instance ids now but stay OUT of the engine until
+      // (unless) they are swapped in — no snapshot can ever carry them.
+      const side: SideboardCardRef[] = (deck.sideboardCardIds ?? []).map((defId, i) => ({ defId, id: `${pid}-side-${i}-${defId}` }));
+      sideboardSeats[pid] = {
+        deck,
+        // A seat with nothing to swap has nothing to decide; the sandbox
+        // opponent seat (Goldfish / Claude) never sideboards for now.
+        // TODO(vs-Claude): model-driven sideboarding hook — ask the seat's
+        // driver for swaps here instead of auto-locking.
+        locked: side.length === 0 || ((options?.sandbox ?? false) && pid === P2),
+        main: mainDeckIds.map((id, i) => ({ defId: deck.mainDeckCardIds[i] as string, id })),
+        side,
+      };
+    }
 
     // Register and initialize rune deck
     const runeDeckIds: string[] = [];
@@ -138,11 +204,13 @@ export function createGameFromDecks(
       playerId: pid as PlayerId,
     });
 
-    // Draw initial hand of 4 (Rule 116)
-    engine.executeMove("drawInitialHand", {
-      params: { playerId: pid },
-      playerId: pid as PlayerId,
-    });
+    // Draw initial hand of 4 (Rule 116) — after sideboarding when that phase runs.
+    if (!sideboarding) {
+      engine.executeMove("drawInitialHand", {
+        params: { playerId: pid },
+        playerId: pid as PlayerId,
+      });
+    }
 
     log.push(
       makeLogEntry(
@@ -229,6 +297,7 @@ export function createGameFromDecks(
     phase: gameMode === "match" ? "battlefield_select" : "mulligan",
     sandbox: isSandbox,
     secondPlayer,
+    ...(sideboarding ? { sideboard: sideboardSeats } : {}),
   };
 
   const firstPlayerName = options?.names?.[firstPlayer]
@@ -266,7 +335,239 @@ export function createGameFromDecks(
   );
 
   const names = options?.names ?? { [P1]: "Player 1", [P2]: "Player 2" };
-  return { clients: new Map(), engine, log, playerNames: names, players: [P1, P2], pregame, sandbox: isSandbox, seq: 0 };
+  const session: GameSession = { clients: new Map(), engine, log, playerNames: names, players: [P1, P2], pregame, sandbox: isSandbox, seq: 0 };
+  // Duel: legends, champions and the random battlefields are all known now —
+  // sideboard (if anyone can) before the mulligan. Match waits for battlefield_select.
+  if (gameMode === "duel") {advancePastReveal(session);}
+  return session;
+}
+
+// ============================================================================
+// Sideboarding (policy: see top of file)
+// ============================================================================
+
+export type SideboardResult = { ok: true } | { ok: false; error: string };
+
+/**
+ * Called once the information sideboarding is based on (both legends,
+ * champions, this game's battlefields) is public: enter the `sideboard`
+ * phase if some seat still has a decision to make, else go (through
+ * completeSideboard when a sideboard phase was armed) straight to the mulligan.
+ */
+export function advancePastReveal(session: GameSession): void {
+  const { pregame } = session;
+  if (!pregame) {return;}
+  const seats = pregame.sideboard;
+  if (seats && !session.players.every((p) => seats[p]?.locked)) {
+    pregame.phase = "sideboard";
+    session.log.push(makeLogEntry("Sideboarding — each player may swap cards between main deck and sideboard, then lock in."));
+    return;
+  }
+  if (seats) {completeSideboard(session);}
+  pregame.phase = "mulligan";
+}
+
+/**
+ * Swap one main-deck card for one sideboard card (1-for-1, so both sizes are
+ * invariant). Validates phase, seat, lock, that `outId` is currently in THIS
+ * seat's main list and `inId` in THIS seat's side list (foreign / unknown ids
+ * are therefore rejected), and rule 103.2.b on the resulting main deck.
+ * Re-swapping (undo) is just another swap until the seat locks in.
+ */
+export function swapSideboard(session: GameSession, playerId: string, outId: unknown, inId: unknown): SideboardResult {
+  const pregame = session.pregame;
+  if (!pregame || pregame.phase !== "sideboard" || !pregame.sideboard) {
+    return { error: "Not in the sideboard phase", ok: false };
+  }
+  const seat = pregame.sideboard[playerId];
+  if (!seat) {return { error: "Not a seated player", ok: false };}
+  if (seat.locked) {return { error: "Sideboard already locked in", ok: false };}
+  if (typeof outId !== "string" || typeof inId !== "string" || !outId || !inId) {
+    return { error: "A swap is 1-for-1: name one main-deck card (out) and one sideboard card (in)", ok: false };
+  }
+  const outIdx = seat.main.findIndex((c) => c.id === outId);
+  if (outIdx === -1) {return { error: "That card is not in your main deck", ok: false };}
+  const inIdx = seat.side.findIndex((c) => c.id === inId);
+  if (inIdx === -1) {return { error: "That card is not in your sideboard", ok: false };}
+  const outCard = seat.main[outIdx] as SideboardCardRef;
+  const inCard = seat.side[inIdx] as SideboardCardRef;
+  // Rule 103.2.b on the deck actually presented: post-swap main deck + Chosen Champion.
+  const nextMain = seat.main.map((c, i) => (i === outIdx ? inCard.defId : c.defId));
+  const inName = registry.get(inCard.defId)?.name ?? inCard.defId;
+  const violations = findCopyLimitViolations([...nextMain, ...(seat.deck.championId ? [seat.deck.championId] : [])])
+    .filter((v) => v.startsWith(`${inName} (x`));
+  if (violations.length > 0) {
+    return { error: `Swap would exceed 3 copies of ${violations.join(", ")} (rule 103.2.b)`, ok: false };
+  }
+  if (seat.side.length > MAX_SIDEBOARD_SIZE) {
+    return { error: `Sideboard exceeds ${MAX_SIDEBOARD_SIZE} cards`, ok: false };
+  }
+  // Swap in place so both lists keep their order in the overlay.
+  seat.main[outIdx] = inCard;
+  seat.side[inIdx] = outCard;
+  return { ok: true };
+}
+
+/**
+ * Lock a seat's configuration. In sandbox games the other (Goldfish / Claude)
+ * seat locks with it. When every seat is locked the decks are rebuilt,
+ * shuffled, hands drawn, and the pregame moves on to the mulligan.
+ * Returns true when this call completed the phase.
+ */
+export function lockSideboard(session: GameSession, playerId: string): SideboardResult & { completed?: boolean } {
+  const pregame = session.pregame;
+  if (!pregame || pregame.phase !== "sideboard" || !pregame.sideboard) {
+    return { error: "Not in the sideboard phase", ok: false };
+  }
+  const seats = pregame.sideboard;
+  const seat = seats[playerId];
+  if (!seat) {return { error: "Not a seated player", ok: false };}
+  if (seat.locked) {return { ok: true };}
+  seat.locked = true;
+  // Shared log: no counts, no identities — only that the seat is done.
+  session.log.push(makeLogEntry(`${actorName(playerId, session.playerNames)} locked in their deck.`, { rewindable: false }));
+  if (pregame.sandbox) {
+    for (const other of session.players) {
+      if (other !== playerId && seats[other] && !seats[other].locked) {
+        seats[other].locked = true;
+        session.log.push(makeLogEntry(`${actorName(other, session.playerNames)} locked in their deck.`));
+      }
+    }
+  }
+  if (!session.players.every((p) => seats[p]?.locked)) {return { ok: true };}
+  completeSideboard(session);
+  pregame.phase = "mulligan";
+  return { completed: true, ok: true };
+}
+
+/**
+ * Every seat locked: rebuild each main deck in the engine from the post-swap
+ * list (main-origin cards now in the sideboard leave the engine entirely;
+ * side-origin cards now in the main deck are registered and added), shuffle
+ * with the engine RNG, draw the opening hands (rule 116), and record the
+ * post-swap deck configs for a Bo3 follow-up game.
+ */
+export function completeSideboard(session: GameSession): void {
+  const pregame = session.pregame;
+  const seats = pregame?.sideboard;
+  if (!pregame || !seats) {return;}
+  const { engine } = session;
+  const internal = getInternalSnapshot(engine);
+  const cardReg = getGlobalCardRegistry();
+  const post: Record<string, DeckConfig> = {};
+
+  for (const pid of session.players) {
+    const seat = seats[pid];
+    if (!seat) {continue;}
+    const keep = new Set(seat.main.map((c) => c.id));
+    const deckZone = internal.zones.mainDeck;
+    if (deckZone) {
+      // Swapped-out cards: gone from the deck zone and the instance tables.
+      const mine = deckZone.cardIds.filter((id) => internal.cards[id]?.owner === pid);
+      for (const id of mine) {
+        if (keep.has(id)) {continue;}
+        deckZone.cardIds.splice(deckZone.cardIds.indexOf(id), 1);
+        delete internal.cards[id];
+        delete internal.cardMetas[id];
+      }
+    }
+    // Swapped-in cards: register + add through the engine's own deck seeding.
+    const added: string[] = [];
+    for (const c of seat.main) {
+      if (internal.cards[c.id]) {continue;}
+      registerCard(internal, c.id, c.defId, pid, "mainDeck");
+      const def = registry.get(c.defId);
+      if (def) {cardReg.register(c.id, makeLookupPayload(def as unknown as Record<string, unknown>, c.id));}
+      added.push(c.id);
+    }
+    if (added.length > 0) {
+      engine.executeMove("initializeMainDeck", {
+        params: { cardIds: added, playerId: pid },
+        playerId: pid as PlayerId,
+      });
+    }
+    // Shuffle (rule 114) with the seeded engine RNG, then the opening hand (116).
+    engine.executeMove("shuffleDecks", { params: { playerId: pid }, playerId: pid as PlayerId });
+    engine.executeMove("drawInitialHand", { params: { playerId: pid }, playerId: pid as PlayerId });
+    post[pid] = {
+      ...seat.deck,
+      mainDeckCardIds: seat.main.map((c) => c.defId),
+      sideboardCardIds: seat.side.map((c) => c.defId),
+    };
+  }
+  session.postSideboardDecks = post;
+  session.log.push(makeLogEntry("Sideboarding complete. Decks shuffled; opening hands drawn."));
+}
+
+/** Public card descriptor for the acting seat's own overlay lists. */
+function describeSideboardCard(c: SideboardCardRef) {
+  const def = registry.get(c.defId);
+  return {
+    cardType: def?.cardType ?? "unknown",
+    defId: c.defId,
+    energyCost: def?.energyCost,
+    id: c.id,
+    name: def?.name ?? c.defId,
+    rulesText: def?.rulesText ?? "",
+  };
+}
+
+/**
+ * Sideboard section of the pregame payload for `playerId`: `you` carries ONLY
+ * this seat's own lists; `opponent` carries only public information (legend,
+ * chosen champion, this game's battlefield(s), choosing|locked).
+ */
+function buildSideboardPayload(session: GameSession, playerId: string): Record<string, unknown> {
+  const pregame = session.pregame!;
+  const seats = pregame.sideboard ?? {};
+  const me = seats[playerId];
+  const oppId = session.players.find((p) => p !== playerId) ?? "";
+  const opp = seats[oppId];
+  const named = (defId: string | undefined) => (defId ? { id: defId, name: registry.get(defId)?.name ?? defId } : null);
+  const oppBf = pregame.battlefieldSelections[oppId];
+  return {
+    opponent: {
+      battlefields: oppBf ? [named(oppBf)] : [],
+      champion: named(opp?.deck.championId),
+      id: oppId,
+      legend: named(opp?.deck.legendId),
+      name: session.playerNames[oppId] ?? oppId,
+      status: opp?.locked ? "locked" : "choosing",
+    },
+    you: me
+      ? {
+          championName: me.deck.championId ? (registry.get(me.deck.championId)?.name ?? null) : null,
+          locked: me.locked,
+          main: me.main.map(describeSideboardCard),
+          mainSize: me.main.length,
+          side: me.side.map(describeSideboardCard),
+          sideMax: MAX_SIDEBOARD_SIZE,
+          sideSize: me.side.length,
+          // Origin is encoded in the instance id: side-origin cards now in the
+          // main deck are the "ins", main-origin cards now in the sideboard the "outs".
+          swaps: {
+            ins: me.main.filter((c) => c.id.includes("-side-")).map((c) => c.id),
+            outs: me.side.filter((c) => c.id.includes("-main-")).map((c) => c.id),
+          },
+        }
+      : null,
+  };
+}
+
+/** Send the pregame frame to every connection of ONE seat (swaps are private; the other seat sees no traffic). */
+function sendPregameTo(session: GameSession, playerId: string): void {
+  for (const [, client] of session.clients) {
+    if (client.playerId !== playerId) {continue;}
+    try {
+      client.ws.send(JSON.stringify({
+        moves: buildAvailableMoves(session, client.playerId),
+        pregame: buildPregamePayload(session, client.playerId),
+        seq: session.seq,
+        state: buildGameSnapshot(session, client.playerId),
+        type: "sync",
+      }));
+    } catch { /* Disconnected */ }
+  }
 }
 
 /**
@@ -386,6 +687,7 @@ export function buildPregamePayload(session: GameSession, playerId: string): Rec
     phase: pregame.phase,
     sandbox: pregame.sandbox,
     waitingFor: session.players.filter((p) => !pregame.mulliganComplete.has(p)),
+    ...(pregame.phase === "sideboard" ? buildSideboardPayload(session, playerId) : {}),
   };
 }
 
@@ -421,16 +723,41 @@ export function handlePregameMessage(
       // Check if both players have selected
       const allSelected = session.players.every((p) => session.pregame!.battlefieldSelections[p]);
       if (allSelected) {
-        session.pregame.phase = "mulligan";
         session.log.push(
           makeLogEntry(
             "Both battlefields are locked. Roll a d20 to decide first player.",
           ),
         );
+        // Battlefields now public → sideboard (if anyone can), else mulligan.
+        advancePastReveal(session);
       }
       session.seq++;
       broadcastPregameUpdate(session);
     }
+  }
+
+  if (msg.type === "sideboard_swap") {
+    const result = swapSideboard(session, playerId, msg.out, msg.in);
+    if (!result.ok) {
+      ws.send(JSON.stringify({ error: result.error, errorCode: "SIDEBOARD_SWAP", type: "error" }));
+    } else {
+      session.seq++;
+      // Private to the acting seat: the opponent's view (choosing|locked) is unchanged.
+      sendPregameTo(session, playerId);
+    }
+    return true;
+  }
+
+  if (msg.type === "sideboard_lock") {
+    const result = lockSideboard(session, playerId);
+    if (!result.ok) {
+      ws.send(JSON.stringify({ error: result.error, errorCode: "SIDEBOARD_LOCK", type: "error" }));
+      return true;
+    }
+    if (result.completed) {gameLogger.logStateChange(gameId, "sideboard", "mulligan");}
+    session.seq++;
+    broadcastPregameUpdate(session);
+    return true;
   }
 
   if (msg.type === "pregame_mulligan") {

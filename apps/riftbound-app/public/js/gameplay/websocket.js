@@ -189,6 +189,15 @@ function connectWs() {
       case "pong":
         break;
 
+      case "error":
+        // Pregame rejections (invalid battlefield choice, sideboard swap/lock refused).
+        console.warn("[WS] Error:", msg.error);
+        if (typeof showToast === "function" && msg.error) showToast(String(msg.error));
+        if (pregameState && pregameState.phase === "sideboard" && typeof maybeRenderSideboardOverlay === "function") {
+          maybeRenderSideboardOverlay(gameState, pregameState);
+        }
+        break;
+
       case "ai_status":
         // The AI seat started/stopped deciding — aiOnServerFrame already updated the pill.
         break;

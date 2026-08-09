@@ -8,7 +8,7 @@ import type { PlayerId } from "@tcg/core";
 import { makeLogEntry } from "../src/narrator";
 import { allCards } from "./cards";
 import { SANDBOX_ENABLED, SERVER_ONLY_MOVES } from "./config";
-import { MIN_MAIN_DECK_SIZE, buildDefaultDeck, findCopyLimitViolations } from "./decks";
+import { MIN_MAIN_DECK_SIZE, buildDefaultDeck, findCopyLimitViolations, findSideboardViolation } from "./decks";
 import { json } from "./http";
 import { gameLogger } from "./log";
 import { createGameFromDecks } from "./pregame";
@@ -59,6 +59,14 @@ export async function handleGameRoutes(req: Request, url: URL, _ctx: RouteCtx): 
       const mainDeckSize = (deck.mainDeckCardIds ?? []).length + (deck.championId ? 1 : 0);
       if (mainDeckSize < MIN_MAIN_DECK_SIZE) {
         return json({ error: `${label} main deck has ${mainDeckSize} cards, needs at least ${MIN_MAIN_DECK_SIZE} (rule 103.2)` }, 400);
+      }
+      // Optional sideboard (OP policy, server/pregame.ts): ≤ 8 main-deck-type cards.
+      if (deck.sideboardCardIds !== undefined && !Array.isArray(deck.sideboardCardIds)) {
+        return json({ error: `${label}.sideboardCardIds must be an array of card ids` }, 400);
+      }
+      const sideboardProblem = findSideboardViolation(deck.sideboardCardIds);
+      if (sideboardProblem) {
+        return json({ error: `${label} ${sideboardProblem}` }, 400);
       }
     }
     const gameId = crypto.randomUUID();

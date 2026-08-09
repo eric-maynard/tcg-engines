@@ -1,4 +1,4 @@
-// pregame.js — Pregame phase: coin flip, battlefield selection, mulligan
+// pregame.js — Pregame phase: coin flip, battlefield selection, sideboarding, mulligan
 
 /** Show dice-roll turn order animation with choose-who-goes-first for the winner */
 function showCoinFlip(flip, onDone) {
@@ -140,9 +140,12 @@ function handlePregameSync(pregame, state) {
   const overlay = document.getElementById("pregameOverlay");
   const content = document.getElementById("pregameContent");
   overlay.classList.add("visible");
+  content.classList.toggle("sideboard-step", pregame.phase === "sideboard");
 
   if (pregame.phase === "battlefield_select") {
     renderBattlefieldSelection(pregame, content);
+  } else if (pregame.phase === "sideboard") {
+    maybeRenderSideboardOverlay(state, pregame);
   } else if (pregame.phase === "mulligan") {
     renderMulliganUI(pregame, state, content);
   }
@@ -319,229 +322,283 @@ function hidePregame() {
 }
 
 /* ============================================================
-   W14 — Non-modal Sideboard Overlay
+   Sideboarding step (pregame phase "sideboard")
    ------------------------------------------------------------
-   Renders a centered card inside #game-scale-wrapper so the
-   live game board remains visible (dimmed) behind the overlay.
-   MUST stay inside the wrapper so scale-to-fit applies.
-   Do NOT use position: fixed.
-
-   The server does not yet emit a `sideboard` phase (see
-   server.ts pregame phases: battlefield_select | mulligan |
-   ready). This is UI scaffolding — call
-   window.showSideboardOverlayDebug() to preview it manually,
-   or once the engine emits `gameState.phase === 'sideboard'`
-   (or `pregame.phase === 'sideboard'`), maybeRenderSideboardOverlay
-   will pick it up automatically.
+   Server contract (server/pregame.ts §Sideboarding — assumed OP
+   policy, not Core Rules): after legends / champions / this
+   game's battlefields are revealed and BEFORE hands are drawn,
+   each player may swap cards 1-for-1 between main deck and
+   sideboard, privately, then lock in. Frames:
+     pregame.phase === "sideboard"
+     pregame.you      = { main:[{id,defId,name,cardType,energyCost}], side:[…],
+                          locked, mainSize, sideSize, sideMax, swaps:{ins,outs}, championName }
+     pregame.opponent = { name, legend, champion, battlefields:[{id,name}], status:"choosing"|"locked" }
+   Client → server: {type:"sideboard_swap", out:<mainInstanceId>, in:<sideInstanceId>}
+                    {type:"sideboard_lock"}
+   Rendered into the regular pregame overlay (#pregameContent) so
+   the "no other modal over the pregame overlay" guards apply.
    ============================================================ */
 
-/**
- * Build a card row (thumbnail, qty, name, click-to-swap).
- * swapHandler is invoked with (cardEntry) when row is clicked,
- * or null to render as non-interactive.
- */
-function buildSideboardRow(entry, swapHandler) {
-  const row = document.createElement("div");
-  row.className = "sideboard-overlay__row";
-  if (swapHandler) {
-    row.style.cursor = "pointer";
-    row.addEventListener("click", () => swapHandler(entry));
-  }
+const SB_SKIP_KEY = "rb-skip-sideboarding";
+let _sbPick = { main: null, side: null }; // Selected instance ids (click one column, then the other)
+let _sbLockSent = false;
+let _sbAutoSkipped = false;
 
-  const thumb = document.createElement("div");
-  thumb.className = "sideboard-overlay__thumb";
-  const defId = (entry.definitionId || entry.id || "").replace(/^player-[12]-/, "");
-  if (defId) {
-    const img = document.createElement("img");
-    img.src = `/card-image/${defId}`;
-    img.alt = entry.name || defId;
-    img.onerror = () => {
-      img.style.display = "none";
-    };
-    thumb.appendChild(img);
-  }
-
-  const qty = document.createElement("div");
-  qty.className = "sideboard-overlay__qty";
-  qty.textContent = `x${entry.qty ?? 1}`;
-
-  const name = document.createElement("div");
-  name.className = "sideboard-overlay__name";
-  name.textContent = entry.name || defId || "Unknown";
-
-  row.appendChild(thumb);
-  row.appendChild(qty);
-  row.appendChild(name);
-  return row;
+function sideboardSkipPreferred() {
+  try { return localStorage.getItem(SB_SKIP_KEY) === "1"; } catch { return false; }
+}
+function setSideboardSkipPreferred(on) {
+  try { localStorage.setItem(SB_SKIP_KEY, on ? "1" : "0"); } catch { /* private mode */ }
 }
 
-/**
- * Collect main-deck and sideboard entries for the viewing player.
- * Falls back to empty arrays if the server hasn't wired a sideboard
- * zone yet.
- */
-function collectSideboardData(state) {
-  const main = [];
-  const side = [];
-  if (!state || !state.zones) return { main, side };
-
-  const groupByDef = (cards) => {
-    const map = new Map();
-    for (const c of cards) {
-      if (c.owner && c.owner !== viewingPlayer) continue;
-      const key = c.definitionId || c.id;
-      const existing = map.get(key);
-      if (existing) {
-        existing.qty += 1;
-      } else {
-        map.set(key, {
-          id: c.id,
-          definitionId: c.definitionId,
-          name: c.name || c.definitionId || "",
-          qty: 1,
-        });
-      }
-    }
-    return [...map.values()];
-  };
-
-  if (Array.isArray(state.zones.deck)) {
-    main.push(...groupByDef(state.zones.deck));
-  }
-  if (Array.isArray(state.zones.sideboard)) {
-    side.push(...groupByDef(state.zones.sideboard));
-  }
-  return { main, side };
+function sendSideboardSwap(outId, inId) {
+  if (!ws || ws.readyState !== WebSocket.OPEN || !outId || !inId) return;
+  ws.send(JSON.stringify({ type: "sideboard_swap", out: outId, in: inId }));
 }
 
-/**
- * Render the sideboard overlay into #sideboard-overlay-mount.
- * Pass opts.debug = true to render with demo data when no zones exist.
- */
-function renderSideboardOverlay(state, opts = {}) {
-  const mount = document.getElementById("sideboard-overlay-mount");
-  if (!mount) return;
+function sendSideboardLock() {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  _sbLockSent = true;
+  ws.send(JSON.stringify({ type: "sideboard_lock" }));
+}
 
-  // Tear down any previous render.
-  mount.innerHTML = "";
-
-  let { main, side } = collectSideboardData(state);
-
-  if (opts.debug && main.length === 0 && side.length === 0) {
-    main = [
-      { id: "demo-main-1", definitionId: "demo-card-1", name: "Demo Main Card A", qty: 3 },
-      { id: "demo-main-2", definitionId: "demo-card-2", name: "Demo Main Card B", qty: 2 },
-      { id: "demo-main-3", definitionId: "demo-card-3", name: "Demo Main Card C", qty: 4 },
-    ];
-    side = [
-      { id: "demo-sb-1", definitionId: "demo-card-4", name: "Demo Sideboard X", qty: 2 },
-      { id: "demo-sb-2", definitionId: "demo-card-5", name: "Demo Sideboard Y", qty: 1 },
-    ];
-  }
-
-  const overlay = document.createElement("div");
-  overlay.className = "sideboard-overlay";
-
-  const backdrop = document.createElement("div");
-  backdrop.className = "sideboard-overlay__backdrop";
-  overlay.appendChild(backdrop);
-
-  const card = document.createElement("div");
-  card.className = "sideboard-overlay__card";
-
-  const title = document.createElement("div");
-  title.className = "sideboard-overlay__title";
-  title.textContent = "Sideboard";
-  card.appendChild(title);
-
-  const subtitle = document.createElement("div");
-  subtitle.className = "sideboard-overlay__subtitle";
-  subtitle.textContent =
-    "Swap cards between your main deck and sideboard, then lock in your configuration.";
-  card.appendChild(subtitle);
-
-  const columns = document.createElement("div");
-  columns.className = "sideboard-overlay__columns";
-
-  // Swap handler: if a real engine move exists, dispatch it;
-  // otherwise log and no-op. The engine move name is speculative
-  // (`sideboard_swap`) — once the engine lands the phase, wire it here.
-  const swap = (fromZone, entry) => {
-    if (typeof ws !== "undefined" && ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(
-        JSON.stringify({
-          type: "sideboard_swap",
-          fromZone,
-          cardId: entry.id,
-          definitionId: entry.definitionId,
-        }),
-      );
-    } else {
-      console.log("[W14] sideboard swap (no-op — ws closed)", fromZone, entry);
+/** Group a card list by definition for "thumb + qty" rows, remembering the instance ids behind each row. */
+function sbGroup(cards, originTag) {
+  const groups = new Map();
+  for (const c of cards) {
+    let g = groups.get(c.defId);
+    if (!g) {
+      g = { defId: c.defId, name: c.name, energyCost: c.energyCost, cardType: c.cardType, ids: [], moved: 0 };
+      groups.set(c.defId, g);
     }
-  };
-
-  const mainCol = document.createElement("div");
-  mainCol.className = "sideboard-overlay__col";
-  const mainHeader = document.createElement("div");
-  mainHeader.className = "sideboard-overlay__col-header";
-  mainHeader.textContent = `Main Deck (${main.reduce((s, e) => s + (e.qty ?? 1), 0)})`;
-  mainCol.appendChild(mainHeader);
-  const mainList = document.createElement("div");
-  mainList.className = "sideboard-overlay__list";
-  for (const entry of main) {
-    mainList.appendChild(buildSideboardRow(entry, (e) => swap("deck", e)));
+    g.ids.push(c.id);
+    if (c.id.includes(originTag)) g.moved++; // Cards that crossed over (side-origin in main / main-origin in side)
   }
-  if (main.length === 0) {
-    const empty = document.createElement("div");
-    empty.className = "sideboard-overlay__empty";
-    empty.textContent = "No cards in main deck.";
-    mainList.appendChild(empty);
-  }
-  mainCol.appendChild(mainList);
+  return [...groups.values()].sort((a, b) => (a.energyCost ?? 99) - (b.energyCost ?? 99) || a.name.localeCompare(b.name));
+}
 
-  const sideCol = document.createElement("div");
-  sideCol.className = "sideboard-overlay__col";
-  const sideHeader = document.createElement("div");
-  sideHeader.className = "sideboard-overlay__col-header";
-  sideHeader.textContent = `Sideboard (${side.reduce((s, e) => s + (e.qty ?? 1), 0)})`;
-  sideCol.appendChild(sideHeader);
-  const sideList = document.createElement("div");
-  sideList.className = "sideboard-overlay__list";
-  for (const entry of side) {
-    sideList.appendChild(buildSideboardRow(entry, (e) => swap("sideboard", e)));
-  }
-  if (side.length === 0) {
-    const empty = document.createElement("div");
-    empty.className = "sideboard-overlay__empty";
-    empty.textContent = "Sideboard is empty.";
-    sideList.appendChild(empty);
-  }
-  sideCol.appendChild(sideList);
+function sbRowHtml(g, column, selectedId) {
+  const selected = selectedId && g.ids.includes(selectedId);
+  // Prefer handing over a card that already crossed (so re-clicking undoes) — else the first instance.
+  const crossedTag = column === "main" ? "-side-" : "-main-";
+  const pickId = g.ids.find((id) => id.includes(crossedTag)) || g.ids[0];
+  const badge = g.moved > 0
+    ? `<span class="sb-badge sb-badge--${column === "main" ? "in" : "out"}">${column === "main" ? "+" : "&minus;"}${g.moved}</span>`
+    : "";
+  return `
+    <div class="sideboard-overlay__row${selected ? " sb-selected" : ""}" draggable="true"
+         data-sb-col="${column}" data-sb-id="${esc(pickId)}" data-def-id="${esc(g.defId)}"
+         title="${esc(g.name)}">
+      <div class="sideboard-overlay__thumb"><img src="/card-image/${esc(g.defId)}" alt="" onerror="this.style.display='none'"></div>
+      <div class="sideboard-overlay__qty">x${g.ids.length}</div>
+      <div class="sb-cost">${g.energyCost != null ? esc(String(g.energyCost)) : "&ndash;"}</div>
+      <div class="sideboard-overlay__name">${esc(g.name)}</div>
+      ${badge}
+    </div>`;
+}
 
-  columns.appendChild(mainCol);
-  columns.appendChild(sideCol);
-  card.appendChild(columns);
+function renderSideboardStep(pregame, container) {
+  const you = pregame.you;
+  const opp = pregame.opponent || {};
+  if (!container) return;
 
-  const lockBtn = document.createElement("button");
-  lockBtn.className = "sideboard-overlay__lock-btn";
-  lockBtn.type = "button";
-  lockBtn.textContent = "Lock In Sideboard";
-  lockBtn.addEventListener("click", () => {
-    if (typeof ws !== "undefined" && ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ type: "sideboard_lock_in" }));
-    } else {
-      console.log("[W14] lock in sideboard (stub — no ws move available)");
-    }
-    hideSideboardOverlay();
+  // Practice games: honour "Skip sideboarding" — lock in immediately, once.
+  if (pregame.sandbox && you && !you.locked && !_sbAutoSkipped && sideboardSkipPreferred()) {
+    _sbAutoSkipped = true;
+    sendSideboardLock();
+  }
+  if (you && !you.locked) _sbLockSent = false;
+
+  const oppBits = [];
+  if (opp.legend) oppBits.push(`Legend <b>${esc(opp.legend.name)}</b>`);
+  if (opp.champion) oppBits.push(`Champion <b>${esc(opp.champion.name)}</b>`);
+  if ((opp.battlefields || []).length) oppBits.push(`Battlefield <b>${opp.battlefields.map((b) => esc(b.name)).join(", ")}</b>`);
+  const oppStatus = opp.status === "locked"
+    ? `<span class="sb-status sb-status--locked">Locked in</span>`
+    : `<span class="sb-status sb-status--choosing">Sideboarding&hellip;</span>`;
+  const myBf = pregame.battlefieldSelectedName
+    ? `<div class="pregame-info">Your battlefield: <b>${esc(pregame.battlefieldSelectedName)}</b>${pregame.battlefieldRandom ? " (selected at random)" : ""}</div>`
+    : "";
+
+  let html = `
+    <div class="pregame-title">Sideboarding</div>
+    <div class="pregame-subtitle">Swap cards 1-for-1 between your main deck and sideboard before opening hands are drawn &mdash; click a main-deck card then a sideboard card (or drag one onto the other). Your opponent only sees when you lock in.</div>
+    <div class="sb-opponent" id="sbOpponent">
+      <span class="sb-opp-name">${esc(opp.name || "Opponent")}</span> revealed: ${oppBits.join(" &middot; ") || "&mdash;"} ${oppStatus}
+    </div>
+    ${myBf}
+  `;
+
+  if (!you) {
+    html += `<div class="pregame-waiting">Spectating &mdash; waiting for both players to lock in&hellip;</div>`;
+    container.innerHTML = html;
+    return;
+  }
+
+  const mainGroups = sbGroup(you.main || [], "-side-");
+  const sideGroups = sbGroup(you.side || [], "-main-");
+  const locked = Boolean(you.locked);
+  const sizesOk = (you.sideSize ?? (you.side || []).length) <= (you.sideMax ?? 8);
+  const k = (you.swaps?.ins || []).length;
+
+  html += `
+    <div class="sideboard-overlay__columns sb-columns${locked ? " sb-locked" : ""}" id="sbColumns">
+      <div class="sideboard-overlay__col" data-sb-drop="main">
+        <div class="sideboard-overlay__col-header">Main deck <span id="sbMainCount">${you.mainSize ?? you.main.length}</span>${you.championName ? ` <span class="sb-sub">+ ${esc(you.championName)}</span>` : ""}</div>
+        <div class="sideboard-overlay__list" id="sbMainList">
+          ${mainGroups.map((g) => sbRowHtml(g, "main", _sbPick.main)).join("") || '<div class="sideboard-overlay__empty">No cards in main deck.</div>'}
+        </div>
+      </div>
+      <div class="sideboard-overlay__col" data-sb-drop="side">
+        <div class="sideboard-overlay__col-header">Sideboard <span id="sbSideCount">${you.sideSize ?? you.side.length}</span> / ${you.sideMax ?? 8}</div>
+        <div class="sideboard-overlay__list" id="sbSideList">
+          ${sideGroups.map((g) => sbRowHtml(g, "side", _sbPick.side)).join("") || '<div class="sideboard-overlay__empty">Sideboard is empty.</div>'}
+        </div>
+      </div>
+    </div>
+    <div class="sb-swaps" id="sbSwaps">
+      <span class="sb-swaps-label">Swaps: <b id="sbSwapCount">${k}</b></span>
+      ${(you.swaps?.ins || []).map((inId, i) => {
+        const outId = you.swaps.outs[i];
+        const inName = (you.main.find((c) => c.id === inId) || {}).name || "?";
+        const outName = (you.side.find((c) => c.id === outId) || {}).name || "?";
+        return `<span class="sb-swap-chip">&minus;${esc(outName)} / +${esc(inName)}${locked ? "" : ` <button type="button" class="sb-undo" data-sb-undo-in="${esc(inId)}" data-sb-undo-out="${esc(outId || "")}" title="Undo this swap">undo</button>`}</span>`;
+      }).join("")}
+    </div>
+  `;
+
+  if (locked) {
+    html += `<div class="pregame-waiting" id="sbWaiting">${opp.status === "locked" ? "Both locked in &mdash; shuffling&hellip;" : "Locked in. Waiting for opponent&hellip;"}</div>`;
+  } else {
+    html += `
+      <div class="mulligan-actions" id="sbActions">
+        <button class="start-btn sideboard-lock-btn" id="sbLockBtn" type="button" ${!sizesOk || _sbLockSent ? "disabled" : ""}>${k === 0 ? "Lock in (no changes)" : `Lock in (${k} swap${k === 1 ? "" : "s"})`}</button>
+      </div>
+      <div id="sbStatus" class="pregame-info">${_sbPick.main || _sbPick.side ? "Now pick a card in the other column to complete the swap &middot; Esc to cancel" : "Decks are shuffled and hands drawn once both players lock in"}</div>
+    `;
+  }
+  if (pregame.sandbox) {
+    html += `<label class="sb-skip"><input type="checkbox" id="sbSkipToggle" ${sideboardSkipPreferred() ? "checked" : ""}> Skip sideboarding in practice games</label>`;
+  }
+
+  container.innerHTML = html;
+  wireSideboardStep(container, you, locked);
+}
+
+function wireSideboardStep(container, you, locked) {
+  const skip = container.querySelector("#sbSkipToggle");
+  if (skip) skip.addEventListener("change", () => setSideboardSkipPreferred(skip.checked));
+  const lockBtn = container.querySelector("#sbLockBtn");
+  if (lockBtn) lockBtn.addEventListener("click", () => { lockBtn.disabled = true; lockBtn.textContent = "Locking in…"; sendSideboardLock(); });
+  container.querySelectorAll(".sb-undo").forEach((btn) => btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    // Undo = swap the pair back: the side-origin card leaves the main deck, the main-origin card returns.
+    sendSideboardSwap(btn.dataset.sbUndoIn, btn.dataset.sbUndoOut);
+  }));
+
+  container.querySelectorAll(".sideboard-overlay__row").forEach((row) => {
+    row.addEventListener("mouseenter", () => sbShowPreview(row));
+    row.addEventListener("mouseleave", () => { if (typeof hidePreview === "function") hidePreview(); });
+    if (locked) return;
+    row.addEventListener("click", () => sbPickRow(row.dataset.sbCol, row.dataset.sbId, container));
+    row.addEventListener("dragstart", (e) => {
+      e.dataTransfer.setData("text/plain", JSON.stringify({ col: row.dataset.sbCol, id: row.dataset.sbId }));
+      e.dataTransfer.effectAllowed = "move";
+      row.classList.add("sb-dragging");
+    });
+    row.addEventListener("dragend", () => row.classList.remove("sb-dragging"));
+    row.addEventListener("dragover", (e) => { e.preventDefault(); row.classList.add("sb-drop-target"); });
+    row.addEventListener("dragleave", () => row.classList.remove("sb-drop-target"));
+    row.addEventListener("drop", (e) => {
+      e.preventDefault();
+      row.classList.remove("sb-drop-target");
+      let src = null;
+      try { src = JSON.parse(e.dataTransfer.getData("text/plain")); } catch { return; }
+      if (!src || src.col === row.dataset.sbCol) return;
+      const outId = src.col === "main" ? src.id : row.dataset.sbId;
+      const inId = src.col === "side" ? src.id : row.dataset.sbId;
+      _sbPick = { main: null, side: null };
+      sendSideboardSwap(outId, inId);
+    });
   });
-  card.appendChild(lockBtn);
-
-  overlay.appendChild(card);
-  mount.appendChild(overlay);
-  mount.classList.add("visible");
 }
 
+function sbPickRow(col, id, container) {
+  if (_sbPick[col] === id) {
+    _sbPick[col] = null; // Toggle off
+  } else {
+    _sbPick[col] = id;
+  }
+  if (_sbPick.main && _sbPick.side) {
+    const { main, side } = _sbPick;
+    _sbPick = { main: null, side: null };
+    sendSideboardSwap(main, side);
+    return;
+  }
+  // Re-mark selection without a server round-trip.
+  container.querySelectorAll(".sideboard-overlay__row").forEach((row) => {
+    row.classList.toggle("sb-selected", _sbPick[row.dataset.sbCol] === row.dataset.sbId);
+  });
+  const status = container.querySelector("#sbStatus");
+  if (status) status.textContent = _sbPick.main || _sbPick.side
+    ? "Now pick a card in the other column to complete the swap · Esc to cancel"
+    : "Decks are shuffled and hands drawn once both players lock in";
+}
+
+/** Hover = enlarged card image only (DESIGN.md), positioned beside the row and clamped to the viewport. */
+function sbShowPreview(row) {
+  const previewEl = document.getElementById("cardPreview");
+  const img = document.getElementById("previewImg");
+  if (!previewEl || !img) return;
+  img.src = `/card-image/${row.dataset.defId}`;
+  img.onerror = function() { this.style.display = "none"; };
+  img.onload = function() { this.style.display = "block"; };
+  for (const id of ["previewName", "previewType", "previewText", "previewStats"]) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = "";
+  }
+  previewEl.classList.add("visible");
+  const rect = row.getBoundingClientRect();
+  const w = previewEl.offsetWidth || 236;
+  const h = previewEl.offsetHeight || 330;
+  // Keep the image off the OTHER column: outside edge of the hovered column, else the far viewport edge.
+  let left = row.dataset.sbCol === "main" ? rect.left - w - 12 : rect.right + 12;
+  if (left < 8 || left + w > window.innerWidth - 8) left = row.dataset.sbCol === "main" ? window.innerWidth - w - 8 : 8;
+  let top = rect.top + rect.height / 2 - h / 2;
+  top = Math.max(8, Math.min(top, window.innerHeight - h - 8));
+  previewEl.style.left = left + "px";
+  previewEl.style.top = top + "px";
+}
+
+// Esc cancels a half-made pick.
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape" || (!_sbPick.main && !_sbPick.side)) return;
+  if (!pregameState || pregameState.phase !== "sideboard") return;
+  _sbPick = { main: null, side: null };
+  document.querySelectorAll("#pregameContent .sideboard-overlay__row.sb-selected").forEach((r) => r.classList.remove("sb-selected"));
+});
+
+/**
+ * Entry point (kept from the W14 scaffold): sync the sideboarding UI to the
+ * current phase. Safe to call on every frame.
+ */
+function maybeRenderSideboardOverlay(state, pregame) {
+  const legacyMount = document.getElementById("sideboard-overlay-mount");
+  if (legacyMount && legacyMount.classList.contains("visible")) hideSideboardOverlay();
+  if (!pregame || pregame.phase !== "sideboard") {
+    _sbPick = { main: null, side: null };
+    _sbAutoSkipped = false;
+    return;
+  }
+  const overlay = document.getElementById("pregameOverlay");
+  const content = document.getElementById("pregameContent");
+  if (!overlay || !content) return;
+  overlay.classList.add("visible");
+  content.classList.add("sideboard-step");
+  renderSideboardStep(pregame, content);
+}
+
+/** Clears the legacy in-wrapper mount (#sideboard-overlay-mount); the live UI is the pregame overlay step. */
 function hideSideboardOverlay() {
   const mount = document.getElementById("sideboard-overlay-mount");
   if (!mount) return;
@@ -549,31 +606,7 @@ function hideSideboardOverlay() {
   mount.classList.remove("visible");
 }
 
-/**
- * Call from the game_state message handler to sync overlay
- * visibility to the current phase. Safe to call on every tick.
- */
-function maybeRenderSideboardOverlay(state, pregame) {
-  const isSideboardPhase =
-    (state && state.phase === "sideboard") ||
-    (pregame && pregame.phase === "sideboard");
-  if (isSideboardPhase) {
-    renderSideboardOverlay(state);
-  } else {
-    const mount = document.getElementById("sideboard-overlay-mount");
-    if (mount && mount.classList.contains("visible")) {
-      hideSideboardOverlay();
-    }
-  }
-}
-
-// Debug entry point — lets us preview the overlay without a live
-// server-side sideboard phase. Once the engine supports the phase,
-// remove this or gate it behind a build flag.
 if (typeof window !== "undefined") {
-  window.showSideboardOverlayDebug = function () {
-    const state = typeof gameState !== "undefined" ? gameState : null;
-    renderSideboardOverlay(state, { debug: true });
-  };
   window.hideSideboardOverlay = hideSideboardOverlay;
+  window.setSideboardSkipPreferred = setSideboardSkipPreferred;
 }

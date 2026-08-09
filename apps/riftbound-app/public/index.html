@@ -884,6 +884,19 @@
       padding: 8px 4px;
     }
 
+    /* Sideboard pane (≤ 8 cards; copy limit counted across main + sideboard) */
+    .sb-target-btn {
+      padding: 2px 8px; margin-right: 8px;
+      border: 1px solid #2a2740; border-radius: 6px; background: transparent;
+      color: #6b6580; font-size: 10px; font-weight: 600; cursor: pointer; transition: all 0.15s;
+    }
+    .sb-target-btn:hover { border-color: #5a4a8a; color: #a090c0; }
+    .sb-target-btn.active { background: #2a2050; border-color: #6b4aff; color: #c4a0ff; }
+    .card-tile .sb-badge {
+      position: absolute; top: 4px; left: 4px; padding: 1px 5px; border-radius: 6px;
+      background: rgba(42,32,80,0.9); color: #c4a0ff; font-size: 9px; font-weight: 700;
+    }
+
   </style>
 </head>
 <body>
@@ -977,6 +990,20 @@
       </div>
       <div class="rune-list" id="runeList">
         <div class="rune-empty">No runes yet — use Auto-fill Runes</div>
+      </div>
+    </div>
+
+    <!-- Sideboard (up to 8; swapped in during pregame sideboarding) -->
+    <div class="rune-section" id="sideboardSection" style="display:none;">
+      <div class="rune-section-header">
+        <span class="rune-section-label">Sideboard</span>
+        <span style="flex:1"></span>
+        <button class="sb-target-btn" id="sbTargetBtn" onclick="toggleAddTarget()"
+                title="While on, clicking a card in the browser adds it to the sideboard instead of the main deck">Add to: Main</button>
+        <span class="rune-section-count" id="sideboardCount">0 / 8</span>
+      </div>
+      <div class="rune-list" id="sideboardList">
+        <div class="rune-empty">No sideboard cards — turn on “Add to: Sideboard” and click cards</div>
       </div>
     </div>
 
@@ -1455,6 +1482,8 @@ Runes:
     }
 
     const copies = deckStats?.copies || {};
+    const sbCounts = {};
+    for (const s of (deckState?.sideboard || [])) sbCounts[s.name] = (sbCounts[s.name] || 0) + 1;
     grid.innerHTML = currentCards.map(c => {
       const count = copies[c.name] || 0;
       const inDeck = count > 0;
@@ -1472,6 +1501,7 @@ Runes:
              onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
         <div class="img-placeholder" style="display:none;">${esc(c.name)}</div>
         ${count > 0 ? `<div class="copy-badge ${maxed ? 'maxed-badge' : ''}">${count}/3</div>` : ''}
+        ${sbCounts[c.name] ? `<div class="sb-badge" title="Copies in sideboard">SB ${sbCounts[c.name]}</div>` : ''}
       </div>`;
     }).join('');
   }
@@ -1506,8 +1536,70 @@ Runes:
   // ========================================
   // Add / Remove Cards
   // ========================================
+  // Where card-grid clicks go: 'main' (default) or 'sideboard'.
+  let addTarget = 'main';
+  function toggleAddTarget() {
+    addTarget = addTarget === 'main' ? 'sideboard' : 'main';
+    const btn = document.getElementById('sbTargetBtn');
+    if (btn) {
+      btn.textContent = addTarget === 'main' ? 'Add to: Main' : 'Add to: Sideboard';
+      btn.classList.toggle('active', addTarget === 'sideboard');
+    }
+  }
+
+  async function addSideboardCard(cardId, el, evt) {
+    if (evt) evt.stopPropagation();
+    try {
+      const res = await fetch(API + `/api/deck/${sessionId}/sideboard/add`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cardId })
+      });
+      if (!res.ok) throw new Error('Failed to add sideboard card');
+      const data = await res.json();
+      if (!data.result || !data.result.success) {
+        if (data.result?.error?.message) showToast('Sideboard', data.result.error.message, 'error');
+        if (el) {
+          el.style.borderColor = '#7a2e2e';
+          setTimeout(() => { el.style.borderColor = ''; }, 300);
+        }
+        return;
+      }
+      deckState = data.state;
+      deckStats = data.stats;
+      updateDeckUI();
+      renderCardGrid();
+      if (el) {
+        el.classList.add('just-added');
+        setTimeout(() => el.classList.remove('just-added'), 400);
+      }
+    } catch (err) {
+      console.error('Add sideboard card error:', err);
+    }
+  }
+
+  async function removeSideboardCard(cardId, evt) {
+    if (evt) evt.stopPropagation();
+    try {
+      const res = await fetch(API + `/api/deck/${sessionId}/sideboard/remove`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cardId })
+      });
+      if (!res.ok) throw new Error('Failed to remove sideboard card');
+      const data = await res.json();
+      deckState = data.state;
+      deckStats = data.stats;
+      updateDeckUI();
+      renderCardGrid();
+    } catch (err) {
+      console.error('Remove sideboard card error:', err);
+    }
+  }
+
   async function addCard(cardId, el, evt) {
     if (evt) evt.stopPropagation();
+    if (addTarget === 'sideboard' && el) { return addSideboardCard(cardId, el, evt); }
     try {
       const res = await fetch(API + `/api/deck/${sessionId}/add`, {
         method: 'POST',
@@ -1625,6 +1717,41 @@ Runes:
 
     // Rune deck display
     updateRuneDisplay();
+    updateSideboardDisplay();
+  }
+
+  function updateSideboardDisplay() {
+    if (!deckState) return;
+    const section = document.getElementById('sideboardSection');
+    const list = document.getElementById('sideboardList');
+    const countEl = document.getElementById('sideboardCount');
+    const side = deckState.sideboard || [];
+    const max = deckStats?.sideboardMax || 8;
+    section.style.display = '';
+    countEl.textContent = `${side.length} / ${max}`;
+    if (side.length === 0) {
+      list.innerHTML = '<div class="rune-empty">No sideboard cards — turn on “Add to: Sideboard” and click cards</div>';
+      return;
+    }
+    const grouped = new Map();
+    for (const c of [...side].sort((a, b) => (a.energyCost || 0) - (b.energyCost || 0))) {
+      if (!grouped.has(c.name)) grouped.set(c.name, { card: c, count: 0 });
+      grouped.get(c.name).count++;
+    }
+    const copies = deckStats?.copies || {};
+    list.innerHTML = [...grouped.values()].map(({ card, count }) => {
+      const cardJson = JSON.stringify(card).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;');
+      const full = side.length >= max || (copies[card.name] || 0) >= 3;
+      return `<div class="deck-card-row" onmouseenter="showPreview(${cardJson})">
+        <span class="dcr-cost">${card.energyCost ?? '-'}</span>
+        <span class="dcr-name">${esc(card.name)}</span>
+        <span class="dcr-count">x${count}</span>
+        <span class="dcr-actions">
+          <button class="dcr-btn dcr-minus" onclick="removeSideboardCard('${esc(card.id)}', event)">−</button>
+          <button class="dcr-btn dcr-plus" ${full ? 'disabled' : ''} onclick="addSideboardCard('${esc(card.id)}', null, event)">+</button>
+        </span>
+      </div>`;
+    }).join('');
   }
 
   function updateRuneDisplay() {
@@ -1801,6 +1928,18 @@ Runes:
       for (const entry of mainCards) {
         for (let i = 0; i < entry.quantity; i++) {
           await fetch(API + `/api/deck/${sessionId}/add`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ cardId: entry.cardId })
+          });
+        }
+      }
+
+      // Sideboard entries (zone 'sideboard') — after the main deck so the
+      // combined 3-copy limit is applied in the same order as when saved.
+      for (const entry of (savedDeck.cards || []).filter(c => c.zone === 'sideboard')) {
+        for (let i = 0; i < entry.quantity; i++) {
+          await fetch(API + `/api/deck/${sessionId}/sideboard/add`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ cardId: entry.cardId })
