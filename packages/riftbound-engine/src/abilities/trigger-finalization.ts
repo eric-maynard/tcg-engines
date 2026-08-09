@@ -26,6 +26,8 @@
 import type { CardId as CoreCardId } from "@tcg/core";
 import type { ChainItem } from "../chain/chain-state";
 import { removeChainItem } from "../chain/chain-state";
+import type { PostMoveCleanupContext } from "../cleanup/post-move-cleanup";
+import { cleanupAndFireDeaths } from "../cleanup/post-move-cleanup";
 import { continueEffectPlay, isPendingPlayItem } from "../game-definition/moves/play/play-pipeline";
 import { buildEffectContext } from "../game-definition/moves/chain/effect-context";
 import { executeResolvedItem, optInIsPerformable } from "../game-definition/moves/chain/resolve";
@@ -696,7 +698,16 @@ export function withTriggerFinalization<
           moveDepth = Math.max(0, moveDepth - 1);
         }
         if (context?.cards && context?.zones && !draft?.pendingChoice) {
+          const chainBefore = draft?.interaction?.chain != null;
           finalizePendingItems(draft, context as FinalizationContext);
+          // rule 319.5 — a Cleanup happens whenever the chain empties. Finalization
+          // can discard the last item(s) itself (an unperformable opt-in, a target-less
+          // ability), and the reducer's own cleanup already ran in a Closed State, so
+          // the state-based checks (e.g. rule 323.6 battlefield vacancy) must run again
+          // here or they wait for an unrelated later move.
+          if (chainBefore && draft?.interaction?.chain == null && !draft?.pendingChoice) {
+            cleanupAndFireDeaths(draft, context as PostMoveCleanupContext);
+          }
         }
       },
     };

@@ -105,12 +105,19 @@ function updateStateIndicatorTracking() {
   void turnChanged;
 }
 
-/** True if the card should display the summoning-sick overlay (entered this turn). */
+/**
+ * True if the card should display the summoning-sick overlay (entered this turn
+ * AND still exhausted). rule 143.4 — a unit enters exhausted unless something
+ * (paid Accelerate, an enters-ready replacement or static) says otherwise; a
+ * ready unit can act the turn it arrives, so it must not get the "can't act"
+ * overlay just because it entered this turn.
+ */
 function isCardSummoningSick(card, zone) {
   if (!card?.id) return false;
   if (!isBoardZone(zone)) return false;
   // Runes don't get sick — only units played to base/battlefields
   if (card.cardType === "rune") return false;
+  if (!card.meta?.exhausted) return false;
   const enteredTurn = _enteredOnTurn.get(card.id);
   if (enteredTurn == null) return false;
   return enteredTurn === (gameState?.turn?.number ?? -1);
@@ -254,6 +261,14 @@ function renderCardElement(card, isFacedown = false, zone = "") {
     attachBadge = `<div class="card-attach card-attach--holder" title="Equipped with ${esc(names)}">&#128279; ${esc(names)}</div>`;
   }
 
+  // rule 762: a card that named another card (Fallen Feline) keeps that name for
+  // as long as it is on the board, and the name drives its ongoing restriction —
+  // so it must be readable on the card, not only in the log.
+  const namedCard = typeof card.meta?.namedCard === "string" ? card.meta.namedCard : "";
+  const namedBadge = namedCard
+    ? `<div class="card-named" title="Named: ${esc(namedCard)}">&#128172; ${esc(namedCard)}</div>`
+    : "";
+
   const imgLoad = _cardImgLoadAttrs(imgId); // [rule:design-no-blank-cards]
 
   return `
@@ -278,6 +293,7 @@ function renderCardElement(card, isFacedown = false, zone = "") {
       ${card.meta?.damage > 0 ? `<div class="card-damage">${card.meta.damage}</div>` : ""}
       ${mightBadge}
       ${attachBadge}
+      ${namedBadge}
       ${hideBtn}
       <div class="card-name">${esc(card.name || "")}</div>
     </div>
@@ -294,6 +310,26 @@ function renderDeckStack(zoneCards, label, options = {}) {
     ? ' oncontextmenu="event.preventDefault(); if (typeof openPeekDialog === \'function\') openPeekDialog(1); return false;" title="Right-click to peek at the top card"'
     : "";
   const cls = peekable ? "deck-stack deck-stack--peekable" : "deck-stack";
+  return `
+    <div class="${cls}"${attrs}>
+      <div class="deck-count">${count}</div>
+      <div class="deck-label">${esc(label)}</div>
+    </div>
+  `;
+}
+
+/**
+ * Trash pile for one player.
+ * rule 108.2.d / 355.10.a.1: cards in a Trash are Public Information, so both
+ * players' trashes must always show a count and be openable for inspection.
+ */
+function renderTrashStack(zoneCards, pid, label = "Trash") {
+  const count = zoneCards?.length ?? 0;
+  const top = count > 0 ? zoneCards[count - 1] : null;
+  const attrs = count > 0
+    ? ` onclick="if (typeof openZoneViewer === 'function') openZoneViewer('trash', '${esc(String(pid))}')" title="${esc(`Top: ${top?.name ?? ""} — click to view`)}"`
+    : ' title="Trash (empty)"';
+  const cls = count > 0 ? "deck-stack deck-stack--trash deck-stack--viewable" : "deck-stack deck-stack--trash";
   return `
     <div class="${cls}"${attrs}>
       <div class="deck-count">${count}</div>

@@ -94,4 +94,27 @@ describe("Charm (ogn-043-298)", () => {
     const noEnemy = await scenario().resources(P1, { energy: 1, power: { calm: 1 } }).unit(P1, "base", { might: 1 }, "u").hand(P1, CARD, "c").build();
     expect(noEnemy.p1.can("cast", "c")).toBe(false);
   });
+
+  // rule 323.6 / 319.5 — a battlefield whose controller has no unit there loses control
+  // in the very next Cleanup. Charming the last enemy unit off a LIVE battlefield (whose
+  // own play-a-spell trigger queues a chain item that is then discarded as unperformable)
+  // must still run that Cleanup once the chain empties.
+  test("control of a live battlefield drops as soon as Charm moves its last unit away, even when the battlefield's own trigger left the chain unfinalized (rules 323.6, 319.5)", async () => {
+    const game = await scenario()
+      .resources(P1, { energy: 1, power: { calm: 1 } })
+      .battlefield("hall", { controller: P2, def: "unl-205-219", inert: false })
+      .unit(P2, "hall", { might: 2, name: "Foe" }, "foe")
+      .unit(P1, "base", { might: 2, name: "Ally" }, "ally")
+      .hand(P1, CARD, "charm")
+      .build();
+    await game.p1.cast("charm", { targets: "foe" });
+    await game.settle();
+    if (game.decision()?.kind === "pick") {
+      await game.p1.pick("base");
+      await game.settle();
+    }
+    expect(game.locationOf("foe")).toBe("base");
+    expect(game.gameState.interaction?.chain ?? null).toBeNull();
+    expect(game.gameState.battlefields.hall?.controller).toBeNull();
+  });
 });
