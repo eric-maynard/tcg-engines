@@ -296,8 +296,15 @@ function renderRuneStacks(runes, opts = {}) {
     // zone. With height alone the clamp applies when the row is squeezed.
     html += `<div class="rune-stack${compact ? " rune-stack--compact" : ""}" data-rune-domain="${esc(domain)}" style="height:${Math.round(stackHeight + LABEL_H)}px;">`;
     html += `<div class="rune-stack-label" style="color:${color};">${labelText}</div>`;
+    // [rule:ui-rune-ready-stays-clickable] Fan ORDER keeps ready first / exhausted
+    // last (so an exhausted rune is never buried), but STACKING puts every ready
+    // rune above every exhausted one: an exhausted rune is rotated 90° about its
+    // centre (gameplay.css .card--exhausted), so it covers the body of the ready
+    // card above it and swallowed the click that exhausts it (rule 133.5.a.1).
+    // Rotated exhausted cards still show their ~22px wings and lower edge.
     visibleCards.forEach((c, i) => {
-      html += renderRuneCard(c, LABEL_H - 2 + Math.round(i * step), i + 1, color);
+      const zIndex = (c.meta?.exhausted ? 1 : 100) + i;
+      html += renderRuneCard(c, LABEL_H - 2 + Math.round(i * step), zIndex, color);
     });
     html += `</div>`;
   }

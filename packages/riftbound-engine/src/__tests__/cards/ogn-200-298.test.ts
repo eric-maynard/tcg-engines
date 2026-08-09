@@ -84,6 +84,38 @@ describe("Twisted Fate, Gambler (ogn-200-298)", () => {
     expect(game.state(deck[deck.length - 1] as string).name).toBe("Mind Rune");
   });
 
+  test("the rune is publicly revealed (rule 424.1) — its identity is recorded, not silently recycled", async () => {
+    const game = await board(MIND_RUNE).build();
+    const runeId = game.p1.runeDeck()[0] as string;
+    await attackAndResolveTrigger(game);
+    expect(game.gameState.publicReveals?.at(-1)).toMatchObject({ cardIds: [runeId], playerId: P1 });
+  });
+
+  test("Void Hatchling replaces the rune reveal — look at the top rune first, recycle it, then reveal the next", async () => {
+    // rule 369.1 / 370.1 (sfd-018-221): "If you would reveal cards from a deck, look at the
+    // top card first. You may recycle it. Then reveal those cards." The rune deck is a deck.
+    const game = await board(MIND_RUNE).unit(P1, "base", "sfd-018-221", "hatch").build();
+    await attackAndResolveTrigger(game);
+    expect(game.decision()?.kind).toBe("yes-no");
+    await game.p1.yes(); // recycle the Mind rune, then reveal what it left on top (Fury)
+    const d = game.decision();
+    expect(d?.kind).toBe("pick");
+    expect(d?.kind === "pick" ? d.options.map((o) => o.card).sort() : []).toEqual(["big", "mid"]);
+    await game.p1.pick("big");
+    expect(game.state("big").damage).toBe(2);
+    expect(game.p1.hand()).toHaveLength(0); // the Mind branch never happened
+  });
+
+  test("declining Void Hatchling's look leaves the rune on top and reveals it normally", async () => {
+    const game = await board(MIND_RUNE).unit(P1, "base", "sfd-018-221", "hatch").build();
+    await attackAndResolveTrigger(game);
+    expect(game.decision()?.kind).toBe("yes-no");
+    await game.p1.no();
+    expect(game.p1.hand()).toHaveLength(1); // [mind] — Draw 1
+    const deck = game.p1.runeDeck();
+    expect(game.state(deck[deck.length - 1] as string).name).toBe("Mind Rune");
+  });
+
   test("[fury] on top — 2 damage to the chosen enemy unit here, 1 to each other enemy unit here, none elsewhere", async () => {
     // Expected: the only prompt is WHICH enemy unit here takes 2 (big | mid); then big=2, mid=1,
     // home=0, TF undamaged, no card drawn. Actual: bogus target prompt (incl. TF and the base
