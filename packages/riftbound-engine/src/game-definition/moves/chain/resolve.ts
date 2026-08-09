@@ -1491,6 +1491,12 @@ export function settleResolvedSpellCard(
   if (resolved.type !== "spell") {
     return;
   }
+  // rule 431.3.c.1 / 472 — a win landed in the MIDDLE of this resolution (an
+  // unpreventable repeat Burn Out point). The game is over, so the "and then
+  // trash it" step never happens: the card stays in the chain zone.
+  if (draft !== undefined && draft.status !== "playing") {
+    return;
+  }
   if (context.zones.getCardZone(resolved.cardId as CoreCardId) !== ("chain" as CoreZoneId)) {
     return;
   }
@@ -1599,6 +1605,13 @@ export function withDeferredSpellSettle<
         originalReducer(draft, context);
         if (draft?.deferredSpellSettle && typeof context?.zones?.getCardZone === "function") {
           flushDeferredSpellSettle(draft as RiftboundGameState, context);
+          // rule 319.5 / 323.1 — the item has only NOW left the Chain, so the
+          // Cleanup it makes outstanding (and its victory check) happens here:
+          // a point gained mid-resolution wins once the spell is in the trash,
+          // never while it is still parked on the chain (rule 321).
+          if (draft.deferredSpellSettle === undefined) {
+            runPostResolutionVictoryCheck(draft as RiftboundGameState);
+          }
         }
       },
     };

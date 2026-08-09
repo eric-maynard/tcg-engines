@@ -188,6 +188,12 @@ const EFFECT_HELPERS: EffectHelpers = {
  * Execute a single effect.
  */
 export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): void {
+  // rule 431.3.c.1 / 472 — a win landing MID-resolution (an unpreventable
+  // repeat Burn Out point) ends the game at once: whatever the resolving card
+  // still owes is never carried out.
+  if (ctx.draft.status !== "playing") {
+    return;
+  }
   // rule 316.3 / 316.4 (rule-id: unl-087-219 Blue Sentinel) — an effect
   // printed "at the start of your next Main Phase" must not happen now: every
   // Rune Pool empties as that phase begins, so anything added earlier is lost.

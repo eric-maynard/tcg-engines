@@ -195,6 +195,34 @@ export function handle_attach(effect: ExecutableEffect, ctx: EffectContext, _h: 
     ctx,
   );
   const unitTargets = getTargetIds({ ...effect, target: effect.to } as ExecutableEffect, ctx);
+  // rule 359.3.e / 811.1.d.2 (sfd-139-221 Edge of Night) — "attach IT to a unit
+  // you control (here)": the Equipment names itself, but its holder is a real
+  // choice. With several legal units the controller is asked; the engine must
+  // never keep the first one on the board. (The candidate pool is already
+  // scoped — a from-Hidden play offers only units at that battlefield.)
+  const selfEquipment =
+    equipDescriptor === "self" ||
+    (typeof equipDescriptor === "object" && equipDescriptor?.type === "self");
+  const holderPool =
+    selfEquipment &&
+    typeof toDescriptor === "object" &&
+    (ctx.boundTargets === undefined || ctx.boundTargets.length === 0)
+      ? getTargetIds(
+          { ...effect, target: { ...(toDescriptor as object), quantity: "all" } } as unknown as ExecutableEffect,
+          ctx,
+        ).filter((id) => id !== ctx.sourceCardId)
+      : [];
+  if (holderPool.length > 1 && !ctx.draft.pendingChoice) {
+    ctx.draft.pendingChoice = {
+      effect,
+      options: [...holderPool],
+      playerId: ctx.playerId,
+      remaining: 1,
+      sourceCardId: ctx.sourceCardId,
+      type: "choose-target",
+    } as typeof ctx.draft.pendingChoice;
+    return;
+  }
   // A single bound-target list feeds both descriptors; split it by card type.
   const pair =
     equipTargets[0] === unitTargets[0]
