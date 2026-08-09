@@ -607,10 +607,20 @@ function resolveStaticTargets(
   affects: string | undefined,
   source: BoardCard,
   boardCards: BoardCard[],
+  ctx?: StaticAbilityContext,
 ): string[] {
   switch (affects) {
     case "self":
     case undefined: {
+      // rule 150.2 — a keyword bar printed on an Equipment applies to the unit
+      // it is attached to, and only while it is attached (an unattached
+      // Equipment grants nothing).
+      if (ctx !== undefined && getGlobalCardRegistry().get(source.id)?.cardType === "equipment") {
+        const attachedTo = (
+          ctx.cards.getCardMeta(source.id as CoreCardId) as { attachedTo?: string } | undefined
+        )?.attachedTo;
+        return attachedTo === undefined ? [] : [attachedTo];
+      }
       return [source.id];
     }
 
@@ -1255,7 +1265,7 @@ export function recalculateStaticEffects(ctx: StaticAbilityContext): boolean {
 
         // Resolve targets
         const { affects } = ability as unknown as { affects?: string };
-        const defaultTargetIds = resolveStaticTargets(affects, card, boardCards);
+        const defaultTargetIds = resolveStaticTargets(affects, card, boardCards, ctx);
 
         for (const passEffect of passEffects) {
           // rule-id: unl-058-219 — with no `affects`, honour the effect's own
