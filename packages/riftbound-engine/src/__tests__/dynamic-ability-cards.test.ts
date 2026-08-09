@@ -621,59 +621,10 @@ describe("The Zero Drive: per-instance exile tracking", () => {
     expect(harness.cardStore.get("victim-1")!.zone).toBe("banishment");
   });
 
-  test("cleanup returns exiled cards when tracker leaves the board", () => {
-    registry.register("zero-drive-1", {
-      cardType: "equipment",
-      id: "zero-drive-1",
-      mightBonus: 2,
-      name: "The Zero Drive",
-      tracksExiledCards: true,
-    });
-    registry.register("exiled-1", { cardType: "unit", id: "exiled-1", might: 3, name: "Prisoner" });
-
-    const state = createMockState();
-    const harness = createHarness({
-      "exiled-1": {
-        meta: {
-          buffed: false,
-          combatRole: null,
-          damage: 0,
-          exhausted: false,
-          hidden: false,
-          stunned: false,
-        },
-        owner: "p1",
-        zone: "banishment",
-      },
-      "zero-drive-1": {
-        meta: {
-          buffed: false,
-          combatRole: null,
-          damage: 0,
-          exhausted: false,
-          exiledByThis: ["exiled-1"],
-          hidden: false,
-          stunned: false,
-        },
-        owner: "p1",
-        zone: "banishment",
-      },
-    });
-
-    const cleanupCtx: CleanupContext = {
-      cards: harness.cards as unknown as CleanupContext["cards"],
-      counters: harness.counters as unknown as CleanupContext["counters"],
-      draft: state,
-      zones: harness.zones as unknown as CleanupContext["zones"],
-    };
-
-    performCleanup(cleanupCtx);
-
-    // The exiled card should have been returned to base.
-    expect(harness.cardStore.get("exiled-1")!.zone).toBe("base");
-    // The tracker's exiledByThis list should be cleared.
-    expect(harness.cardStore.get("zero-drive-1")!.meta.exiledByThis).toBeUndefined();
-  });
+  // rule 397 (sfd-090-221) — releasing the cards banished WITH a tracker is the
+  // tracker's own activated ability ("Play all units banished with this"), not a
+  // state-based action, so Cleanup no longer moves them when it leaves the board.
+  // Covered end-to-end by `__tests__/cards/sfd-090-221.test.ts`.
 
   test("cleanup does not return exiled cards while tracker still on board", () => {
     registry.register("zero-drive-1", {

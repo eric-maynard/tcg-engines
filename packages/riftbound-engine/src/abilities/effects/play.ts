@@ -288,6 +288,14 @@ function offerPileCandidates(eff: PlayEffectShape, ctx: EffectContext, pile: "tr
     }
     return canPerformEffectPlay(io, { ...template, cardId: id });
   });
+  // rule 419.3 (sfd-090-221) — "Play ALL units banished with this": no choice
+  // is involved, so every candidate is played, oldest first, with no prompt.
+  if ((target as { quantity?: unknown } | undefined)?.quantity === "all") {
+    for (const id of candidates) {
+      beginPlay(io, { ...template, cardId: id });
+    }
+    return;
+  }
   // A board pick bound by the chain resolver is meaningless here; only a pick
   // among the pile's candidates counts.
   const chosen = ctx.boundTargets?.find((id) => candidates.includes(id));

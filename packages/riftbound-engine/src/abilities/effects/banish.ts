@@ -21,16 +21,22 @@ export function handle_banish(effect: ExecutableEffect, ctx: EffectContext, _h: 
   // rule 397 (rule-id: unl-148-219) — a Linked ability ("play a unit banished
   // WITH THIS") needs the same list without the Zero Drive's return-on-leave
   // behaviour, so the banish effect itself can ask for the tagging.
+  // rule 395 — Effect Text an Equipment appended to its wearer banishes "with
+  // the Equipment", so the link list lives on `linkTo` rather than on the
+  // ability's own source.
+  const linkTo = (effect as { linkTo?: unknown }).linkTo;
+  const linkHolder = typeof linkTo === "string" && linkTo !== "" ? linkTo : ctx.sourceCardId;
   const tracksLinked =
     banishSourceDef?.tracksExiledCards === true ||
-    (effect as { trackLinked?: unknown }).trackLinked === true;
+    (effect as { trackLinked?: unknown }).trackLinked === true ||
+    linkHolder !== ctx.sourceCardId;
   if (tracksLinked && targets.length > 0) {
-    const sourceMeta = ctx.cards.getCardMeta?.(ctx.sourceCardId as CoreCardId) as
+    const sourceMeta = ctx.cards.getCardMeta?.(linkHolder as CoreCardId) as
       | Partial<RiftboundCardMeta>
       | undefined;
     const existing = sourceMeta?.exiledByThis ?? [];
     ctx.cards.updateCardMeta?.(
-      ctx.sourceCardId as CoreCardId,
+      linkHolder as CoreCardId,
       {
         exiledByThis: [...existing, ...(targets as string[])],
       } as unknown as Record<string, unknown>,

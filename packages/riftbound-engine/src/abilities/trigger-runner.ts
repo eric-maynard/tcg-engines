@@ -167,6 +167,42 @@ function copiedAttachmentAbilities(
   return out;
 }
 
+/**
+ * rule 150.2 / 718.3 / 724 (sfd-090-221 The Zero Drive) — an Equipment's Effect
+ * Text is appended to the Top-Most unit it is attached to, so it is the
+ * WEARER's ability: it triggers off what happens to the wearer, and its source
+ * for targeting is the wearer. rule 395 keeps the "with this" bookkeeping on
+ * the Equipment, which `linkTo` carries into the banish handler.
+ */
+function attachedEffectTextAbilities(
+  meta: Partial<RiftboundCardMeta> | undefined,
+): TriggerableAbility[] {
+  const equipped = meta?.equippedWith;
+  if (!equipped || equipped.length === 0) {
+    return [];
+  }
+  const registry = getGlobalCardRegistry();
+  const out: TriggerableAbility[] = [];
+  for (const equipId of equipped) {
+    for (const a of registry.getAbilities(equipId as string) ?? []) {
+      if (a.type !== "triggered" || a.effectText !== true || !a.trigger) {
+        continue;
+      }
+      const effect =
+        typeof a.effect === "object" && a.effect !== null
+          ? { ...(a.effect as object), linkTo: equipId as string }
+          : a.effect;
+      out.push({
+        effect: effect as never,
+        ...(a.optional === true ? { optional: true } : {}),
+        trigger: { event: a.trigger.event, on: a.trigger.on ?? "self" },
+        type: "triggered",
+      });
+    }
+  }
+  return out;
+}
+
 function grantedKeywordAbilities(
   meta: Partial<RiftboundCardMeta> | undefined,
 ): TriggerableAbility[] {
@@ -236,6 +272,11 @@ export function toTriggerableAbilities(cardId: string): TriggerableAbility[] {
 
   const result: TriggerableAbility[] = [];
   for (const a of abilities) {
+    // rule 150.2 — Effect Text belongs to the attached unit, never to the
+    // Equipment printing it (`attachedEffectTextAbilities` grants it there).
+    if (a.effectText === true) {
+      continue;
+    }
     if (a.type === "triggered" && a.trigger) {
       result.push({
         condition: (a as { condition?: unknown }).condition,
@@ -452,6 +493,22 @@ export function evaluateTriggerCondition(
       return false;
     }
     return getGlobalCardRegistry().getPowerCost(playedId).length >= needed;
+  }
+  if (c.type === "triggering-energy-cost") {
+    // rule 206 / 206.1 (rule-id: ven-192-166, Curator of the Sands) — "with
+    // Energy cost [N] or more" reads the PRINTED/base Energy cost of the card
+    // played, or of the activated ability used (the `use-activated-ability`
+    // event carries its own cost). Reductions and increases never move that
+    // number, so read the registry / the ability's cost, never what was paid.
+    const needed = (c as { min?: number }).min ?? 1;
+    if (event.type === "use-activated-ability") {
+      return ((event as { energyCost?: number }).energyCost ?? 0) >= needed;
+    }
+    const playedId = (event as { cardId?: string }).cardId;
+    if (playedId === undefined) {
+      return false;
+    }
+    return getGlobalCardRegistry().getEnergyCost(playedId) >= needed;
   }
   if (c.type === "while-empowered") {
     // Rule 827 (rule-id: ven-136-166): `[Empowered][>]` triggers fire only
@@ -1209,6 +1266,8 @@ export function getBoardCards(
       ...grantedKeywordAbilities(meta),
       ...delayedTriggerAbilities(meta),
       ...copiedAttachmentAbilities(cardId as string, meta, ctx, printed, event),
+      // rule 150.2 — Effect Text from every Equipment attached to this unit.
+      ...attachedEffectTextAbilities(meta),
     ];
     return granted.length > 0 ? [...printed, ...granted] : printed;
   };
@@ -1642,9 +1701,14 @@ export function fireTriggers(rawEvent: GameEvent, ctx: TriggerRunnerContext): nu
       // rule 477.1.b / 808.1.d.2 — a unit that died while copying another card
       // (Shady Spectacles) had the COPY's rules text as it left; the copy is
       // already reverted by the detach, so read it from the LKI snapshot.
+      // rule 150.2 / 808 (sfd-090-221) — Effect Text from the Equipment it wore
+      // as it died: the attachments are already detached, so read them from LKI.
       abilities: [
         ...toTriggerableAbilities(lki?.copyOfCardId ?? event.cardId),
         ...delayedTriggerAbilitiesFrom(lki?.delayedTriggers),
+        ...attachedEffectTextAbilities({
+          equippedWith: lki?.attachments as RiftboundCardMeta["equippedWith"],
+        }),
       ],
       id: event.cardId,
       owner: (event as { controller?: string }).controller ?? lki?.controller ?? event.owner,

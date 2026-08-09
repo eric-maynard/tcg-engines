@@ -110,6 +110,14 @@ export interface PlayEffect {
 export interface BanishEffect {
   readonly type: "banish";
   readonly target: AnyTarget;
+  /**
+   * rule 395 / 397 — record the banished cards as "banished with" THIS card
+   * instead of with the ability's own source. Set when an Equipment's Effect
+   * Text runs on its wearer: the link belongs to the Equipment.
+   */
+  readonly linkTo?: string;
+  /** rule 397 — record the banished cards on the source's link list. */
+  readonly trackLinked?: boolean;
 }
 
 /**

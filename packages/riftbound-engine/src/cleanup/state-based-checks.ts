@@ -522,42 +522,10 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
     }
   }
 
-  // Step 5b: Return exile-tracked cards when the tracking card leaves the
-  // Board (The Zero Drive). Equipment with `tracksExiledCards` stores each
-  // Banished card's ID in `exiledByThis`. When the equipment is no longer
-  // On the board (base / battlefield), all tracked cards are played back to
-  // Their owner's base and the list is cleared.
-  const offBoardZoneIds: string[] = ["trash", "banishment", "hand", "mainDeck"];
-  const scannedTrackers = new Set<string>();
-  for (const zoneId of offBoardZoneIds) {
-    const cardsInZone = ctx.zones.getCardsInZone(zoneId as CoreZoneId);
-    for (const cardId of cardsInZone) {
-      const key = cardId as string;
-      if (scannedTrackers.has(key)) {
-        continue;
-      }
-      scannedTrackers.add(key);
-      const def = registry.get(key);
-      if (def?.tracksExiledCards !== true) {
-        continue;
-      }
-      const meta = ctx.cards.getCardMeta(cardId) as Partial<RiftboundCardMeta> | undefined;
-      const tracked = meta?.exiledByThis ?? [];
-      if (tracked.length === 0) {
-        continue;
-      }
-      for (const exiledId of tracked) {
-        ctx.zones.moveCard({
-          cardId: exiledId as CoreCardId,
-          targetZoneId: "base" as CoreZoneId,
-        });
-      }
-      ctx.cards.updateCardMeta(cardId, {
-        exiledByThis: undefined,
-      } as Partial<RiftboundCardMeta>);
-      stateChanged = true;
-    }
-  }
+  // (Step 5b removed) rule 397 — releasing the cards banished WITH a tracker
+  // is the tracker's own ability ("Play all units banished with this"), not a
+  // state-based action: The Zero Drive plays them from its activated ability,
+  // so a Cleanup must never move them on its own.
 
   // Step 5c — rule-id: sfd-109-221 (Akshan "You control it until I leave the
   // board"): re-layer control-changing effects. Entries whose source left the

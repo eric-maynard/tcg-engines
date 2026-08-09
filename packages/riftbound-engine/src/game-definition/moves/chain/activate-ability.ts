@@ -1321,6 +1321,16 @@ export const activateAbility: Defs["activateAbility"] = {
     ) {
       return false;
     }
+    // rule 377.2.b (sfd-090-221 The Zero Drive) — "(Use only if unattached.)":
+    // while the Equipment is worn the ability is not available at all.
+    if (abilityRestrictions?.some((r) => r.type === "unattached")) {
+      const attached = (
+        context.cards.getCardMeta(cardId as CoreCardId) as { attachedTo?: string } | undefined
+      )?.attachedTo;
+      if (typeof attached === "string" && attached !== "") {
+        return false;
+      }
+    }
     // rule 377.2.b: "Use only once per turn" — already used this turn.
     if (oncePerTurnExhausted(state, abilityRestrictions, cardId as string, abilityIndex as number)) {
       return false;
@@ -1799,6 +1809,16 @@ export const activateAbility: Defs["activateAbility"] = {
         if (
           abilityRestrictions?.some((r) => r.type === "granted-only") &&
           entry.sourceCardId === entry.hostCardId
+        ) {
+          continue;
+        }
+        // rule 377.2.b (sfd-090-221): "(Use only if unattached.)" — skip while
+        // the Equipment is worn by a unit.
+        if (
+          abilityRestrictions?.some((r) => r.type === "unattached") &&
+          (context.cards.getCardMeta?.(entry.hostCardId as CoreCardId) as
+            | { attachedTo?: string }
+            | undefined)?.attachedTo !== undefined
         ) {
           continue;
         }
@@ -2394,6 +2414,24 @@ export const activateAbility: Defs["activateAbility"] = {
         }
       }
 
+      // rule 202-203 / 356 (sfd-090-221 "Banish this") — a banish paid as a
+      // COST leaves the board while the ability is being activated, before
+      // anyone can respond, and it stays banished after resolution.
+      if (cost.banish) {
+        const banishId = cost.banish === "self" ? (cardId as string) : undefined;
+        if (!banishId) {
+          return;
+        }
+        const banishCtx = buildEffectContext(draft, playerId, cardId, context);
+        removeFromBoard(
+          banishCtx,
+          [banishId],
+          "banishment",
+          { by: playerId, kind: "banish", source: cardId as string, sourceKind: "ability" },
+          banishCtx.fireTriggers,
+        );
+      }
+
       // Handle kill (sacrifice) cost — the chosen permanent is trashed as
       // part of paying the cost, before the effect resolves.
       if (cost.kill) {
@@ -2430,6 +2468,8 @@ export const activateAbility: Defs["activateAbility"] = {
       fireTriggers(
         {
           cardId: cardId as string,
+          // rule 206.1 (rule-id: ven-192-166) — the ability's own printed cost.
+          energyCost: Number((ability.cost as { energy?: unknown } | undefined)?.energy ?? 0),
           playerId: playerId as string,
           sourceType: activationSourceType(cardId as string),
           type: "use-activated-ability",
@@ -2468,6 +2508,8 @@ export const activateAbility: Defs["activateAbility"] = {
     fireTriggers(
       {
         cardId: cardId as string,
+        // rule 206.1 (rule-id: ven-192-166) — the ability's own printed cost.
+        energyCost: Number((ability.cost as { energy?: unknown } | undefined)?.energy ?? 0),
         playerId: playerId as string,
         sourceType: activationSourceType(cardId as string),
         type: "use-activated-ability",

@@ -96,6 +96,7 @@ export interface CardDefinitionLookup {
     readonly condition?: unknown;
     readonly affects?: string;
     readonly optional?: boolean;
+    readonly effectText?: boolean;
     readonly keyword?: string;
     readonly value?: number;
     readonly cost?: unknown;

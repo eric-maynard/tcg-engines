@@ -9,25 +9,36 @@ import { createCardId } from "@tcg/riftbound-types/cards";
  *  [3][mind], Banish this: Play all units banished with this, ignoring
  *  their costs. (Use only if unattached.)"
  *
- * Engine primitive: the `tracksExiledCards` flag on the card-definition
- * lookup makes the `banish` effect executor append every banished target's
- * instance ID to the source's `exiledByThis` meta. When this equipment
- * later leaves the board (via its own banish-self activation or any other
- * means), the `performCleanup` state-based check returns each tracked card
- * to its owner's base and clears the list.
+ * Effect Text (rule 150.2 / 718.3 / 724): "[Deathknell] Banish me." — while
+ * attached it belongs to the Top-Most unit, so the wearer's death banishes the
+ * wearer. rule 395/397: the banish is linked to the drive (`linkTo`), which is
+ * what "banished WITH THIS" reads.
  *
- * The activated ability here is "pay [3][mind], banish this" — its effect
- * is `banish { target: self }`, which moves this card to banishment and
- * triggers the cleanup return. The "use only if unattached" restriction
- * noted in the rules text is not yet modeled as a `Condition` variant and
- * is enforced at a higher layer.
+ * rule 202-203 / 356: "Banish this" is a COST — the drive is in banishment as
+ * soon as the ability is activated and stays there.
+ * rule 419.3 / 359.2.c: the released units are PLAYED (they enter exhausted),
+ * ignoring their costs; rule 377.2.b gates the ability on being unattached.
  */
 const abilities: Ability[] = [
   { cost: { energy: 1, power: ["mind"] }, keyword: "Equip", type: "keyword" },
   {
-    cost: { energy: 3, power: ["mind"] },
-    effect: { target: "self", type: "banish" },
+    cost: { banish: "self", energy: 3, power: ["mind"] },
+    effect: {
+      from: "banishment",
+      ignoreCost: true,
+      linkedToSource: true,
+      target: { quantity: "all", type: "unit" },
+      type: "play",
+    },
+    restrictions: [{ type: "unattached" }],
     type: "activated",
+  },
+  {
+    effect: { target: "self", type: "banish" },
+    effectText: true,
+    name: "Deathknell",
+    trigger: { event: "die", on: "self" },
+    type: "triggered",
   },
 ];
 
