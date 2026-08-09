@@ -59,10 +59,12 @@ export function handle_choosePerLocation(
     return;
   }
 
-  // Re-entry from the prompt: apply the inner effect to the chosen units,
-  // keeping at most one per location (rule 106).
+  // rule 402.2 — the objects were named while the item was FINALIZED (or by an
+  // earlier prompt): apply the inner effect to exactly them, keeping at most
+  // one per location (rule 106). An empty set is a legal answer ("up to one"),
+  // and nothing is re-picked here.
   const picked = ctx.boundTargets;
-  if (picked && picked.length > 0) {
+  if (picked) {
     const seen = new Set<string>();
     for (const id of picked) {
       const key = locationKey(id, ctx);
@@ -75,8 +77,26 @@ export function handle_choosePerLocation(
     return;
   }
 
-  if (!spec.candidates || ctx.draft.pendingChoice) {
+  if (ctx.draft.pendingChoice) {
     return;
+  }
+  raiseChoosePerLocationChoice(effect, ctx);
+}
+
+/**
+ * rule 106 / 355.13 — raise the "up to one at each location" pick for
+ * `effect.candidates` on `ctx.draft.pendingChoice`, returning false when there
+ * is nothing to choose. `extra` carries `bindToChainItemId` when the choice is
+ * made while the item is FINALIZED (rule 402.2) instead of as it resolves.
+ */
+export function raiseChoosePerLocationChoice(
+  effect: ExecutableEffect,
+  ctx: EffectContext,
+  extra: Record<string, unknown> = {},
+): boolean {
+  const spec = effect as unknown as { candidates?: TargetDescriptor };
+  if (!spec.candidates) {
+    return false;
   }
   const options = resolveTarget({ ...spec.candidates, quantity: "all" }, {
     cards: ctx.cards,
@@ -88,7 +108,7 @@ export function handle_choosePerLocation(
     zones: ctx.zones,
   } as Parameters<typeof resolveTarget>[1]);
   if (options.length === 0) {
-    return;
+    return false;
   }
   // rule 809.1.c / 809.1.c.1 (356.2.a.2) — [Deflect] taxes ABILITIES as well as
   // spells, and the surcharge is incurred when the target is CHOSEN. This
@@ -112,7 +132,7 @@ export function handle_choosePerLocation(
     ).reduce((a: number, b) => a + (b ?? 0), 0);
     pool = options.filter((id) => surchargeOf(id) <= budget);
     if (pool.length === 0) {
-      return;
+      return false;
     }
   }
   // rule 355.13: "up to one at EACH location" — the cap is the number of
@@ -121,6 +141,7 @@ export function handle_choosePerLocation(
   ctx.draft.pendingChoice = {
     anyNumber: true,
     ...(deflectTax ? { deflectTax: true as const } : {}),
+    ...extra,
     effect: effect as never,
     maxPicks: locations.size,
     // rule 106: the prompt layer must drop options sharing a location with an
@@ -132,4 +153,5 @@ export function handle_choosePerLocation(
     sourceCardId: ctx.sourceCardId,
     type: "choose-target",
   } as never;
+  return true;
 }

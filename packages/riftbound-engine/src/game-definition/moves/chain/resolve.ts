@@ -16,6 +16,7 @@ import {
 } from "../../../chain";
 import type { EffectContext, ExecutableEffect } from "../../../abilities/effect-executor";
 import { executeEffect } from "../../../abilities/effect-executor";
+import { raiseChoosePerLocationChoice } from "../../../abilities/effects/choose-per-location";
 import { findSpendableBuff } from "../../../abilities/effects/spend-buff";
 import { canSpendXp } from "../../../abilities/effects/spend-xp";
 import type { TargetDescriptor } from "../../../abilities/target-resolver";
@@ -268,11 +269,17 @@ export function optInIsPerformable(
   resolved: ChainItem,
   draft: RiftboundGameState,
   context: Parameters<typeof buildEffectContext>[3],
+  opts: { readonly deferEffectCosts?: boolean } = {},
 ): boolean {
   {
     // rule-id: ogn-147-298 — "you may spend a buff to …": when no friendly
     // buff can be spent the cost is unpayable, so don't offer the opt-in
     // prompt at all — the trigger simply has no effect.
+    // rule 383.3.d (ruling 0fe2856182397693) — the spend happens WITHIN the
+    // instructions, i.e. at resolution: while other items are still on the
+    // Chain (a simultaneous trigger the controller may order first) one of
+    // them can create the buff this one spends, so payability is not settled
+    // yet and `deferEffectCosts` keeps the item alive.
     const optEffect = resolved.effect as ExecutableEffect | undefined;
     const leadEffect =
       optEffect?.type === "sequence"
@@ -280,6 +287,7 @@ export function optInIsPerformable(
         : optEffect;
     if (
       leadEffect?.type === "spend-buff" &&
+      opts.deferEffectCosts !== true &&
       !findSpendableBuff(
         leadEffect,
         buildEffectContext(draft, resolved.controller, resolved.cardId, context),
@@ -1259,6 +1267,16 @@ export function executeResolvedItem(
     if (withMatches.length === 1) {
       boundTargets = [withMatches[0] as string];
     }
+  }
+  // rule 402.2 / 383.3.b (unl-118-219 Elder Dragon) — "choose up to one enemy
+  // unit at each location" names its objects as the ability is put ON the
+  // Chain, so an opponent answering it already knows the picks and the trigger
+  // later resolves against exactly them (359.3.e — anything gone by then is
+  // simply not damaged). The pool lives on `candidates`, never `target`, so the
+  // shared planning above never sees it; raise the per-location prompt here and
+  // bind the answer onto the item.
+  if (finalizeOnly && !boundTargets && effect.type === "choose-per-location") {
+    return raiseChoosePerLocationChoice(effect, baseCtx, bindTag) ? undefined : { targets: [] };
   }
   // rule 402.2 / 337.4 — finalization stops here: the bound Game Objects ride
   // on the item and the effect itself waits for resolution.
