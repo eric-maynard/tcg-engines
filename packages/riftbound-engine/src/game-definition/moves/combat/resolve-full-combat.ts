@@ -368,13 +368,31 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
           keywordValues[keyword] = (keywordValues[keyword] ?? 0) + 1;
         }
       }
+      // rule 136.2.c / 814.2 (sfd-059-221 Svellsongur) — an attached Equipment
+      // whose effect text COPIES the wearer's text appends that text back onto
+      // the unit, so every printed keyword applies once more per such copy.
+      const printedTextCopies = (meta?.equippedWith ?? []).filter((equipId) => {
+        const equipMeta = cards.getCardMeta(equipId as CoreCardId) as
+          | Partial<RiftboundCardMeta>
+          | undefined;
+        return (
+          registry.get(equipId as string)?.copyAttachedUnitText === true &&
+          equipMeta?.copiedFromCardId === cardId
+        );
+      }).length;
+      const printedKeywords = [...defKeywords, ...abilityKeywords];
+      if (printedTextCopies > 0) {
+        for (const keyword of Object.keys(keywordValues)) {
+          keywordValues[keyword] = (keywordValues[keyword] ?? 0) * (1 + printedTextCopies);
+        }
+      }
       for (const gk of grantedKeywords) {
         keywordValues[gk.keyword] = (keywordValues[gk.keyword] ?? 0) + (gk.value ?? 1);
       }
 
       const allKeywords = [
-        ...defKeywords,
-        ...abilityKeywords,
+        ...printedKeywords,
+        ...Array.from({ length: printedTextCopies }, () => printedKeywords).flat(),
         ...grantedKeywords.map((gk) => gk.keyword),
       ];
 
