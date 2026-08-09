@@ -33,7 +33,12 @@ import type { PostMoveCleanupContext } from "../cleanup/post-move-cleanup";
 import { cleanupAndFireDeaths } from "../cleanup/post-move-cleanup";
 import { continueEffectPlay, isPendingPlayItem } from "../game-definition/moves/play/play-pipeline";
 import { buildEffectContext } from "../game-definition/moves/chain/effect-context";
-import { executeResolvedItem, optInIsPerformable } from "../game-definition/moves/chain/resolve";
+import {
+  executeResolvedItem,
+  minDeflectSurchargeForItem,
+  optInIsPerformable,
+  totalPooledPower,
+} from "../game-definition/moves/chain/resolve";
 import {
   killCostCandidates,
   recycleCostCandidates,
@@ -857,10 +862,13 @@ export function finalizePendingItems(draftLike: unknown, ctx: FinalizationContex
         removeUnfinalizedItem(draft, item.id);
         continue;
       }
+      // rule 404.1 — a [Deflect] surcharge this item's own choice will owe is
+      // part of THIS cost payment, so answering here is answering for it too.
+      patchItem(draft, item.id, { deflectOffered: true });
       draft.pendingChoice = {
         finalizationChainItemId: item.id,
         playerId: item.controller,
-        resolved: { ...item, optional: false },
+        resolved: { ...item, deflectOffered: true, optional: false },
         sourceCardId: item.cardId,
         type: "opt-in",
       };
@@ -876,6 +884,33 @@ export function finalizePendingItems(draftLike: unknown, ctx: FinalizationContex
         return;
       }
       continue;
+    }
+
+    // Step 1c — rule 404.2 / 809.1.c.1: a MANDATORY trigger still INCURS a cost
+    // when every object it may choose has [Deflect], and a cost a triggered
+    // ability incurs may always be declined — declining removes the Pending
+    // Item (it never becomes a Chain Item). Only offered when the controller
+    // can actually pay; otherwise the item is removed unasked by the target
+    // step below (404.2), and the surcharge itself is charged there on accept.
+    if (
+      item.type === "ability" &&
+      item.triggered === true &&
+      item.targets === undefined &&
+      item.deflectOffered !== true
+    ) {
+      const pips = minDeflectSurchargeForItem(item, draft, context);
+      if (pips > 0 && totalPooledPower(draft, item.controller) >= pips) {
+        patchItem(draft, item.id, { deflectOffered: true });
+        draft.pendingChoice = {
+          deflectSurcharge: pips,
+          finalizationChainItemId: item.id,
+          playerId: item.controller,
+          resolved: { ...item, deflectOffered: true, optional: false },
+          sourceCardId: item.cardId,
+          type: "opt-in",
+        };
+        return;
+      }
     }
 
     // Step 2 — rule 402.2 targets.

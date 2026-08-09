@@ -118,6 +118,14 @@ export interface ChainItem {
    * (rule 402.2) rather than at resolution.
    */
   readonly delayed?: boolean;
+  /**
+   * rule 404.2 / 809.1.c.1 — this item's controller has already been asked
+   * whether to pay the [Deflect] surcharge its own choice will incur (on the
+   * leading "you may" prompt, which folds Deflect into the same cost payment
+   * per 404.1, or on the standalone decline offer a MANDATORY trigger gets).
+   * Set so the question is never asked twice for one item.
+   */
+  readonly deflectOffered?: boolean;
   /** Whether this item was countered (skip execution on resolve) */
   readonly countered?: boolean;
   /** rule-id: ven-015-166 — "This can't be countered." (rule 544): counter attempts are refused */

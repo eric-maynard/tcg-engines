@@ -415,6 +415,14 @@ export interface BattlefieldState {
   combatWinTriggersFired?: boolean;
 
   /**
+   * rule 466.1.a.1 / ruling 0f232f2b69b24f47 — the Combat Cleanup's "Heal all
+   * Units" step is owed: it runs only after the chain the combat deaths put up
+   * (Deathknell) has resolved, so survivors keep their combat damage while that
+   * chain is live.
+   */
+  combatHealPending?: boolean;
+
+  /**
    * rule 465.2.c.3 — the attacking player's chosen assignment of its combat
    * damage onto the defenders here, recorded by the `combat-damage` prompt and
    * consumed by the next `resolveFullCombat` pass.
@@ -1053,6 +1061,13 @@ export interface OptInChoice {
    * item's `optional` flag; declining removes it from the chain entirely.
    */
   readonly finalizationChainItemId?: string;
+  /**
+   * rule 404.2 / 809.1.c.1 — Power of any Domain this item's own choice will
+   * unavoidably owe as a [Deflect] surcharge. Carried so the prompt can name
+   * the cost being accepted; the pips themselves are charged when the
+   * finalized item binds its target, not by the opt-in answer.
+   */
+  readonly deflectSurcharge?: number;
   /**
    * rule 372 (ogn-023-298): an optional "you may pay … instead" death
    * replacement is awaiting its controller's answer for this unit; state-based

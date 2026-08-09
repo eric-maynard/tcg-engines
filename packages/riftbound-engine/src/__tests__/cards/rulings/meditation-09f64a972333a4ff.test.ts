@@ -49,10 +49,8 @@ describe("Ruling 09f64a972333a4ff — Meditation's exhaust cost does not 'choose
     expect(game.p1.hand()).toHaveLength(hand0 + 1);
   });
 
-  // Expected: the exhaust is a cost object, not a target → no Dreaming Tree item, 2 cards drawn in total.
-  // Actual: the engine records the cost unit as the spell's `targets` and raises the Tree's choose
-  // trigger — chain = [med, tree] and P1 ends up drawing 3.
-  test("BUG: ruling 09f64a972333a4ff — engine treats Meditation's exhaust-cost unit as a spell target and fires The Dreaming Tree", async () => {
+  // The exhaust is a cost object, not a target → no Dreaming Tree item, 2 cards drawn in total.
+  test("ruling 09f64a972333a4ff — Meditation's exhaust-cost unit is not a spell target, so The Dreaming Tree never fires", async () => {
     const game = await board().build();
     await game.p1.cast("med", { payOptional: true, targets: "dreamer" });
     expect(game.p1.energy()).toBe(1);
@@ -69,9 +67,8 @@ describe("Ruling 09f64a972333a4ff — Meditation's exhaust cost does not 'choose
     expect(game.violations()).toEqual([]);
   });
 
-  // Expected: Meditation never used the Tree's once-per-turn trigger, so the later Spark still draws.
-  // Actual: the (wrong) Tree trigger off Meditation consumed "first time each turn" — Spark draws nothing.
-  test("BUG: ruling 09f64a972333a4ff — after a paid Meditation the Tree's first-time-each-turn draw is already spent, so a real targeting spell later that turn draws nothing", async () => {
+  // Meditation never used the Tree's once-per-turn trigger, so the later Spark still draws.
+  test("ruling 09f64a972333a4ff — a paid Meditation leaves the Tree's first-time-each-turn draw intact for a real targeting spell later that turn", async () => {
     const game = await board().build();
     await game.p1.cast("med", { payOptional: true, targets: "dreamer" });
     await game.settle();

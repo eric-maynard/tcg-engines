@@ -22,7 +22,7 @@ import type { PendingChoice, RiftboundGameState } from "../types/game-state";
 import { getActingSeat, getPendingChoiceChooser } from "../views/acting-seat";
 import { cardLabel } from "./card-state";
 import type { HarnessEngine } from "./internal";
-import { canonicalJson } from "./internal";
+import { canonicalJson, getInternalState } from "./internal";
 import type {
   ActionContext,
   ActionDecision,
@@ -57,6 +57,8 @@ export interface DecisionContext {
   label(card: CardRef): string;
   /** Optional legality probe for non-enumerated knobs (X). */
   canExecute?(seat: Seat, moveId: string, params: Record<string, unknown>): boolean;
+  /** A seat's hand (owner-scoped). Only needed for the pregame mulligan prompt (rule 117). */
+  handOf?(seat: Seat): readonly CardRef[];
   /** Whether procedures are auto-run (then they are hidden from menus). */
   readonly autoProcedures: boolean;
   readonly seq: number;
@@ -71,6 +73,10 @@ export function engineDecisionContext(
     autoProcedures,
     canExecute: (seat, moveId, params) =>
       engine.canExecuteMove(moveId, { params, playerId: seat as PlayerId }),
+    handOf: (seat) => {
+      const internal = getInternalState(engine);
+      return (internal.zones.hand?.cardIds ?? []).filter((id) => internal.cards[id]?.owner === seat);
+    },
     label: (card) => cardLabel(engine, card),
     legal: (seat, moveIds) =>
       engine
@@ -795,7 +801,16 @@ export function deriveFromPendingChoice(ctx: DecisionContext, pc: PendingChoice)
       if (cost?.discard) {
         costParts.push(`[discard ${cost.discard}]`);
       }
+      // rule 404.2 / 809.1.c.1 — the [Deflect] surcharge this item's own choice
+      // will owe is part of the same answer, so name it alongside the base cost.
+      const deflectPips = (pc as { deflectSurcharge?: number }).deflectSurcharge ?? 0;
+      for (let i = 0; i < deflectPips; i++) {
+        costParts.push("[rainbow]");
+      }
       let costText = costParts.length > 0 ? `Pay ${costParts.join("")}` : "";
+      if (deflectPips > 0) {
+        costText = `${costText} ([Deflect])`;
+      }
       if (cost?.exhaust) {
         costText = costText ? `${costText} and exhaust` : "Exhaust";
       }
@@ -870,9 +885,59 @@ export function deriveFromPendingChoice(ctx: DecisionContext, pc: PendingChoice)
   }
 }
 
+/**
+ * rule 117 — "In turn order, players perform their Mulligan": after the opening
+ * draw (116) the First Player is asked first and the next seat only once the
+ * previous one has resolved, each seat over its OWN four cards, "up to two"
+ * (117.1). Surfaced as a normal pick so the pregame is reachable through the
+ * Decision/Answer protocol instead of raw setup moves.
+ */
+function deriveMulliganDecision(ctx: DecisionContext): Decision | null {
+  const { state } = ctx;
+  const setup = state.setup;
+  const first = setup?.firstPlayer as Seat | undefined;
+  if (!setup || first === undefined || !ctx.handOf) {
+    return null;
+  }
+  const rest = Object.keys(state.players).filter((p) => p !== first);
+  const second = setup.secondPlayer as Seat | undefined;
+  const order: Seat[] = [
+    first,
+    ...(second !== undefined && second !== first ? [second] : []),
+    ...rest.filter((p) => p !== second),
+  ];
+  const done = (setup.mulliganedBy ?? []) as readonly string[];
+  const seat = order.find((p) => !done.includes(p));
+  if (seat === undefined) {
+    return null;
+  }
+  const hand = ctx.handOf(seat);
+  // rule 116 precedes 117: nothing to mulligan before the opening draw.
+  if (hand.length === 0) {
+    return null;
+  }
+  const d: PickDecision = {
+    allowDecline: true,
+    id: decisionId(ctx.seq, seat, "pick", "mulligan"),
+    kind: "pick",
+    // rule 117.1: "up to two cards in their hand" — zero is a legal answer.
+    max: 2,
+    min: 0,
+    options: hand.map((id) => ({ card: id, key: id, label: ctx.label(id) })),
+    prompt: "Mulligan: set aside up to two cards",
+    seat,
+    source: { moveId: "mulligan" },
+    timing: "PRE",
+  };
+  return d;
+}
+
 /** The cursor seat's decision, or null when the game is over / nobody can act. */
 export function deriveDecision(ctx: DecisionContext): Decision | null {
   const { state } = ctx;
+  if (state.status === "setup") {
+    return deriveMulliganDecision(ctx);
+  }
   if (state.status !== "playing") {
     return null;
   }

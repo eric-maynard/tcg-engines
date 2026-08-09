@@ -92,7 +92,8 @@ describe("Ruined Rex Deathknell × Navori Scout Deflect", () => {
   test("(a)+(c) variant A with 1 power: Deflect taxes the triggered ability — P1 pays 1 power of any domain to choose the Scout (809.1.c, 809.1.c.1, 809.1.d)", async () => {
     // Expected: the mind power is spent as the mandatory additional cost of finalizing the trigger.
     // Actual: no trigger fires (and even for triggers that do fire, no Deflect surcharge is charged).
-    const game = await board({ power: 1 }).build();
+    // rule 404.2 — the incurred cost is P1's to accept or decline; P1 accepts.
+    const game = await board({ power: 1 }).script(P1, ["yes"]).build();
     await killRex(game);
     await game.settle();
     expect(game.p1.power("mind")).toBe(0);
@@ -101,7 +102,8 @@ describe("Ruined Rex Deathknell × Navori Scout Deflect", () => {
 
   test("(c) variant A with 1 power: on resolution Navori Scout takes 4 and, being 4 Might, dies", async () => {
     // Expected: Scout is dealt 4 → lethal → trash at cleanup. Actual: Deathknell never triggers; Scout undamaged.
-    const game = await board({ power: 1 }).build();
+    // rule 404.2 — P1 accepts the Deflect cost the trigger incurs.
+    const game = await board({ power: 1 }).script(P1, ["yes"]).build();
     await killRex(game);
     await game.settle();
     expect(game.zoneOf("scout")).toBe("trash");
@@ -166,7 +168,8 @@ describe("Ruined Rex Deathknell × Navori Scout Deflect", () => {
   test("(a) control — Deflect must tax the triggered ability: with 1 power P1 pays it to hit the Scout (809.1.c)", async () => {
     // Expected: Scout takes 4 and dies AND the mind power is spent on the Deflect surcharge.
     // Actual: Scout dies but P1 keeps the power — the surcharge is only applied to spells.
-    const game = await controlBoard(1).build();
+    // rule 404.2 — P1 accepts the Deflect cost the trigger incurs.
+    const game = await controlBoard(1).script(P1, ["yes"]).build();
     await killRex(game);
     await game.settle();
     expect(game.zoneOf("scout")).toBe("trash");

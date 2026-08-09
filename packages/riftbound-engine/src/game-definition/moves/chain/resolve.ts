@@ -63,7 +63,7 @@ function runPostResolutionVictoryCheck(draft: RiftboundGameState): void {
  * Total pooled Power a player has across every Domain — rule 809.1.c.1: a
  * Deflect surcharge is Power of ANY Domain, so only the total matters.
  */
-function totalPooledPower(state: RiftboundGameState, playerId: string): number {
+export function totalPooledPower(state: RiftboundGameState, playerId: string): number {
   const pool = state.runePools[playerId];
   if (!pool) {
     return 0;
@@ -269,17 +269,11 @@ export function optInIsPerformable(
   resolved: ChainItem,
   draft: RiftboundGameState,
   context: Parameters<typeof buildEffectContext>[3],
-  opts: { readonly deferEffectCosts?: boolean } = {},
 ): boolean {
   {
     // rule-id: ogn-147-298 — "you may spend a buff to …": when no friendly
     // buff can be spent the cost is unpayable, so don't offer the opt-in
     // prompt at all — the trigger simply has no effect.
-    // rule 383.3.d (ruling 0fe2856182397693) — the spend happens WITHIN the
-    // instructions, i.e. at resolution: while other items are still on the
-    // Chain (a simultaneous trigger the controller may order first) one of
-    // them can create the buff this one spends, so payability is not settled
-    // yet and `deferEffectCosts` keeps the item alive.
     const optEffect = resolved.effect as ExecutableEffect | undefined;
     const leadEffect =
       optEffect?.type === "sequence"
@@ -287,7 +281,6 @@ export function optInIsPerformable(
         : optEffect;
     if (
       leadEffect?.type === "spend-buff" &&
-      opts.deferEffectCosts !== true &&
       !findSpendableBuff(
         leadEffect,
         buildEffectContext(draft, resolved.controller, resolved.cardId, context),
@@ -950,6 +943,16 @@ export function executeResolvedItem(
     target.type !== "player" &&
     target.type !== "battlefield" &&
     target.quantity !== "all" &&
+    // rule 387 / 359.2 (rule-id: unl-199-219 Deceiver) — a REFLEXIVE follow-up
+    // sentence ("… play a Reflection token there. It becomes a copy of another
+    // unit there.") names its object only as that instruction resolves, so it
+    // is not one of the item's finalization-time choices (383.3.b): the
+    // opponent gets priority first and the pick is made afterwards.
+    !(
+      finalizeOnly &&
+      ((effect as { chooseAtResolution?: boolean }).chooseAtResolution === true ||
+        (target as { chooseAtResolution?: boolean }).chooseAtResolution === true)
+    ) &&
     // rule-id: ogn-107-298 / ogn-226-298 — "play a card … from your hand /
     // your trash": neither zone is a board zone the resolver scans, so a
     // board-wide prompt here would offer the wrong cards. The play handler
@@ -1197,6 +1200,11 @@ export function executeResolvedItem(
         // battlefield": the destination is fixed by the triggering move, so it
         // must survive the target prompt.
         ...(typeof trigEvt?.to === "string" ? { triggerToZone: trigEvt.to } : {}),
+        // rule 359.3.f.3 (rule-id: unl-199-219) — "…play a token THERE": the
+        // battlefield the triggering event named is already fixed on this
+        // context, so it must outlive the prompt; rebuilding the context off
+        // the source card's zone would make "here" the legend zone.
+        ...(typeof baseCtx.sourceZone === "string" ? { sourceZone: baseCtx.sourceZone } : {}),
         // rule 809.1.c.1 — the surcharge for choosing a [Deflect] card is owed
         // at PICK time; the prompt carries the obligation to `pending-choice.ts`.
         ...(deflectTax ? { deflectTax: true as const } : {}),
