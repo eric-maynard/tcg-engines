@@ -485,6 +485,17 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
   }
 
   // Step 5: Auto-recall gear from battlefields to base (rule 518)
+  // rule 811.1.d.1 / 811.1.d.1.a / 152.2 (sfd-139-221 Edge of Night) — a gear
+  // played from [Hidden] is played TO the battlefield it was hidden at, and its
+  // own play trigger attaches it to a unit "here" (811.1.d.2). That trigger has
+  // to find it AT the battlefield, so the recall waits while an unresolved Chain
+  // item sourced from this gear is still pending; a gear with nothing of its own
+  // on the Chain is recalled by this Cleanup as before (319.6 / 518).
+  const gearWithPendingItem = new Set(
+    (ctx.draft.interaction?.chain?.items ?? [])
+      .filter((it) => it.triggered === true && it.countered !== true)
+      .map((it) => it.cardId),
+  );
   for (const bfId of Object.keys(ctx.draft.battlefields)) {
     const bfZoneId = `battlefield-${bfId}` as CoreZoneId;
     const cardsAtBf = ctx.zones.getCardsInZone(bfZoneId);
@@ -511,6 +522,10 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
         ctx.cards.updateCardMeta(cardId, {
           attachedTo: undefined,
         } as Partial<RiftboundCardMeta>);
+        stateChanged = true;
+      }
+      if (gearWithPendingItem.has(cardId as string)) {
+        continue;
       }
       // rule 435.4.a / 318: an Equipment detached from a unit AT a battlefield
       // is present at that battlefield, so this Cleanup recalls it to base —

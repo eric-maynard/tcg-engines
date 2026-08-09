@@ -911,6 +911,12 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
               // over it (the permanent's controller may respond, e.g. Retreat
               // it in answer to the trigger). Resolution runs
               // `handle_temporaryKill`, which performs the removal above.
+              //
+              // rule 383.3.d — the [Temporary] kill triggers "at the start of
+              // your Beginning Phase", exactly when every other start-of-phase
+              // ability does, so all of them form ONE simultaneous batch whose
+              // order their controller chooses: the kills carry the same
+              // `triggerBatch` stamp as the start-of-turn triggers fired below.
               if (temporaryIds.length > 0) {
                 const state = context.state as RiftboundGameState;
                 if (!state.interaction) {
@@ -919,6 +925,10 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
                   }).interaction = createInteractionState();
                 }
                 const turnOrder = Object.keys(state.players ?? {});
+                // The start-of-phase triggers fired below are stamped with the
+                // chain id that is next once these kills are queued; share it so
+                // the whole instant is one orderable batch.
+                const temporaryBatch = `batch-${state.interaction!.nextChainItemId + temporaryIds.length}`;
                 for (const cardId of temporaryIds) {
                   (state as RiftboundGameState & {
                     interaction: NonNullable<RiftboundGameState["interaction"]>;
@@ -928,6 +938,10 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
                       cardId,
                       controller: turnPlayerId as string,
                       effect: { type: "temporary-kill" } as never,
+                      // rule 402.4 — the kill has no objects or costs to settle,
+                      // so the item is finalized the moment it is queued.
+                      status: "finalized",
+                      triggerBatch: temporaryBatch,
                       triggered: true,
                       type: "ability",
                     },

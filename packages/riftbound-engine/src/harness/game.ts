@@ -808,10 +808,23 @@ export class SeatHandle {
   }
 
   gear(): CardRef[] {
-    return this.base().filter((id) => {
+    const isGear = (id: CardRef): boolean => {
       const t = this.game.state(id).cardType;
       return t === "gear" || t === "equipment";
-    });
+    };
+    const out = this.base().filter(isGear);
+    // rule 811.1.d.1 (sfd-139-221) — a gear played from [Hidden] enters AT the
+    // battlefield it was hidden at and stays there until a Cleanup recalls it
+    // (rule 518), so loose gear at a battlefield is this seat's gear too.
+    // Attached Equipment is listed through its bearer, not here.
+    for (const bf of this.game.battlefields()) {
+      for (const id of this.game.cardsAt(`battlefield-${bf}`, this.seat)) {
+        if (isGear(id) && this.game.state(id).attachedTo === undefined) {
+          out.push(id);
+        }
+      }
+    }
+    return out;
   }
 
   facedown(battlefield: string): CardRef[] {
