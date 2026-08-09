@@ -59,7 +59,13 @@ export function attachEquipment(ctx: EffectContext, equipmentId: string, unitId:
   }
 
   const equipDef = getGlobalCardRegistry().get(equipmentId);
-  const equipMeta: Record<string, unknown> = { attachedTo: unitId };
+  // rule 434.1.f — attaching anew detaches first, so this is the ONE attach
+  // event an "attached to me this turn" clause may see; a same-turn re-equip
+  // overwrites the stamp instead of adding a second one.
+  const equipMeta: Record<string, unknown> = {
+    attachedOnTurn: ctx.draft.turn?.number,
+    attachedTo: unitId,
+  };
   if (equipDef?.copyAttachedUnitText) {
     equipMeta.copiedFromCardId = unitId;
   }
@@ -109,7 +115,13 @@ export function detachEquipment(ctx: EffectContext, equipmentId: string): void {
     return;
   }
   const unitId = attachedUnitOf(ctx, equipmentId);
-  update(equipmentId as CoreCardId, { attachedTo: undefined, copiedFromCardId: undefined });
+  // rule 435.1.e — detached, the Effect Text is inactive, so the attach stamp
+  // goes with the link.
+  update(equipmentId as CoreCardId, {
+    attachedOnTurn: undefined,
+    attachedTo: undefined,
+    copiedFromCardId: undefined,
+  });
 
   if (unitId) {
     // rule 477.1.b: "for as long as this is attached" — detaching ends the copy.

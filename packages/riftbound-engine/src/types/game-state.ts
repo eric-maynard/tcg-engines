@@ -119,6 +119,14 @@ export interface RiftboundCardMeta {
   /** Card ID of the unit this equipment is attached to (equipment only) */
   attachedTo?: CardId;
 
+  /**
+   * rule 434.1.f — turn number on which this Equipment was last attached to its
+   * current holder. Attaching anew detaches first and rewrites this, so an
+   * "if this was attached to me this turn" clause reads one attach event only
+   * (it never stacks across a same-turn re-equip).
+   */
+  attachedOnTurn?: number;
+
   /** Card IDs of equipment attached to this unit (unit only) */
   equippedWith?: CardId[];
 

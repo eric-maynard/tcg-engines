@@ -102,7 +102,6 @@ const EQUIPMENT_EFFECT_TEXT: Record<string, string> = {
  */
 const UNSTRUCTURED_EFFECT_TEXT: Record<string, string> = {
   "sfd-030-221": "hold↔conquer effect aliasing has no ability shape",
-  "sfd-042-221": "'attached to me this turn' condition has no shape (an unknown static condition would apply the +2 permanently)",
   "sfd-051-221": "hand-authored as a `replacement` bound to the holder (attachedToSource) rather than a flagged ability",
   "sfd-073-221": "'I am a <Tag>' (tag grant) has no ability shape",
   "sfd-150-221": "'play a unit from your trash' paying its costs parses to raw text only",

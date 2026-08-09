@@ -2,6 +2,7 @@
  * Brutalizer — sfd-042-221 · Gear (Equipment) · Calm · 2 energy · Might bonus +1
  *
  *   [Equip] [calm] ([calm]: Attach this to a unit you control.)
+ *   If this was attached to me this turn, I have an additional +2 [Might].
  *
  * Rules: 149.1 (gear enters ready, to base), 818 (Equip = activated gear ability "[cost]: attach
  * this to a unit you control"; the unit is a TARGET, 818.1.b.1), 151.2 (gear abilities: your Main
@@ -15,8 +16,9 @@
  *  2. Only units YOU CONTROL are legal recipients — enemy units and non-units are never offered.
  *  3. Once attached its [Equip] text is Inactive (718.2): you cannot pay [calm] again to hop it
  *     to another unit.
- *  4. The +1 travels with the unit into combat and matters for exactly-lethal math; when the
- *     wearer dies at a battlefield the Brutalizer is NOT trashed — it detaches and is recalled.
+ *  4. The bonus travels with the unit into combat and matters for exactly-lethal math; on the
+ *     turn it was attached that bonus is +3 (434.1.d), +1 on later turns; when the wearer dies
+ *     at a battlefield the Brutalizer is NOT trashed — it detaches and is recalled.
  *  5. Timing: [Equip] is illegal during a showdown / with a chain open / on the opponent's turn.
  *  6. Partner: a Weaponmaster unit (Sentinel Adept) equips it on play for [calm]−[rainbow] = free.
  */
@@ -28,13 +30,13 @@ const CARD = "sfd-042-221";
 const SENTINEL_ADEPT = "sfd-008-221"; // Unit · Fury · 3 energy · 3 might · [Weaponmaster]
 const DISINTEGRATE = "ogn-005-298"; // [Action] 4 energy: deal 3 damage to a unit at a battlefield
 
-function onBoard(power: Record<string, number> = { calm: 1 }, energy = 0) {
+function onBoard(power: Record<string, number> = { calm: 1 }, energy = 0, guardMight = 3) {
   return scenario()
     .resources(P1, { energy, power })
     .battlefield("bf1", { controller: P2 })
     .unit(P1, "base", { might: 2, name: "Squire" }, "squire")
     .unit(P1, "base", { might: 3, name: "Knight" }, "knight")
-    .unit(P2, "bf1", { might: 3, name: "Guard" }, "guard")
+    .unit(P2, "bf1", { might: guardMight, name: "Guard" }, "guard")
     .gear(P1, CARD, "brut");
 }
 
@@ -43,10 +45,19 @@ function equipTargets(game: { p1: { option(v: string): { fields: readonly { name
 }
 
 describe("Brutalizer (sfd-042-221)", () => {
-  test("registry payload: a 2-cost calm Equipment with +1 Might bonus and exactly one Equip keyword costing [calm]", async () => {
+  test("registry payload: a 2-cost calm Equipment with +1 Might bonus, an Equip keyword costing [calm], and the conditional +2", async () => {
     const def = (await loadDefaultCardPool()).get(CARD);
     expect(def).toMatchObject({ cardType: "equipment", domain: "calm", energyCost: 2, mightBonus: 1, name: "Brutalizer" });
-    expect(def?.abilities).toEqual([{ cost: { power: ["calm"] }, keyword: "Equip", type: "keyword" }]);
+    expect(def?.abilities).toEqual([
+      { cost: { power: ["calm"] }, keyword: "Equip", type: "keyword" },
+      {
+        affects: "self",
+        condition: { type: "attached-this-turn" },
+        effect: { amount: 2, type: "modify-might" },
+        effectText: true,
+        type: "static",
+      },
+    ]);
   });
 
   test("playing it: costs 2 energy (no power), lands in base READY and unattached; 1 energy is not enough", async () => {
@@ -61,14 +72,15 @@ describe("Brutalizer (sfd-042-221)", () => {
     expect(poor.p1.can("play", "brut")).toBe(false);
   });
 
-  test("[Equip][calm]: pays exactly one calm power, attaches to the chosen friendly unit, +1 Might; nothing gets exhausted (434.5)", async () => {
+  test("[Equip][calm]: pays exactly one calm power, attaches to the chosen friendly unit, +1 +2 Might; nothing gets exhausted (434.5)", async () => {
     const game = await onBoard({ calm: 2 }, 3).build();
     await game.p1.choose("equipCard", { params: { equipmentId: "brut", unitId: "squire" } });
     await game.settle();
     expect(game.p1.resources()).toEqual({ energy: 3, power: { calm: 1 } });
     expect(game.state("brut").attachedTo).toBe("squire");
     expect(game.state("squire").attachments).toEqual(["brut"]);
-    expect(game.state("squire").might).toBe(3);
+    // rule 434.1.d — attached THIS turn, so the printed +1 and the Effect Text's +2 both apply.
+    expect(game.state("squire").might).toBe(5);
     expect(game.state("knight").might).toBe(3);
     expect(game.state("brut").isExhausted).toBe(false);
     expect(game.state("squire").isExhausted).toBe(false);
@@ -118,11 +130,11 @@ describe("Brutalizer (sfd-042-221)", () => {
     expect(oppTurn.p1.can("equipCard")).toBe(false);
   });
 
-  test("the +1 goes to war: an equipped 3+1 Knight attacking a 3-might Guard kills it, survives and conquers; the Brutalizer rides along (719.3.a)", async () => {
+  test("the bonus goes to war: an equipped 3+1+2 Knight attacking a 3-might Guard kills it, survives and conquers; the Brutalizer rides along (719.3.a)", async () => {
     const game = await onBoard().build();
     await game.p1.choose("equipCard", { params: { equipmentId: "brut", unitId: "knight" } });
     await game.settle();
-    expect(game.state("knight").might).toBe(4);
+    expect(game.state("knight").might).toBe(6);
     await game.p1.move("knight", "bf1");
     expect(game.locationOf("brut")).toBe("bf1");
     await game.settle();
@@ -146,8 +158,8 @@ describe("Brutalizer (sfd-042-221)", () => {
   });
 
   test("wearer dies at a battlefield: the Equipment is NOT trashed — it detaches, stays P1's, and is recalled to base (457.1 / 149.3)", async () => {
-    // Squire 2+1 = 3 attacks the 3-might Guard: both die.
-    const game = await onBoard().build();
+    // Squire 2+1+2 = 5 (equipped this turn) attacks a 5-might Guard: both die.
+    const game = await onBoard({ calm: 1 }, 0, 5).build();
     await game.p1.choose("equipCard", { params: { equipmentId: "brut", unitId: "squire" } });
     await game.settle();
     await game.p1.move("squire", "bf1");
@@ -162,12 +174,12 @@ describe("Brutalizer (sfd-042-221)", () => {
     expect(equipTargets(game)).toEqual(["knight"]);
   });
 
-  test("partner — Sentinel Adept (Weaponmaster): on play, equips the Brutalizer for [calm] − [rainbow] = nothing; 3 + 1 = 4", async () => {
+  test("partner — Sentinel Adept (Weaponmaster): on play, equips the Brutalizer for [calm] − [rainbow] = nothing; 3 + 1 + 2 = 6", async () => {
     const game = await scenario().resources(P1, { energy: 3 }).gear(P1, CARD, "brut").hand(P1, SENTINEL_ADEPT, "adept").build();
     await game.p1.play("adept", { answers: ["brut"] });
     await game.settle();
     expect(game.p1.resources()).toEqual({ energy: 0, power: {} });
     expect(game.state("brut").attachedTo).toBe("adept");
-    expect(game.state("adept").might).toBe(4);
+    expect(game.state("adept").might).toBe(6);
   });
 });

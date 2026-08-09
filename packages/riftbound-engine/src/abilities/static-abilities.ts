@@ -245,6 +245,13 @@ function unitMatchesUnitState(
 }
 
 /**
+ * rule 434.1.d / 718 — condition kinds whose subject is the Equipment ITSELF
+ * ("if this was attached to me this turn"), so they are NOT remapped to the
+ * holder the way the rest of an `effectText` sentence is.
+ */
+const SELF_IS_ATTACHMENT_CONDITIONS = new Set(["attached-this-turn"]);
+
+/**
  * Evaluate whether a static ability's condition is met.
  */
 export function evaluateCondition(
@@ -389,6 +396,21 @@ export function evaluateCondition(
         | Partial<RiftboundCardMeta>
         | undefined;
       return (meta?.equippedWith?.length ?? 0) > 0;
+    }
+
+    // rule 434.1.d / 434.1.f — "if this was attached to me this turn": the
+    // source Equipment must be attached right now AND its attach stamp must be
+    // the current turn. A same-turn re-equip detaches first and re-stamps, so
+    // the clause turns on again without ever stacking (435.1.e).
+    case "attached-this-turn": {
+      const meta = ctx.cards.getCardMeta(source.id as CoreCardId) as
+        | Partial<RiftboundCardMeta>
+        | undefined;
+      if (meta?.attachedTo === undefined) {
+        return false;
+      }
+      const attachedOnTurn = meta.attachedOnTurn;
+      return attachedOnTurn !== undefined && attachedOnTurn === ctx.draft.turn?.number;
     }
 
     // Rule 827 (rule-id: ven-136-166): `[Empowered][>]` abilities function
@@ -1314,7 +1336,11 @@ export function recalculateStaticEffects(ctx: StaticAbilityContext): boolean {
         // means the equipped unit, so an `effectText` static evaluates its
         // condition with the holder as self. The grant target is remapped
         // separately (`resolveStaticTargets` / `applyStaticEffect`).
-        const conditionSource = effectTextSelf(card, ability as unknown as { effectText?: boolean }, boardCards, ctx);
+        // rule 434.1.d — a clause about "THIS" (the Equipment) rather than "me"
+        // (the holder) keeps the Equipment as its subject through that remap.
+        const conditionSource = SELF_IS_ATTACHMENT_CONDITIONS.has(condition?.type as string)
+          ? card
+          : effectTextSelf(card, ability as unknown as { effectText?: boolean }, boardCards, ctx);
         if (condition && !evaluateCondition(condition, conditionSource, ctx)) {
           continue;
         }
