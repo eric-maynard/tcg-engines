@@ -36,6 +36,7 @@ import { getCardEffectiveMight, getDeflectSurcharge, xCostIsPower } from "../pla
 import {
   collectSequenceTargetSlots,
   findAmountReferenceTarget,
+  findConditionalBranchTarget,
   findSequenceLeadTarget,
   hiddenChoiceIsPulledIn,
   isLegalMultiTargetSet,
@@ -723,6 +724,7 @@ export function executeResolvedItem(
     // that no longer satisfies the descriptor's LOCATION when the item resolves
     // (a "unit at a battlefield" recalled to base) is an illegal target.
     const lockedTarget = (effect.target ??
+      findConditionalBranchTarget(effect as unknown as SpellEffectTargetShape) ??
       findSequenceLeadTarget(effect as unknown as SpellEffectTargetShape)) as
       | { location?: unknown }
       | string
@@ -912,9 +914,15 @@ export function executeResolvedItem(
     effect.type === "move" && (effect as { swap?: unknown }).swap === true
       ? ((effect as { partner?: unknown }).partner as TargetDescriptor | undefined)
       : undefined;
+  // rule 355.10 (rule-id: ven-021-166 Akali) — "deal 1 to a unit at a
+  // battlefield I moved to or from. If I'm [Empowered], deal 2 instead" parses
+  // as a `conditional` whose branches name the SAME caster-chosen object, so
+  // the choice belongs to the ability as a whole; lift it, or the branch's own
+  // handler silently auto-picks the first candidate.
   const target = (effect.target ??
     fightDefender ??
     swapPartner ??
+    findConditionalBranchTarget(effect as unknown as SpellEffectTargetShape) ??
     findSequenceLeadTarget(effect as unknown as SpellEffectTargetShape)) as
     | TargetDescriptor
     | string

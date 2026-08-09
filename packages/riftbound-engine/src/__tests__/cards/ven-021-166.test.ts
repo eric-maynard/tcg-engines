@@ -12,7 +12,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { P1, scenario } from "../../harness";
+import { P1, P2, scenario } from "../../harness";
 
 const CARD = "ven-021-166";
 
@@ -52,5 +52,32 @@ describe("Akali, Deadly Weapon (ven-021-166)", () => {
     }
     await game.settle();
     expect(game.state("dummy").damage).toBe(2);
+  });
+});
+
+describe("Akali's move trigger asks who takes the damage (rule 355.10)", () => {
+  function twoFoes(empowered: boolean) {
+    return scenario()
+      .battlefield("bf1", { controller: P1 })
+      .card("akali", {
+        def: CARD,
+        meta: empowered ? { empowered: true } : undefined,
+        owner: P1,
+        zone: "base",
+      })
+      .unit(P2, "bf1", { might: 5 }, "big")
+      .unit(P2, "bf1", { might: 3 }, "small");
+  }
+
+  test("the controller picks the damaged unit instead of the engine auto-picking", async () => {
+    const game = await twoFoes(true).build();
+    await game.p1.move("akali", "bf1");
+    await game.settle();
+    await game.p1.yes();
+    expect(game.decision()?.kind).toBe("pick");
+    await game.p1.pick("small");
+    await game.settle();
+    expect(game.state("small").damage).toBe(2);
+    expect(game.state("big").damage ?? 0).toBe(0);
   });
 });

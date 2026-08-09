@@ -262,4 +262,14 @@ describe("Fizz, Trickster (sfd-140-221)", () => {
     expect(game.zoneOf("theirs")).toBe("trash");
     expect(game.p2.trash()).toEqual(["theirs"]);
   });
+
+  test("419.3.b (rule 355.5): Incinerate's target is chosen as it goes on the Chain, not deferred to its resolution", async () => {
+    const game = await board({ energy: 10 }).build();
+    const pick = await playAndAccept(game);
+    expect(pick).toBeDefined();
+    await game.p1.pick("inc");
+    // The only legal "unit at a battlefield" locks itself onto the item right
+    // away, so the opponent sees the target before responding.
+    expect(game.chain().find((c) => c.cardId === "inc")).toMatchObject({ targets: ["tgt"] });
+  });
 });

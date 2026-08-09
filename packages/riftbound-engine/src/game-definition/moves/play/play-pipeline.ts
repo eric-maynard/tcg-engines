@@ -27,6 +27,7 @@ import type { CardId as CoreCardId, PlayerId as CorePlayerId, ZoneId as CoreZone
 import type { RiftboundCardMeta, RiftboundGameState } from "../../../types";
 import { fireTriggers } from "../../../abilities/trigger-runner";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
+import { resolveTarget } from "../../../abilities/target-resolver";
 import { resetObjectState } from "../../../operations/leave-board";
 import { noteArrival } from "../../../operations/arrive-at-battlefield";
 import { notePlayThisTurn } from "../../../operations/plays-this-turn";
@@ -396,6 +397,75 @@ export function putPlayedSpellOnChain(
     draft.cardsPlayedThisTurn[spec.playerId] = (draft.cardsPlayedThisTurn[spec.playerId] ?? 0) + 1;
   }
   notePlayThisTurn(draft, spec.playerId, spec.cardId);
+  bindPlayedSpellTarget(io, spec.cardId, spec.playerId, spellEffect as SpellTargetShape | undefined);
+}
+
+interface SpellTargetShape {
+  readonly target?: unknown;
+}
+
+/**
+ * rule 419.3.b / 355.5 / 355.8 (rule-id: sfd-140-221 Fizz) — a spell an EFFECT
+ * plays still runs every step of the play process, so any target it names is
+ * chosen as it goes on the Chain, never deferred to resolution: an item may
+ * only sit on the Chain once valid choices exist for all of its targets, and
+ * the opponent must be able to see them before responding. One legal object
+ * locks itself; several park a `choose-target` bound to the new item, exactly
+ * like a play-time slot.
+ */
+export function bindPlayedSpellTarget(
+  io: PlayIO,
+  cardId: string,
+  playerId: string,
+  spellEffect: SpellTargetShape | undefined,
+): void {
+  const { draft } = io;
+  const descriptor = spellEffect?.target;
+  if (
+    !descriptor ||
+    typeof descriptor !== "object" ||
+    (descriptor as { quantity?: unknown }).quantity === "all" ||
+    ["self", "player", "battlefield", "trigger-source"].includes(
+      (descriptor as { type?: string }).type ?? "",
+    )
+  ) {
+    return;
+  }
+  const items = draft.interaction?.chain?.items;
+  const item = items?.[items.length - 1];
+  if (!item || item.cardId !== cardId) {
+    return;
+  }
+  const options = resolveTarget(
+    { ...(descriptor as object), quantity: "all" } as Parameters<typeof resolveTarget>[0],
+    {
+      cards: io.cards,
+      choosing: true,
+      draft,
+      playerId,
+      sourceCardId: cardId,
+      zones: io.zones,
+    } as Parameters<typeof resolveTarget>[1],
+  ) as string[];
+  if (options.length === 0) {
+    return;
+  }
+  if (options.length === 1) {
+    (item as { targets?: readonly string[] }).targets = [options[0] as string];
+    return;
+  }
+  if (draft.pendingChoice) {
+    return;
+  }
+  draft.pendingChoice = {
+    bindToChainItemId: item.id,
+    effect: spellEffect,
+    options,
+    playerId,
+    remaining: 1,
+    sourceCardId: cardId,
+    type: "choose-target",
+  } as unknown as typeof draft.pendingChoice;
 }
 
 // ===========================================================================
