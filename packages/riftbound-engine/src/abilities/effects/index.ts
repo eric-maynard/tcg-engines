@@ -15,7 +15,6 @@ import { handle_move } from "./move";
 import { handle_discard } from "./discard";
 import { handle_recycle } from "./recycle";
 import {
-  handle_playBanishedCard,
   handle_playBanishedPass,
 } from "./play-banished-pass";
 import { handle_returnBanishedToHand } from "./return-banished-to-hand";
@@ -111,7 +110,6 @@ export const EFFECT_HANDLERS: Record<string, EffectHandler> = {
   "recycle": handle_recycle,
   // rule 337.1.b (ogn-115-298) — the deferred "then each player plays those cards" pass.
   "play-banished-pass": handle_playBanishedPass,
-  "play-banished-card": handle_playBanishedCard,
   "return-banished-to-hand": handle_returnBanishedToHand,
   "return-to-champion-zone": handle_returnToChampionZone,
   "return-to-hand": handle_returnToHand,

@@ -192,7 +192,7 @@ describe("Bottled Constellation × Ferrous Forerunner × Gold tokens — cost ti
 
   // ---- (b) three others: Forerunner + two Gold ---------------------------------------------------------------
 
-  test.failing("BUG: (b) the leading 'you may' and the choice of the three are made during FINALIZATION — P1 is asked before any player holds priority, with the trigger still on the chain (383.3.a, 402.1, 402.2, 337.1.a)", async () => {
+  test("BUG: (b) the leading 'you may' and the choice of the three are made during FINALIZATION — P1 is asked before any player holds priority, with the trigger still on the chain (383.3.a, 402.1, 402.2, 337.1.a)", async () => {
     // Expected: right after the turn starts the first decision is P1's opt-in (then the pick), chain = [bottle].
     // Actual: the first decision is a priority window for P1 (then P2); the opt-in is only asked on resolution.
     const game = await board(2).build();
@@ -228,7 +228,7 @@ describe("Bottled Constellation × Ferrous Forerunner × Gold tokens — cost ti
     expect(pick!.options.map((o) => o.card ?? o.key).sort()).toEqual(["ff", "gold1", "gold2"]);
   });
 
-  test.failing("BUG: (b) the cost is all-or-nothing — exactly three must be named (no 'kill 1, decline the rest, still score') (404.1, 404.2, 383.3.b.1)", async () => {
+  test("BUG: (b) the cost is all-or-nothing — exactly three must be named (no 'kill 1, decline the rest, still score') (404.1, 404.2, 383.3.b.1)", async () => {
     // Expected: the pick demands exactly 3 (min 3 / max 3, not declinable); naming one Gold and stopping is
     // not a legal way to pay, so no point can result from it and Forerunner/gold2 are untouched.
     // Actual: pick is min 1 / max 3 / declinable; picking gold1 then declining kills just gold1 AND scores 1.
@@ -259,7 +259,7 @@ describe("Bottled Constellation × Ferrous Forerunner × Gold tokens — cost ti
     expect(game.has("gold2")).toBe(true);
   });
 
-  test.failing("BUG: (b) when P2 FIRST holds priority the three are already dead — Forerunner in the trash, both Gold ceased to exist (186.1) — the Deathknell sits on top of the still-unresolved Constellation trigger, and no point has been scored yet (404.1, 337.3, 406.4)", async () => {
+  test("BUG: (b) when P2 FIRST holds priority the three are already dead — Forerunner in the trash, both Gold ceased to exist (186.1) — the Deathknell sits on top of the still-unresolved Constellation trigger, and no point has been scored yet (404.1, 337.3, 406.4)", async () => {
     // Expected at P2's first window: chain = [bottle, ff] (oldest→newest), ff in trash, gold1/gold2 gone,
     // P1 points 0, no Mechs yet.
     // Actual: P2's first window comes BEFORE the opt-in — chain = [bottle], all three still on the board;
@@ -305,7 +305,7 @@ describe("Bottled Constellation × Ferrous Forerunner × Gold tokens — cost ti
     expect(game.p2.hand()).toEqual(expect.arrayContaining(["nsf", "ww", "defy"]));
   });
 
-  test.failing("BUG: (b) resolution is LIFO — the Deathknell (newest) resolves BEFORE the Constellation scores: while the Deathknell is the top item the Constellation trigger is still beneath it and P1 has 0 points (340.1)", async () => {
+  test("BUG: (b) resolution is LIFO — the Deathknell (newest) resolves BEFORE the Constellation scores: while the Deathknell is the top item the Constellation trigger is still beneath it and P1 has 0 points (340.1)", async () => {
     // Expected: every window in which "ff" is on the chain also has "bottle" beneath it and points = 0; the
     // Mechs appear before the point does.
     // Actual: the point is scored (and the Constellation item is gone) before the Deathknell is even put on

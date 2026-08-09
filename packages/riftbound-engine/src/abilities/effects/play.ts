@@ -617,16 +617,20 @@ function trashPlayEnergyReduction(effect: ExecutableEffect, ctx: EffectContext):
   if (typeof raw === "number") {
     return Math.max(0, raw);
   }
-  if (
-    typeof raw === "object" &&
-    raw !== null &&
-    (raw as { might?: unknown }).might === "recycled" &&
-    ctx.triggerSourceId !== undefined
-  ) {
+  if (typeof raw === "object" && raw !== null && (raw as { might?: unknown }).might === "recycled") {
     // rule 359.3.e.13 — look-back: the recycled card has already left the board,
     // so the discount is the Might it LAST had there (buff, +N this turn,
     // equipment), read from its last-known-information snapshot. Printed Might
     // is only a fallback for a card that never had a board state.
+    // rule 404.1 — the unit was recycled to PAY the trigger at finalization: it
+    // rides on the item as a paid object with that snapshot.
+    const paidUnit = ctx.paidObjects?.[0];
+    if (paidUnit !== undefined) {
+      return Math.max(0, paidUnit.lki.might);
+    }
+    if (ctx.triggerSourceId === undefined) {
+      return 0;
+    }
     const lki = getLKI(ctx.draft, ctx.triggerSourceId);
     if (lki !== undefined) {
       return Math.max(0, lki.might);

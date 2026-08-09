@@ -1545,7 +1545,7 @@ function expandKeywordDoubling(
 }
 
 /** The finalization dialog lives in `trigger-finalization.ts`; re-exported for move code. */
-export { finalizePendingItems, removeUnfinalizedItem } from "./trigger-finalization";
+export { finalizePendingItems, objectCostsOf, payTriggerObjectCost, removeUnfinalizedItem } from "./trigger-finalization";
 
 /**
  * rule 359.2 (rule-id: ogn-292-298) — the battlefield a card currently stands
@@ -1683,6 +1683,9 @@ export function fireTriggers(rawEvent: GameEvent, ctx: TriggerRunnerContext): nu
   ) {
     recalculateStaticEffects({
       cards: {
+        // rule 108.2 — "friendly"/"your" reads CONTROL: drop this and the pass
+        // silently falls back to ownership, so a stolen unit keeps the wrong grants.
+        getCardController: ctx.cards.getCardController,
         getCardMeta: ctx.cards.getCardMeta,
         getCardOwner: ctx.cards.getCardOwner,
         updateCardMeta: ctx.cards.updateCardMeta,

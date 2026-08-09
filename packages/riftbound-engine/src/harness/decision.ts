@@ -478,8 +478,15 @@ export function deriveFromPendingChoice(ctx: DecisionContext, pc: PendingChoice)
   const flat = ctx.legal(seat, ["resolvePendingChoice"]);
   // rule 402 — a prompt bound to a still-pending chain item (leading "you may",
   // targets, modes, base cost) is part of FINALIZING it, not of resolving it.
-  const fin = pc as { finalizationChainItemId?: string; bindToChainItemId?: string };
-  const chainItemId = fin.finalizationChainItemId ?? fin.bindToChainItemId;
+  const fin = pc as {
+    finalizationChainItemId?: string;
+    bindToChainItemId?: string;
+    resume?: { kind?: string; itemId?: string };
+  };
+  const chainItemId =
+    fin.finalizationChainItemId ??
+    fin.bindToChainItemId ??
+    (fin.resume?.kind === "trigger-cost" ? fin.resume.itemId : undefined);
   const source = {
     cardId: (pc as { sourceCardId?: string }).sourceCardId,
     ...(chainItemId !== undefined ? { chainItemId } : {}),
@@ -491,7 +498,7 @@ export function deriveFromPendingChoice(ctx: DecisionContext, pc: PendingChoice)
   const genericTiming =
     resumeKind === "die-order" || resumeKind === "die-assign" || resumeKind === "damage-order"
       ? ("RPL" as const)
-      : resumeKind === "trigger-batch"
+      : resumeKind === "trigger-batch" || resumeKind === "trigger-cost"
         ? ("FIN" as const)
         : undefined;
   const base = {

@@ -157,7 +157,7 @@ describe("Promising Future flips two Stupefys × Ravenbloom Student / Diana — 
   // after both Stupefys were queued; Student's trigger is therefore the NEWEST item: [stupP2, stupP1, student].
   // Actual: the engine creates Student's trigger as PF starts resolving (before the banish picks), making it
   // the OLDEST item, and lists P1's Stupefy before P2's.
-  test.failing("BUG: (a) chain order oldest→newest right after the picks is [Stupefy-P2, Stupefy-P1, Student-trig(PF)] — engine appends Student's PF trigger first (oldest)", async () => {
+  test("BUG: (a) chain order oldest→newest right after the picks is [Stupefy-P2, Stupefy-P1, Student-trig(PF)] — engine appends Student's PF trigger first (oldest)", async () => {
     const game = await board().build();
     await castAndBanish(game);
     expect(game.chain().map((c) => c.cardId)).toEqual(["stupP2", "stupP1", "student"]);
@@ -168,7 +168,7 @@ describe("Promising Future flips two Stupefys × Ravenbloom Student / Diana — 
   // finalization — P2 is asked for their Stupefy's target FIRST, then P1, both before any priority window.
   // Actual: the engine asks each Stupefy's target only when that spell RESOLVES (P1's first), after several
   // priority windows.
-  test.failing("BUG: (b) P2 chooses their Stupefy's target first, then P1 — and no one has had priority before both targets are locked", async () => {
+  test("BUG: (b) P2 chooses their Stupefy's target first, then P1 — and no one has had priority before both targets are locked", async () => {
     const game = await board().build();
     await castAndBanish(game);
     const log = await playOut(game);
@@ -183,7 +183,7 @@ describe("Promising Future flips two Stupefys × Ravenbloom Student / Diana — 
   // BUG — expected (337.1.a, 337.4): the first priority window opens with all three items Finalized — both
   // Stupefys carrying their targets (stupP2 → Student, stupP1 → Diana) under Student-trig(PF). Actual: the
   // first window opens with both Stupefys still un-targeted Pending plays.
-  test.failing("BUG: (c) at the FIRST priority window the chain is [stupP2→student, stupP1→diana, student-trig], all finalized", async () => {
+  test("BUG: (c) at the FIRST priority window the chain is [stupP2→student, stupP1→diana, student-trig], all finalized", async () => {
     const game = await board().build();
     await castAndBanish(game);
     const log = await playOut(game);

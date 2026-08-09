@@ -95,6 +95,12 @@ export interface EffectContext {
    */
   readonly triggerSourceId?: string;
   /**
+   * rule 383.3.b / 404.1 / 359.3.e.13 — the Game Objects that PAID this
+   * triggered ability's base cost during finalization, with their last-known
+   * board state ("reduce its cost by the Might of the unit you recycled").
+   */
+  readonly paidObjects?: readonly { readonly id: string; readonly lki: import("../operations/leave-board").LKISnapshot }[];
+  /**
    * rule-id: ogn-177-298 — destination zone of the `move` event that fired
    * this triggered ability, so "I may be moved WITH IT" (`to: "same"`) lands
    * where the mover went.

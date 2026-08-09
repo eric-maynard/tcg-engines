@@ -85,16 +85,20 @@ describe("Shadow Order Disciple (ven-095-166)", () => {
     expect((await scenario().resources(P1, { energy: 1, power: { chaos: 2 } }).hand(P1, CARD, "sod").build()).p1.can("play", "sod")).toBe(false);
   });
 
-  test("moving puts ONE triggered item (controller P1) on the chain; P2 gets priority; the 'you may' is P1's to answer and nothing is burned before that", async () => {
+  // rule 383.3.a / 383.3.b.1 (finalization) — "[Burn 1] to …" is the trigger's base cost: the "you may"
+  // is put to P1 as the item is FINALIZED (nothing burned until answered); P2's priority comes after.
+  test("moving puts ONE triggered item (controller P1) on the chain; the 'you may' is P1's to answer first (nothing burned before that), then P2 gets priority", async () => {
     const game = await board().build();
     await game.p1.move("sod", "bf2");
     expect(game.locationOf("sod")).toBe("bf2");
     expect(game.chain()).toEqual([expect.objectContaining({ cardId: "sod", controller: P1, triggered: true })]);
+    expect(game.zoneOf("top")).toBe("mainDeck");
+    expect(game.decision()).toMatchObject({ kind: "yes-no", seat: P1, timing: "FIN" });
+    await game.p1.yes();
+    expect(game.zoneOf("top")).toBe("trash"); // paid at finalization
     await game.p1.passPriority();
     expect(game.actingSeat()).toBe(P2);
-    expect(game.zoneOf("top")).toBe("mainDeck");
-    const asked = await answerMay(game, false);
-    expect(asked).toMatchObject({ kind: "yes-no", seat: P1 });
+    expect(game.state("sod").might).toBe(2); // the +1 waits for resolution
   });
 
   test("accepting burns exactly the TOP card of the Main Deck (top → trash, d2 now on top) and makes the Disciple 3 Might", async () => {

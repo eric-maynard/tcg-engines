@@ -427,9 +427,16 @@ export function killCostCandidates(
   const target = (raw.target ?? raw) as {
     controller?: string;
     excludeSelf?: boolean;
+    location?: string;
     type?: string;
     types?: readonly string[];
   };
+  // rule 108.2 / 355.10.c.1 (rule-id: unl-209-219 Dusk Rose Lab) — "kill a unit
+  // you control HERE to …": only the source's own battlefield pays.
+  const hereZone = target.location === "here" ? sourceHereZone(state, sourceCardId, context) : undefined;
+  if (target.location === "here" && hereZone === undefined) {
+    return [];
+  }
   const types =
     target.types && target.types.length > 0
       ? target.types
@@ -437,12 +444,15 @@ export function killCostCandidates(
         ? [target.type]
         : ["unit", "gear", "equipment"];
   const wantTypes = new Set(types.flatMap((t) => (t === "gear" ? ["gear", "equipment"] : [t])));
-  const zoneIds = [
-    "base",
-    ...Object.keys((state as { battlefields?: Record<string, unknown> }).battlefields ?? {}).map(
-      (bf) => `battlefield-${bf}`,
-    ),
-  ];
+  const zoneIds =
+    hereZone !== undefined
+      ? [hereZone]
+      : [
+          "base",
+          ...Object.keys((state as { battlefields?: Record<string, unknown> }).battlefields ?? {}).map(
+            (bf) => `battlefield-${bf}`,
+          ),
+        ];
   const registry = getGlobalCardRegistry();
   const out: string[] = [];
   for (const zoneId of zoneIds) {
@@ -982,6 +992,18 @@ function resumePending(
     case "trigger-batch": {
       const order = answer.orderedKeys && answer.orderedKeys.length > 0 ? answer.orderedKeys : resume.itemIds;
       reorderChainItems(draft, resume.itemIds, order);
+      return;
+    }
+    // rule 402.2 / 404.1 — the named objects pay the trigger's base cost now;
+    // the wrapper's finalization pass then continues with the item's targets.
+    case "trigger-cost": {
+      const picked = (answer.pickedKeys ?? []).map(
+        (k) => (choice.type === "pick-many" ? choice.options.find((o) => o.key === k)?.cardId : undefined) ?? k,
+      );
+      triggerRunner.payTriggerObjectCost(draft, context, resume.itemId, picked);
+      if (!draft.pendingChoice) {
+        postChoiceCleanup(draft, context);
+      }
       return;
     }
     case "subset-repick": {
@@ -1989,6 +2011,21 @@ export const pendingChoiceMoves: Partial<
               );
             }
           }
+          // rule 440.1 / 383.3.b (rule-id: ven-095-166) — "[Burn N] to …": no
+          // choice is involved (the top N cards are fixed), so it is paid here.
+          const burnCount = accepted && typeof cost?.burn === "number" ? cost.burn : 0;
+          if (burnCount > 0) {
+            executeEffect(
+              { amount: burnCount, player: "self", type: "mill" } as ExecutableEffect,
+              buildEffectContext(draft, choice.playerId, choice.sourceCardId, context),
+            );
+          }
+          // rule 402.2 / 404.1 — Game Objects the cost names ("kill a unit you
+          // control here", "recycle another friendly unit", "return a unit you
+          // control here") are chosen and paid by the finalization dialog right
+          // after this answer (`trigger-finalization.ts settleObjectCost`), still
+          // before anyone receives Priority (406.4); the spec rides on the item.
+          const owesObjects = accepted && triggerRunner.objectCostsOf(cost).length > 0;
           const interaction = draft.interaction;
           if (accepted && interaction?.chain) {
             draft.interaction = {
@@ -1996,7 +2033,14 @@ export const pendingChoiceMoves: Partial<
               chain: {
                 ...interaction.chain,
                 items: interaction.chain.items.map((it) =>
-                  it.id === finalizeId ? { ...it, optInCost: undefined, optional: false } : it,
+                  it.id === finalizeId
+                    ? {
+                        ...it,
+                        optInCost: owesObjects ? cost : undefined,
+                        optional: false,
+                        ...(owesObjects ? { objectCostOwed: true } : {}),
+                      }
+                    : it,
                 ),
               },
             };

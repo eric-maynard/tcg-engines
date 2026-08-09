@@ -370,15 +370,18 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
       // effect gates every remaining step. An unpayable cost (no card in any
       // trash) means nothing after it happens, so the step must not fall
       // through as a silent no-op and let the payoff resolve for free.
-      if ((sub as { costStep?: boolean }).costStep === true) {
-        const costTarget = (sub as { target?: SubTarget }).target;
-        const payable =
-          typeof costTarget === "object" && costTarget !== null
-            ? resolveTarget({ ...(costTarget as TargetDescriptor), quantity: "all" }, {
-                ...resolverCtx,
-                choosing: true,
-              } as Parameters<typeof resolveTarget>[1])
-            : [];
+      // (A cost step naming no board object — "spend 3 XP to …" — is gated by
+      // its own payability check above.)
+      const costStepTarget = (sub as { target?: SubTarget }).target;
+      if (
+        (sub as { costStep?: boolean }).costStep === true &&
+        typeof costStepTarget === "object" &&
+        costStepTarget !== null
+      ) {
+        const payable = resolveTarget({ ...(costStepTarget as TargetDescriptor), quantity: "all" }, {
+          ...resolverCtx,
+          choosing: true,
+        } as Parameters<typeof resolveTarget>[1]);
         if (payable.length === 0) {
           break;
         }

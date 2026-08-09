@@ -39,18 +39,18 @@ function lab(here: (string | { might: number; name: string })[], aliases: string
 }
 
 describe("Dusk Rose Lab (unl-209-219)", () => {
-  test("registry payload: optional Beginning-Phase trigger for the controller — kill a friendly unit HERE, then draw 1", async () => {
+  // rule 383.3.b / 204.3.a — "kill a unit you control here TO draw 1": the kill is the trigger's BASE
+  // COST (paid at finalization), the draw is the effect.
+  test("registry payload: optional Beginning-Phase trigger for the controller — base cost 'kill a friendly unit HERE', effect draw 1", async () => {
     const def = (await loadDefaultCardPool()).get(CARD);
     expect(def).toMatchObject({ cardType: "battlefield", name: "Dusk Rose Lab" });
     expect(def?.abilities).toEqual([
       {
-        effect: {
-          effects: [
-            { target: { controller: "friendly", location: "here", type: "unit" }, type: "kill" },
-            { amount: 1, type: "draw" },
-          ],
-          type: "sequence",
+        condition: {
+          cost: { kill: { target: { controller: "friendly", location: "here", type: "unit" } } },
+          type: "pay-cost",
         },
+        effect: { amount: 1, type: "draw" },
         optional: true,
         trigger: { event: "beginning-phase", on: "controller", timing: "at" },
         type: "triggered",

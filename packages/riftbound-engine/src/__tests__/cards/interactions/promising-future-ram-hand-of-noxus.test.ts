@@ -102,14 +102,18 @@ async function castAndBanish(game: Game): Promise<void> {
   await game.p2.pick("y");
 }
 
-/** YES side, fully driven: Y → P2's base (+8 aimed at P2 Holder), then X → P1's base; ends in P1's open main phase. */
+/**
+ * YES side, fully driven: Y → P2's base, then X → P1's base (the older pending play is finalized before
+ * Y's freshly appended play trigger — rule 337.1.b), then Y's +8 aimed at P2 Holder; ends in P1's open
+ * main phase.
+ */
 async function resolveBothPlays(game: Game): Promise<void> {
   await until(game, isPickFor(P2, /destination/i));
   await game.p2.pick("base");
-  await until(game, isPickFor(P2, /target/i));
-  await game.p2.pick("p2holder");
   await until(game, isPickFor(P1, /destination/i));
   await game.p1.pick("base");
+  await until(game, isPickFor(P2, /target/i));
+  await game.p2.pick("p2holder");
   await until(game, isOpenMain);
 }
 
@@ -152,19 +156,20 @@ describe("Promising Future × Battering Ram × Hand of Noxus — the opponent's 
     expect(game.zoneOf("pf")).toBe("trash");
     expect(game.zoneOf("x")).toBe("banishment");
     expect(game.zoneOf("y")).toBe("banishment");
-    // Two pending plays, one per player.
-    expect(game.chain().map((c) => [c.cardId, c.controller]).sort()).toEqual([["x", P1], ["y", P2]]);
+    // Two pending plays, next player (P2) first — rule 354.3 / 337.1.b.
+    expect(game.chain().map((c) => [c.cardId, c.controller])).toEqual([["y", P2], ["x", P1]]);
     await until(game, isPickFor(P2, /destination/i));
     expect(game.zoneOf("x")).toBe("banishment"); // X waits
     await game.p2.pick("base");
     expect(game.zoneOf("y")).toBe("base");
     expect(game.zoneOf("x")).toBe("banishment");
-    // …then X for P1.
-    await until(game, isPickFor(P2, /target/i));
-    await game.p2.pick("p2holder");
+    // …then X for P1 (older pending play before Y's just-appended play trigger — 337.1.b) …
     await until(game, isPickFor(P1, /destination/i));
     await game.p1.pick("base");
     expect(game.zoneOf("x")).toBe("base");
+    // … and only then Y's "When you play me" target.
+    await until(game, isPickFor(P2, /target/i));
+    await game.p2.pick("p2holder");
   });
 
   test("(b) P2 chooses Y's location among P2's base and the battlefield P2 controls — P1's battlefield is not offered and is rejected (355.2.a, 191.3.c)", async () => {
@@ -207,12 +212,12 @@ describe("Promising Future × Battering Ram × Hand of Noxus — the opponent's 
     await castAndBanish(game);
     await until(game, isPickFor(P2, /destination/i));
     await game.p2.pick("base");
+    await until(game, isPickFor(P1, /destination/i)); // X (older pending play) is placed first — 337.1.b
+    await game.p1.pick("base");
     const d = (await until(game, isPickFor(P2, /target/i))) as Pick;
     expect(d.seat).toBe(P2);
-    expect(keysOf(d)).toEqual(expect.arrayContaining(["p1holder", "p2holder", "y"]));
+    expect(keysOf(d)).toEqual(expect.arrayContaining(["p1holder", "p2holder", "y", "x"]));
     await game.p2.pick("p2holder");
-    await until(game, isPickFor(P1, /destination/i)); // Y's trigger has resolved by the time X is placed (or right after)
-    await game.p1.pick("base");
     await until(game, isOpenMain);
     expect(game.state("p2holder").might).toBe(10);
     expect(game.state("p1holder").might).toBe(2);
@@ -223,12 +228,12 @@ describe("Promising Future × Battering Ram × Hand of Noxus — the opponent's 
     await castAndBanish(game);
     await until(game, isPickFor(P2, /destination/i));
     await game.p2.pick("base");
-    await until(game, isPickFor(P2, /target/i));
-    await game.p2.pick("p2holder");
     const d = (await until(game, isPickFor(P1, /destination/i))) as Pick;
     expect(d.options.map((o) => o.key).sort()).toEqual(["base", "battlefield-bfP1"]);
     expect((await game.p1.try((p) => p.pick("battlefield-bfP2"))).ok).toBe(false);
     await game.p1.pick("base");
+    await until(game, isPickFor(P2, /target/i));
+    await game.p2.pick("p2holder");
     await until(game, isOpenMain);
     expect(game.p1.base()).toContain("x");
     expect(game.state("x")).toMatchObject({ controller: P1, isExhausted: true, owner: P1 });
@@ -309,11 +314,12 @@ describe("Promising Future × Battering Ram × Hand of Noxus — the opponent's 
   });
 
   // ── (e) Hand of Noxus Legion on the opponent's turn ───────────────────────────────────────────
-  test("(e) before Y is Finalized P2's Legion is OFF even with priority on P1's turn (P2 has played nothing yet)", async () => {
+  // rule 337.4 (finalization): nobody receives priority while a play is still pending, so the only
+  // moment "before Y is Finalized" at which P2 acts at all is its own destination prompt for Y.
+  test("(e) before Y is Finalized P2's Legion is OFF — while P2 is placing Y on P1's turn it has played nothing yet and Hand of Noxus is not usable", async () => {
     const game = await board().build();
     await castAndBanish(game);
-    // The first priority P2 receives after the picks — Y is still banished.
-    await until(game, isChainPriorityFor(P2));
+    await until(game, isPickFor(P2, /destination/i));
     expect(game.zoneOf("y")).toBe("banishment");
     expect(game.gameState.cardsPlayedThisTurn?.[P2] ?? 0).toBe(0);
     expect(game.p2.can("activate", "hon")).toBe(false);
@@ -324,7 +330,9 @@ describe("Promising Future × Battering Ram × Hand of Noxus — the opponent's 
     await castAndBanish(game);
     await until(game, isPickFor(P2, /destination/i));
     await game.p2.pick("base");
-    await until(game, isPickFor(P2, /target/i));
+    await until(game, isPickFor(P1, /destination/i)); // X first (337.1.b) …
+    await game.p1.pick("base");
+    await until(game, isPickFor(P2, /target/i)); // … then Y's trigger is finalized
     await game.p2.pick("p2holder");
     // P2 now holds priority with Y's play trigger on the chain, during P1's turn.
     const d = await until(game, isChainPriorityFor(P2));
@@ -338,25 +346,22 @@ describe("Promising Future × Battering Ram × Hand of Noxus — the opponent's 
     expect(game.state("hon").isExhausted).toBe(true);
     expect(game.actingSeat()).toBe(P2); // [Add]: no chain item, priority kept
     // Finish the turn's business; nothing else changes.
-    await until(game, isPickFor(P1, /destination/i));
-    await game.p1.pick("base");
     await until(game, isOpenMain);
     expect(game.p2.energy()).toBe(1);
     expect(game.violations()).toEqual([]);
   });
 
-  test("(e) it stays live for the REST of P1's turn: P2 also has it in the later priority window around X's play", async () => {
-    const game = await board().build();
+  // rule 337.4 (finalization): X's play is finalized before any priority, so the "later window" of P1's
+  // turn is a Reaction P1 plays afterwards — P2 answers it with Hand of Noxus still live.
+  test("(e) it stays live for the REST of P1's turn: P2 also has it in a later priority window (P1's next spell) after both plays are done", async () => {
+    const game = await board().hand(P1, "ogn-169-298", "gust").build(); // Gust: 1-cost Reaction
     await castAndBanish(game);
-    await until(game, isPickFor(P2, /destination/i));
-    await game.p2.pick("base");
-    await until(game, isPickFor(P2, /target/i));
-    await game.p2.pick("p2holder");
+    await resolveBothPlays(game);
+    expect(game.state("hon").isReady).toBe(true); // not used yet
+    await game.p1.cast("gust", { targets: "p1holder" });
+    await game.p1.passPriority();
     await until(game, isChainPriorityFor(P2));
-    await game.p2.passPriority(); // don't use it yet
-    // Next P2 priority: Y's trigger is gone, X's pending play is the top item.
-    await until(game, (d) => isChainPriorityFor(P2)(d) && game.chain().every((c) => c.cardId !== "y"));
-    expect(game.chain().map((c) => c.cardId)).toEqual(["x"]);
+    expect(game.chain().map((c) => c.cardId)).toEqual(["gust"]);
     expect(game.p2.can("activate", "hon")).toBe(true);
     await game.p2.activate("hon");
     expect(game.p2.energy()).toBe(1);

@@ -1,7 +1,4 @@
-// Effect handlers: "play-banished-pass" / "play-banished-card"
-import type { CardId as CoreCardId, PlayerId as CorePlayerId, ZoneId as CoreZoneId } from "@tcg/core";
-import { addToChain, createInteractionState } from "../../chain";
-import { getGlobalCardRegistry } from "../../operations/card-lookup";
+// Effect handler: "play-banished-pass"
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import type { EffectHelpers } from "./_helpers";
 import { beginPlay, type PlayIO } from "../../game-definition/moves/play/play-pipeline";
@@ -18,12 +15,18 @@ type DraftWithLookBanish = {
 };
 
 /**
- * rule-id: ogn-115-298 (rule 337.1.b) — "Starting with the next player, each
- * player plays those cards, ignoring Energy costs." The banish pass is public
- * and finished before any of the picks is played, so the plays are queued as
- * their own chain items (rule 354.2/354.3) in player order beginning with the
- * player after the turn player. The chain resolves newest-first (rule 340.1),
- * so they are pushed in reverse: the next player's card is finalized first.
+ * rule-id: ogn-115-298 (rules 354.2 / 354.3 / 337.1) — "Starting with the next
+ * player, each player plays those cards, ignoring Energy costs." The banish
+ * pass is public and finished before any of the picks is played. Each play the
+ * instruction makes is a PLAY (419.3): its card becomes a Pending Item on the
+ * Chain now — in the order the effect names, beginning with the player after
+ * the turn player — and, once the resolving spell has finished (354.3; its own
+ * "when you play a spell" triggers are appended after them, 383.2.c), the
+ * finalization pass has each performer finish their play oldest-first
+ * (337.1.b: location, targets, remaining Power cost — 356.1.b) with nobody
+ * receiving Priority in between (337.1.a / 337.4). A permanent enters at once
+ * (337.2); a spell keeps its slot as a Finalized item and resolves LIFO (340.1).
+ * A card its owner cannot play right now simply stays banished (419.2.a).
  */
 export function handle_playBanishedPass(
   effect: ExecutableEffect,
@@ -50,96 +53,19 @@ export function handle_playBanishedPass(
     .concat(mine.filter((r) => !order.includes(r.playerId)));
 
   const ignoreEnergyCost = (effect as { ignoreEnergyCost?: boolean }).ignoreEnergyCost !== false;
-  for (const record of [...queued].reverse()) {
-    ctx.draft.interaction = addToChain(
-      ctx.draft.interaction ?? createInteractionState(),
-      {
-        cardId: record.cardId,
-        controller: record.playerId,
-        effect: {
-          ignoreEnergyCost,
-          target: record.cardId,
-          type: "play-banished-card",
-        } as unknown as ExecutableEffect,
-        triggered: true,
-        type: "ability",
-      },
-      seats,
-    );
-  }
-}
-
-/**
- * rule-id: ogn-115-298 × ogn-064-298 (rules 337.1.b, 340.1) — "each player
- * plays those cards" is ONE instruction: every play in the pass happens before
- * any of the played cards resolves. The pass is modelled as one queued item per
- * play, so a card put on the chain by an earlier play must be slotted BENEATH
- * the play items still waiting — otherwise it would resolve before the later
- * players have played at all, and a counterspell played last could never see it.
- */
-function slotBeneathPendingPlays(
-  interaction: NonNullable<EffectContext["draft"]["interaction"]>,
-): typeof interaction {
-  const chain = interaction.chain;
-  if (!chain) {
-    return interaction;
-  }
-  const items = chain.items;
-  const newest = items[items.length - 1];
-  if (!newest) {
-    return interaction;
-  }
-  const firstPlayIdx = items.findIndex(
-    (it) => (it.effect as { type?: string } | undefined)?.type === "play-banished-card",
-  );
-  if (firstPlayIdx < 0 || firstPlayIdx >= items.length - 1) {
-    return interaction;
-  }
-  const reordered = [...items.slice(0, items.length - 1)];
-  reordered.splice(firstPlayIdx, 0, newest);
-  return { ...interaction, chain: { ...chain, items: reordered } };
-}
-
-/**
- * rule-id: ogn-115-298 (rule 356.1.b) — finalizing one instructed play out of
- * banishment: the Energy cost is ignored, the Power cost is not. rule 358.3.a:
- * if the remaining cost cannot be paid the play is impossible and is skipped —
- * the card simply stays banished.
- */
-export function handle_playBanishedCard(
-  effect: ExecutableEffect,
-  ctx: EffectContext,
-  _h: EffectHelpers,
-): void {
-  const cardId = (effect as { target?: unknown }).target;
-  if (typeof cardId !== "string") {
-    return;
-  }
-  const owner = (ctx.cards.getCardOwner(cardId as CoreCardId) as string | undefined) ?? ctx.playerId;
-  if (ctx.zones.getCardZone(cardId as CoreCardId) !== "banishment") {
-    return;
-  }
-  // rule 419.3 / 356.1.b — its OWNER plays it through the ONE play pipeline
-  // (Energy ignored, Power still paid; a spell needs a legal target — 355.8;
-  // an unpayable / impossible play leaves the card banished — 358.3.a).
-  beginPlay(
-    ctx as unknown as PlayIO,
-    {
-      cardId,
-      costMode:
-        (effect as { ignoreEnergyCost?: boolean }).ignoreEnergyCost === false
-          ? { kind: "full" }
-          : { kind: "ignore-energy" },
+  for (const record of queued) {
+    if (ctx.zones.getCardZone(record.cardId as never) !== "banishment") {
+      continue;
+    }
+    // rule 419.3 / 356.1.b — its OWNER plays it through the ONE play pipeline
+    // (Energy ignored, Power still paid; a spell needs a legal target — 355.8).
+    beginPlay(ctx as unknown as PlayIO, {
+      cardId: record.cardId,
+      costMode: ignoreEnergyCost ? { kind: "ignore-energy" } : { kind: "full" },
       location: "prompt",
-      playerId: owner,
+      playerId: record.playerId,
       sourceCardId: ctx.sourceCardId,
       via: "effect",
-    },
-    { immediate: true },
-  );
-  // rule 337.1.b / 340.1 — a spell it put on the Chain slots beneath the play
-  // items still waiting, so a later player's play (or counterspell) sees it.
-  if (ctx.draft.interaction) {
-    ctx.draft.interaction = slotBeneathPendingPlays(ctx.draft.interaction);
+    });
   }
 }

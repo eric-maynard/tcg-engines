@@ -1631,8 +1631,9 @@ const JSON_CARD_ENGINE_FLAGS: Record<string, Record<string, unknown>> = {
   // point." The three kills are a cost WITHIN the instruction, so they ride as
   // the trigger's `pay-cost` condition: with fewer than three other friendly
   // permanents the option cannot be taken at all (never a partial kill, never a
-  // free point). The effect kills the three the controller picks and then
-  // scores — an "effect" point, so the Final-Point restriction never applies.
+  // free point). The three are named and killed while the item is FINALIZED
+  // (rule 402.2 / 404.1); the effect then scores — an "effect" point, so the
+  // Final-Point restriction never applies.
   // The parser leaves the whole clause as a `raw` no-op.
   "ven-067-166": {
     abilities: [
@@ -1646,21 +1647,9 @@ const JSON_CARD_ENGINE_FLAGS: Record<string, Record<string, unknown>> = {
           },
           type: "pay-cost",
         },
-        effect: {
-          effects: [
-            {
-              target: {
-                controller: "friendly",
-                excludeSelf: true,
-                quantity: { upTo: 3 },
-                types: ["unit", "gear"],
-              },
-              type: "kill",
-            },
-            { amount: 1, type: "score" },
-          ],
-          type: "sequence",
-        },
+        // rule 383.3.b / 404.1 — the three kills are the BASE COST (named and
+        // paid at finalization, all or nothing); the effect is the point alone.
+        effect: { amount: 1, type: "score" },
         optional: true,
         trigger: { event: "main-phase", on: "controller" },
         type: "triggered",

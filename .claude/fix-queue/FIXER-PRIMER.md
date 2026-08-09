@@ -64,9 +64,16 @@ Recipe: 1) dump enriched abilities. 2) JSON wrong → explicit `abilities` in th
   {battlefield:…}` gets a `choose-destination` prompt bound to the item (`bindToChainItemId`, ≥2 options; 1 ⇒ auto,
   0 ⇒ null) right after its target; the answer is `_dest` on the move node; `effects/move.ts moveToBoundDestination`
   re-checks it via the shared `abilities/move-destinations.ts moveDestinationOptions` (illegal ⇒ no move) and runs a
-  `then` at the landing zone. Still at RESOLUTION: up-to-N/any-number picks (and their destinations), split
-  damage, reveal-and-pick/look, destinations of cards an effect PLAYS / movers chosen at resolution, object-choosing
-  costs (discard/recycle/kill), later "you may".
+  `then` at the landing zone. OBJECT COSTS of a trigger's base cost too (rule 383.3.b/402.2/404.1, "kill a unit
+  you control here TO …", "recycle another friendly unit TO …", "pay [1] and return a unit here …", "kill 3 other
+  friendly units and/or gear TO …"): right after `yes()` the controller names the cost object(s) — a forced
+  `pick-many` (min=max=needed, `resume:{kind:"trigger-cost"}`, timing FIN; a lone candidate for a single object
+  is auto-bound) — and they are killed/recycled/bounced AT ONCE (`trigger-finalization.ts settleObjectCost /
+  payTriggerObjectCost`; Deathknells they set off are newer pending items finalized in the same sweep, above);
+  the paid objects ride on the item as `paidObjects[{id,lki}]` (359.3.e.13 look-back, e.g. Rumble's discount reads
+  `ctx.paidObjects[0].lki.might`). Still at RESOLUTION: up-to-N/any-number picks (and their destinations), split
+  damage, reveal-and-pick/look, destinations of cards an effect PLAYS / movers chosen at resolution, later "you may"
+  / "then you may pay" (383.3.a.3).
   Harness: these prompts have `timing:"FIN"`; answer them right after the triggering verb (or `{answers:[…]}` — e.g.
   `cast("charm",{targets:"foe",answers:["bf2"]})`), THEN settle.
 Recipe — add a filter (non-token, in-base, at-a-battlefield, other, stunned…):
@@ -320,12 +327,22 @@ Recipe — timing wrong: spell → card `rulesText`/`normalizeSpellTiming`; abil
   `play-unit.ts completeUnitPlay` runs from `pending-choice.ts postChoiceCleanup` via `completeSuspendedPlay` once no
   prompt is open (resources were paid first; the unit is still in its origin zone meanwhile). rule 357.3: playSpell's
   `mandatoryKillCandidates` drops sacrifices that would leave a cost-capped "play from trash" with no legal card.
-- TRIGGER costs (`item.optInCost`, from `condition:{type:"pay-cost", cost}`): simple ones (energy/power/xp/exhaust/
-  kill-me/banish-me/burn) are asked+paid at FINALIZATION (`trigger-finalization.ts` → `opt-in` with
-  `finalizationChainItemId`; decline ⇒ item removed, 404.2); object-choosing ones (`kill {amount,target}`, `discard N`,
-  `recycle`, `returnToHand`) still go through the resolution-time opt-in; payability gate for both =
-  `pending-choice.ts canPayOptInCost` (+ `killCostCandidates` / `recycleCostCandidates` count checks). Costs written
-  inside instructions (`costStep:true`, "disempower X to …") are paid by `payFinalizationCostSteps`.
+- TRIGGER costs (`item.optInCost`, from `condition:{type:"pay-cost", cost}`) are ALL settled at FINALIZATION
+  (rules 383.3.b / 402–404): `trigger-finalization.ts` raises the `opt-in` (`finalizationChainItemId`, timing FIN;
+  payability gate = `pending-choice.ts canPayOptInCost` = resources + `killCostCandidates`/`recycleCostCandidates`/
+  `returnToHandCostCandidates` counts; DESIGN: resource-short ⇒ prompt stays with canAccept:false; an EMPTY/too-small
+  object set ⇒ item removed silently, no prompt — `optInCostObjectsExist`). On `yes()` the opt-in reducer pays
+  energy/power/xp/exhaust/kill-me/banish-me/burn/discard-N at once and, when the cost names board objects
+  (`objectCostsOf(cost)`: `kill {amount?,target}` / `recycle {…}` / `returnToHand {…}` — "here"/"another"/types
+  honoured), marks the item `objectCostOwed`; the dialog's Step 1b (`settleObjectCost`) then has the controller
+  name them (forced `pick-many`, `resume:{kind:"trigger-cost", itemId}`) and `payTriggerObjectCost` snapshots LKI →
+  `item.paidObjects`, kills/recycles/bounces them through the effect handlers (357.2.a replacements, Deathknell,
+  186.1) inside `withinMoveReducer`, then targets are chosen (Step 2). Nothing is asked or paid again at
+  resolution (`executeResolvedItem` passes `paidObjects` into the EffectContext). Card-def shape for "you may
+  <kill|recycle|return> X to Y": `condition:{type:"pay-cost", cost:{kill:{target}}}` + effect Y (Dusk Rose Lab,
+  Bottled Constellation, Rumble, Emperor's Dais). Costs written inside instructions (`costStep:true`: "disempower X
+  to …", "banish me to …", "Recycle me to …", and the parser's "Spend N XP to …" lead step) are paid by
+  `payFinalizationCostSteps` (Step 3, after targets; a target-less cost step consumes no bound-target slot).
 - Activated costs: `moves/chain/activate-ability.ts` condition checks energy, power (`chain/effect-context.ts canAffordPower`),
   xp, exhaust, `discard`/`recycle`/`kill` (params or `costs.paid.{discard|recycle|kill}.objects`); reducer `deductAbilityCost`.
 - NOT DONE (fenced TODO at the top of `cost-model.ts`): the play-time Add sub-step (357.1.a — credit ready runes/Gold/
@@ -497,7 +514,20 @@ prompt — reuse the `opt-in` pattern (`die-replacement-batch.ts offerOptionalSh
     playIgnoreCost/playIgnoreEnergy/playEnergyReduction/playHere/playRecycleAfter` or an explicit `playSpec`) → `playSpecFromChoice`
     → `beginPlay` (Bone Skewer `playTo` ⇒ performer = OWNER, `ignore-any-and-all`, stunned, `stagedBy` caster); the pick's `then`
     rides on the play; a `then:{type:"optional"}` follow-up (ven-089) is its own chain item decided at resolution.
-    `play-banished-pass.ts` (Promising Future) → `beginPlay` per card. Flow stays `play-spell.ts viaFlow`; tokens stay `create-token.ts`.
+    `play-banished-pass.ts` (Promising Future) → one `beginPlay` (non-immediate) per banished card, in the effect's
+    order (next player first). Flow stays `play-spell.ts viaFlow`; tokens stay `create-token.ts`.
+  - BATCHES (rules 337.1/337.3/337.4/354.3/383.2.c/340.1): every play a resolving effect queues is a Pending Item in
+    queue order; the resolving SPELL's own "when you play a spell/card" triggers (`resolve.ts firePlayedCardTriggers`,
+    fired only once the resolution — incl. its prompts — has finished, `flushDeferredSpellSettle`) are appended AFTER
+    them; `finalizePendingItems` then finalizes everything oldest-first back to back — each play dialogs to its
+    performer, a permanent enters at once (its play-triggers append at the end and are finalized in the same sweep),
+    a spell becomes a finalized spell item IN ITS OWN SLOT (`continueEffectPlay` re-slots the `putPlayedSpellOnChain`
+    item; its targets are bound via the shared `executeResolvedItem(…,{finalizeOnly:true})` planning in
+    `bindPlayedSpellTarget`, prompting the performer when >1) — and only when nothing is pending does the controller
+    of the NEWEST item get priority (`reseatPriorityOnTop`); resolution is plain LIFO. Nothing lifts/reorders items
+    any more (`finalizeAfter` survives only for the ven-089 reflexive follow-up). TEST IDIOM: after the last pick of
+    such an effect expect the performers' FIN prompts (destination/target) in queue order with NO `action` decision
+    in between; an older pending play is finalized before a newer play-trigger's target is asked.
   - PERMISSIONS (366.1 / 419.1.a): `E/operations/play-permissions.ts` — `draft.playPermissions[]` runtime grants
     (`grantPlayPermission`, effect `grant-play-permission {target, zone?, duration turn|permanent, cost?, ignoreCost?, player?,
     once?}`; turn grants lapse by `grantedOnTurn`) + standing ones derived on read (`hasPlayFromTrashGrant` board static →
@@ -596,3 +626,8 @@ prompt — reuse the `opt-in` pattern (`die-replacement-batch.ts offerOptionalSh
 
 ## Held-out data
 `packages/riftbound-cards/src/data/rulings/test.json` (and the test-split entries inside all-rulings.json) are a HELD-OUT benchmark. Never read them, never write tests from them, never use them to motivate an engine change. Discovery/writers use train.json only.
+
+## Known DESIGN deviations (do not "fix" the engine toward the rule; rewrite the test to the design with a `// DESIGN (DESIGN.md §…)` comment)
+- **Unpayable optional trigger cost** (rule 404.2 says remove silently): DESIGN.md §Paying costs = manual pay → the yes/no IS shown with `canAccept:false` + reason so the player can tap runes and then accept; harness passivePolicy auto-declines it. Tests asserting "no prompt when the cost can't currently be paid" must be rewritten to: prompt offered, canAccept false, 'no'/settle removes the item with nothing paid. EXCEPTION: when a mandatory TARGET/OBJECT set is empty (nothing to kill/return/choose) the item IS removed silently (402.4) — that is not a payment question.
+- **383.3.d same-controller trigger order**: SOFT prompt (stack popup); tests must not require settle() to stop on it.
+- **Bo1 battlefield**: random in duel mode, manual in sandbox.

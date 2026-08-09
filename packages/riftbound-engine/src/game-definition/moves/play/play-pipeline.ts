@@ -47,6 +47,7 @@ import {
 } from "../../../chain";
 import { executeEffect } from "../../../abilities/effect-executor";
 import { buildEffectContext } from "../chain/effect-context";
+import { executeResolvedItem } from "../chain/resolve";
 import {
   type CostExtras,
   type OptionalPlayCost,
@@ -420,6 +421,38 @@ export function bindPlayedSpellTarget(
   spellEffect: SpellTargetShape | undefined,
 ): void {
   const { draft } = io;
+  const items = draft.interaction?.chain?.items;
+  const item = items?.[items.length - 1];
+  if (!item || item.cardId !== cardId || !spellEffect) {
+    return;
+  }
+  // rule 355.5 / 402.2 — the same choice planning a hand cast / a finalized
+  // trigger uses (sequence lead targets, "X then Y", fight defenders, Deflect
+  // surcharges): the single caster-chosen object is bound onto the item now, or
+  // a `choose-target` bound to the item is parked for the performer.
+  if (typeof io.zones?.getCardsInZone === "function" && typeof io.cards?.getCardOwner === "function") {
+    if (draft.pendingChoice) {
+      return;
+    }
+    const outcome = executeResolvedItem(item as never, draft, io as never, { finalizeOnly: true });
+    if (draft.pendingChoice) {
+      return;
+    }
+    if (outcome?.targets !== undefined && outcome.targets.length > 0) {
+      (item as { targets?: readonly string[] }).targets = [...outcome.targets];
+      // rule 355.6 / 383.4.b.2 — "when you choose me" fires as the spell is finalized.
+      for (const targetId of outcome.targets) {
+        if (draft.battlefields?.[targetId] !== undefined) {
+          continue;
+        }
+        fireTriggers(
+          { cardId: targetId, chooserId: playerId, sourceType: "spell", type: "choose" },
+          { cards: io.cards, counters: io.counters, draft, zones: io.zones } as never,
+        );
+      }
+    }
+    return;
+  }
   const descriptor = spellEffect?.target;
   if (
     !descriptor ||
@@ -429,11 +462,6 @@ export function bindPlayedSpellTarget(
       (descriptor as { type?: string }).type ?? "",
     )
   ) {
-    return;
-  }
-  const items = draft.interaction?.chain?.items;
-  const item = items?.[items.length - 1];
-  if (!item || item.cardId !== cardId) {
     return;
   }
   const options = resolveTarget(
@@ -1143,7 +1171,10 @@ export function continueEffectPlay(io: PlayIO, item: PendingPlayItem): "prompted
   }
 
   // rule 359 — the item leaves the Chain: a permanent becomes a Game Object at
-  // the chosen location (337.2 — immediately), a spell becomes a spell item.
+  // the chosen location (337.2 — immediately), a spell becomes a spell item —
+  // in the SLOT the pending play occupied (337.1.b / 340.1: finalizing never
+  // reorders the Chain, so items appended after it still resolve before it).
+  const slot = (draft.interaction?.chain?.items ?? []).findIndex((it) => it.id === item.id);
   if (draft.interaction) {
     (draft as { interaction?: RiftboundGameState["interaction"] }).interaction = removeChainItem(draft.interaction, item.id);
   }
@@ -1159,6 +1190,16 @@ export function continueEffectPlay(io: PlayIO, item: PendingPlayItem): "prompted
       resolveTo: spec.recycleAfter ? "mainDeck" : "trash",
       via: spec.via,
     });
+    const chain = draft.interaction?.chain;
+    if (chain && slot >= 0 && slot < chain.items.length - 1) {
+      const items = [...chain.items];
+      const [spellItem] = items.splice(items.length - 1, 1);
+      items.splice(slot, 0, spellItem as (typeof items)[number]);
+      (draft as { interaction?: RiftboundGameState["interaction"] }).interaction = {
+        ...draft.interaction,
+        chain: { ...chain, items },
+      } as RiftboundGameState["interaction"];
+    }
   } else {
     enteredAt = enterPlayedPermanent(io, {
       cardId: spec.cardId,

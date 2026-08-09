@@ -154,8 +154,11 @@ export function parseSpendXpToEffect(text: string): Effect | undefined {
   if (!inner) {
     return undefined;
   }
+  // rule 204.3 / 740.4.a — "Spend N XP TO <effect>" is a cost within
+  // instructions: `costStep` lets a triggered ability pay it while the item is
+  // finalized (740.4.a.2) and gates the payoff on it everywhere else.
   return {
-    effects: [{ amount, type: "spend-xp" } as unknown as Effect, inner],
+    effects: [{ amount, costStep: true, type: "spend-xp" } as unknown as Effect, inner],
     type: "sequence",
   } as unknown as SequenceEffect;
 }

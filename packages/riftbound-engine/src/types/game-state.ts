@@ -1144,6 +1144,12 @@ export type PendingResume =
   /** rule 383.3.d — the answer orders these (already appended) trigger items on the Chain. */
   | { readonly kind: "trigger-batch"; readonly itemIds: readonly string[] }
   /**
+   * rule 402.2 / 404.1 — the answer names the Game Objects that pay the base
+   * cost of Pending trigger item `itemId`; they are paid (killed / recycled /
+   * returned …) at once, before the item is finalized.
+   */
+  | { readonly kind: "trigger-cost"; readonly itemId: string }
+  /**
    * rule 355.11.b — the answer is the subset of the ORIGINAL targets the
    * effect affects; `effect` re-executes with them bound.
    */
@@ -1672,6 +1678,12 @@ export interface RiftboundGameState {
    * prompt the card stays in the chain zone and its settle is parked here,
    * flushed once the whole prompt chain has been answered.
    */
+  /**
+   * rule 337.4 — set while a finalization sweep (possibly spread over several
+   * FIN prompts) has taken up a Pending Item; consumed when nothing is Pending
+   * any more to seat Priority on the newest item's controller.
+   */
+  finalizeSweepTouched?: boolean;
   deferredSpellSettle?: {
     cardId: string;
     controller: string;

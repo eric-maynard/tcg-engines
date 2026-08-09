@@ -1271,6 +1271,9 @@ export function executeResolvedItem(
     ...(mergedVariables ? { variables: mergedVariables } : {}),
     ...(boundTargets ? { boundTargets } : {}),
     ...(triggerSourceId ? { triggerSourceId } : {}),
+    // rule 404.1 / 359.3.e.13 — the objects that paid this trigger's base cost
+    // at finalization (with their last-known board state).
+    ...(resolved.paidObjects ? { paidObjects: resolved.paidObjects } : {}),
     // rule-id: ogn-177-298 — where the triggering move went ("with it").
     ...(typeof trigEvt?.to === "string" ? { triggerToZone: trigEvt.to } : {}),
     // rule 359.3.f.3 (sfd-126-221) — the battlefield the firing event names
@@ -1396,7 +1399,7 @@ function firePlayedCardTriggers(
   resolved: ChainItem,
   draft: RiftboundGameState,
   context: Parameters<typeof buildEffectContext>[3],
-  preLen: number,
+  _preLen: number,
 ): void {
   if (resolved.type !== "spell") {
     return;
@@ -1425,26 +1428,11 @@ function firePlayedCardTriggers(
     },
     trigCtx,
   );
-  // Rule 354.2 / 383.2.c / 337.1.b: a pending play the resolving spell put on
-  // the chain (Thrill of the Hunt banish→play) must finalize BEFORE any
-  // trigger that becomes pending because the spell was played (Abandoned
-  // Hall). Lift the effect-added items back above the just-queued triggers so
-  // the replayed unit is on the board when the trigger's target is chosen.
-  const chain = draft.interaction?.chain;
-  if (chain && postLen > preLen && chain.items.length > postLen) {
-    const items = chain.items as ChainItem[];
-    const pendingPlays = items.splice(preLen, postLen - preLen);
-    // rule 337.1.b — those plays were appended first, so their finalization
-    // (the location prompt as they resolve) precedes the triggers' dialog.
-    const blockers = pendingPlays.map((it) => it.id);
-    for (let i = preLen; i < items.length; i++) {
-      const it = items[i] as ChainItem;
-      if (it.status === "pending") {
-        items[i] = { ...it, finalizeAfter: [...(it.finalizeAfter ?? []), ...blockers] };
-      }
-    }
-    items.push(...pendingPlays);
-  }
+  // rule 354.2 / 383.2.c / 337.1.b — Pending plays the resolving spell put on
+  // the Chain (Thrill of the Hunt banish→play, Promising Future) were appended
+  // BEFORE these triggers, so they are finalized first (the replayed unit is on
+  // the board when an Abandoned Hall trigger picks its target) and, being
+  // older, resolve after them (340.1). Nothing is reordered.
 }
 
 /**

@@ -142,7 +142,7 @@ describe("Rumble, Hotheaded × Ferrous Forerunner × Mega-Mech — recycle-as-co
   // (383.3.b.1 / 204.3.a) belong to FINALIZATION, so P1's very first decision after the conquer is the
   // yes-no with timing FIN. Actual: the trigger is finalized with no questions asked, both players get
   // priority, and the opt-in / recycle / Mech pick are all asked at RESOLUTION (timing RES).
-  test.failing("BUG: (a) the opt-in is P1's first decision after the conquer, at FINALIZATION (timing FIN) — before any priority window (383.3.a, 383.3.b.1)", async () => {
+  test("BUG: (a) the opt-in is P1's first decision after the conquer, at FINALIZATION (timing FIN) — before any priority window (383.3.a, 383.3.b.1)", async () => {
     const game = await board().build();
     await conquer(game);
     expect(game.decision()).toMatchObject({ canAccept: true, kind: "yes-no", seat: P1, timing: "FIN" });
@@ -153,7 +153,7 @@ describe("Rumble, Hotheaded × Ferrous Forerunner × Mega-Mech — recycle-as-co
   // trash, 355.10.a); step 4 recycles Forerunner; only then (406.4) does P2 receive priority — seeing
   // Forerunner already on the bottom of P1's deck and Mega-Mech still in the trash (it is played on
   // resolution). Actual: P2 holds priority while Forerunner is still in P1's base and nothing is chosen.
-  test.failing("BUG: (a) when P2 first holds priority the cost is already paid and the target locked — Forerunner is the bottom card of P1's deck, Mega-Mech (target) still in trash (402.2, 404.1, 406.4, 416.1)", async () => {
+  test("BUG: (a) when P2 first holds priority the cost is already paid and the target locked — Forerunner is the bottom card of P1's deck, Mega-Mech (target) still in trash (402.2, 404.1, 406.4, 416.1)", async () => {
     const game = await board().build();
     await conquer(game);
     const d = await drive(game, isChainPriorityFor(P2));
@@ -168,7 +168,7 @@ describe("Rumble, Hotheaded × Ferrous Forerunner × Mega-Mech — recycle-as-co
   // Expected: Forerunner has left the board before P2 can react, so Stupefy's only legal target is Rumble
   // and aiming it at Forerunner is rejected — the discount (6) is locked via look-back (359.3.e.13).
   // Actual: P2 is offered Forerunner (still in base) and the cast succeeds.
-  test.failing("BUG: (a) P2 cannot Stupefy Forerunner in response — it is no longer on the board; only Rumble is offered (406.4, 359.3.e.13)", async () => {
+  test("BUG: (a) P2 cannot Stupefy Forerunner in response — it is no longer on the board; only Rumble is offered (406.4, 359.3.e.13)", async () => {
     const game = await board().build();
     await conquer(game);
     await drive(game, isChainPriorityFor(P2));

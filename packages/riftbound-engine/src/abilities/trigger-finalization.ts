@@ -9,6 +9,9 @@
  *      the item; it is considered to have not triggered (383.3.a.2 / 383.3.e.2).
  *      A base cost ("[pay] to …", rule 383.3.b / 404) rides on the same prompt
  *      and is paid on accept; declining likewise removes the item (404.2).
+ *  1b. rule 402.2 / 404.1 — the Game Objects such a cost names ("kill a unit
+ *      you control here to …", "recycle another friendly unit to …") are named
+ *      (forced pick) and paid at once; they ride on the item as `paidObjects`.
  *   2. rule 402.2 — every caster-chosen Game Object / mode is chosen now and
  *      bound onto the item (`targets`, `_chosenIndex`). No legal option ⇒ the
  *      item is removed (402.4). Copies of the same trigger (Karthus doubling a
@@ -45,7 +48,9 @@ import {
   type SpellEffectTargetShape,
 } from "../game-definition/moves/play/targeting";
 import { getGlobalCardRegistry } from "../operations/card-lookup";
+import { type LeaveBoardContext, type LKISnapshot, snapshotLKI } from "../operations/leave-board";
 import type { RiftboundGameState } from "../types";
+import { executeEffect, type ExecutableEffect } from "./effect-executor";
 import type { TargetDescriptor } from "./target-resolver";
 import { resolveTarget } from "./target-resolver";
 import { fireTriggers } from "./trigger-runner";
@@ -187,41 +192,72 @@ export function removeUnfinalizedItem(draftLike: unknown, itemId: string): void 
   );
 }
 
+/** One Game-Object component of a trigger's base cost (rule 383.3.b / 403.1.b.1). */
+export interface TriggerObjectCost {
+  readonly kind: "kill" | "recycle" | "returnToHand";
+  /** How many objects must be named — all of them, or the cost is not paid (404.1). */
+  readonly needed: number;
+  /** The raw spec as carried on `optInCost` (descriptor / `{ amount, target }`). */
+  readonly spec: unknown;
+}
+
 /**
- * Base costs whose payment picks a Game Object of its own ("recycle another
- * unit to …", "kill 3 friendly units to …", "discard 2 to …"). Their pay
- * step still runs at resolution through the legacy opt-in path until the
- * payment sub-step can bind the paid object onto the item.
+ * rule 383.3.b / 204.3.a — the parts of a trigger's base cost that are paid
+ * with Game Objects its controller must NAME ("kill a unit you control here
+ * to …", "recycle another friendly unit to …", "pay [1] and return a unit you
+ * control here …", "kill 3 other friendly units and/or gear to …"). "Kill me" /
+ * "banish me" / "discard N" / "[Burn N]" name nothing on the board and are paid
+ * straight from the opt-in answer.
  */
-function costChoosesObjects(cost: unknown): boolean {
+export function objectCostsOf(cost: unknown): TriggerObjectCost[] {
   if (!cost || typeof cost !== "object") {
-    return false;
+    return [];
   }
   const c = cost as Record<string, unknown>;
-  // rule 204.3.a (rule-id: sfd-128-221) — "kill me to …" names no Game Object
-  // to choose, so it is a simple cost payable during finalization.
-  if (c.kill === "self") {
-    return false;
+  const out: TriggerObjectCost[] = [];
+  const amountOf = (spec: unknown): number =>
+    typeof spec === "object" && spec !== null && typeof (spec as { amount?: unknown }).amount === "number"
+      ? Math.max(1, (spec as { amount: number }).amount)
+      : 1;
+  if (c.kill !== undefined && c.kill !== "self" && typeof c.kill === "object" && c.kill !== null) {
+    out.push({ kind: "kill", needed: amountOf(c.kill), spec: c.kill });
   }
-  // rule 383.3.b.1 (rule-id: unl-199-219) — "discard N" names only cards in the
-  // payer's own hand, so the pick can be made while the item is still being
-  // finalized; the trigger stays on the Chain with the cost already paid.
-  const discardIsCount = typeof c.discard === "number";
-  return (
-    c.recycle !== undefined ||
-    c.kill !== undefined ||
-    (c.discard !== undefined && !discardIsCount) ||
-    c.burn !== undefined ||
-    c.returnToHand !== undefined
-  );
+  if (c.recycle !== undefined && typeof c.recycle === "object" && c.recycle !== null) {
+    out.push({ kind: "recycle", needed: amountOf(c.recycle), spec: c.recycle });
+  }
+  if (c.returnToHand !== undefined && typeof c.returnToHand === "object" && c.returnToHand !== null) {
+    out.push({ kind: "returnToHand", needed: amountOf(c.returnToHand), spec: c.returnToHand });
+  }
+  return out;
+}
+
+/** The board objects that may pay one object component right now (same filters the legacy gate used). */
+export function objectCostCandidates(
+  part: TriggerObjectCost,
+  draft: RiftboundGameState,
+  playerId: string,
+  sourceCardId: string,
+  // biome-ignore lint/suspicious/noExplicitAny: move context bag is framework-typed
+  context: any,
+): string[] {
+  switch (part.kind) {
+    case "kill":
+      return killCostCandidates(draft, playerId, sourceCardId, part.spec, context);
+    case "recycle":
+      return recycleCostCandidates(draft, playerId, sourceCardId, part.spec, context);
+    case "returnToHand":
+      return returnToHandCostCandidates(draft, playerId, sourceCardId, part.spec, context);
+    default:
+      return [];
+  }
 }
 
 /**
  * rule 402.4 / 404.2 (rule-id: sfd-026-221) — an object cost whose candidate set
- * is EMPTY is not a payment question at all: there is no Game Object to name, so
- * the Pending Item is removed before it is finalized — no opt-in prompt, no
- * Chain Item, no Priority window. (A non-empty but unaffordable set still gets
- * its prompt; see DESIGN.md §Paying costs.)
+ * is too small is not a payment question at all: there is no Game Object to
+ * name, so the Pending Item is removed before it is finalized — no opt-in
+ * prompt, no Chain Item, no Priority window. (A payable-in-objects but
+ * unaffordable-in-resources cost still gets its prompt; DESIGN.md §Paying costs.)
  */
 function optInCostObjectsExist(
   item: ChainItem,
@@ -229,32 +265,132 @@ function optInCostObjectsExist(
   // biome-ignore lint/suspicious/noExplicitAny: move context bag is framework-typed
   context: any,
 ): boolean {
-  const cost = item.optInCost as Record<string, unknown> | undefined;
-  if (!cost) {
-    return true;
+  return objectCostsOf(item.optInCost).every(
+    (part) =>
+      objectCostCandidates(part, draft, item.controller as string, item.cardId as string, context).length >=
+      part.needed,
+  );
+}
+
+function toLeaveContext(draft: RiftboundGameState, ctx: FinalizationContext): LeaveBoardContext {
+  return { cards: ctx.cards, counters: ctx.counters, draft, zones: ctx.zones } as LeaveBoardContext;
+}
+
+/**
+ * rule 404.1 / 383.3.b.1 — PAY the object part of a trigger's base cost with the
+ * objects its controller named: each one is snapshotted (359.3.e.13 look-back —
+ * "reduce its cost by the Might of the unit you recycled" reads the paid unit as
+ * it last was on the board, buffs and all) and bound onto the item as
+ * `paidObjects`, then killed / recycled / returned through the ordinary effect
+ * handlers — so a die replacement still replaces a cost-kill (357.2.a: paid all
+ * the same), a [Deathknell] it sets off becomes a NEWER Pending Item (finalized
+ * next, resolving first — 337.3 / 340.1) and a token ceases to exist (186.1).
+ * Only afterwards does anyone receive Priority (406.4). The paid objects are
+ * cost objects, not targets (355.10.c.1): no "when you choose" fires for them.
+ */
+export function payTriggerObjectCost(
+  draftLike: unknown,
+  ctx: FinalizationContext,
+  itemId: string,
+  pickedIds: readonly string[],
+): void {
+  const draft = draftLike as RiftboundGameState;
+  const live = chainItems(draft)?.find((it) => it.id === itemId);
+  if (!live) {
+    return;
   }
-  const player = item.controller as string;
-  const source = item.cardId as string;
-  const recycle = cost.recycle as { amount?: number } | undefined;
-  if (recycle && typeof recycle === "object") {
-    if (recycleCostCandidates(draft, player, source, recycle, context).length < (recycle.amount ?? 1)) {
-      return false;
+  const parts = objectCostsOf(live.optInCost);
+  const leaveCtx = toLeaveContext(draft, ctx);
+  const paid: { id: string; lki: LKISnapshot }[] = [...(live.paidObjects ?? [])];
+  for (const id of pickedIds) {
+    if (!paid.some((p) => p.id === id)) {
+      paid.push({ id, lki: snapshotLKI(leaveCtx, id) });
     }
   }
-  const killSpec = cost.kill;
-  if (killSpec !== undefined && killSpec !== "self" && typeof killSpec === "object" && killSpec !== null) {
-    const needed = (killSpec as { amount?: number }).amount ?? 1;
-    if (killCostCandidates(draft, player, source, killSpec, context).length < needed) {
-      return false;
+  // The item is settled BEFORE the payment runs: whatever the payment triggers
+  // re-enters the dialog and must find this item no longer owing anything.
+  patchItem(draft, itemId, { objectCostOwed: undefined, optInCost: undefined, paidObjects: paid });
+  const context = toResolveContext(ctx);
+  const base = buildEffectContext(draft, live.controller as string, live.cardId as string, context);
+  // Split the named objects over the components in order (a single component
+  // — the printed case — simply takes them all).
+  let cursor = 0;
+  withinMoveReducer(() => {
+    for (const part of parts) {
+      const ids = parts.length === 1 ? [...pickedIds] : pickedIds.slice(cursor, cursor + part.needed);
+      cursor += part.needed;
+      if (ids.length === 0) {
+        continue;
+      }
+      const effect: ExecutableEffect =
+        part.kind === "kill"
+          ? ({ target: { type: "permanent" }, type: "kill" } as unknown as ExecutableEffect)
+          : part.kind === "recycle"
+            ? ({ target: { type: "unit" }, type: "recycle" } as unknown as ExecutableEffect)
+            : ({
+                target: (part.spec as { target?: object }).target ?? (part.spec as object),
+                type: "return-to-hand",
+              } as unknown as ExecutableEffect);
+      executeEffect(effect, { ...base, boundTargets: ids, paidObjects: paid });
     }
-  }
-  const bounce = cost.returnToHand;
-  if (bounce !== undefined && typeof bounce === "object" && bounce !== null) {
-    if (returnToHandCostCandidates(draft, player, source, bounce, context).length === 0) {
-      return false;
+    // rule 319 — the payment changed the board (deaths, a vacated battlefield's
+    // statics); the Cleanup's own triggers join the same finalization sweep.
+    if (typeof ctx.counters?.getCounter === "function" && typeof ctx.zones.getCardsInZone === "function") {
+      cleanupAndFireDeaths(draft, context as unknown as PostMoveCleanupContext);
     }
+  });
+}
+
+/**
+ * rule 402.2 / 402.4.b / 404.1 — the object part of an accepted opt-in's base
+ * cost: name the objects (a forced `pick-many` of exactly the needed count when
+ * there is anything to choose between; a lone candidate for a single object is
+ * bound without asking, like a lone target) and pay them. Returns "prompted"
+ * while waiting for the pick, "removed" when the objects vanished since the
+ * gate (404.2 — nothing else is refunded, 425.1.c), "paid" otherwise.
+ */
+function settleObjectCost(
+  draft: RiftboundGameState,
+  ctx: FinalizationContext,
+  item: ChainItem,
+  // biome-ignore lint/suspicious/noExplicitAny: move context bag is framework-typed
+  context: any,
+): "prompted" | "removed" | "paid" {
+  const parts = objectCostsOf(item.optInCost);
+  if (parts.length === 0) {
+    patchItem(draft, item.id, { objectCostOwed: undefined, optInCost: undefined });
+    return "paid";
   }
-  return true;
+  const pools = parts.map((part) =>
+    objectCostCandidates(part, draft, item.controller as string, item.cardId as string, context),
+  );
+  if (pools.some((pool, i) => pool.length < (parts[i] as TriggerObjectCost).needed)) {
+    removeUnfinalizedItem(draft, item.id);
+    return "removed";
+  }
+  const needed = parts.reduce((n, p) => n + p.needed, 0);
+  const options = [...new Set(pools.flat())];
+  if (needed === 1 && options.length === 1) {
+    payTriggerObjectCost(draft, ctx, item.id, options);
+    return "paid";
+  }
+  const nameOf = (cardId: string): string =>
+    (ctx.cards.getCardName?.(cardId as CoreCardId) as string | undefined) ??
+    (getGlobalCardRegistry().get(cardId) as { name?: string } | undefined)?.name ??
+    cardId;
+  const verb = parts.length === 1 ? { kill: "kill", recycle: "recycle", returnToHand: "return" }[parts[0]!.kind] : "pay with";
+  draft.pendingChoice = {
+    max: needed,
+    min: needed,
+    options: options.map((id) => ({ cardId: id, key: id, label: nameOf(id) })),
+    playerId: item.controller,
+    prompt: `Choose ${needed === 1 ? "the card" : `${needed} cards`} to ${verb} — the cost of ${nameOf(item.cardId as string)}'s ability`,
+    resume: { itemId: item.id, kind: "trigger-cost" },
+    semantics: "target",
+    sourceCardId: item.cardId,
+    type: "pick-many",
+  } as RiftboundGameState["pendingChoice"];
+  return "prompted";
 }
 
 /**
@@ -303,13 +439,19 @@ function payFinalizationCostStepsInner(
 ): boolean {
   const steps = [...(effect.effects as unknown[])] as Record<string, unknown>[];
   let paid = 0;
+  // Bound targets are one per caster-chosen SLOT, not one per step: a cost step
+  // that names no board object ("spend 3 XP to …", rule-id: unl-119-219)
+  // consumes none, so the payoff's own pick stays on the item.
+  let consumed = 0;
   for (let i = 0; i < steps.length; i++) {
     const step = steps[i] as Record<string, unknown>;
     if (step?.costStep !== true) {
       break;
     }
-    let bound = live.targets?.[i];
     const descriptor = step.target as TargetDescriptor | undefined;
+    const ownsSlot =
+      typeof descriptor === "object" && descriptor !== null && casterChosenTarget({ target: descriptor }) !== undefined;
+    let bound = ownsSlot ? live.targets?.[consumed] : undefined;
     if (bound === undefined && typeof descriptor === "object" && descriptor !== null) {
       const options = resolveTarget({ ...descriptor, quantity: "all" }, {
         cards: ctx.cards,
@@ -328,7 +470,7 @@ function payFinalizationCostStepsInner(
         (descriptor as { promptWhenSingle?: boolean }).promptWhenSingle === true
       ) {
         draft.pendingChoice = {
-          bindSlotIndex: i,
+          bindSlotIndex: consumed,
           bindToChainItemId: itemId,
           effect: step as never,
           options: options as never,
@@ -340,7 +482,12 @@ function payFinalizationCostStepsInner(
         return true;
       }
       bound = options[0] as string;
-      patchItem(draft, itemId, { targets: [...(live.targets ?? []), bound] });
+      const targetsNow = [...(live.targets ?? [])];
+      targetsNow.splice(consumed, 0, bound);
+      patchItem(draft, itemId, { targets: targetsNow });
+    }
+    if (bound !== undefined || ownsSlot) {
+      consumed += 1;
     }
     // Performed through the ordinary resolution path (a one-instruction item) so
     // the payment runs through the same handlers, events and cleanup.
@@ -359,7 +506,7 @@ function payFinalizationCostStepsInner(
   if (paid > 0) {
     const latest = chainItems(draft)?.find((it) => it.id === itemId);
     const remaining = steps.slice(paid);
-    const remainingTargets = (latest?.targets ?? []).slice(paid);
+    const remainingTargets = (latest?.targets ?? []).slice(consumed);
     patchItem(draft, itemId, {
       effect: (remaining.length === 1
         ? remaining[0]
@@ -548,8 +695,31 @@ function offerTriggerOrder(draft: RiftboundGameState, ctx: FinalizationContext):
 }
 
 /**
- * Finalize Pending trigger items oldest-first (rule 337.1.b) until one of them
- * needs an answer or none is left. Safe to call whenever no prompt is open.
+ * `draft.finalizeSweepTouched` is set once the current finalization sweep
+ * (possibly spread over several prompts) has taken up a Pending Item; it is
+ * consumed here when nothing is Pending any more.
+ */
+function reseatPriorityOnTop(draft: RiftboundGameState): void {
+  if (draft.finalizeSweepTouched !== true) {
+    return;
+  }
+  draft.finalizeSweepTouched = undefined;
+  const chain = draft.interaction?.chain;
+  const top = chain?.items[chain.items.length - 1];
+  if (!chain || !top || chain.activePlayer === top.controller) {
+    return;
+  }
+  (draft as { interaction?: RiftboundGameState["interaction"] }).interaction = {
+    ...draft.interaction,
+    chain: { ...chain, activePlayer: top.controller, passedPlayers: [] },
+  } as RiftboundGameState["interaction"];
+}
+
+/**
+ * Finalize Pending items (triggers AND plays an effect queued) oldest-first
+ * (rule 337.1.b) until one of them needs an answer or none is left — nobody
+ * receives Priority in between (337.1.a / 337.4). Safe to call whenever no
+ * prompt is open.
  */
 export function finalizePendingItems(draftLike: unknown, ctx: FinalizationContext): void {
   const draft = draftLike as RiftboundGameState;
@@ -588,11 +758,16 @@ export function finalizePendingItems(draftLike: unknown, ctx: FinalizationContex
       if (items?.some((it) => it.status === "pending")) {
         return;
       }
+      // rule 337.4 — nothing is Pending any more: the controller of the newest
+      // item on the Chain receives Priority (a spell finalized into an older
+      // slot, or an item removed unfinalized, must not leave it elsewhere).
+      reseatPriorityOnTop(draft);
       // rule 383.3.d — everything is finalized: offer the same-controller
       // ordering of the items this batch added (soft prompt, default = as listed).
       offerTriggerOrder(draft, ctx);
       return;
     }
+    draft.finalizeSweepTouched = true;
     if (item.countered) {
       patchItem(draft, item.id, { status: "finalized" });
       continue;
@@ -610,14 +785,10 @@ export function finalizePendingItems(draftLike: unknown, ctx: FinalizationContex
 
     // Step 1 — rule 402.1 / 383.3.a (+ 383.3.b base cost on the same prompt).
     if (item.optional === true) {
-      if (costChoosesObjects(item.optInCost)) {
-        // rule 402.4 — nothing to name ⇒ removed silently, before any Priority.
-        if (!optInCostObjectsExist(item, draft, context)) {
-          removeUnfinalizedItem(draft, item.id);
-          continue;
-        }
-        // Deferred: asked (and paid) at resolution by the legacy path.
-        patchItem(draft, item.id, { status: "finalized" });
+      // rule 402.4 / 404.2 — an object cost with nothing (or too few) to name
+      // ⇒ removed silently, before any Priority.
+      if (!optInCostObjectsExist(item, draft, context)) {
+        removeUnfinalizedItem(draft, item.id);
         continue;
       }
       if (!optInIsPerformable(item, draft, context)) {
@@ -632,6 +803,17 @@ export function finalizePendingItems(draftLike: unknown, ctx: FinalizationContex
         type: "opt-in",
       };
       return;
+    }
+
+    // Step 1b — rule 402.2 / 404.1: the accepted opt-in still owes the Game
+    // Objects of its base cost — named and paid now, before targets and before
+    // anyone receives Priority (406.4).
+    if (item.objectCostOwed === true) {
+      const r = settleObjectCost(draft, ctx, item, context);
+      if (r === "prompted") {
+        return;
+      }
+      continue;
     }
 
     // Step 2 — rule 402.2 targets.

@@ -67,10 +67,13 @@ describe("Bottled Constellation (ven-067-166)", () => {
     const ability = def?.abilities?.[0] as { type: string; optional?: boolean; trigger: unknown; effect: { type: string } };
     expect(ability).toMatchObject({ optional: true, trigger: { event: "main-phase", on: "controller" }, type: "triggered" });
     expect(ability.effect.type).not.toBe("raw");
-    const json = JSON.stringify(ability.effect);
+    // rule 383.3.b / 404.1 — the three kills are the trigger's BASE COST (`pay-cost` condition, named and
+    // paid at finalization); the effect is the point alone.
+    const json = JSON.stringify(ability);
     expect(json).toContain('"kill"');
     expect(json).toContain('"score"');
     expect(json).toContain("3");
+    expect(JSON.stringify(ability.effect)).not.toContain('"kill"');
   });
 
   test("cost: exactly 10 energy + 2 mind puts it into the base; 9 energy or a single mind → not playable", async () => {
@@ -202,15 +205,23 @@ describe("Bottled Constellation (ven-067-166)", () => {
     expect(game.winner()).toBe(P1);
   });
 
-  test("the trigger is a chain item the opponent may answer: P2 holds priority after I pass, before the question is put", async () => {
+  // rule 383.3.a / 383.3.b.1 / 406.4 (finalization) — the "you may" and the kill-3 cost are settled while
+  // the item is FINALIZED; the opponent's priority comes after that, over an already-paid item.
+  test("the trigger is a chain item the opponent may answer: the question (and the three kills) come first, then P2 holds priority after I pass", async () => {
     const game = await threeOthers().build();
     await game.p2.endTurn();
+    expect(game.decision()).toMatchObject({ kind: "yes-no", seat: P1, timing: "FIN" });
+    await game.p1.yes();
+    expect(game.decision()).toMatchObject({ kind: "pick", max: 3, min: 3, seat: P1, timing: "FIN" });
+    await game.p1.pick("a", "b", "trinket");
+    expect(game.zoneOf("a")).toBe("trash"); // paid before anyone has priority
     expect(game.actingSeat()).toBe(P1);
+    expect(game.chain()).toEqual([expect.objectContaining({ cardId: "bottle", controller: P1, triggered: true })]);
     await game.p1.passPriority();
     expect(game.actingSeat()).toBe(P2);
     expect(game.decision()).toMatchObject({ context: "chain", kind: "action", seat: P2 });
-    expect(game.chain()).toHaveLength(1);
+    expect(game.p1.points()).toBe(0); // scores only on resolution
     await game.p2.passPriority();
-    expect(game.decision()).toMatchObject({ kind: "yes-no", seat: P1 });
+    expect(game.p1.points()).toBe(1);
   });
 });
