@@ -241,6 +241,14 @@ export function checkVictory(
   if (!opts.immediate && isResolvingChainItem()) {
     return null;
   }
+  // rule 321 / 359.3.d — a spell whose effect suspended on a prompt has NOT
+  // finished resolving: it still sits in the chain zone owing its "and then
+  // trash it" step (`deferredSpellSettle`). The synchronous guard above is
+  // already released by then, so the parked settle is what marks the item as
+  // still resolving — no Cleanup, hence no victory check, until it is flushed.
+  if (!opts.immediate && draft.deferredSpellSettle !== undefined) {
+    return null;
+  }
   // rule 466.4 / 466.5 — a combat Resolution Step parked on the chain items its
   // result produced has not Established Control yet. No Cleanup interrupts a
   // step in progress (320 / 321), so the victory check waits for 466.5 to run:
