@@ -225,9 +225,7 @@ describe("Monastery of Hirana (ogn-282-298)", () => {
     expect(game.p1.hand()).toHaveLength(0);
   });
 
-  test.failing("BUG: with two buffed units the payer must choose WHICH unit's buff is spent (702.2.b — spending is the paying player's action); the engine auto-spends one", async () => {
-    // Expected: after opting in, a pick decision for P1 over {monk, elder}; picking the Monk leaves
-    // the Elder buffed and draws exactly 1. Actual: no prompt — the first buff found is removed.
+  test("with two buffed units the payer must choose WHICH unit's buff is spent (702.2.b — spending is the paying player's action)", async () => {
     const game = await siege()
       .unit(P1, "base", { might: 3, name: "Monk" }, "monk", { buffed: true })
       .unit(P1, "base", { might: 1, name: "Elder" }, "elder", { buffed: true })

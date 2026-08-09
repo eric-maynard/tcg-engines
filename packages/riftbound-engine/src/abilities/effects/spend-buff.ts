@@ -77,6 +77,29 @@ export function handle_spendBuff(effect: ExecutableEffect, ctx: EffectContext, h
     } as typeof ctx.draft.pendingChoice;
     return;
   }
+  // rule 702.2.b (rule-id: ogn-282-298) — spending a buff is the PAYING
+  // player's own action, so when two or more of their units carry one they
+  // choose WHICH buff is spent instead of the engine taking the first found.
+  // Only the bare "spend a buff to …" cost asks: shapes naming their own
+  // subject (`trigger-source`, "spend any number of") carry a descriptor.
+  if (
+    !ctx.boundTargets &&
+    (effect as { target?: unknown }).target === undefined &&
+    !ctx.draft.pendingChoice
+  ) {
+    const choices = findAllSpendableBuffs(effect, ctx);
+    if (choices.length >= 2) {
+      ctx.draft.pendingChoice = {
+        effect,
+        options: choices,
+        playerId: ctx.playerId,
+        remaining: 1,
+        sourceCardId: ctx.sourceCardId,
+        type: "choose-target",
+      } as typeof ctx.draft.pendingChoice;
+      return;
+    }
+  }
   // rule-id: ogn-230-298 (rule 355.13) — "spend any number of buffs": the
   // chooser's picks arrive as boundTargets (possibly none), and the nested
   // `then` resolves once PER buff spent. Without bound targets this stays the
