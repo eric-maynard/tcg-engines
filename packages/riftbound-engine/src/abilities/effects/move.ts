@@ -78,6 +78,24 @@ function hasNoMoveToBase(ctx: EffectContext, cardId: string): boolean {
 }
 
 /**
+ * unl-150-219 (Vex, Apathetic) — "They can't move it this turn" is modelled as a
+ * turn-duration granted `NoMove` keyword. rule 420.2.a: the player who carries
+ * out a spell's move instruction is the spell's controller, so the prohibition
+ * binds only that unit's OWN controller (rule 054.1 — a prohibition beats a
+ * permission for the forbidden player); an opponent's effect (Fight or Flight)
+ * may still move it. A Recall is not a Move (456.3) and never comes through here.
+ */
+function moverIsForbidden(ctx: EffectContext, cardId: string): boolean {
+  const meta = (
+    ctx.cards as { getCardMeta?: (id: CoreCardId) => { grantedKeywords?: { keyword: string }[] } | undefined }
+  ).getCardMeta?.(cardId as CoreCardId);
+  if (meta?.grantedKeywords?.some((gk) => gk.keyword === "NoMove") !== true) {
+    return false;
+  }
+  return ctx.playerId === arrivingController(ctx, cardId);
+}
+
+/**
  * rule-id: unl-133-219 — an effect-driven move is still a move: move a board
  * card and emit the `move` event (with the unit's controller as `owner` and
  * the effect's controller as `movedBy`) so "When I move" / "When you move an
@@ -89,6 +107,11 @@ export function moveCardWithEvent(
   targetZoneId: string,
 ): string {
   const from = ctx.zones.getCardZone(cardId as CoreCardId) ?? "";
+  // rule 350.1 / 054.1 / unl-150-219 (Vex): the unit's controller was told it
+  // "can't move it this turn" — that player's own effects move it nowhere.
+  if (moverIsForbidden(ctx, cardId)) {
+    return from;
+  }
   // rule 144.4.b / sfd-014-221 (Minotaur Reckoner): "Units can't move to base"
   // binds effect-driven moves too (a Recall is not a Move — rule 455 — and goes
   // through effects/recall.ts, which never calls this).
