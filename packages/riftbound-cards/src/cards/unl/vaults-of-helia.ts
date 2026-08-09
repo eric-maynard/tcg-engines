@@ -7,17 +7,19 @@ import { createCardId } from "@tcg/riftbound-types/cards";
  *
  * When you hold here, your non-token units cost [1] more to play this turn.
  *
- * Captured as a triggered grant-keyword with a virtual "CostIncrease"
- * modifier. Engine support is pending.
+ * rule 356.3 — a turn-scoped surcharge on the holder's own future UNIT plays;
+ * `scope: "play"` marks it as a rider on later plays rather than a modifier on
+ * objects already on the board. rule 185 / 186 — tokens are put into play by
+ * effects and have no cost of their own, hence `excludeTokens`.
  */
 const abilities: Ability[] = [
   {
     effect: {
+      amount: 1,
       duration: "turn",
-      keyword: "CostIncrease",
-      target: "controller",
-      type: "grant-keyword",
-      value: 1,
+      scope: "play",
+      target: { cardType: "unit", controller: "friendly", excludeTokens: true },
+      type: "cost-increase",
     },
     trigger: {
       event: "hold",

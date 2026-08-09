@@ -1113,7 +1113,9 @@ export interface ActiveReplacementEntry {
   duration?: string;
   owner?: string;
   sourceCardId?: string;
-  target?: { type?: string; controller?: string };
+  target?: { type?: string; cardType?: string; controller?: string; excludeTokens?: boolean };
+  /** rule-id: unl-219-219 — surcharge carried by a `play-cost-increase` rider. */
+  amount?: number;
   /** rule-id: unl-052-219 — also [Buff] the entering unit. */
   buff?: boolean;
   /**
@@ -1282,6 +1284,47 @@ export function takeNextPlayDiscount(
     }
   }
   return { energy: total, power };
+}
+
+/**
+ * rule 356.3 (rule-id: unl-219-219) — runtime "your <cards> cost [N] more to
+ * play this turn" surcharges, installed by the `cost-increase` effect handler
+ * as `replaces: "play-cost-increase"` riders on `draft.activeReplacements`
+ * (so they expire with the turn like every other runtime rider, 517.2).
+ * Increases are added after all discounts and are never floored.
+ *
+ * rule 185 / 186: an `excludeTokens` rider skips tokens — an effect puts them
+ * into play, they are not played for a cost of their own.
+ */
+export function getRuntimePlayCostIncrease(
+  state: RiftboundGameState,
+  playerId: string,
+  cardId: string,
+): number {
+  const active = state.activeReplacements as ActiveReplacementEntry[] | undefined;
+  if (!active || active.length === 0) {
+    return 0;
+  }
+  const registry = getGlobalCardRegistry();
+  const playedType = registry.get(cardId)?.cardType;
+  let total = 0;
+  for (const entry of active) {
+    if (entry?.replaces !== "play-cost-increase") {
+      continue;
+    }
+    if (entry.owner !== undefined && entry.owner !== playerId) {
+      continue;
+    }
+    const wanted = entry.target?.cardType ?? entry.target?.type;
+    if (wanted !== undefined && wanted !== "card" && wanted !== playedType) {
+      continue;
+    }
+    if (entry.target?.excludeTokens === true && registry.isToken(cardId)) {
+      continue;
+    }
+    total += entry.amount ?? 0;
+  }
+  return total;
 }
 
 /**
@@ -3318,6 +3361,8 @@ export function computePlayResourceCost(
   const boardReduction = getBoardCostReduction(state, playerId, cardId, extras);
   // rule 356.3 — opponents' static cost increases, added after all discounts.
   const boardIncrease = getBoardCostIncrease(state, playerId, cardId, extras);
+  // rule 356.3 (rule-id: unl-219-219) — turn-scoped runtime surcharges.
+  const runtimeIncrease = getRuntimePlayCostIncrease(state, playerId, cardId);
   // rule-id: ven-096-166 — self static "I cost [N] less for each …".
   const selfScaled =
     getSelfScaledEnergyReduction(state, playerId, cardId, extras) +
@@ -3336,6 +3381,7 @@ export function computePlayResourceCost(
       xEnergy +
       repeatSurcharge +
       boardIncrease.energy +
+      runtimeIncrease +
       applyDiscountOverflowToAdditionalCost(extras.additionalCost?.energy ?? 0, discounted),
   );
 

@@ -407,6 +407,27 @@ export interface RestrictPlayEffect {
   readonly matchesNamedCard?: boolean;
 }
 
+/**
+ * rule 356.3 (unl-219-219 Vaults of Helia): a surcharge on card costs.
+ * With `scope: "play"` it rides on the controller's FUTURE plays for
+ * `duration` (rule 517.2) instead of modifying objects already on the board.
+ */
+export interface CostIncreaseEffect {
+  readonly type: "cost-increase";
+  readonly amount?: number;
+  /** Legacy spelling used by some static "enemy spells cost more" auras. */
+  readonly by?: number;
+  readonly duration?: "turn" | "next";
+  readonly scope?: "play";
+  readonly target?: {
+    readonly type?: string;
+    readonly cardType?: string;
+    readonly controller?: string;
+    /** rule 185 / 186 — tokens are put into play by effects and pay no cost. */
+    readonly excludeTokens?: boolean;
+  };
+}
+
 // ============================================================================
 // Movement Effects
 // ============================================================================
@@ -1097,6 +1118,7 @@ export type Effect =
 
   // Special
   | ScoreEffect
+  | CostIncreaseEffect
   | CounterEffect
   | TakeControlEffect
   | DelayedLoseControlEffect

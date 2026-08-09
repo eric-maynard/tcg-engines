@@ -66,7 +66,7 @@ describe("Vaults of Helia (unl-219-219)", () => {
   // BUG — expected: a "hold here" trigger whose turn-long effect raises the Energy cost of the holder's NON-TOKEN UNIT
   // plays by 1. Actual: a `grant-keyword` of a virtual "CostIncrease" keyword to the player, value 1, duration turn —
   // with no unit / non-token qualifier at all (and nothing in the engine reads it).
-  test.failing("BUG: registry payload should be hold-here → +[1] this turn on the controller's non-token UNIT plays (parsed as an unqualified player keyword grant)", async () => {
+  test("registry payload should be hold-here → +[1] this turn on the controller's non-token UNIT plays (parsed as an unqualified player keyword grant)", async () => {
     const def = (await loadDefaultCardPool()).get(CARD);
     expect(def).toMatchObject({ cardType: "battlefield", name: "Vaults of Helia" });
     expect(def?.abilities).toHaveLength(1);
@@ -95,7 +95,7 @@ describe("Vaults of Helia (unl-219-219)", () => {
 
   // BUG (shared by the unit-cost tests below) — expected: after the hold my 2-cost unit costs 3 this turn.
   // Actual: the play is offered and charged at the printed 2; the CostIncrease grant is never applied.
-  test.failing("BUG: core line — after holding, my 2-cost unit is NOT playable on exactly 2 Energy; on 3 it is, and all 3 are spent", async () => {
+  test("core line — after holding, my 2-cost unit is NOT playable on exactly 2 Energy; on 3 it is, and all 3 are spent", async () => {
     const short = await aboutToHold().build();
     await holdThenMain(short, 2);
     expect(short.p1.can("play", "two")).toBe(false);
@@ -112,7 +112,7 @@ describe("Vaults of Helia (unl-219-219)", () => {
     expect(enough.violations()).toEqual([]);
   });
 
-  test.failing("BUG: a unit played from the Champion Zone is still 'a unit you play' — 3-cost Fiora needs 4 after the hold (3 → not offered; 4 → played, pool drained)", async () => {
+  test("a unit played from the Champion Zone is still 'a unit you play' — 3-cost Fiora needs 4 after the hold (3 → not offered; 4 → played, pool drained)", async () => {
     const short = await aboutToHold().build();
     await holdThenMain(short, 3);
     expect(short.p1.can("playChampion")).toBe(false);
@@ -201,7 +201,7 @@ describe("Vaults of Helia (unl-219-219)", () => {
     expect(game.zoneOf("two")).toBe("base");
   });
 
-  test.failing("BUG: 'you' = the holder — P2 holding the Vaults gets P2's trigger and P2's 2-drop needs 3 on P2's turn; P1 is untouched", async () => {
+  test("'you' = the holder — P2 holding the Vaults gets P2's trigger and P2's 2-drop needs 3 on P2's turn; P1 is untouched", async () => {
     const game = await scenario()
       .turn(3)
       .active(P1)
@@ -222,7 +222,7 @@ describe("Vaults of Helia (unl-219-219)", () => {
     expect(game.p2.energy()).toBe(0);
   });
 
-  test.failing("BUG: 'this turn' — taxed on the hold turn (2 Energy won't do), then the holder walks home, control lapses, and on my NEXT turn (no hold) the same 2-drop is played for its printed 2", async () => {
+  test("'this turn' — taxed on the hold turn (2 Energy won't do), then the holder walks home, control lapses, and on my NEXT turn (no hold) the same 2-drop is played for its printed 2", async () => {
     const game = await aboutToHold().build();
     await holdThenMain(game, 2);
     expect(game.p1.can("play", "two")).toBe(false); // hold turn: costs 3
