@@ -234,6 +234,29 @@ export function minDeflectSurchargeForItem(
 }
 
 /**
+ * rule 355.4.a (rule-id: ogn-067-298 Blitzcrank) — "move an enemy unit TO HERE":
+ * the destination is the source's own battlefield, so a unit already standing
+ * there can never be the mover; a source that is not at a battlefield names no
+ * "here" at all (rule 359.3.f.2). Shared by the finalization planning and the
+ * "you may" performability gate so both agree on the candidate set.
+ */
+function filterMoveToHere(
+  effect: unknown,
+  options: readonly string[],
+  getZone: (id: string) => string | undefined,
+  sourceZone: string | undefined,
+): string[] {
+  const e = effect as { to?: unknown; type?: unknown } | undefined;
+  if (e?.type !== "move" || e.to !== "here") {
+    return [...options];
+  }
+  if (!(sourceZone ?? "").startsWith("battlefield-")) {
+    return [];
+  }
+  return options.filter((id) => getZone(id) !== sourceZone);
+}
+
+/**
  * rule 383.3.a / 402.4 — whether a "you may …" triggered item can be performed
  * at all: an unpayable leading cost (no buff to spend, too little XP, too few
  * cards to discard) or an unambiguously empty candidate set means the
@@ -352,11 +375,12 @@ export function optInIsPerformable(
         // A BATTLEFIELD": either player's, but battlefields are fully public, so
         // an empty candidate set here is just as unambiguous as a friendly one.
         (optTarget.controller === undefined && optTarget.location === "battlefield") ||
-        // rule 402.4 / 355.8 (rule-id: ven-115-166 Ocean Drake) — "a non-Dragon
-        // unit": neither controller- nor location-restricted, i.e. every unit in
-        // play. Units in play are fully public, so an empty candidate set is
-        // unambiguous and the trigger leaves the Chain without a Yes/No prompt.
-        (optTarget.controller === undefined &&
+        // rule 402.4 / 355.4.a (rule-id: ogn-067-298 Blitzcrank) — "move AN
+        // ENEMY UNIT to here": every enemy unit in play is public, so an empty
+        // legal set (nothing but Untargetable units, or every enemy already
+        // standing here) is unambiguous and the trigger leaves the Chain
+        // without a Yes/No prompt.
+        (optTarget.controller === "enemy" &&
           optTarget.location === undefined &&
           optTarget.type === "unit") ||
         (optTarget.controller === "enemy" &&
@@ -372,10 +396,15 @@ export function optInIsPerformable(
       optTarget.quantity === undefined
     ) {
       const optCtx = buildEffectContext(draft, resolved.controller, resolved.cardId, context);
-      const optCandidates = resolveTarget({ ...optTarget, quantity: "all" }, {
-        ...optCtx,
-        choosing: true,
-      } as Parameters<typeof resolveTarget>[1]);
+      const optCandidates = filterMoveToHere(
+        leadEffect,
+        resolveTarget({ ...optTarget, quantity: "all" }, {
+          ...optCtx,
+          choosing: true,
+        } as Parameters<typeof resolveTarget>[1]),
+        (id) => context.zones.getCardZone(id as CoreCardId) as string | undefined,
+        context.zones.getCardZone(resolved.cardId as CoreCardId) as string | undefined,
+      );
       if (optCandidates.length === 0) {
         return false;
       }
@@ -1020,8 +1049,13 @@ export function executeResolvedItem(
       // that has left the battlefield by then (killed in response, recalled to
       // base, banished) names no location, so the move is ignored entirely —
       // asking which units to drag would be a purely cosmetic prompt.
-      if (to === "here" && !(baseCtx.sourceZone ?? "").startsWith("battlefield-")) {
-        options = [];
+      if (to === "here") {
+        options = filterMoveToHere(
+          effect,
+          options,
+          (id) => baseCtx.zones.getCardZone(id as CoreCardId) as string | undefined,
+          baseCtx.sourceZone,
+        );
       }
     }
     // rule 809.1.c / 809.1.d (721.1.c): Deflect taxes ABILITIES as well as
