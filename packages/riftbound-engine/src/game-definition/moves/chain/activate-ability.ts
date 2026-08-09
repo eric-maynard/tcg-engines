@@ -337,17 +337,30 @@ function recycleSubsets(eligible: readonly string[], amount: number): string[][]
  * object costs X more Power of any Domain on top of the ability's own cost.
  * The host already sits on the board, so the whole pool (less the ability's own
  * Power pips) is the budget. Returns 0 for a chooser who controls the target.
+ *
+ * rule 766 / 767 (rule-id: ven-158-166) — the waiver a battlefield grants
+ * ("Players ignore [Deflect] … choosing something here") is keyed off the
+ * target's ZONE, so `zones` must reach `getDeflectSurcharge`; without it the
+ * ability path taxes a unit the spell path lets through for free.
  */
 function deflectSurchargeForActivation(
   state: RiftboundGameState,
   playerId: string,
   targets: readonly string[] | undefined,
   cards: unknown,
+  zones?: unknown,
 ): number {
   if (!targets || targets.length === 0) {
     return 0;
   }
-  return getDeflectSurcharge(state as never, playerId, targets as string[], cards as never);
+  return getDeflectSurcharge(
+    state as never,
+    playerId,
+    targets as string[],
+    cards as never,
+    undefined,
+    zones as never,
+  );
 }
 
 /** Power left over for a Deflect surcharge after the ability's own Power pips. */
@@ -1723,7 +1736,7 @@ export const activateAbility: Defs["activateAbility"] = {
       // rule 809.1.c (rule-id: sfd-120-221) — an opponent's Deflect object may
       // only be chosen when the extra Power is available on top of the cost.
       if (
-        deflectSurchargeForActivation(state, playerId, boundTargets, context.cards) >
+        deflectSurchargeForActivation(state, playerId, boundTargets, context.cards, context.zones) >
         deflectBudget(state, playerId, ability.cost as Record<string, unknown> | undefined)
       ) {
         return false;
@@ -2183,8 +2196,13 @@ export const activateAbility: Defs["activateAbility"] = {
           );
           targetOptions = targetOptions.filter(
             (id) =>
-              deflectSurchargeForActivation(state, playerId, [id as string], context.cards) <=
-              budget,
+              deflectSurchargeForActivation(
+                state,
+                playerId,
+                [id as string],
+                context.cards,
+                context.zones,
+              ) <= budget,
           );
           if (targetOptions.length === 0) {
             continue;
@@ -2337,6 +2355,7 @@ export const activateAbility: Defs["activateAbility"] = {
       playerId,
       context.params.targets as string[] | undefined,
       context.cards,
+      context.zones,
     );
     if (deflectOwed > 0) {
       deductAbilityCost(

@@ -111,7 +111,7 @@ describe("Heisho, Shell of the World (ven-158-166)", () => {
     expect(game.locationOf("here")).toBe("heisho");
   });
 
-  test.failing("BUG: 'and abilities' — the opponent's LEGEND ability (Voidreaver: Spend 1 XP, Exhaust: Buff a unit) may choose my Poro at Heisho with no power", async () => {
+  test("'and abilities' — the opponent's LEGEND ability (Voidreaver: Spend 1 XP, Exhaust: Buff a unit) may choose my Poro at Heisho with no power", async () => {
     // Control: today the engine does tax abilities (with 0 power neither Poro is offered; with 1
     // power both are) — so the only missing piece is Heisho's waiver for the unit here.
     const game = await scenario()
