@@ -213,4 +213,29 @@ describe("Unforgiven (ogn-259-298)", () => {
     expect(game.p1.points()).toBe(1);
     expect(game.violations()).toEqual([]);
   });
+  // rule 402.2 — the destination is a choice made per ACTIVATION. It is recorded on the chain
+  // item, never on the shared card definition, so a second activation is neither blocked nor
+  // stuck with the first one's destination.
+  test("activating it again on a later turn works and picks a fresh destination (no state left on the card definition)", async () => {
+    const game = await scenario()
+      .resources(P1, { energy: 2 })
+      .legend(P1, CARD, "lg")
+      .battlefield("bf1", { controller: P1 })
+      .battlefield("bf2", { controller: P1 })
+      .unit(P1, "base", { might: 2, name: "First" }, "u1")
+      .unit(P1, "base", { might: 2, name: "Second" }, "u2")
+      .build();
+    await game.p1.activate("lg", 0, { answers: ["battlefield-bf1"], targets: "u1" });
+    await game.settle();
+    expect(game.zoneOf("u1")).toBe("battlefield-bf1");
+
+    await game.advanceTurn();
+    await game.advanceTurn();
+    expect(game.turnPlayer()).toBe(P1);
+    await game.p1.do("addResources", { energy: 2 });
+    await game.p1.activate("lg", 0, { answers: ["battlefield-bf2"], targets: "u2" });
+    await game.settle();
+    expect(game.zoneOf("u2")).toBe("battlefield-bf2");
+    expect(game.violations()).toEqual([]);
+  });
 });

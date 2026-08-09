@@ -328,6 +328,27 @@ export const equipmentMoves: Partial<
         );
       }
 
+      // rule 476.1 / 818.1.c.3 (sfd-150-221 Last Rites) — the non-resource half
+      // "Recycle N cards from your trash" is paid NOW, as the ability is
+      // activated (377.3 / 357): the payer chooses which N leave the trash
+      // (416.6) before anyone may respond, and nothing is refunded if the
+      // attach later fizzles. Same prompt shape as the Weaponmaster on-play
+      // Equip so the two payment paths cannot drift.
+      const recycleCount = equipCost?.recycleFromTrash;
+      if (recycleCount !== undefined && recycleCount > 0 && !draft.pendingChoice) {
+        const trash = context.zones
+          .getCardsInZone("trash" as CoreZoneId, playerId as CorePlayerId)
+          .map((id) => id as string);
+        draft.pendingChoice = {
+          onPicked: "recycle",
+          prompter: playerId,
+          remaining: recycleCount,
+          revealed: trash,
+          revealer: playerId,
+          type: "reveal-and-pick",
+        } as RiftboundGameState["pendingChoice"];
+      }
+
       // rule 377.3 / 818.1.c.1: [Equip] is an ACTIVATED ability — activating it
       // pays the cost and puts an ability item on the chain; the attach happens
       // only when that item resolves, after every player has had priority. The

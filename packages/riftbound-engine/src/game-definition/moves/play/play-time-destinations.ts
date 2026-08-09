@@ -55,6 +55,23 @@ export function collectDestinationNodes(effect: unknown, out: AnyEffect[] = []):
   return out;
 }
 
+/**
+ * rule-id: ogn-259-298 — a chain item's `effect` is often the card
+ * definition's OWN ability object, shared by every activation of that card and
+ * frozen once it has been part of a finished state. Writing `_dest` onto it in
+ * place throws ("object is not extensible") on a later activation, and would
+ * leak one activation's destination into the next, so swap in a private deep
+ * copy before the first write. Effects are plain JSON data.
+ */
+function writableDestinationNodes(item: ChainItemLike): AnyEffect[] {
+  const nodes = collectDestinationNodes(item.effect);
+  if (nodes.every((n) => Object.isExtensible(n))) {
+    return nodes;
+  }
+  item.effect = JSON.parse(JSON.stringify(item.effect));
+  return collectDestinationNodes(item.effect);
+}
+
 function isSingleChoice(target: AnyEffect): boolean {
   const q = target.quantity;
   return q === undefined || q === 1;
@@ -114,7 +131,7 @@ export function raisePlayTimeDestinationChoice(
   if (item.countered === true || item.effect === undefined) {
     return false;
   }
-  const nodes = collectDestinationNodes(item.effect);
+  const nodes = writableDestinationNodes(item);
   for (const [index, node] of nodes.entries()) {
     if (node._dest !== undefined) {
       continue;
@@ -191,7 +208,7 @@ export function bindDestinationOnItem(
   if (!item) {
     return;
   }
-  const node = collectDestinationNodes(item.effect)[nodeIndex ?? 0];
+  const node = writableDestinationNodes(item)[nodeIndex ?? 0];
   if (node) {
     node._dest = zoneId;
   }
