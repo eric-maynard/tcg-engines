@@ -1675,6 +1675,8 @@ export interface RiftboundGameState {
   deferredSpellSettle?: {
     cardId: string;
     controller: string;
+    /** rule 419.4.a — its "when you play a spell" triggers are still owed. */
+    playTriggersPending?: boolean;
     resolveTo?: string;
   };
 
