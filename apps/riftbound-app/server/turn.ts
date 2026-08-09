@@ -50,7 +50,18 @@ export function applySessionMove(
   moveId: string,
   params: Record<string, unknown>,
 ): SessionMoveResult {
-  const result = applyMove(session.engine, session.players, playerId, moveId, params);
+  // rule 128.4 — a pick taken out of a PRIVATE look (nothing was revealed,
+  // 424.1) must not be named in the shared match log. This is the one choke
+  // point that still sees the open prompt, so stamp the recorded params here;
+  // `formatMoveLog` narrates a flagged pick generically.
+  let recordedParams = params;
+  if (moveId === "resolvePendingChoice") {
+    const open = session.engine.getState().pendingChoice as { private?: boolean } | undefined;
+    if (open?.private) {
+      recordedParams = { ...params, privateChoice: true };
+    }
+  }
+  const result = applyMove(session.engine, session.players, playerId, moveId, recordedParams);
   if (!result.success) {
     return result;
   }

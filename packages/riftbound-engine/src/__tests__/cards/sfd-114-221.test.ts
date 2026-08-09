@@ -145,6 +145,29 @@ describe("Marching Orders (sfd-114-221)", () => {
     expect(game.zoneOf("mo")).toBe("trash");
   });
 
+  test("[Repeat] [3] with its OWN pair (820.2.a) — [brawler,raider] then [scout,twin]: Raider dies to 4, Scout dies to 4, Twin keeps 2, Brawler keeps 3", async () => {
+    const game = await board(6).build();
+    await game.p1.cast("mo", { repeat: 1, targets: ["brawler", "raider", "scout", "twin"] });
+    expect(game.p1.energy()).toBe(0);
+    expect(game.chain()).toHaveLength(1);
+    await game.settle();
+    expect(game.zoneOf("raider")).toBe("trash");
+    expect(game.zoneOf("scout")).toBe("trash");
+    expect(game.zoneOf("brawler")).toBe("base");
+    expect(game.state("brawler").damage).toBe(3);
+    expect(game.locationOf("twin")).toBe("bf1");
+    expect(game.state("twin").damage).toBe(2);
+  });
+
+  test("[Repeat] per-execution pairs are enumerated, and an illegal second pair is refused", async () => {
+    const game = await board(6).build();
+    const opts = (game.p1.option("cast", "mo")?.fields.find((f) => f.arg === "targets")?.options ?? []) as string[][];
+    expect(opts.some((o) => o.length === 4)).toBe(true);
+    const bad = await game.p1.try((p) => p.cast("mo", { repeat: 1, targets: ["brawler", "raider", "scout", "giant"] }));
+    expect(bad.ok).toBe(false);
+    expect(game.zoneOf("mo")).toBe("hand");
+  });
+
   test("[Repeat] must be affordable — with 5 energy the repeated cast is refused (nothing spent) while the plain cast goes through", async () => {
     const game = await board(5).build();
     const r = await game.p1.try((p) => p.cast("mo", { repeat: 1, targets: ["brawler", "raider"] }));

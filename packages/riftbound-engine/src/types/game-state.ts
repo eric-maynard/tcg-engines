@@ -572,6 +572,13 @@ export interface RevealAndPickChoice {
   readonly revealed: CardId[];
 
   /**
+   * rule 128.4 / 424.1 — the cards were LOOKED AT, not revealed, so only the
+   * prompter learns what they are. Presentation layers must not ship
+   * `revealed` to any other seat, nor name the pick in the shared match log.
+   */
+  readonly private?: boolean;
+
+  /**
    * Optional filter on which revealed card may be picked.
    * - `excludeCardTypes`: card types that are NOT valid picks (e.g., ["unit"]).
    * - `maxMight`: rule-id ogn-242-298 — "a unit … that has Might up to 1 more

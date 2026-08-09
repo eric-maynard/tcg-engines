@@ -49,6 +49,25 @@ function enrichPendingChoice(pending: unknown): unknown {
 }
 
 /**
+ * rule 128.4 / 424.1 — a `reveal-and-pick` parked by a LOOK is private: the
+ * cards were not revealed, so only the prompter may receive their ids (an
+ * instance id embeds the definition id). Every other viewer gets the count.
+ */
+function redactPrivateChoice(pending: unknown, viewer: string | undefined): unknown {
+  const pc = pending as
+    | { private?: boolean; prompter?: string; revealed?: unknown[] }
+    | undefined;
+  if (!pc?.private || !viewer || viewer === pc.prompter) {
+    return pending;
+  }
+  return {
+    ...pc,
+    revealed: [],
+    revealedCount: Array.isArray(pc.revealed) ? pc.revealed.length : 0,
+  };
+}
+
+/**
  * Format a move into a Rift Atlas-style narrated log line.
  *
  * The resulting string reads like "Lillia played Swift Scout to base" — the
@@ -296,6 +315,14 @@ export function formatMoveLog(
         }
       }
       if (picked.length > 0) {
+        // rule 128.4 — the pick came out of a PRIVATE look (nothing was
+        // revealed, 424.1), so the shared log must not name it: the opponent
+        // would learn a card that only the looker is allowed to know.
+        if (params.privateChoice === true) {
+          return picked.length === 1
+            ? `${actor} chose a card.`
+            : `${actor} chose ${picked.length} cards.`;
+        }
         return `${actor} chose ${picked.join(", ")}.`;
       }
       if (typeof params.pickedName === "string" && params.pickedName) {
@@ -683,7 +710,7 @@ export function buildGameSnapshot(session: GameSession, viewingPlayer?: string) 
         : null,
     },
     log: buildHistoryLog(session),
-    pendingChoice: enrichPendingChoice(state.pendingChoice),
+    pendingChoice: redactPrivateChoice(enrichPendingChoice(state.pendingChoice), redactFor),
     // rule 383.3.d — the soft "order your simultaneous triggers" offer is not a
     // pendingChoice (nothing is blocked); ship it so the client can label the
     // resolvePendingChoice{orderedKeys} variants it enumerates alongside it.

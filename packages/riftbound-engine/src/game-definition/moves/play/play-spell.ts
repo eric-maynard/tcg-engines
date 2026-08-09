@@ -986,7 +986,12 @@ export const playSpell: Defs["playSpell"] = {
         fightEffect.defender !== null
       ) {
         const supplied = (context.params.targets ?? []) as string[];
-        if (supplied.length !== 2 || supplied[0] === supplied[1]) {
+        // rule 820.2.a (sfd-114-221) — the additional [Repeat] execution makes
+        // its OWN choices, so the caster may name one [attacker, defender]
+        // pair per execution: 2 × (1 + repeatCount) ids. A single pair repeated
+        // for every execution stays legal (the shorter list).
+        const execCount = 1 + Math.max(0, (context.params.repeatCount as number | undefined) ?? 0);
+        if (supplied.length !== 2 && supplied.length !== 2 * execCount) {
           return false;
         }
         const attackers = resolveTarget(
@@ -1001,8 +1006,14 @@ export const playSpell: Defs["playSpell"] = {
           >[0],
           conditionResolverCtx,
         ) as string[];
-        if (!attackers.includes(supplied[0]) || !defenders.includes(supplied[1])) {
-          return false;
+        for (let i = 0; i < supplied.length; i += 2) {
+          if (
+            supplied[i] === supplied[i + 1] ||
+            !attackers.includes(supplied[i] as string) ||
+            !defenders.includes(supplied[i + 1] as string)
+          ) {
+            return false;
+          }
         }
       }
     }
@@ -2055,6 +2066,29 @@ export const playSpell: Defs["playSpell"] = {
                 results.push({ ...base, repeatCount: n, targets: [...lo, ...hi] });
               }
             }
+            // rule 820.2.a (sfd-114-221) — a `fight` execution names an
+            // [attacker, defender] PAIR, and the repeated execution chooses its
+            // own pair. Order matters here (the first exchange can kill), so
+            // offer every ordered pair of distinct pairs.
+            if (
+              (spellEffect as { type?: string } | undefined)?.type === "fight" &&
+              base.targets?.length === 2 &&
+              n === 1
+            ) {
+              for (const other of baseVariants) {
+                if (other.targets?.length !== 2) {
+                  continue;
+                }
+                if (other.targets[0] === base.targets[0] && other.targets[1] === base.targets[1]) {
+                  continue;
+                }
+                results.push({
+                  ...base,
+                  repeatCount: n,
+                  targets: [...base.targets, ...other.targets],
+                });
+              }
+            }
           }
         }
       }
@@ -2495,12 +2529,22 @@ export const playSpell: Defs["playSpell"] = {
       // targets per execution ("Give two friendly units each +1"), each copy
       // gets its own slice so execution i affects only its own group.
       const perExecution = (spellEffect as { target?: { quantity?: unknown } }).target?.quantity;
-      const groupSize =
-        typeof perExecution === "number" &&
-        perExecution >= 2 &&
-        targets?.length === perExecution * (1 + repeatN)
-          ? perExecution
+      // rule 820.2.a (sfd-114-221) — a `fight` execution owns an
+      // [attacker, defender] pair, so a per-execution pair list slices by 2.
+      const perFight =
+        (spellEffect as { type?: string }).type === "fight" &&
+        targets?.length === 2 * (1 + repeatN) &&
+        repeatN > 0
+          ? 2
           : 0;
+      const groupSize =
+        perFight > 0
+          ? perFight
+          : typeof perExecution === "number" &&
+              perExecution >= 2 &&
+              targets?.length === perExecution * (1 + repeatN)
+            ? perExecution
+            : 0;
       // rule 820.2 — every execution owns its choices, so each copy must be a
       // DISTINCT object: a mode locked in for one execution must not leak into
       // the others.

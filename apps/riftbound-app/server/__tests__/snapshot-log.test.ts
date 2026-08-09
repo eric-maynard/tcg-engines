@@ -38,6 +38,19 @@ describe("formatMoveLog: resolvePendingChoice", () => {
     expect(text).toContain("Serrated Dirk");
   });
 
+  // rule 128.4 — "Look at the top 3 … you may draw one" is a PRIVATE view: no
+  // reveal happens (424.1), so the shared log must not name the taken card.
+  test("does not name a pick taken out of a private look (rule 128.4)", () => {
+    const text = formatMoveLog(
+      "resolvePendingChoice",
+      "player-1",
+      { pickedCardId: "player-1-main-3-sfd-030-221", playerId: "player-1", privateChoice: true },
+      NAMES,
+    );
+    expect(text).toBe("Dev chose a card.");
+    expect(text).not.toContain("Skyfall of Areion");
+  });
+
   test("falls back to a readable line when nothing was picked", () => {
     const text = formatMoveLog(
       "resolvePendingChoice",

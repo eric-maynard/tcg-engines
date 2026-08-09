@@ -47,6 +47,23 @@ describe("Lightning Rush (ven-156-166)", () => {
     expect(game.p1.hand()).toEqual(["c1"]);
   });
 
+  // rule 128.4 / 424.1 — "Look at" is a PRIVATE view: nothing is revealed, so
+  // the prompt is marked private and presentation layers must keep the cards
+  // (and the pick) away from the opponent.
+  test("the look prompt is marked private (rule 128.4)", async () => {
+    const game = await inHand().build();
+    await game.p1.play("rush");
+    await game.settle();
+    const pending = game.gameState.pendingChoice as {
+      private?: boolean;
+      prompter?: string;
+      type?: string;
+    };
+    expect(pending.type).toBe("reveal-and-pick");
+    expect(pending.private).toBe(true);
+    expect(pending.prompter).toBe(P1);
+  });
+
   // rule 383.3.a.3 — "You may choose": declining is legal and draws nothing.
   test("the pick can be declined", async () => {
     const game = await inHand().build();

@@ -169,10 +169,19 @@ export function handle_look(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
         revealReplaced: true,
       } as ExecutableEffect;
       _h.executeEffect(prefix, { ...ctx, playerId: looker as CorePlayerId });
-      const raised = ctx.draft.pendingChoice as { then?: unknown } | undefined;
+      const raised = ctx.draft.pendingChoice as
+        | { then?: unknown; onDecline?: unknown }
+        | undefined;
       if (raised) {
+        // rule 359.3.e / 424 — the replacement's own prompt is optional ("you MAY
+        // recycle it"), but the reveal it replaced happens either way: hang the
+        // continuation off BOTH the accept (`then`) and the decline (`onDecline`)
+        // branches so declining cannot cancel the reveal.
         ctx.draft.pendingChoice = {
           ...(raised as NonNullable<typeof ctx.draft.pendingChoice>),
+          onDecline: raised.onDecline
+            ? { effects: [raised.onDecline, continuation], type: "sequence" }
+            : continuation,
           then: raised.then
             ? { effects: [raised.then, continuation], type: "sequence" }
             : continuation,
@@ -338,6 +347,9 @@ export function handle_look(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
     ...(visionLike || lookEff.optional ? { optional: true } : {}),
     // rule 355.13 (ogn-291-298) — "one or both": up to `remaining` picks, one answer.
     ...(recycleAnyOfThem ? { remaining: topN.length, upTo: true } : {}),
+    // rule 128.4 — "Look at" is a PRIVATE view; nothing is revealed (424.1),
+    // so the looked-at cards and the pick stay hidden from every other player.
+    private: true,
     prompter: looker,
     revealed: topN,
     revealer: looker,
