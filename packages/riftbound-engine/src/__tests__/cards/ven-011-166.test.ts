@@ -36,7 +36,12 @@ describe("Pendulum Blade (ven-011-166)", () => {
     await scenario().build();
     const def = peekDefaultCardPool()?.get(CARD);
     expect(def).toMatchObject({ cardType: "gear", domain: "fury", energyCost: 3, mightBonus: 1, name: "Pendulum Blade" });
-    expect(def?.abilities).toEqual([{ cost: { power: ["fury"] }, keyword: "Equip", type: "keyword" }]);
+    // Effect Text (gallery `effect`, rule 136 / 150.2 / 718.3): "When I move to a battlefield, give me +2 [Might] this turn." —
+    // conferred on the equipped unit while attached, hence the `effectText: true` entries.
+    expect(def?.abilities).toEqual([
+      { cost: { power: ["fury"] }, keyword: "Equip", type: "keyword" },
+      { effect: { amount: 2, duration: "turn", target: "self", type: "modify-might" }, effectText: true, trigger: { event: "move-to-battlefield", on: "self" }, type: "triggered" },
+    ] as never);
   });
 
   test("play cost: 3 energy, no power; enters the base READY and unattached; nothing is attached by playing it; 2 energy is not enough", async () => {

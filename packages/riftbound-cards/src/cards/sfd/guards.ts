@@ -42,7 +42,7 @@ export const guards: SpellCard = {
   name: "Guards!",
   rarity: "common",
   rulesText:
-    "[Hidden] (Hide now for [rainbow] to react with later for [energy_0].)\nPlay a 2 [Might] Sand Soldier unit token. You may pay [order] to ready it.",
+    "[Hidden] (Hide now for [rainbow] to react with later for [0].)\nPlay a 2 [Might] Sand Soldier unit token. You may pay [order] to ready it.",
   setId: "SFD",
   timing: "action",
 };

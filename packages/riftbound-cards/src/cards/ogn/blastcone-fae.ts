@@ -11,6 +11,6 @@ export const blastconeFae: UnitCard = {
   name: "Blastcone Fae",
   rarity: "uncommon",
   rulesText:
-    "[Hidden] (Hide now for [rainbow] to react with later for [energy_0].)\nWhen you play me, give a unit -2 [Might] this turn, to a minimum of 1 [Might].",
+    "[Hidden] (Hide now for [rainbow] to react with later for [0].)\nWhen you play me, give a unit -2 [Might] this turn, to a minimum of 1 [Might].",
   setId: "OGN",
 };

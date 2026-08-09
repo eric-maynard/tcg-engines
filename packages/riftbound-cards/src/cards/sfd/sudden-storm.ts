@@ -43,7 +43,7 @@ export const suddenStorm: SpellCard = {
   name: "Sudden Storm",
   rarity: "uncommon",
   rulesText:
-    "[Hidden] (Hide now for [rainbow] to react with later for [energy_0].)\n[Action] (Play on your turn or in showdowns.)\nDeal 2 to a unit at a battlefield. If it's attacking, deal 4 to it instead.",
+    "[Hidden] (Hide now for [rainbow] to react with later for [0].)\n[Action] (Play on your turn or in showdowns.)\nDeal 2 to a unit at a battlefield. If it's attacking, deal 4 to it instead.",
   setId: "SFD",
   timing: "action",
 };

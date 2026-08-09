@@ -68,6 +68,14 @@ export interface BaseCard {
   /** Rules text (original card text) */
   readonly rulesText?: string;
 
+  /**
+   * Effect Text (rule 136) — the box printed below the rules text. On an
+   * Equipment these abilities are conferred on the equipped unit while
+   * attached (150.2 / 718.3). `rulesText` also ends with this text, in printed
+   * order; the separate field marks where the gear's own text stops.
+   */
+  readonly effectText?: string;
+
   /** Flavor text */
   readonly flavorText?: string;
 

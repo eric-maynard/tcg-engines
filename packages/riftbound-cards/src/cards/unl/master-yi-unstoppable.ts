@@ -12,7 +12,7 @@ export const masterYiUnstoppable: UnitCard = {
   name: "Master Yi, Unstoppable",
   rarity: "epic",
   rulesText:
-    "[Level 3][&gt;] I cost [2][calm] less. (While you have 3+ XP, get the effect.)\n[Level 6][&gt;] I cost [4][calm][calm] less instead.\n[Level 11][&gt;] I cost [6][calm][calm][calm] less instead.\n[Level 16][&gt;] I can't be chosen by enemy spells and abilities.",
+    "[Level 3][>] I cost [2][calm] less. (While you have 3+ XP, get the effect.)\n[Level 6][>] I cost [4][calm][calm] less instead.\n[Level 11][>] I cost [6][calm][calm][calm] less instead.\n[Level 16][>] I can't be chosen by enemy spells and abilities.",
   setId: "UNL",
   tags: ["Master Yi"],
 };

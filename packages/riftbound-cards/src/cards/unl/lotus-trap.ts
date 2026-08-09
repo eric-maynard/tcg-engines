@@ -32,7 +32,7 @@ export const lotusTrap: SpellCard = {
   name: "Lotus Trap",
   rarity: "uncommon",
   rulesText:
-    "[Hidden] (Hide now for [rainbow] to react with later for [energy_0].)\n[Reaction] (Play any time, even before spells and abilities resolve.)\nChoose a unit. Double all damage that would be dealt to it this turn.",
+    "[Hidden] (Hide now for [rainbow] to react with later for [0].)\n[Reaction] (Play any time, even before spells and abilities resolve.)\nChoose a unit. Double all damage that would be dealt to it this turn.",
   setId: "UNL",
   timing: "action",
 };

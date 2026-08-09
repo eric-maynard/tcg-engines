@@ -11,6 +11,6 @@ export const dragonsoulSage: UnitCard = {
   name: "Dragonsoul Sage",
   rarity: "common",
   rulesText:
-    "[Reaction][&gt;] [Exhaust]: [Add] [1]. (Abilities that add resources can't be reacted to.)",
+    "[Reaction][>] [Exhaust]: [Add] [1]. (Abilities that add resources can't be reacted to.)",
   setId: "UNL",
 };

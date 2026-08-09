@@ -49,6 +49,6 @@ export const diviningShells: GearCard = {
   name: "Divining Shells",
   rarity: "uncommon",
   rulesText:
-    "[Vision] (When you play this, look at the top card of your Main Deck. You may recycle it.)\n[Action][&gt;] Kill this, [Exhaust]: Give a unit +2 [Might] this turn.",
+    "[Vision] (When you play this, look at the top card of your Main Deck. You may recycle it.)\n[Action][>] Kill this, [Exhaust]: Give a unit +2 [Might] this turn.",
   setId: "UNL",
 };

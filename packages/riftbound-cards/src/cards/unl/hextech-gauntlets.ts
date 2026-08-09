@@ -18,6 +18,10 @@ import { createCardId } from "@tcg/riftbound-types/cards";
  * The [Equip] keyword ability records the base equip cost
  * (3 energy + 1 rainbow power) for UI and rules reference; the actual cost
  * reduction happens at play time in the engine.
+ *
+ * Effect Text (rule 136 / 150.2 / 718.3): "When I conquer, if you assigned 3 or
+ * more excess damage, draw 1." — the equipped unit's trigger while attached,
+ * hence `effectText: true` (same shape the parser gives the printed sentence).
  */
 const abilities: Ability[] = [
   {
@@ -25,6 +29,13 @@ const abilities: Ability[] = [
     keyword: "Equip",
     type: "keyword",
   },
+  {
+    condition: { amount: 3, type: "excess-damage-assigned" },
+    effect: { amount: 1, type: "draw" },
+    effectText: true,
+    trigger: { event: "conquer", on: "self" },
+    type: "triggered",
+  } as unknown as Ability,
 ];
 
 export const hextechGauntlets: EquipmentCard = {
@@ -32,6 +43,7 @@ export const hextechGauntlets: EquipmentCard = {
   cardNumber: 188,
   cardType: "equipment",
   domain: ["fury", "order"],
+  effectText: "When I conquer, if you assigned 3 or more excess damage, draw 1.",
   energyCost: 3,
   id: createCardId("unl-188-219"),
   interactiveCostReduction: "target-might",
@@ -39,6 +51,6 @@ export const hextechGauntlets: EquipmentCard = {
   name: "Hextech Gauntlets",
   rarity: "epic",
   rulesText:
-    "[Equip] [3][rainbow]. This ability's Energy cost is reduced by the Might of the unit you choose. (Pay the cost: Attach this to a unit you control.)",
+    "[Equip] [3][rainbow]. This ability's Energy cost is reduced by the Might of the unit you choose. (Pay the cost: Attach this to a unit you control.)\nWhen I conquer, if you assigned 3 or more excess damage, draw 1.",
   setId: "UNL",
 };

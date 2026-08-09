@@ -46,7 +46,7 @@ export const deadlyFlourish: SpellCard = {
   name: "Deadly Flourish",
   rarity: "uncommon",
   rulesText:
-    "Deal 3 to an enemy unit. When it dies this turn, play a Gold gear token exhausted. (It has &quot;[Reaction][&gt;] Kill this, [Exhaust]: [Add] [rainbow].&quot;)",
+    "Deal 3 to an enemy unit. When it dies this turn, play a Gold gear token exhausted. (It has \"[Reaction][>] Kill this, [Exhaust]: [Add] [rainbow].\")",
   setId: "UNL",
   timing: "standard",
 };

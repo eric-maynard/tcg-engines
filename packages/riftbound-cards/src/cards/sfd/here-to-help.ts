@@ -34,7 +34,7 @@ export const hereToHelp: SpellCard = {
   name: "Here to Help",
   rarity: "rare",
   rulesText:
-    "[Hidden] (Hide now for [rainbow] to react with later for [energy_0].)\n[Action] (Play on your turn or in showdowns.)\nYou may play a unit from hand to a battlefield you control, reducing its cost by [3].",
+    "[Hidden] (Hide now for [rainbow] to react with later for [0].)\n[Action] (Play on your turn or in showdowns.)\nYou may play a unit from hand to a battlefield you control, reducing its cost by [3].",
   setId: "SFD",
   timing: "action",
 };

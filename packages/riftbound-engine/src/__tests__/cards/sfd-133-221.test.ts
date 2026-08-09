@@ -62,7 +62,12 @@ describe("Boots of Swiftness (sfd-133-221)", () => {
     const def = (await loadDefaultCardPool()).get(CARD);
     expect(def).toMatchObject({ cardType: "equipment", domain: "chaos", energyCost: 3, mightBonus: 2, name: "Boots of Swiftness" });
     expect(def?.powerCost ?? []).toEqual([]);
-    expect(def?.abilities).toEqual([{ cost: { power: ["chaos"] }, keyword: "Equip", type: "keyword" }]);
+    // Effect Text (gallery `effect`, rule 136 / 150.2 / 718.3): "[Ganking] (I can move from battlefield to battlefield.)" —
+    // conferred on the equipped unit while attached, hence the `effectText: true` entries.
+    expect(def?.abilities).toEqual([
+      { cost: { power: ["chaos"] }, keyword: "Equip", type: "keyword" },
+      { effect: { keyword: "Ganking", target: "self", type: "grant-keyword" }, effectText: true, type: "static" },
+    ] as never);
     expect(def?.keywords ?? []).not.toContain("Quick-Draw");
   });
 

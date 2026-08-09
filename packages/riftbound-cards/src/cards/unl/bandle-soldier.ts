@@ -10,6 +10,6 @@ export const bandleSoldier: UnitCard = {
   might: 5,
   name: "Bandle Soldier",
   rarity: "common",
-  rulesText: "[Level 3][&gt;] I enter ready. (While you have 3+ XP, get the effect.)",
+  rulesText: "[Level 3][>] I enter ready. (While you have 3+ XP, get the effect.)",
   setId: "UNL",
 };

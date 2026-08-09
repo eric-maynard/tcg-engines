@@ -11,6 +11,6 @@ export const edgeOfNight: EquipmentCard = {
   name: "Edge of Night",
   rarity: "rare",
   rulesText:
-    "[Hidden] (Hide now for [rainbow] to react with later for [energy_0].)\nWhen you play this from face down, attach it to a unit you control (here).\n[Equip] [chaos] ([chaos]: Attach this to a unit you control.)",
+    "[Hidden] (Hide now for [rainbow] to react with later for [0].)\nWhen you play this from face down, attach it to a unit you control (here).\n[Equip] [chaos] ([chaos]: Attach this to a unit you control.)",
   setId: "SFD",
 };

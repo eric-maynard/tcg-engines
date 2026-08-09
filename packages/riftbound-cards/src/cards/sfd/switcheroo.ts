@@ -32,7 +32,7 @@ export const switcheroo: SpellCard = {
   name: "Switcheroo",
   rarity: "rare",
   rulesText:
-    "[Hidden] (Hide now for [rainbow] to react with later for [energy_0].)\n[Action] (Play on your turn or in showdowns.)\nSwap the Might of two units at the same battlefield this turn.",
+    "[Hidden] (Hide now for [rainbow] to react with later for [0].)\n[Action] (Play on your turn or in showdowns.)\nSwap the Might of two units at the same battlefield this turn.",
   setId: "SFD",
   timing: "action",
 };

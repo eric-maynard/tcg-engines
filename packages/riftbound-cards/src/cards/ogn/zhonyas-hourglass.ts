@@ -37,6 +37,6 @@ export const zhonyasHourglass: GearCard = {
   name: "Zhonya's Hourglass",
   rarity: "rare",
   rulesText:
-    "[Hidden] (Hide now for [rainbow] to react with later for [energy_0].)\nIf a friendly unit would die, kill this instead. Heal that unit, exhaust it, and recall it. (Send it to base. This isn't a move.)",
+    "[Hidden] (Hide now for [rainbow] to react with later for [0].)\nIf a friendly unit would die, kill this instead. Heal that unit, exhaust it, and recall it. (Send it to base. This isn't a move.)",
   setId: "OGN",
 };

@@ -56,7 +56,7 @@ export const pykeDocksideButcher: UnitCard = {
   name: "Pyke, Dockside Butcher",
   rarity: "epic",
   rulesText:
-    "[Hidden] (Hide now for [rainbow] to react with later for [energy_0].)\n[Ganking] (I can move from battlefield to battlefield.)\nYou may pay [fury] as an additional cost to play me.\nWhen you play me, if you paid the additional cost, ready me and give me +2 [Might] this turn.",
+    "[Hidden] (Hide now for [rainbow] to react with later for [0].)\n[Ganking] (I can move from battlefield to battlefield.)\nYou may pay [fury] as an additional cost to play me.\nWhen you play me, if you paid the additional cost, ready me and give me +2 [Might] this turn.",
   setId: "UNL",
   tags: ["Pyke"],
 };

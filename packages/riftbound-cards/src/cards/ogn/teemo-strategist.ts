@@ -39,7 +39,7 @@ export const teemoStrategist: UnitCard = {
   name: "Teemo, Strategist",
   rarity: "epic",
   rulesText:
-    "[Hidden] (Hide now for [rainbow] to react with later for [energy_0].)\nWhen I defend, choose an enemy unit here and reveal the top 5 cards of your Main Deck. Deal 1 to that unit for each card with [Hidden] revealed this way, then recycle the revealed cards.",
+    "[Hidden] (Hide now for [rainbow] to react with later for [0].)\nWhen I defend, choose an enemy unit here and reveal the top 5 cards of your Main Deck. Deal 1 to that unit for each card with [Hidden] revealed this way, then recycle the revealed cards.",
   setId: "OGN",
   tags: ["Teemo"],
 };

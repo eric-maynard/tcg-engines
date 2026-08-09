@@ -2,9 +2,10 @@
  * Eye of the Herald — sfd-153-221 · Gear (Equipment) · Order · 1 energy (no power) · Might bonus +0
  *
  *   [Equip] [order] ([order]: Attach this to a unit you control.)
+ *   Effect Text: When I move, play a 1 [Might] Recruit unit token here.
  *
- * (The card data carries no Effect Text for this Equipment; only the printed [Equip] and the +0 bonus
- * are tested. With a +0 bonus its whole job is to be a cheap Equipment / make a unit "equipped".)
+ * (+0 bonus: as a stat stick it does nothing; its Effect Text — the WEARER's move trigger while attached,
+ * rule 150.2 / 718.3 — is what the card is for.)
  *
  * Rules: 359.2.d (gear enters READY in base, no chain), 818.1 ([Equip] is an activated ability: cost
  * on activation, chain item, target = a unit you control, attach on resolution), 818.3 (Equipped = has
@@ -68,7 +69,12 @@ describe("Eye of the Herald (sfd-153-221)", () => {
     const def = (await loadDefaultCardPool()).get(CARD);
     expect(def).toMatchObject({ cardType: "equipment", domain: "order", energyCost: 1, mightBonus: 0, name: "Eye of the Herald" });
     expect(def?.powerCost ?? []).toEqual([]);
-    expect(def?.abilities).toEqual([{ cost: { power: ["order"] }, keyword: "Equip", type: "keyword" }]);
+    // Effect Text (gallery `effect`, rule 136 / 150.2 / 718.3): "When I move, play a 1 [Might] Recruit unit token here." —
+    // conferred on the equipped unit while attached, hence the `effectText: true` entries.
+    expect(def?.abilities).toEqual([
+      { cost: { power: ["order"] }, keyword: "Equip", type: "keyword" },
+      { effect: { location: "here", token: { might: 1, name: "Recruit", type: "unit" }, type: "create-token" }, effectText: true, trigger: { event: "move", on: "self" }, type: "triggered" },
+    ] as never);
   });
 
   test("play cost: exactly 1 energy (order power can't pay it), no chain item, READY and unattached in base; 0 energy → not playable", async () => {
@@ -127,18 +133,36 @@ describe("Eye of the Herald (sfd-153-221)", () => {
     expect(pairs(worn)).toEqual([]);
   });
 
-  test("+0 changes no fight: the equipped 3-Might Knight into the 3-Might Guard still TRADES; the Eye detaches at bf1 and is recalled to P1's base unattached (457.1)", async () => {
+  test("Effect Text 'When I move, play a 1 [Might] Recruit unit token here': the equipped Knight's move raises ITS trigger; the Recruit lands at bf1 and joins the attack, so 3+1 into the 3-Might Guard conquers; the +0 Knight still dies and the Eye is recalled to base unattached (457.1)", async () => {
     const game = await onBoard().build();
     await equip(game);
     await game.p1.move("knight", "bf1");
     expect(game.locationOf("eye")).toBe("bf1");
+    expect(game.state("knight").might).toBe(3); // +0
+    // rule 150.2 / 718.3: the trigger's source is the wearer, not the gear. While it is Pending the
+    // contested battlefield stays Staged (401.1) — no showdown, no combat roles yet.
+    expect(game.chain()).toEqual([expect.objectContaining({ cardId: "knight", controller: P1, triggered: true })]);
+    expect(game.state("knight").meta.combatRole ?? null).toBeNull();
+    await game.p1.passPriority();
+    await game.p2.passPriority();
+    const [recruit] = game.findAll({ name: "Recruit", owner: P1 });
+    expect(recruit).toBeDefined();
+    expect(game.locationOf(recruit!)).toBe("bf1"); // "here" = where the wearer moved to
     expect(game.state("knight")).toMatchObject({ combatRole: "attacker", might: 3 });
+    expect(game.state(recruit!)).toMatchObject({ combatRole: "attacker", might: 1 });
     await game.settle();
-    expect(game.zoneOf("knight")).toBe("trash");
-    expect(game.zoneOf("guard")).toBe("trash");
+    expect(game.zoneOf("knight")).toBe("trash"); // takes 3 ≥ 3
+    expect(game.zoneOf("guard")).toBe("trash"); // takes 3 + 1
+    expect(game.zoneOf(recruit!)).toBe("battlefield-bf1");
+    expect(game.gameState.battlefields.bf1?.controller).toBe(P1);
     expect(game.zoneOf("eye")).toBe("base");
     expect(game.state("eye")).toMatchObject({ attachedTo: undefined, controller: P1, owner: P1 });
-    expect(game.p1.points()).toBe(0);
+    expect(game.p1.points()).toBe(1); // the surviving Recruit conquers
+    // Unattached, the Eye confers nothing: a bare Knight's move raises no trigger and mints no token.
+    const bare = await onBoard().build();
+    await bare.p1.move("knight", "bf1");
+    expect(bare.chain()).toEqual([]);
+    expect(bare.findAll({ name: "Recruit", owner: P1 })).toEqual([]);
   });
 
   test("718.5.a/b — a worn Eye is still a gear on the board: the opponent's 'kill a gear' picks it off the Knight, who stays a bare 3", async () => {

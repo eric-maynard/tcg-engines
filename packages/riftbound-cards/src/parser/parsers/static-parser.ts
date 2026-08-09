@@ -969,8 +969,11 @@ function parseStaticAbilityInner(
     };
   }
 
-  // "I have +N :rb_might: while CONDITION." - conditional static self-might
-  const whileMightMatch = cleanText.match(/^I have \+(\d+)\s*:rb_might:\s+(while .+?)\.?$/i);
+  // "I have [an additional] +N :rb_might: while CONDITION." - conditional static self-might
+  // ("an additional" is Equipment effect-text wording: on top of the Might Bonus.)
+  const whileMightMatch = cleanText.match(
+    /^I have(?:\s+an additional)?\s+\+(\d+)\s*:rb_might:\s+(while .+?)\.?$/i,
+  );
   if (whileMightMatch) {
     const amount = Number.parseInt(whileMightMatch[1], 10);
     const conditionResult = parseConditionFromText(whileMightMatch[2] + ",");
@@ -1046,13 +1049,14 @@ function parseStaticAbilityInner(
     };
   }
 
-  // "I have [+/-]N :rb_might:[ and <extras>]." - unconditional static self-might
+  // "I have [an additional] [+/-]N :rb_might:[ and <extras>]." - unconditional static self-might
   // Examples:
   //   "I have +1 :rb_might:."
   //   "I have +1 :rb_might: and enter ready."
   //   "I have +1 :rb_might: and [Deflect]."
+  //   "[Level 3][>] I have an additional +1 :rb_might:." (Soul Sword effect text)
   const unconditionalSelfMightMatch = cleanText.match(
-    /^I have\s+([+-]\d+)\s*:rb_might:(?:\s+and\s+(.+?))?\.?$/i,
+    /^I have\s+(?:an additional\s+)?([+-]\d+)\s*:rb_might:(?:\s+and\s+(.+?))?\.?$/i,
   );
   if (unconditionalSelfMightMatch) {
     const amount = Number.parseInt(unconditionalSelfMightMatch[1], 10);

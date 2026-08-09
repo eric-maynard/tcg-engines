@@ -29,6 +29,6 @@ export const ruinedRex: UnitCard = {
   might: 6,
   name: "Ruined Rex",
   rarity: "common",
-  rulesText: "[Deathknell][&gt;] Deal 4 to an enemy unit. (When I die, get the effect.)",
+  rulesText: "[Deathknell][>] Deal 4 to an enemy unit. (When I die, get the effect.)",
   setId: "UNL",
 };

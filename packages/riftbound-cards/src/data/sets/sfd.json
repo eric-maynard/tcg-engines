@@ -169,7 +169,9 @@
       "set": "SFD",
       "setName": "Spiritforged",
       "cardType": "spell",
-      "domains": ["fury"],
+      "domains": [
+        "fury"
+      ],
       "rarity": "common",
       "energy": 2,
       "might": null,
@@ -177,7 +179,7 @@
       "power": 1,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [energy_0].)\nFriendly units enter ready this turn. Play a Gold gear token exhausted.",
+      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [0].)\nFriendly units enter ready this turn. Play a Gold gear token exhausted.",
       "abilities": [
         {
           "keyword": "Hidden",
@@ -333,7 +335,9 @@
       "set": "SFD",
       "setName": "Spiritforged",
       "cardType": "gear",
-      "domains": ["fury"],
+      "domains": [
+        "fury"
+      ],
       "rarity": "common",
       "energy": 1,
       "might": null,
@@ -341,14 +345,27 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Equip] [fury] ([fury]: Attach this to a unit you control.)",
+      "rulesText": "[Equip] [fury] ([fury]: Attach this to a unit you control.)\n[Assault 2] (+2 [Might] while I'm an attacker.)",
+      "effectText": "[Assault 2] (+2 [Might] while I'm an attacker.)",
       "abilities": [
         {
           "cost": {
-            "power": ["fury"]
+            "power": [
+              "fury"
+            ]
           },
           "keyword": "Equip",
           "type": "keyword"
+        },
+        {
+          "effect": {
+            "keyword": "Assault",
+            "target": "self",
+            "type": "grant-keyword",
+            "value": 2
+          },
+          "effectText": true,
+          "type": "static"
         }
       ],
       "parseSuccess": true,
@@ -569,7 +586,9 @@
       "set": "SFD",
       "setName": "Spiritforged",
       "cardType": "gear",
-      "domains": ["fury"],
+      "domains": [
+        "fury"
+      ],
       "rarity": "uncommon",
       "energy": 2,
       "might": null,
@@ -577,14 +596,34 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Equip] [fury] ([fury]: Attach this to a unit you control.)",
+      "rulesText": "[Equip] [fury] ([fury]: Attach this to a unit you control.)\nWhen I attack or defend, deal 2 to an enemy unit here.",
+      "effectText": "When I attack or defend, deal 2 to an enemy unit here.",
       "abilities": [
         {
           "cost": {
-            "power": ["fury"]
+            "power": [
+              "fury"
+            ]
           },
           "keyword": "Equip",
           "type": "keyword"
+        },
+        {
+          "effect": {
+            "amount": 2,
+            "target": {
+              "type": "unit",
+              "controller": "enemy",
+              "location": "here"
+            },
+            "type": "damage"
+          },
+          "trigger": {
+            "event": "attack-or-defend",
+            "on": "self"
+          },
+          "type": "triggered",
+          "effectText": true
         }
       ],
       "parseSuccess": true,
@@ -599,7 +638,9 @@
       "set": "SFD",
       "setName": "Spiritforged",
       "cardType": "spell",
-      "domains": ["fury"],
+      "domains": [
+        "fury"
+      ],
       "rarity": "uncommon",
       "energy": 3,
       "might": null,
@@ -607,7 +648,7 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [energy_0].)\n[Action] (Play on your turn or in showdowns.)\nDeal 2 to a unit at a battlefield. If it's attacking, deal 4 to it instead.",
+      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [0].)\n[Action] (Play on your turn or in showdowns.)\nDeal 2 to a unit at a battlefield. If it's attacking, deal 4 to it instead.",
       "abilities": [
         {
           "keyword": "Hidden",
@@ -1146,7 +1187,9 @@
       "set": "SFD",
       "setName": "Spiritforged",
       "cardType": "gear",
-      "domains": ["fury"],
+      "domains": [
+        "fury"
+      ],
       "rarity": "epic",
       "energy": 3,
       "might": null,
@@ -1154,12 +1197,15 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Equip] [1][fury] ([1][fury]: Attach this to a unit you control.)",
+      "rulesText": "[Equip] [1][fury] ([1][fury]: Attach this to a unit you control.)\nMy hold effects are also conquer effects, and vice versa.",
+      "effectText": "My hold effects are also conquer effects, and vice versa.",
       "abilities": [
         {
           "cost": {
             "energy": 1,
-            "power": ["fury"]
+            "power": [
+              "fury"
+            ]
           },
           "keyword": "Equip",
           "type": "keyword"
@@ -1253,7 +1299,9 @@
       "set": "SFD",
       "setName": "Spiritforged",
       "cardType": "gear",
-      "domains": ["calm"],
+      "domains": [
+        "calm"
+      ],
       "rarity": "common",
       "energy": 1,
       "might": null,
@@ -1261,14 +1309,26 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Equip] [calm] ([calm]: Attach this to a unit you control.)",
+      "rulesText": "[Equip] [calm] ([calm]: Attach this to a unit you control.)\n[Tank] (I must be assigned combat damage first.)",
+      "effectText": "[Tank] (I must be assigned combat damage first.)",
       "abilities": [
         {
           "cost": {
-            "power": ["calm"]
+            "power": [
+              "calm"
+            ]
           },
           "keyword": "Equip",
           "type": "keyword"
+        },
+        {
+          "effect": {
+            "keyword": "Tank",
+            "target": "self",
+            "type": "grant-keyword"
+          },
+          "effectText": true,
+          "type": "static"
         }
       ],
       "parseSuccess": true,
@@ -1583,7 +1643,9 @@
       "set": "SFD",
       "setName": "Spiritforged",
       "cardType": "gear",
-      "domains": ["calm"],
+      "domains": [
+        "calm"
+      ],
       "rarity": "uncommon",
       "energy": 2,
       "might": null,
@@ -1591,11 +1653,14 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Equip] [calm] ([calm]: Attach this to a unit you control.)",
+      "rulesText": "[Equip] [calm] ([calm]: Attach this to a unit you control.)\nIf this was attached to me this turn, I have an additional +2 [Might].",
+      "effectText": "If this was attached to me this turn, I have an additional +2 [Might].",
       "abilities": [
         {
           "cost": {
-            "power": ["calm"]
+            "power": [
+              "calm"
+            ]
           },
           "keyword": "Equip",
           "type": "keyword"
@@ -1613,7 +1678,9 @@
       "set": "SFD",
       "setName": "Spiritforged",
       "cardType": "spell",
-      "domains": ["calm"],
+      "domains": [
+        "calm"
+      ],
       "rarity": "uncommon",
       "energy": 2,
       "might": null,
@@ -1621,7 +1688,7 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [energy_0].)\n[Action] (Play on your turn or in showdowns.)\nMove any number of friendly units at a battlefield to their base.",
+      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [0].)\n[Action] (Play on your turn or in showdowns.)\nMove any number of friendly units at a battlefield to their base.",
       "abilities": [
         {
           "keyword": "Hidden",
@@ -1907,7 +1974,9 @@
       "set": "SFD",
       "setName": "Spiritforged",
       "cardType": "gear",
-      "domains": ["calm"],
+      "domains": [
+        "calm"
+      ],
       "rarity": "rare",
       "energy": 2,
       "might": null,
@@ -1915,11 +1984,14 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Equip] [calm] ([calm]: Attach this to a unit you control.)",
+      "rulesText": "[Equip] [calm] ([calm]: Attach this to a unit you control.)\nIf I would die, kill Guardian Angel instead. Heal me, exhaust me, and recall me.",
+      "effectText": "If I would die, kill Guardian Angel instead. Heal me, exhaust me, and recall me.",
       "abilities": [
         {
           "cost": {
-            "power": ["calm"]
+            "power": [
+              "calm"
+            ]
           },
           "keyword": "Equip",
           "type": "keyword"
@@ -2413,7 +2485,9 @@
       "set": "SFD",
       "setName": "Spiritforged",
       "cardType": "gear",
-      "domains": ["mind"],
+      "domains": [
+        "mind"
+      ],
       "rarity": "common",
       "energy": 1,
       "might": null,
@@ -2421,31 +2495,31 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Quick-Draw] (This has [Reaction]. When you play it, attach it to a unit you control.)\n[Equip] [mind] ([mind]: Attach this to a unit you control.)",
+      "rulesText": "[Quick-Draw] (This has [Reaction]. When you play it, attach it to a unit you control.)\n[Equip] [mind] ([mind]: Attach this to a unit you control.)\n[Shield 2] (+2 [Might] while I'm a defender.)",
+      "effectText": "[Shield 2] (+2 [Might] while I'm a defender.)",
       "abilities": [
         {
-          "effect": {
-            "description": "[Quick-Draw] (This has",
-            "effects": [],
-            "type": "sequence"
-          },
-          "type": "static"
-        },
-        {
-          "effect": {
-            "description": ". When you play it, attach it to a unit you control.)",
-            "effects": [],
-            "type": "sequence"
-          },
-          "timing": "reaction",
-          "type": "spell"
+          "keyword": "Quick-Draw",
+          "type": "keyword"
         },
         {
           "cost": {
-            "power": ["mind"]
+            "power": [
+              "mind"
+            ]
           },
           "keyword": "Equip",
           "type": "keyword"
+        },
+        {
+          "effect": {
+            "keyword": "Shield",
+            "target": "self",
+            "type": "grant-keyword",
+            "value": 2
+          },
+          "effectText": true,
+          "type": "static"
         }
       ],
       "parseSuccess": true,
@@ -2664,7 +2738,9 @@
       "set": "SFD",
       "setName": "Spiritforged",
       "cardType": "spell",
-      "domains": ["mind"],
+      "domains": [
+        "mind"
+      ],
       "rarity": "common",
       "energy": 3,
       "might": null,
@@ -2672,7 +2748,7 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [energy_0].)\n[Action] (Play on your turn or in showdowns.)\nDeal 3 to a unit at a battlefield. Play a Gold gear token exhausted.",
+      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [0].)\n[Action] (Play on your turn or in showdowns.)\nDeal 3 to a unit at a battlefield. Play a Gold gear token exhausted.",
       "abilities": [
         {
           "keyword": "Hidden",
@@ -2784,7 +2860,9 @@
       "set": "SFD",
       "setName": "Spiritforged",
       "cardType": "gear",
-      "domains": ["mind"],
+      "domains": [
+        "mind"
+      ],
       "rarity": "uncommon",
       "energy": 1,
       "might": null,
@@ -2792,11 +2870,14 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Equip] [mind] ([mind]: Attach this to a unit you control.)",
+      "rulesText": "[Equip] [mind] ([mind]: Attach this to a unit you control.)\nI am a Mech.",
+      "effectText": "I am a Mech.",
       "abilities": [
         {
           "cost": {
-            "power": ["mind"]
+            "power": [
+              "mind"
+            ]
           },
           "keyword": "Equip",
           "type": "keyword"
@@ -3313,7 +3394,9 @@
       "set": "SFD",
       "setName": "Spiritforged",
       "cardType": "gear",
-      "domains": ["mind"],
+      "domains": [
+        "mind"
+      ],
       "rarity": "rare",
       "energy": 3,
       "might": null,
@@ -3321,14 +3404,34 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Equip] [mind] ([mind]: Attach this to a unit you control.)",
+      "rulesText": "[Equip] [mind] ([mind]: Attach this to a unit you control.)\nWhen I hold, play two Gold gear tokens exhausted.",
+      "effectText": "When I hold, play two Gold gear tokens exhausted.",
       "abilities": [
         {
           "cost": {
-            "power": ["mind"]
+            "power": [
+              "mind"
+            ]
           },
           "keyword": "Equip",
           "type": "keyword"
+        },
+        {
+          "effect": {
+            "token": {
+              "name": "Gold",
+              "type": "gear"
+            },
+            "type": "create-token",
+            "amount": 2,
+            "ready": false
+          },
+          "trigger": {
+            "event": "hold",
+            "on": "self"
+          },
+          "type": "triggered",
+          "effectText": true
         }
       ],
       "parseSuccess": true,
@@ -3471,7 +3574,9 @@
       "set": "SFD",
       "setName": "Spiritforged",
       "cardType": "gear",
-      "domains": ["mind"],
+      "domains": [
+        "mind"
+      ],
       "rarity": "epic",
       "energy": 3,
       "might": null,
@@ -3479,25 +3584,26 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Equip] [1][mind] ([1][mind]: Attach this to a unit you control.)\n[3][mind], Banish this: Play all units banished with this, ignoring their costs. (Use only if unattached.)",
+      "rulesText": "[Equip] [1][mind] ([1][mind]: Attach this to a unit you control.)\n[3][mind], Banish this: Play all units banished with this, ignoring their costs. (Use only if unattached.)\n[Deathknell] — Banish me. (When I die, get the effect.)",
+      "effectText": "[Deathknell] — Banish me. (When I die, get the effect.)",
       "abilities": [
         {
           "cost": {
             "energy": 1,
-            "power": ["mind"]
+            "power": [
+              "mind"
+            ]
           },
           "keyword": "Equip",
           "type": "keyword"
         },
         {
           "cost": {
-            "energy": 3,
-            "power": ["mind"]
+            "energy": 3
           },
           "effect": {
-            "description": "Play all units banished with this, ignoring their costs",
-            "effects": [],
-            "type": "sequence"
+            "text": "rb_rune_mind:, Banish this: Play all units banished with this, ignoring their costs.",
+            "type": "raw"
           },
           "type": "activated"
         }
@@ -3882,7 +3988,9 @@
       "set": "SFD",
       "setName": "Spiritforged",
       "cardType": "gear",
-      "domains": ["body"],
+      "domains": [
+        "body"
+      ],
       "rarity": "uncommon",
       "energy": 2,
       "might": null,
@@ -3890,14 +3998,27 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Equip] [body] ([body]: Attach this to a unit you control.)",
+      "rulesText": "[Equip] [body] ([body]: Attach this to a unit you control.)\n[Deflect] (Opponents must pay [rainbow] to choose me with a spell or ability.)",
+      "effectText": "[Deflect] (Opponents must pay [rainbow] to choose me with a spell or ability.)",
       "abilities": [
         {
           "cost": {
-            "power": ["body"]
+            "power": [
+              "body"
+            ]
           },
           "keyword": "Equip",
           "type": "keyword"
+        },
+        {
+          "effect": {
+            "keyword": "Deflect",
+            "target": "self",
+            "type": "grant-keyword",
+            "value": 1
+          },
+          "effectText": true,
+          "type": "static"
         }
       ],
       "parseSuccess": true,
@@ -4086,7 +4207,9 @@
       "set": "SFD",
       "setName": "Spiritforged",
       "cardType": "gear",
-      "domains": ["body"],
+      "domains": [
+        "body"
+      ],
       "rarity": "uncommon",
       "energy": 1,
       "might": null,
@@ -4094,14 +4217,29 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Equip] [body] ([body]: Attach this to a unit you control.)",
+      "rulesText": "[Equip] [body] ([body]: Attach this to a unit you control.)\nWhen I conquer, buff me. (If I don't have a buff, I get a +1 [Might] buff.)",
+      "effectText": "When I conquer, buff me. (If I don't have a buff, I get a +1 [Might] buff.)",
       "abilities": [
         {
           "cost": {
-            "power": ["body"]
+            "power": [
+              "body"
+            ]
           },
           "keyword": "Equip",
           "type": "keyword"
+        },
+        {
+          "effect": {
+            "target": "self",
+            "type": "buff"
+          },
+          "trigger": {
+            "event": "conquer",
+            "on": "self"
+          },
+          "type": "triggered",
+          "effectText": true
         }
       ],
       "parseSuccess": true,
@@ -4203,7 +4341,9 @@
       "set": "SFD",
       "setName": "Spiritforged",
       "cardType": "spell",
-      "domains": ["body"],
+      "domains": [
+        "body"
+      ],
       "rarity": "rare",
       "energy": 2,
       "might": null,
@@ -4211,7 +4351,7 @@
       "power": 1,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [energy_0].)\n[Action] (Play on your turn or in showdowns.)\nYou may play a unit from hand to a battlefield you control, reducing its cost by [3].",
+      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [0].)\n[Action] (Play on your turn or in showdowns.)\nYou may play a unit from hand to a battlefield you control, reducing its cost by [3].",
       "abilities": [
         {
           "keyword": "Hidden",
@@ -4370,7 +4510,9 @@
       "set": "SFD",
       "setName": "Spiritforged",
       "cardType": "gear",
-      "domains": ["body"],
+      "domains": [
+        "body"
+      ],
       "rarity": "rare",
       "energy": 4,
       "might": null,
@@ -4378,14 +4520,29 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Equip] [body] ([body]: Attach this to a unit you control.)",
+      "rulesText": "[Equip] [body] ([body]: Attach this to a unit you control.)\nWhen I hold, score 1 point.",
+      "effectText": "When I hold, score 1 point.",
       "abilities": [
         {
           "cost": {
-            "power": ["body"]
+            "power": [
+              "body"
+            ]
           },
           "keyword": "Equip",
           "type": "keyword"
+        },
+        {
+          "effect": {
+            "amount": 1,
+            "type": "score"
+          },
+          "trigger": {
+            "event": "hold",
+            "on": "self"
+          },
+          "type": "triggered",
+          "effectText": true
         }
       ],
       "parseSuccess": true,
@@ -4478,7 +4635,9 @@
       "set": "SFD",
       "setName": "Spiritforged",
       "cardType": "gear",
-      "domains": ["body"],
+      "domains": [
+        "body"
+      ],
       "rarity": "epic",
       "energy": 3,
       "might": null,
@@ -4486,15 +4645,31 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Equip] [1][body] ([1][body]: Attach this to a unit you control.)",
+      "rulesText": "[Equip] [1][body] ([1][body]: Attach this to a unit you control.)\nWhen I conquer, channel 1 rune exhausted.",
+      "effectText": "When I conquer, channel 1 rune exhausted.",
       "abilities": [
         {
           "cost": {
             "energy": 1,
-            "power": ["body"]
+            "power": [
+              "body"
+            ]
           },
           "keyword": "Equip",
           "type": "keyword"
+        },
+        {
+          "effect": {
+            "amount": 1,
+            "exhausted": true,
+            "type": "channel"
+          },
+          "trigger": {
+            "event": "conquer",
+            "on": "self"
+          },
+          "type": "triggered",
+          "effectText": true
         }
       ],
       "parseSuccess": true,
@@ -4708,7 +4883,9 @@
       "set": "SFD",
       "setName": "Spiritforged",
       "cardType": "gear",
-      "domains": ["chaos"],
+      "domains": [
+        "chaos"
+      ],
       "rarity": "common",
       "energy": 1,
       "might": null,
@@ -4716,14 +4893,33 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Equip] [chaos] ([chaos]: Attach this to a unit you control.)",
+      "rulesText": "[Equip] [chaos] ([chaos]: Attach this to a unit you control.)\nWhen I conquer, discard 1, then draw 1.",
+      "effectText": "When I conquer, discard 1, then draw 1.",
       "abilities": [
         {
           "cost": {
-            "power": ["chaos"]
+            "power": [
+              "chaos"
+            ]
           },
           "keyword": "Equip",
           "type": "keyword"
+        },
+        {
+          "effect": {
+            "amount": 1,
+            "then": {
+              "amount": 1,
+              "type": "draw"
+            },
+            "type": "discard"
+          },
+          "trigger": {
+            "event": "conquer",
+            "on": "self"
+          },
+          "type": "triggered",
+          "effectText": true
         }
       ],
       "parseSuccess": true,
@@ -5034,7 +5230,9 @@
       "set": "SFD",
       "setName": "Spiritforged",
       "cardType": "gear",
-      "domains": ["chaos"],
+      "domains": [
+        "chaos"
+      ],
       "rarity": "uncommon",
       "energy": 3,
       "might": null,
@@ -5042,14 +5240,26 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Equip] [chaos] ([chaos]: Attach this to a unit you control.)",
+      "rulesText": "[Equip] [chaos] ([chaos]: Attach this to a unit you control.)\n[Ganking] (I can move from battlefield to battlefield.)",
+      "effectText": "[Ganking] (I can move from battlefield to battlefield.)",
       "abilities": [
         {
           "cost": {
-            "power": ["chaos"]
+            "power": [
+              "chaos"
+            ]
           },
           "keyword": "Equip",
           "type": "keyword"
+        },
+        {
+          "effect": {
+            "keyword": "Ganking",
+            "target": "self",
+            "type": "grant-keyword"
+          },
+          "effectText": true,
+          "type": "static"
         }
       ],
       "parseSuccess": true,
@@ -5064,7 +5274,9 @@
       "set": "SFD",
       "setName": "Spiritforged",
       "cardType": "gear",
-      "domains": ["chaos"],
+      "domains": [
+        "chaos"
+      ],
       "rarity": "uncommon",
       "energy": 1,
       "might": null,
@@ -5072,14 +5284,33 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Equip] [chaos] ([chaos]: Attach this to a unit you control.)",
+      "rulesText": "[Equip] [chaos] ([chaos]: Attach this to a unit you control.)\nWhen I conquer, play a Gold gear token exhausted.",
+      "effectText": "When I conquer, play a Gold gear token exhausted.",
       "abilities": [
         {
           "cost": {
-            "power": ["chaos"]
+            "power": [
+              "chaos"
+            ]
           },
           "keyword": "Equip",
           "type": "keyword"
+        },
+        {
+          "effect": {
+            "token": {
+              "name": "Gold",
+              "type": "gear"
+            },
+            "type": "create-token",
+            "ready": false
+          },
+          "trigger": {
+            "event": "conquer",
+            "on": "self"
+          },
+          "type": "triggered",
+          "effectText": true
         }
       ],
       "parseSuccess": true,
@@ -5212,7 +5443,9 @@
       "set": "SFD",
       "setName": "Spiritforged",
       "cardType": "unit",
-      "domains": ["chaos"],
+      "domains": [
+        "chaos"
+      ],
       "rarity": "uncommon",
       "energy": 2,
       "might": 1,
@@ -5220,7 +5453,7 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "Hidden (Hide now for [rainbow] to react with later for [energy_0].)\nWhen you play me, you may return another unit at a battlefield with 3 [Might] or less to its owner's hand.",
+      "rulesText": "Hidden (Hide now for [rainbow] to react with later for [0].)\nWhen you play me, you may return another unit at a battlefield with 3 [Might] or less to its owner's hand.",
       "abilities": [
         {
           "keyword": "Hidden",
@@ -5252,7 +5485,9 @@
       "set": "SFD",
       "setName": "Spiritforged",
       "cardType": "gear",
-      "domains": ["chaos"],
+      "domains": [
+        "chaos"
+      ],
       "rarity": "rare",
       "energy": 3,
       "might": null,
@@ -5260,7 +5495,7 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [energy_0].)\nWhen you play this from face down, attach it to a unit you control (here).\n[Equip] [chaos] ([chaos]: Attach this to a unit you control.)",
+      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [0].)\nWhen you play this from face down, attach it to a unit you control (here).\n[Equip] [chaos] ([chaos]: Attach this to a unit you control.)",
       "abilities": [
         {
           "keyword": "Hidden",
@@ -5281,7 +5516,9 @@
         },
         {
           "cost": {
-            "power": ["chaos"]
+            "power": [
+              "chaos"
+            ]
           },
           "keyword": "Equip",
           "type": "keyword"
@@ -5477,7 +5714,9 @@
       "set": "SFD",
       "setName": "Spiritforged",
       "cardType": "spell",
-      "domains": ["chaos"],
+      "domains": [
+        "chaos"
+      ],
       "rarity": "rare",
       "energy": 2,
       "might": null,
@@ -5485,7 +5724,7 @@
       "power": 2,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [energy_0].)\n[Action] (Play on your turn or in showdowns.)\nSwap the Might of two units at the same battlefield this turn.",
+      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [0].)\n[Action] (Play on your turn or in showdowns.)\nSwap the Might of two units at the same battlefield this turn.",
       "abilities": [
         {
           "keyword": "Hidden",
@@ -5669,7 +5908,9 @@
       "set": "SFD",
       "setName": "Spiritforged",
       "cardType": "gear",
-      "domains": ["chaos"],
+      "domains": [
+        "chaos"
+      ],
       "rarity": "epic",
       "energy": 3,
       "might": null,
@@ -5677,11 +5918,14 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Equip] — [chaos], Recycle 2 cards from your trash (Pay the cost: Attach this to a unit you control.)",
+      "rulesText": "[Equip] — [chaos], Recycle 2 cards from your trash (Pay the cost: Attach this to a unit you control.)\nWhen I conquer or hold, you may play a unit from your trash. (You still pay its costs.)",
+      "effectText": "When I conquer or hold, you may play a unit from your trash. (You still pay its costs.)",
       "abilities": [
         {
           "cost": {
-            "power": ["chaos"],
+            "power": [
+              "chaos"
+            ],
             "recycle": 2
           },
           "keyword": "Equip",
@@ -5782,7 +6026,9 @@
       "set": "SFD",
       "setName": "Spiritforged",
       "cardType": "gear",
-      "domains": ["order"],
+      "domains": [
+        "order"
+      ],
       "rarity": "common",
       "energy": 1,
       "might": null,
@@ -5790,14 +6036,34 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Equip] [order] ([order]: Attach this to a unit you control.)",
+      "rulesText": "[Equip] [order] ([order]: Attach this to a unit you control.)\nWhen I move, play a 1 [Might] Recruit unit token here.",
+      "effectText": "When I move, play a 1 [Might] Recruit unit token here.",
       "abilities": [
         {
           "cost": {
-            "power": ["order"]
+            "power": [
+              "order"
+            ]
           },
           "keyword": "Equip",
           "type": "keyword"
+        },
+        {
+          "effect": {
+            "token": {
+              "might": 1,
+              "name": "Recruit",
+              "type": "unit"
+            },
+            "type": "create-token",
+            "location": "here"
+          },
+          "trigger": {
+            "event": "move",
+            "on": "self"
+          },
+          "type": "triggered",
+          "effectText": true
         }
       ],
       "parseSuccess": true,
@@ -5812,7 +6078,9 @@
       "set": "SFD",
       "setName": "Spiritforged",
       "cardType": "spell",
-      "domains": ["order"],
+      "domains": [
+        "order"
+      ],
       "rarity": "common",
       "energy": 3,
       "might": null,
@@ -5820,7 +6088,7 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [energy_0].)\nPlay a 2 [Might] Sand Soldier unit token. You may pay [order] to ready it.",
+      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [0].)\nPlay a 2 [Might] Sand Soldier unit token. You may pay [order] to ready it.",
       "abilities": [
         {
           "keyword": "Hidden",
@@ -6464,7 +6732,9 @@
       "set": "SFD",
       "setName": "Spiritforged",
       "cardType": "gear",
-      "domains": ["order"],
+      "domains": [
+        "order"
+      ],
       "rarity": "rare",
       "energy": 2,
       "might": null,
@@ -6472,14 +6742,30 @@
       "power": 1,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Equip] [order] ([order]: Attach this to a unit you control.)",
+      "rulesText": "[Equip] [order] ([order]: Attach this to a unit you control.)\n[Deathknell] — Draw 1. (When I die, get the effect.)",
+      "effectText": "[Deathknell] — Draw 1. (When I die, get the effect.)",
       "abilities": [
         {
           "cost": {
-            "power": ["order"]
+            "power": [
+              "order"
+            ]
           },
           "keyword": "Equip",
           "type": "keyword"
+        },
+        {
+          "effect": {
+            "amount": 1,
+            "type": "draw"
+          },
+          "trigger": {
+            "event": "die",
+            "on": "self"
+          },
+          "type": "triggered",
+          "effectText": true,
+          "name": "Deathknell"
         }
       ],
       "parseSuccess": true,
@@ -7142,7 +7428,10 @@
       "set": "SFD",
       "setName": "Spiritforged",
       "cardType": "gear",
-      "domains": ["calm", "mind"],
+      "domains": [
+        "calm",
+        "mind"
+      ],
       "rarity": "epic",
       "energy": 4,
       "might": null,
@@ -7150,7 +7439,8 @@
       "power": 2,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Unique] (Your deck can have only 1 card with this name.)\n[Equip] [rainbow] ([rainbow]: Attach this to a unit you control.)",
+      "rulesText": "[Unique] (Your deck can have only 1 card with this name.)\n[Equip] [rainbow] ([rainbow]: Attach this to a unit you control.)\nWhen I attack or defend, deal 2 to all enemy units here.",
+      "effectText": "When I attack or defend, deal 2 to all enemy units here.",
       "abilities": [
         {
           "keyword": "Unique",
@@ -7158,10 +7448,30 @@
         },
         {
           "cost": {
-            "power": ["rainbow"]
+            "power": [
+              "rainbow"
+            ]
           },
           "keyword": "Equip",
           "type": "keyword"
+        },
+        {
+          "effect": {
+            "amount": 2,
+            "target": {
+              "type": "unit",
+              "controller": "enemy",
+              "quantity": "all",
+              "location": "here"
+            },
+            "type": "damage"
+          },
+          "trigger": {
+            "event": "attack-or-defend",
+            "on": "self"
+          },
+          "type": "triggered",
+          "effectText": true
         }
       ],
       "parseSuccess": true,
@@ -7176,7 +7486,10 @@
       "set": "SFD",
       "setName": "Spiritforged",
       "cardType": "gear",
-      "domains": ["calm", "mind"],
+      "domains": [
+        "calm",
+        "mind"
+      ],
       "rarity": "epic",
       "energy": 4,
       "might": null,
@@ -7184,7 +7497,8 @@
       "power": 2,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Unique] (Your deck can have only 1 card with this name.)\n[Equip] [rainbow] ([rainbow]: Attach this to a unit you control.)",
+      "rulesText": "[Unique] (Your deck can have only 1 card with this name.)\n[Equip] [rainbow] ([rainbow]: Attach this to a unit you control.)\nYour spells and abilities deal 3 Bonus Damage (while this is attached).",
+      "effectText": "Your spells and abilities deal 3 Bonus Damage (while this is attached).",
       "abilities": [
         {
           "keyword": "Unique",
@@ -7192,7 +7506,9 @@
         },
         {
           "cost": {
-            "power": ["rainbow"]
+            "power": [
+              "rainbow"
+            ]
           },
           "keyword": "Equip",
           "type": "keyword"
@@ -7210,7 +7526,10 @@
       "set": "SFD",
       "setName": "Spiritforged",
       "cardType": "gear",
-      "domains": ["calm", "mind"],
+      "domains": [
+        "calm",
+        "mind"
+      ],
       "rarity": "epic",
       "energy": 4,
       "might": null,
@@ -7218,7 +7537,8 @@
       "power": 2,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Unique] (Your deck can have only 1 card with this name.)\n[Equip] [rainbow] ([rainbow]: Attach this to a unit you control.)\nWhen you play this, ready your units.",
+      "rulesText": "[Unique] (Your deck can have only 1 card with this name.)\n[Equip] [rainbow] ([rainbow]: Attach this to a unit you control.)\nWhen you play this, ready your units.\nYour units here have [Ganking]. (We can move from battlefield to battlefield.)",
+      "effectText": "Your units here have [Ganking]. (We can move from battlefield to battlefield.)",
       "abilities": [
         {
           "keyword": "Unique",
@@ -7226,23 +7546,39 @@
         },
         {
           "cost": {
-            "power": ["rainbow"]
+            "power": [
+              "rainbow"
+            ]
           },
           "keyword": "Equip",
           "type": "keyword"
         },
         {
           "effect": {
-            "description": "When you play this, ready your units",
-            "effects": [],
-            "type": "sequence"
+            "target": {
+              "controller": "friendly",
+              "quantity": "all",
+              "type": "unit"
+            },
+            "type": "ready"
           },
-          "optional": false,
           "trigger": {
-            "event": "play-self",
-            "on": "self"
+            "event": "play-self"
           },
           "type": "triggered"
+        },
+        {
+          "effect": {
+            "keyword": "Ganking",
+            "target": {
+              "type": "unit",
+              "controller": "friendly",
+              "location": "here"
+            },
+            "type": "grant-keyword"
+          },
+          "type": "static",
+          "effectText": true
         }
       ],
       "parseSuccess": true,
@@ -7611,7 +7947,10 @@
       "set": "SFD",
       "setName": "Spiritforged",
       "cardType": "spell",
-      "domains": ["mind", "order"],
+      "domains": [
+        "mind",
+        "order"
+      ],
       "rarity": "epic",
       "energy": 5,
       "might": null,
@@ -7619,7 +7958,7 @@
       "power": 2,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [energy_0].)\nTake control of an enemy unit at a battlefield. Ready it. (Start a combat if other enemies are there. Otherwise, conquer.)\nLose control of that unit and recall it at end of turn. (Send it to base. This isn't a move.)",
+      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [0].)\nTake control of an enemy unit at a battlefield. Ready it. (Start a combat if other enemies are there. Otherwise, conquer.)\nLose control of that unit and recall it at end of turn. (Send it to base. This isn't a move.)",
       "abilities": [
         {
           "keyword": "Hidden",

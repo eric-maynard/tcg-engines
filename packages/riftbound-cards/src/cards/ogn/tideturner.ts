@@ -38,6 +38,6 @@ export const tideturner: UnitCard = {
   name: "Tideturner",
   rarity: "rare",
   rulesText:
-    "[Hidden] (Hide now for [rainbow] to react with later for [energy_0].)\nWhen you play me, you may choose a unit you control at another location. Move me to its location and it to my original location.",
+    "[Hidden] (Hide now for [rainbow] to react with later for [0].)\nWhen you play me, you may choose a unit you control at another location. Move me to its location and it to my original location.",
   setId: "OGN",
 };

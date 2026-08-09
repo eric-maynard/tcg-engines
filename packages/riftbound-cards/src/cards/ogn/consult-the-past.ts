@@ -10,7 +10,7 @@ export const consultThePast: SpellCard = {
   name: "Consult the Past",
   rarity: "common",
   rulesText:
-    "[Hidden] (Hide now for [rainbow] to react with later for [energy_0].)\n[Reaction] (Play any time, even before spells and abilities resolve.)\nDraw 2.",
+    "[Hidden] (Hide now for [rainbow] to react with later for [0].)\n[Reaction] (Play any time, even before spells and abilities resolve.)\nDraw 2.",
   setId: "OGN",
   timing: "reaction",
 };

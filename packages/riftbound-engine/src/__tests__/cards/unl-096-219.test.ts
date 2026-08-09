@@ -59,7 +59,13 @@ describe("Hunter's Machete (unl-096-219)", () => {
     const def = (await loadDefaultCardPool()).get(CARD);
     expect(def).toMatchObject({ cardType: "equipment", domain: "body", energyCost: 3, mightBonus: 2, name: "Hunter's Machete" });
     expect(def?.powerCost ?? []).toEqual([]);
-    expect(def?.abilities).toEqual([{ cost: { power: ["body"] }, keyword: "Equip", type: "keyword" }]);
+    // Effect Text (gallery `effect`, rule 136 / 150.2 / 718.3): "[Hunt] (When I conquer or hold, gain 1 XP.)" —
+    // conferred on the equipped unit while attached, hence the `effectText: true` entries.
+    expect(def?.abilities).toEqual([
+      { cost: { power: ["body"] }, keyword: "Equip", type: "keyword" },
+      { effect: { amount: 1, type: "gain-xp" }, effectText: true, name: "Hunt", trigger: { event: "conquer", on: "self" }, type: "triggered" },
+      { effect: { amount: 1, type: "gain-xp" }, effectText: true, name: "Hunt", trigger: { event: "hold", on: "self" }, type: "triggered" },
+    ] as never);
   });
 
   test("PLAY: exactly 3 energy (body power untouched), lands in base unattached; 2 energy + body power is not enough; not on the opponent's turn", async () => {

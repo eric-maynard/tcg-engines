@@ -187,7 +187,9 @@
       "set": "UNL",
       "setName": "Unleashed",
       "cardType": "unit",
-      "domains": ["fury"],
+      "domains": [
+        "fury"
+      ],
       "rarity": "common",
       "energy": 2,
       "might": 2,
@@ -195,7 +197,7 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [energy_0].)\nWhen you play me to a battlefield, deal 2 to an enemy unit here.",
+      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [0].)\nWhen you play me to a battlefield, deal 2 to an enemy unit here.",
       "abilities": [
         {
           "keyword": "Hidden",
@@ -655,7 +657,9 @@
       "set": "UNL",
       "setName": "Unleashed",
       "cardType": "spell",
-      "domains": ["fury"],
+      "domains": [
+        "fury"
+      ],
       "rarity": "uncommon",
       "energy": 2,
       "might": null,
@@ -663,7 +667,7 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [energy_0].)\n[Reaction] (Play any time, even before spells and abilities resolve.)\nChoose a unit. Double all damage that would be dealt to it this turn.",
+      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [0].)\n[Reaction] (Play any time, even before spells and abilities resolve.)\nChoose a unit. Double all damage that would be dealt to it this turn.",
       "abilities": [
         {
           "keyword": "Hidden",
@@ -866,7 +870,9 @@
       "set": "UNL",
       "setName": "Unleashed",
       "cardType": "gear",
-      "domains": ["fury"],
+      "domains": [
+        "fury"
+      ],
       "rarity": "rare",
       "energy": 4,
       "might": null,
@@ -874,15 +880,31 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Equip] [1][fury] ([1][fury]: Attach this to a unit you control.)",
+      "rulesText": "[Equip] [1][fury] ([1][fury]: Attach this to a unit you control.)\nAt the end of your turn, if I didn't conquer this turn, unattach this and deal 4 to me.",
+      "effectText": "At the end of your turn, if I didn't conquer this turn, unattach this and deal 4 to me.",
       "abilities": [
         {
           "cost": {
             "energy": 1,
-            "power": ["fury"]
+            "power": [
+              "fury"
+            ]
           },
           "keyword": "Equip",
           "type": "keyword"
+        },
+        {
+          "effect": {
+            "text": "if I didn't conquer this turn, unattach this and deal 4 to me.",
+            "type": "raw"
+          },
+          "trigger": {
+            "event": "end-of-turn",
+            "on": "controller",
+            "timing": "at"
+          },
+          "type": "triggered",
+          "effectText": true
         }
       ],
       "parseSuccess": true,
@@ -1220,15 +1242,19 @@
       "set": "UNL",
       "setName": "Unleashed",
       "cardType": "unit",
-      "domains": ["fury"],
+      "domains": [
+        "fury"
+      ],
       "rarity": "epic",
       "energy": 3,
       "might": 2,
       "mightBonus": null,
       "power": null,
-      "tags": ["Pyke"],
+      "tags": [
+        "Pyke"
+      ],
       "isChampion": true,
-      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [energy_0].)\n[Ganking] (I can move from battlefield to battlefield.)\nYou may pay [fury] as an additional cost to play me.\nWhen you play me, if you paid the additional cost, ready me and give me +2 [Might] this turn.",
+      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [0].)\n[Ganking] (I can move from battlefield to battlefield.)\nYou may pay [fury] as an additional cost to play me.\nWhen you play me, if you paid the additional cost, ready me and give me +2 [Might] this turn.",
       "abilities": [
         {
           "keyword": "Hidden",
@@ -1664,7 +1690,9 @@
       "set": "UNL",
       "setName": "Unleashed",
       "cardType": "gear",
-      "domains": ["calm"],
+      "domains": [
+        "calm"
+      ],
       "rarity": "common",
       "energy": 1,
       "might": null,
@@ -1672,14 +1700,30 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Equip] [calm] ([calm]: Attach this to a unit you control.)",
+      "rulesText": "[Equip] [calm] ([calm]: Attach this to a unit you control.)\n[Level 3][>] I have an additional +1 [Might]. (While you have 3+ XP, get the effect.)",
+      "effectText": "[Level 3][>] I have an additional +1 [Might]. (While you have 3+ XP, get the effect.)",
       "abilities": [
         {
           "cost": {
-            "power": ["calm"]
+            "power": [
+              "calm"
+            ]
           },
           "keyword": "Equip",
           "type": "keyword"
+        },
+        {
+          "effect": {
+            "amount": 1,
+            "target": "self",
+            "type": "modify-might"
+          },
+          "type": "static",
+          "condition": {
+            "threshold": 3,
+            "type": "while-level"
+          },
+          "effectText": true
         }
       ],
       "parseSuccess": true,
@@ -1762,7 +1806,9 @@
       "set": "UNL",
       "setName": "Unleashed",
       "cardType": "spell",
-      "domains": ["calm"],
+      "domains": [
+        "calm"
+      ],
       "rarity": "uncommon",
       "energy": 3,
       "might": null,
@@ -1770,7 +1816,7 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [energy_0].)\n[Action] (Play on your turn or in showdowns.)\n[Stun] a unit. (It doesn't deal combat damage this turn.)\nIf you played this from your hand, draw 1.",
+      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [0].)\n[Action] (Play on your turn or in showdowns.)\n[Stun] a unit. (It doesn't deal combat damage this turn.)\nIf you played this from your hand, draw 1.",
       "abilities": [
         {
           "keyword": "Hidden",
@@ -3288,7 +3334,9 @@
       "set": "UNL",
       "setName": "Unleashed",
       "cardType": "unit",
-      "domains": ["mind"],
+      "domains": [
+        "mind"
+      ],
       "rarity": "rare",
       "energy": 2,
       "might": 1,
@@ -3296,7 +3344,7 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [energy_0].)\n[Temporary] (Kill me at the start of my controller's Beginning Phase, before scoring.)\nWhen you play me, play two Reflection unit tokens here. They become copies of me.",
+      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [0].)\n[Temporary] (Kill me at the start of my controller's Beginning Phase, before scoring.)\nWhen you play me, play two Reflection unit tokens here. They become copies of me.",
       "abilities": [
         {
           "keyword": "Hidden",
@@ -3379,7 +3427,9 @@
       "set": "UNL",
       "setName": "Unleashed",
       "cardType": "spell",
-      "domains": ["mind"],
+      "domains": [
+        "mind"
+      ],
       "rarity": "rare",
       "energy": 2,
       "might": null,
@@ -3387,7 +3437,7 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [energy_0].)\n[Action] (Play on your turn or in showdowns.)\nChoose a unit you control and another unit you control at a different location. If at least one of them has [Temporary], move each to the other's location. Draw 1.",
+      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [0].)\n[Action] (Play on your turn or in showdowns.)\nChoose a unit you control and another unit you control at a different location. If at least one of them has [Temporary], move each to the other's location. Draw 1.",
       "abilities": [
         {
           "keyword": "Hidden",
@@ -3889,7 +3939,9 @@
       "set": "UNL",
       "setName": "Unleashed",
       "cardType": "gear",
-      "domains": ["body"],
+      "domains": [
+        "body"
+      ],
       "rarity": "common",
       "energy": 3,
       "might": null,
@@ -3897,14 +3949,43 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Equip] [body] ([body]: Attach this to a unit you control.)",
+      "rulesText": "[Equip] [body] ([body]: Attach this to a unit you control.)\n[Hunt] (When I conquer or hold, gain 1 XP.)",
+      "effectText": "[Hunt] (When I conquer or hold, gain 1 XP.)",
       "abilities": [
         {
           "cost": {
-            "power": ["body"]
+            "power": [
+              "body"
+            ]
           },
           "keyword": "Equip",
           "type": "keyword"
+        },
+        {
+          "effect": {
+            "amount": 1,
+            "type": "gain-xp"
+          },
+          "trigger": {
+            "event": "conquer",
+            "on": "self"
+          },
+          "type": "triggered",
+          "effectText": true,
+          "name": "Hunt"
+        },
+        {
+          "effect": {
+            "amount": 1,
+            "type": "gain-xp"
+          },
+          "trigger": {
+            "event": "hold",
+            "on": "self"
+          },
+          "type": "triggered",
+          "effectText": true,
+          "name": "Hunt"
         }
       ],
       "parseSuccess": true,
@@ -5456,7 +5537,9 @@
       "set": "UNL",
       "setName": "Unleashed",
       "cardType": "spell",
-      "domains": ["chaos"],
+      "domains": [
+        "chaos"
+      ],
       "rarity": "rare",
       "energy": 2,
       "might": null,
@@ -5464,7 +5547,7 @@
       "power": 1,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [energy_0].)\nChoose a battlefield. An opponent reveals their hand. You may choose a unit from it. They play that unit to that battlefield, ignoring any and all costs. When they do, [Stun] it. (It doesn't deal combat damage this turn.)",
+      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [0].)\nChoose a battlefield. An opponent reveals their hand. You may choose a unit from it. They play that unit to that battlefield, ignoring any and all costs. When they do, [Stun] it. (It doesn't deal combat damage this turn.)",
       "abilities": [
         {
           "keyword": "Hidden",
@@ -5530,15 +5613,19 @@
       "set": "UNL",
       "setName": "Unleashed",
       "cardType": "unit",
-      "domains": ["chaos"],
+      "domains": [
+        "chaos"
+      ],
       "rarity": "rare",
       "energy": 2,
       "might": 2,
       "mightBonus": null,
       "power": null,
-      "tags": ["Evelynn"],
+      "tags": [
+        "Evelynn"
+      ],
       "isChampion": true,
-      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [energy_0].)\n[Backline] (I must be assigned combat damage last.)\nWhen you play me from face down on your turn, you may move an enemy unit at a different location to my battlefield.",
+      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [0].)\n[Backline] (I must be assigned combat damage last.)\nWhen you play me from face down on your turn, you may move an enemy unit at a different location to my battlefield.",
       "abilities": [
         {
           "keyword": "Hidden",
@@ -5704,15 +5791,19 @@
       "set": "UNL",
       "setName": "Unleashed",
       "cardType": "unit",
-      "domains": ["chaos"],
+      "domains": [
+        "chaos"
+      ],
       "rarity": "rare",
       "energy": 3,
       "might": 3,
       "mightBonus": null,
       "power": null,
-      "tags": ["Pyke"],
+      "tags": [
+        "Pyke"
+      ],
       "isChampion": true,
-      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [energy_0].)\n[Backline] (I must be assigned combat damage last.)\nOnce each turn, when an enemy unit dies while I'm at a battlefield, play a Gold gear token exhausted. (It has \"[Reaction][>] Kill this, [Exhaust]: [Add] [rainbow].\")",
+      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [0].)\n[Backline] (I must be assigned combat damage last.)\nOnce each turn, when an enemy unit dies while I'm at a battlefield, play a Gold gear token exhausted. (It has \"[Reaction][>] Kill this, [Exhaust]: [Add] [rainbow].\")",
       "abilities": [
         {
           "keyword": "Hidden",
@@ -7353,7 +7444,10 @@
       "set": "UNL",
       "setName": "Unleashed",
       "cardType": "gear",
-      "domains": ["fury", "order"],
+      "domains": [
+        "fury",
+        "order"
+      ],
       "rarity": "epic",
       "energy": 3,
       "might": null,
@@ -7361,15 +7455,41 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Equip] [3][rainbow]. This ability's Energy cost is reduced by the Might of the unit you choose. (Pay the cost: Attach this to a unit you control.)",
+      "rulesText": "[Equip] [3][rainbow]. This ability's Energy cost is reduced by the Might of the unit you choose. (Pay the cost: Attach this to a unit you control.)\nWhen I conquer, if you assigned 3 or more excess damage, draw 1.",
+      "effectText": "When I conquer, if you assigned 3 or more excess damage, draw 1.",
       "abilities": [
         {
           "cost": {
             "energy": 3,
-            "power": ["rainbow"]
+            "power": [
+              "rainbow"
+            ]
           },
           "keyword": "Equip",
           "type": "keyword"
+        },
+        {
+          "effect": {
+            "text": ". This ability's Energy cost is reduced by the Might of the unit you choose.",
+            "type": "raw"
+          },
+          "type": "static"
+        },
+        {
+          "effect": {
+            "amount": 1,
+            "type": "draw"
+          },
+          "trigger": {
+            "event": "conquer",
+            "on": "self"
+          },
+          "type": "triggered",
+          "condition": {
+            "amount": 3,
+            "type": "excess-damage-assigned"
+          },
+          "effectText": true
         }
       ],
       "parseSuccess": true,

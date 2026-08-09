@@ -36,6 +36,6 @@ export const carrionDredger: UnitCard = {
   name: "Carrion Dredger",
   rarity: "common",
   rulesText:
-    "[Deathknell][&gt;] Play a 1 [Might] Bird unit token with [Deflect] to your base. (When I die, get the effect. Opponents must pay [rainbow] to choose a [Deflect] unit with a spell or ability.)",
+    "[Deathknell][>] Play a 1 [Might] Bird unit token with [Deflect] to your base. (When I die, get the effect. Opponents must pay [rainbow] to choose a [Deflect] unit with a spell or ability.)",
   setId: "UNL",
 };

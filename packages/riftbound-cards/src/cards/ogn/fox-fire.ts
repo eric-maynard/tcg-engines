@@ -10,7 +10,7 @@ export const foxFire: SpellCard = {
   name: "Fox-Fire",
   rarity: "epic",
   rulesText:
-    "[Hidden] (Hide now for [rainbow] to react with later for [energy_0].)\n[Action] (Play on your turn or in showdowns.)\nKill any number of units at a battlefield with total Might 4 or less.",
+    "[Hidden] (Hide now for [rainbow] to react with later for [0].)\n[Action] (Play on your turn or in showdowns.)\nKill any number of units at a battlefield with total Might 4 or less.",
   setId: "OGN",
   timing: "action",
 };

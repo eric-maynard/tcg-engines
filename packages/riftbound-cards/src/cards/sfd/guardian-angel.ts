@@ -33,11 +33,13 @@ export const guardianAngel: EquipmentCard = {
   cardNumber: 51,
   cardType: "equipment",
   domain: "calm",
+  effectText: "If I would die, kill Guardian Angel instead. Heal me, exhaust me, and recall me.",
   energyCost: 2,
   id: createCardId("sfd-051-221"),
   mightBonus: 1,
   name: "Guardian Angel",
   rarity: "rare",
-  rulesText: "[Equip] [calm] ([calm]: Attach this to a unit you control.)",
+  rulesText:
+    "[Equip] [calm] ([calm]: Attach this to a unit you control.)\nIf I would die, kill Guardian Angel instead. Heal me, exhaust me, and recall me.",
   setId: "SFD",
 };

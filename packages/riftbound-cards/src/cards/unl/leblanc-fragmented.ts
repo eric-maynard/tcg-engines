@@ -12,7 +12,7 @@ export const leblancFragmented: UnitCard = {
   name: "LeBlanc, Fragmented",
   rarity: "rare",
   rulesText:
-    "[Assault] (+1 [Might] while I'm an attacker.)\n[Deathknell][&gt;] Draw 1. If it's your Beginning Phase, draw 2 instead. (When I die, get the effect.)",
+    "[Assault] (+1 [Might] while I'm an attacker.)\n[Deathknell][>] Draw 1. If it's your Beginning Phase, draw 2 instead. (When I die, get the effect.)",
   setId: "UNL",
   tags: ["LeBlanc"],
 };

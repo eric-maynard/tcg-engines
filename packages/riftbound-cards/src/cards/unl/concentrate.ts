@@ -10,7 +10,7 @@ export const concentrate: SpellCard = {
   name: "Concentrate",
   rarity: "common",
   rulesText:
-    "Draw 2.\n[Level 6][&gt;] This costs [2] less. (While you have 6+ XP, get the effect.)\n[Level 11][&gt;] This costs [4] less instead.",
+    "Draw 2.\n[Level 6][>] This costs [2] less. (While you have 6+ XP, get the effect.)\n[Level 11][>] This costs [4] less instead.",
   setId: "UNL",
   timing: "action",
 };

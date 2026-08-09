@@ -50,6 +50,6 @@ export const forgeOfTheFluft: BattlefieldCard = {
   name: "Forge of the Fluft",
   rarity: "uncommon",
   rulesText:
-    "While you control this battlefield, friendly legends have &quot;[Exhaust]: Attach an Equipment you control to a unit you control.&quot;",
+    "While you control this battlefield, friendly legends have \"[Exhaust]: Attach an Equipment you control to a unit you control.\"",
   setId: "SFD",
 };

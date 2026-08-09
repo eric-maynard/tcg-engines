@@ -11,6 +11,6 @@ export const blackRoseDignitary: UnitCard = {
   name: "Black Rose Dignitary",
   rarity: "common",
   rulesText:
-    "[Assault] (+1 [Might] while I'm an attacker.)\n[Deathknell][&gt;] Channel 1 rune exhausted. (When I die, get the effect.)",
+    "[Assault] (+1 [Might] while I'm an attacker.)\n[Deathknell][>] Channel 1 rune exhausted. (When I die, get the effect.)",
   setId: "UNL",
 };

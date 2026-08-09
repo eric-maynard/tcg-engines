@@ -52,7 +52,7 @@ export const relentlessPursuit: SpellCard = {
   name: "Relentless Pursuit",
   rarity: "epic",
   rulesText:
-    "[Action] (Play on your turn or in showdowns.)\nMove a friendly unit. You may attach an Equipment with the same controller to it. This turn, that unit has &quot;When I conquer, you may move me to my base.&quot;",
+    "[Action] (Play on your turn or in showdowns.)\nMove a friendly unit. You may attach an Equipment with the same controller to it. This turn, that unit has \"When I conquer, you may move me to my base.\"",
   setId: "SFD",
   timing: "action",
 };

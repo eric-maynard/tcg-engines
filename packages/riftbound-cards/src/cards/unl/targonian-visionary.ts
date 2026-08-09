@@ -10,6 +10,6 @@ export const targonianVisionary: UnitCard = {
   might: 6,
   name: "Targonian Visionary",
   rarity: "common",
-  rulesText: "[Level 11][&gt;] I have +4 [Might]. (While you have 11+ XP, get the effect.)",
+  rulesText: "[Level 11][>] I have +4 [Might]. (While you have 11+ XP, get the effect.)",
   setId: "UNL",
 };

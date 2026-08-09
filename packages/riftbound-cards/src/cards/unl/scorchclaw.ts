@@ -11,6 +11,6 @@ export const scorchclaw: UnitCard = {
   name: "Scorchclaw",
   rarity: "uncommon",
   rulesText:
-    "[Hunt 2] (When I conquer or hold, gain 2 XP.)\n[Level 3][&gt;] I have +1 [Might] and enter ready. (While you have 3+ XP, get the effect.)",
+    "[Hunt 2] (When I conquer or hold, gain 2 XP.)\n[Level 3][>] I have +1 [Might] and enter ready. (While you have 3+ XP, get the effect.)",
   setId: "UNL",
 };

@@ -10,7 +10,7 @@ export const block: SpellCard = {
   name: "Block",
   rarity: "uncommon",
   rulesText:
-    "[Hidden] (Hide now for [rainbow] to react with later for [energy_0].)\n[Action] (Play on your turn or in showdowns.)\nGive a unit [Shield 3] and [Tank] this turn. (+3 [Might] while it's a defender. It must be assigned combat damage first.)",
+    "[Hidden] (Hide now for [rainbow] to react with later for [0].)\n[Action] (Play on your turn or in showdowns.)\nGive a unit [Shield 3] and [Tank] this turn. (+3 [Might] while it's a defender. It must be assigned combat damage first.)",
   setId: "OGN",
   timing: "action",
 };

@@ -11,6 +11,6 @@ export const wujuApprentice: UnitCard = {
   name: "Wuju Apprentice",
   rarity: "common",
   rulesText:
-    "[Hunt] (When I conquer or hold, gain 1 XP.)\n[Level 6][&gt;] When you play me, draw 1. (While you have 6+ XP, get the effect.)",
+    "[Hunt] (When I conquer or hold, gain 1 XP.)\n[Level 6][>] When you play me, draw 1. (While you have 6+ XP, get the effect.)",
   setId: "UNL",
 };

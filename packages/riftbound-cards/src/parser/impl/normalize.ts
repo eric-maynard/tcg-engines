@@ -37,15 +37,14 @@ export function stripReminders(text: string): string {
  *   - `[Exhaust]` -> `:rb_exhaust:`
  *   - `[N]` (number) -> `:rb_energy_N:`
  *   - `[fury]`, `[calm]`, etc. -> `:rb_rune_X:`
- *   - `[&gt;]` / `[>]` / `[>>]` indicator markers -> stripped. These are
+ *   - `[>]` / `[>>]` indicator markers -> stripped. These are
  *     visual arrows that separate a timing / threshold prefix (e.g.
  *     `[Reaction][>]`, `[Level 6][>]`, `[Deathknell][>]`) from the effect
- *     text and carry no parser-relevant meaning.
+ *     text and carry no parser-relevant meaning. (Card text is plain text by
+ *     the time it reaches the parser — HTML entities are decoded at import.)
  */
 export function normalizeTokens(text: string): string {
   let result = text;
-  // Decode the HTML entity used in card text for the ">" arrow.
-  result = result.replace(/&gt;/g, ">");
   // Strip "[>]" / "[>>]" indicator arrows wherever they appear.
   result = result.replace(/\[>>?\]/g, " ");
   // Convert [Might] to :rb_might: (case-insensitive)
@@ -77,7 +76,7 @@ export function normalizeTokens(text: string): string {
     /(^|\n)([ \t]*)(Accelerate|Equip|Repeat|Flow)(?=\s+:rb_(?:energy_\d+|rune_[a-z]+):)/g,
     (_match, lead: string, indent: string, keyword: string) => `${lead}${indent}[${keyword}]`,
   );
-  // Collapse runs of whitespace left behind by arrow/entity removal.
+  // Collapse runs of whitespace left behind by arrow removal.
   result = result.replace(/\s{2,}/g, " ");
   return result;
 }

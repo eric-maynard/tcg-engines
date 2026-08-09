@@ -10,7 +10,7 @@ export const spriteCall: SpellCard = {
   name: "Sprite Call",
   rarity: "common",
   rulesText:
-    "[Hidden] (Hide now for [rainbow] to react with later for [energy_0].)\n[Action] (Play on your turn or in showdowns.)\nPlay a ready 3 [Might] Sprite unit token with [Temporary]. (Kill it at the start of its controller's Beginning Phase, before scoring.)",
+    "[Hidden] (Hide now for [rainbow] to react with later for [0].)\n[Action] (Play on your turn or in showdowns.)\nPlay a ready 3 [Might] Sprite unit token with [Temporary]. (Kill it at the start of its controller's Beginning Phase, before scoring.)",
   setId: "OGN",
   timing: "action",
 };

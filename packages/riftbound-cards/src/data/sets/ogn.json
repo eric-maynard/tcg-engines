@@ -1892,7 +1892,9 @@
       "set": "OGN",
       "setName": "Origins",
       "cardType": "spell",
-      "domains": ["calm"],
+      "domains": [
+        "calm"
+      ],
       "rarity": "common",
       "energy": 3,
       "might": null,
@@ -1900,7 +1902,7 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [energy_0].)\n[Action] (Play on your turn or in showdowns.)\nBuff a friendly unit. Buffs give an additional +1 [Might] to friendly units this turn. (To buff a unit, give it a +1 [Might] buff if it doesn't already have one.)",
+      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [0].)\n[Action] (Play on your turn or in showdowns.)\nBuff a friendly unit. Buffs give an additional +1 [Might] to friendly units this turn. (To buff a unit, give it a +1 [Might] buff if it doesn't already have one.)",
       "abilities": [
         {
           "keyword": "Hidden",
@@ -2035,7 +2037,9 @@
       "set": "OGN",
       "setName": "Origins",
       "cardType": "spell",
-      "domains": ["calm"],
+      "domains": [
+        "calm"
+      ],
       "rarity": "uncommon",
       "energy": 2,
       "might": null,
@@ -2043,7 +2047,7 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [energy_0].)\n[Action] (Play on your turn or in showdowns.)\nGive a unit [Shield 3] and [Tank] this turn. (+3 [Might] while it's a defender. It must be assigned combat damage first.)",
+      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [0].)\n[Action] (Play on your turn or in showdowns.)\nGive a unit [Shield 3] and [Tank] this turn. (+3 [Might] while it's a defender. It must be assigned combat damage first.)",
       "abilities": [
         {
           "effect": {
@@ -2795,7 +2799,9 @@
       "set": "OGN",
       "setName": "Origins",
       "cardType": "gear",
-      "domains": ["calm"],
+      "domains": [
+        "calm"
+      ],
       "rarity": "rare",
       "energy": 2,
       "might": null,
@@ -2803,7 +2809,7 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [energy_0].)\nIf a friendly unit would die, kill this instead. Heal that unit, exhaust it, and recall it. (Send it to base. This isn't a move.)",
+      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [0].)\nIf a friendly unit would die, kill this instead. Heal that unit, exhaust it, and recall it. (Send it to base. This isn't a move.)",
       "abilities": [
         {
           "keyword": "Hidden",
@@ -3025,7 +3031,9 @@
       "set": "OGN",
       "setName": "Origins",
       "cardType": "spell",
-      "domains": ["mind"],
+      "domains": [
+        "mind"
+      ],
       "rarity": "common",
       "energy": 4,
       "might": null,
@@ -3033,7 +3041,7 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [energy_0].)\n[Reaction] (Play any time, even before spells and abilities resolve.)\nDraw 2.",
+      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [0].)\n[Reaction] (Play any time, even before spells and abilities resolve.)\nDraw 2.",
       "abilities": [
         {
           "keyword": "Hidden",
@@ -3407,7 +3415,9 @@
       "set": "OGN",
       "setName": "Origins",
       "cardType": "spell",
-      "domains": ["mind"],
+      "domains": [
+        "mind"
+      ],
       "rarity": "common",
       "energy": 3,
       "might": null,
@@ -3415,7 +3425,7 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [energy_0].)\n[Action] (Play on your turn or in showdowns.)\nPlay a ready 3 [Might] Sprite unit token with [Temporary]. (Kill it at the start of its controller's Beginning Phase, before scoring.)",
+      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [0].)\n[Action] (Play on your turn or in showdowns.)\nPlay a ready 3 [Might] Sprite unit token with [Temporary]. (Kill it at the start of its controller's Beginning Phase, before scoring.)",
       "abilities": [
         {
           "keyword": "Hidden",
@@ -3520,7 +3530,9 @@
       "set": "OGN",
       "setName": "Origins",
       "cardType": "unit",
-      "domains": ["mind"],
+      "domains": [
+        "mind"
+      ],
       "rarity": "uncommon",
       "energy": 2,
       "might": 2,
@@ -3528,7 +3540,7 @@
       "power": 1,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [energy_0].)\nWhen you play me, give a unit -2 [Might] this turn, to a minimum of 1 [Might].",
+      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [0].)\nWhen you play me, give a unit -2 [Might] this turn, to a minimum of 1 [Might].",
       "abilities": [
         {
           "keyword": "Hidden",
@@ -4419,15 +4431,19 @@
       "set": "OGN",
       "setName": "Origins",
       "cardType": "unit",
-      "domains": ["mind"],
+      "domains": [
+        "mind"
+      ],
       "rarity": "epic",
       "energy": 2,
       "might": 2,
       "mightBonus": null,
       "power": 1,
-      "tags": ["Teemo"],
+      "tags": [
+        "Teemo"
+      ],
       "isChampion": true,
-      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [energy_0].)\nWhen I defend, choose an enemy unit here and reveal the top 5 cards of your Main Deck. Deal 1 to that unit for each card with [Hidden] revealed this way, then recycle the revealed cards.",
+      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [0].)\nWhen I defend, choose an enemy unit here and reveal the top 5 cards of your Main Deck. Deal 1 to that unit for each card with [Hidden] revealed this way, then recycle the revealed cards.",
       "abilities": [
         {
           "keyword": "Hidden",
@@ -4906,7 +4922,9 @@
       "set": "OGN",
       "setName": "Origins",
       "cardType": "unit",
-      "domains": ["body"],
+      "domains": [
+        "body"
+      ],
       "rarity": "common",
       "energy": 3,
       "might": 3,
@@ -4914,7 +4932,7 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [energy_0].)",
+      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [0].)",
       "abilities": [
         {
           "keyword": "Hidden",
@@ -6095,7 +6113,9 @@
       "set": "OGN",
       "setName": "Origins",
       "cardType": "spell",
-      "domains": ["chaos"],
+      "domains": [
+        "chaos"
+      ],
       "rarity": "common",
       "energy": 2,
       "might": null,
@@ -6103,7 +6123,7 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [energy_0].)\n[Action] (Play on your turn or in showdowns.)\nMove a unit from a battlefield to its base.",
+      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [0].)\n[Action] (Play on your turn or in showdowns.)\nMove a unit from a battlefield to its base.",
       "abilities": [
         {
           "keyword": "Hidden",
@@ -7140,15 +7160,19 @@
       "set": "OGN",
       "setName": "Origins",
       "cardType": "unit",
-      "domains": ["chaos"],
+      "domains": [
+        "chaos"
+      ],
       "rarity": "rare",
       "energy": 2,
       "might": 1,
       "mightBonus": null,
       "power": null,
-      "tags": ["Teemo"],
+      "tags": [
+        "Teemo"
+      ],
       "isChampion": true,
-      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [energy_0].)\nWhen you play me, give me +3 [Might] this turn.",
+      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [0].)\nWhen you play me, give me +3 [Might] this turn.",
       "abilities": [
         {
           "keyword": "Hidden",
@@ -7214,7 +7238,9 @@
       "set": "OGN",
       "setName": "Origins",
       "cardType": "unit",
-      "domains": ["chaos"],
+      "domains": [
+        "chaos"
+      ],
       "rarity": "rare",
       "energy": 2,
       "might": 2,
@@ -7222,7 +7248,7 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [energy_0].)\nWhen you play me, you may choose a unit you control at another location. Move me to its location and it to my original location.",
+      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [0].)\nWhen you play me, you may choose a unit you control at another location. Move me to its location and it to my original location.",
       "abilities": [
         {
           "keyword": "Hidden",
@@ -7727,7 +7753,9 @@
       "set": "OGN",
       "setName": "Origins",
       "cardType": "spell",
-      "domains": ["order"],
+      "domains": [
+        "order"
+      ],
       "rarity": "common",
       "energy": 2,
       "might": null,
@@ -7735,7 +7763,7 @@
       "power": 1,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [energy_0].)\n[Action] (Play on your turn or in showdowns.)\nKill a unit at a battlefield. Its controller draws 2.",
+      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [0].)\n[Action] (Play on your turn or in showdowns.)\nKill a unit at a battlefield. Its controller draws 2.",
       "abilities": [
         {
           "keyword": "Hidden",
@@ -7940,7 +7968,9 @@
       "set": "OGN",
       "setName": "Origins",
       "cardType": "spell",
-      "domains": ["order"],
+      "domains": [
+        "order"
+      ],
       "rarity": "uncommon",
       "energy": 2,
       "might": null,
@@ -7948,7 +7978,7 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [energy_0].)\n[Action] (Play on your turn or in showdowns.)\nStun a friendly unit and an enemy unit at the same battlefield. (They don't deal combat damage this turn.)",
+      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [0].)\n[Action] (Play on your turn or in showdowns.)\nStun a friendly unit and an enemy unit at the same battlefield. (They don't deal combat damage this turn.)",
       "abilities": [
         {
           "keyword": "Hidden",
@@ -9338,7 +9368,10 @@
       "set": "OGN",
       "setName": "Origins",
       "cardType": "spell",
-      "domains": ["calm", "mind"],
+      "domains": [
+        "calm",
+        "mind"
+      ],
       "rarity": "epic",
       "energy": 3,
       "might": null,
@@ -9346,7 +9379,7 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [energy_0].)\n[Action] (Play on your turn or in showdowns.)\nKill any number of units at a battlefield with total Might 4 or less.",
+      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [0].)\n[Action] (Play on your turn or in showdowns.)\nKill any number of units at a battlefield with total Might 4 or less.",
       "abilities": [
         {
           "keyword": "Hidden",

@@ -40,7 +40,12 @@ describe("Sacred Shears (sfd-172-221)", () => {
   test("registry payload: Order equipment, 2 energy + [order] to play, +1 Might bonus, exactly one [Equip] keyword ability costed [order]", async () => {
     const def = (await loadDefaultCardPool()).get(CARD);
     expect(def).toMatchObject({ cardType: "equipment", domain: "order", energyCost: 2, mightBonus: 1, name: "Sacred Shears", powerCost: ["order"] });
-    expect(def?.abilities).toEqual([{ cost: { power: ["order"] }, keyword: "Equip", type: "keyword" }]);
+    // Effect Text (gallery `effect`, rule 136 / 150.2 / 718.3): "[Deathknell] — Draw 1. (When I die, get the effect.)" —
+    // conferred on the equipped unit while attached, hence the `effectText: true` entries.
+    expect(def?.abilities).toEqual([
+      { cost: { power: ["order"] }, keyword: "Equip", type: "keyword" },
+      { effect: { amount: 1, type: "draw" }, effectText: true, name: "Deathknell", trigger: { event: "die", on: "self" }, type: "triggered" },
+    ] as never);
   });
 
   test("play: costs 2 energy AND 1 order power; enters base READY, unattached, bonus dormant; the Equip then needs a SECOND order power", async () => {

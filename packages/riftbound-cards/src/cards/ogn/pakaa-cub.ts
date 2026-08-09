@@ -10,6 +10,6 @@ export const pakaaCub: UnitCard = {
   might: 3,
   name: "Pakaa Cub",
   rarity: "common",
-  rulesText: "[Hidden] (Hide now for [rainbow] to react with later for [energy_0].)",
+  rulesText: "[Hidden] (Hide now for [rainbow] to react with later for [0].)",
   setId: "OGN",
 };

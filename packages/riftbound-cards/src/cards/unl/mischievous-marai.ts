@@ -11,6 +11,6 @@ export const mischievousMarai: UnitCard = {
   name: "Mischievous Marai",
   rarity: "common",
   rulesText:
-    "[Hidden] (Hide now for [rainbow] to react with later for [energy_0].)\nWhen you play me to a battlefield, deal 2 to an enemy unit here.",
+    "[Hidden] (Hide now for [rainbow] to react with later for [0].)\nWhen you play me to a battlefield, deal 2 to an enemy unit here.",
   setId: "UNL",
 };

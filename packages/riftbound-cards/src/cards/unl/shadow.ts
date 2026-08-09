@@ -52,6 +52,6 @@ export const shadow: UnitCard = {
   name: "Shadow",
   rarity: "epic",
   rulesText:
-    "If you play me to a battlefield, I enter ready.\n[Action][&gt;] [1][rainbow], [Exhaust]: [Stun] an enemy unit attacking here. (It doesn't deal combat damage this turn.)",
+    "If you play me to a battlefield, I enter ready.\n[Action][>] [1][rainbow], [Exhaust]: [Stun] an enemy unit attacking here. (It doesn't deal combat damage this turn.)",
   setId: "UNL",
 };

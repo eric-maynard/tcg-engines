@@ -11,6 +11,6 @@ export const gemhandHunter: UnitCard = {
   name: "Gemhand Hunter",
   rarity: "common",
   rulesText:
-    "[Hunt] (When I conquer or hold, gain 1 XP.)\n[Level 6][&gt;] I have +1 [Might]. (While you have 6+ XP, get the effect.)",
+    "[Hunt] (When I conquer or hold, gain 1 XP.)\n[Level 6][>] I have +1 [Might]. (While you have 6+ XP, get the effect.)",
   setId: "UNL",
 };

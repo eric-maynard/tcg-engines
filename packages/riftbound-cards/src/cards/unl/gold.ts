@@ -28,6 +28,6 @@ export const gold: GearCard = {
   name: "Gold",
   rarity: "common",
   rulesText:
-    "[Reaction][&gt;] Kill this, [Exhaust]: [Add] [rainbow]. (Abilities that add resources can't be reacted to.)",
+    "[Reaction][>] Kill this, [Exhaust]: [Add] [rainbow]. (Abilities that add resources can't be reacted to.)",
   setId: "UNL",
 };

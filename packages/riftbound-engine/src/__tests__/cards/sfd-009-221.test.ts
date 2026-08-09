@@ -2,6 +2,7 @@
  * Serrated Dirk — sfd-009-221 · Equipment · Fury · 1 energy
  *
  *   [Equip] [fury] ([fury]: Attach this to a unit you control.)
+ *   Effect Text: [Assault 2] (+2 [Might] while I'm an attacker.)
  *
  * Head-judge notes (timing of the [Equip] activated ability):
  *  - [Equip] is an Activated Ability keyword of a Gear (rule 818.1 / 818.1.a), so rule 151.2
@@ -66,5 +67,58 @@ describe("Serrated Dirk (sfd-009-221) — [Equip] timing", () => {
 
     const oppTurn = await board().active(P2).build();
     expect(equipOffered(oppTurn)).toBe(false);
+  });
+});
+
+describe("Serrated Dirk (sfd-009-221) — Effect Text [Assault 2]", () => {
+  // rule 136 / 150.2 / 718.3: the Effect Text box (gallery `effect`: "[Assault 2] (+2 :rb_might: while I'm an
+  // attacker.)") is appended to the equipped unit while attached — the keyword bar is the BEARER's, and only then.
+  test("the attached unit attacks with +2 Might — a 3-Might ally kills a 3-Might defender and survives", async () => {
+    const game = await board().build();
+    await game.p1.do("equipCard", { equipmentId: "dirk", unitId: "ally" });
+    await game.settle();
+    await game.p1.move("ally", "bf1");
+    await game.settle();
+    expect(game.zoneOf("foe")).toBe("trash");
+    expect(game.locationOf("ally")).toBe("bf1");
+    expect(game.gameState.battlefields.bf1).toMatchObject({ controller: P1 });
+  });
+
+  test("attach ⇒ the bearer (not the Dirk, not anyone else) has Assault 2: +0 at rest, 3 → 5 while it is the attacker", async () => {
+    const game = await board().unit(P1, "base", { might: 3 }, "bystander").build();
+    expect(game.state("ally").grantedKeywords).toEqual([]); // unattached: nothing conferred (136.2.b)
+    await game.p1.do("equipCard", { equipmentId: "dirk", unitId: "ally" });
+    await game.settle();
+    expect(game.state("dirk").attachedTo).toBe("ally");
+    expect(game.state("ally").grantedKeywords).toEqual([{ duration: "static", keyword: "Assault", value: 2 }]);
+    expect(game.state("ally").might).toBe(3); // +0 bonus, Assault is attacker-only (807)
+    expect(game.state("bystander").grantedKeywords).toEqual([]);
+    expect(game.state("dirk").keywords).toEqual(["Equip"]); // the gear itself has no Assault (718.2)
+    await game.p1.move("ally", "bf1");
+    expect(game.state("ally")).toMatchObject({ combatRole: "attacker", might: 5 });
+    expect(game.state("foe").might).toBe(3);
+  });
+
+  test("bearer dies ⇒ the Dirk detaches to base and Assault 2 is gone from the board; re-equipping another unit moves the grant to it", async () => {
+    const game = await scenario()
+      .resources(P1, { power: { fury: 2 } })
+      .battlefield("bf1", { controller: P2 })
+      .unit(P1, "base", { might: 1 }, "ally")
+      .unit(P1, "base", { might: 2 }, "next")
+      .unit(P2, "bf1", { might: 6 }, "wall")
+      .gear(P1, CARD, "dirk")
+      .build();
+    await game.p1.do("equipCard", { equipmentId: "dirk", unitId: "ally" });
+    await game.settle();
+    await game.p1.move("ally", "bf1"); // 1 + 2 = 3 into 6: the bearer dies
+    await game.settle();
+    expect(game.zoneOf("ally")).toBe("trash");
+    expect(game.zoneOf("dirk")).toBe("base");
+    expect(game.state("dirk").attachedTo).toBeUndefined();
+    expect(game.state("next").grantedKeywords).toEqual([]);
+    expect(game.state("wall").grantedKeywords).toEqual([]);
+    await game.p1.do("equipCard", { equipmentId: "dirk", unitId: "next" });
+    await game.settle();
+    expect(game.state("next").grantedKeywords).toEqual([{ duration: "static", keyword: "Assault", value: 2 }]);
   });
 });

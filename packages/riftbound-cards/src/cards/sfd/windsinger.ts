@@ -43,6 +43,6 @@ export const windsinger: UnitCard = {
   name: "Windsinger",
   rarity: "uncommon",
   rulesText:
-    "Hidden (Hide now for [rainbow] to react with later for [energy_0].)\nWhen you play me, you may return another unit at a battlefield with 3 [Might] or less to its owner's hand.",
+    "Hidden (Hide now for [rainbow] to react with later for [0].)\nWhen you play me, you may return another unit at a battlefield with 3 [Might] or less to its owner's hand.",
   setId: "SFD",
 };

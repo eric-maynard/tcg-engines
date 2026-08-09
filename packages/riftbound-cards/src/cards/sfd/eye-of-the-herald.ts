@@ -5,11 +5,13 @@ export const eyeOfTheHerald: EquipmentCard = {
   cardNumber: 153,
   cardType: "equipment",
   domain: "order",
+  effectText: "When I move, play a 1 [Might] Recruit unit token here.",
   energyCost: 1,
   id: createCardId("sfd-153-221"),
   mightBonus: 0,
   name: "Eye of the Herald",
   rarity: "common",
-  rulesText: "[Equip] [order] ([order]: Attach this to a unit you control.)",
+  rulesText:
+    "[Equip] [order] ([order]: Attach this to a unit you control.)\nWhen I move, play a 1 [Might] Recruit unit token here.",
   setId: "SFD",
 };

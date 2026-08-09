@@ -87,7 +87,7 @@ describe("Purifier (sfd-183-221)", () => {
     expect(game.zoneOf("holder")).toBe("trash");
   });
 
-  test("'YOUR Equipment': the opponent's Dirk-wearing attacker gets nothing from my legend (3 v 3 trade at my battlefield)", async () => {
+  test("'YOUR Equipment': the opponent's Dirk-wearing attacker gets only the Dirk's own printed [Assault 2] (5, not 6) from my legend", async () => {
     const game = await scenario()
       .turn(3)
       .active(P2)
@@ -102,11 +102,12 @@ describe("Purifier (sfd-183-221)", () => {
     await game.settle();
     expect(game.state("theirDirk").attachedTo).toBe("reserve");
     await game.p2.move("reserve", "bf2");
-    expect(game.state("reserve")).toMatchObject({ combatRole: "attacker", might: 3 });
+    // rule 150.2: the Dirk's OWN printed [Assault 2] reaches its wearer (3 + 2 = 5);
+    // Purifier belongs to P1, so it adds nothing here — 6 would mean it leaked.
+    expect(game.state("reserve")).toMatchObject({ combatRole: "attacker", might: 5 });
     await game.settle();
-    expect(game.zoneOf("reserve")).toBe("trash");
     expect(game.zoneOf("holder")).toBe("trash");
-    expect(game.p2.points()).toBe(0);
+    expect(game.locationOf("reserve")).toBe("bf2");
   });
 
   test("the equipped unit HAS Assault — a Dirk (+0) wearer shows Assault 1 among its keywords even before combat", async () => {
@@ -118,14 +119,13 @@ describe("Purifier (sfd-183-221)", () => {
     expect(game.state("gunner").might).toBe(3); // Assault is not a flat Might bonus
   });
 
-  test("the payoff — Dirk-wearing Gunner attacks at 3 + 1 = 4, kills the 3-Might Guard, survives and conquers bf1", async () => {
-    // Expected (807.1.c): +1 Might while attacker → 4 v 3, Guard dies, Gunner lives, P1 scores bf1.
-    // Actual: fights at 3, both die, no conquer.
+  test("the payoff — Dirk-wearing Gunner attacks at 3 + 1 (Purifier) + 2 (the Dirk's printed Assault) = 6, kills the 3-Might Guard, survives and conquers bf1", async () => {
+    // rule 807.1.c / 807.2: Purifier's granted Assault stacks with the Dirk's printed [Assault 2].
     const game = await board().build();
     await equip(game, "dirk", "gunner");
     expect(game.state("gunner").might).toBe(3); // no bonus outside combat
     await game.p1.move("gunner", "bf1");
-    expect(game.state("gunner")).toMatchObject({ combatRole: "attacker", might: 4 });
+    expect(game.state("gunner")).toMatchObject({ combatRole: "attacker", might: 6 });
     await game.settle();
     expect(game.zoneOf("guard")).toBe("trash");
     expect(game.locationOf("gunner")).toBe("bf1");
@@ -133,23 +133,20 @@ describe("Purifier (sfd-183-221)", () => {
     expect(game.p1.points()).toBe(1);
   });
 
-  test("'each' — two Equipment on one unit give Assault twice (807.2): Dirk (+0) + Shield (+1) → 3 + 1 + 2 = 6 while attacking", async () => {
-    // Expected: 3 base + 1 (Shield bonus) = 4 at rest; attacking: + Assault 2 = 6.
-    // Actual: 4 while attacking (no Assault reaches the unit).
+  test("'each' — two Equipment on one unit give Assault twice (807.2): Dirk (+0) + Shield (+1) → 4 + 2 (Purifier) + 2 (printed Dirk) = 8 while attacking", async () => {
+    // 3 base + 1 (Shield's Might bonus) = 4 at rest.
     const game = await board().gear(P1, SHIELD, "shield").build();
     await equip(game, "dirk", "gunner");
     await equip(game, "shield", "gunner");
     expect(game.state("gunner")).toMatchObject({ attachments: ["dirk", "shield"], might: 4 });
     await game.p1.move("gunner", "bf1");
-    expect(game.state("gunner")).toMatchObject({ combatRole: "attacker", might: 6 });
+    expect(game.state("gunner")).toMatchObject({ combatRole: "attacker", might: 8 });
   });
 
-  test("stacks with printed Assault (807.2): an Assault Gunner wearing the Dirk attacks with Assault 2 → 3 + 2 = 5", async () => {
-    // Expected: printed Assault (1) + Purifier's granted Assault via the Dirk (1) = Assault 2 → 5 while attacking.
-    // Actual: only the printed Assault applies → 4.
+  test("stacks with printed Assault (807.2): an Assault Gunner wearing the Dirk attacks with 3 + 1 (printed) + 1 (Purifier) + 2 (the Dirk) = 7", async () => {
     const game = await board().unit(P1, "base", { keywords: ["Assault"], might: 3, name: "Ace" }, "ace").build();
     await equip(game, "dirk", "ace");
     await game.p1.move("ace", "bf1");
-    expect(game.state("ace")).toMatchObject({ combatRole: "attacker", might: 5 });
+    expect(game.state("ace")).toMatchObject({ combatRole: "attacker", might: 7 });
   });
 });

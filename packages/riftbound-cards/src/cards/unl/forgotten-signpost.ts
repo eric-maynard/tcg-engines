@@ -51,6 +51,6 @@ export const forgottenSignpost: GearCard = {
   name: "Forgotten Signpost",
   rarity: "uncommon",
   rulesText:
-    "[Action][&gt;] Exhaust a unit you control, [Exhaust]: Move a different unit you control to the location of the unit you exhausted to pay for this ability.",
+    "[Action][>] Exhaust a unit you control, [Exhaust]: Move a different unit you control to the location of the unit you exhausted to pay for this ability.",
   setId: "UNL",
 };

@@ -692,9 +692,32 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Equip] [fury] ([fury]: Attach this to a unit you control.)",
+      "rulesText": "[Equip] [fury] ([fury]: Attach this to a unit you control.)\nWhen I move to a battlefield, give me +2 [Might] this turn.",
+      "effectText": "When I move to a battlefield, give me +2 [Might] this turn.",
       "abilities": [
-        null
+        {
+          "cost": {
+            "power": [
+              "fury"
+            ]
+          },
+          "keyword": "Equip",
+          "type": "keyword"
+        },
+        {
+          "effect": {
+            "amount": 2,
+            "target": "self",
+            "type": "modify-might",
+            "duration": "turn"
+          },
+          "trigger": {
+            "event": "move-to-battlefield",
+            "on": "self"
+          },
+          "type": "triggered",
+          "effectText": true
+        }
       ],
       "parseSuccess": true,
       "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/857a5cee28f403454b1825dd112c07e9ac06b8a4-744x1039.png?accountingTag=RB",
@@ -1121,9 +1144,46 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Equip] [calm] ([calm]: Attach this to a unit you control.)",
+      "rulesText": "[Equip] [calm] ([calm]: Attach this to a unit you control.)\nI have +2 [Might] while I'm at a battlefield with exactly one other unit you control.",
+      "effectText": "I have +2 [Might] while I'm at a battlefield with exactly one other unit you control.",
       "abilities": [
-        null
+        {
+          "cost": {
+            "power": [
+              "calm"
+            ]
+          },
+          "keyword": "Equip",
+          "type": "keyword"
+        },
+        {
+          "condition": {
+            "conditions": [
+              {
+                "type": "while-at-battlefield"
+              },
+              {
+                "target": {
+                  "controller": "friendly",
+                  "excludeSelf": true,
+                  "quantity": {
+                    "exactly": 1
+                  },
+                  "type": "unit"
+                },
+                "type": "exists-here"
+              }
+            ],
+            "type": "and"
+          },
+          "effect": {
+            "amount": 2,
+            "target": "self",
+            "type": "modify-might"
+          },
+          "type": "static",
+          "effectText": true
+        }
       ],
       "parseSuccess": true,
       "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/524fedb9116db0eb62380c03e0853c342c53daeb-744x1039.png?accountingTag=RB",
@@ -1310,7 +1370,7 @@
       "power": 1,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [energy_0].)\n[Reaction] (Play on your turn or in showdowns.)\nChoose a battlefield you control and a unit you control at a different location. Move that unit to that battlefield and give it +2 [Might] this turn.",
+      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [0].)\n[Reaction] (Play on your turn or in showdowns.)\nChoose a battlefield you control and a unit you control at a different location. Move that unit to that battlefield and give it +2 [Might] this turn.",
       "timing": "reaction",
       "abilities": [
         {
@@ -2245,8 +2305,38 @@
       "power": 1,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [energy_0].)\nBanish a unit, then its owner plays it to the same location, ignoring its cost.",
-      "abilities": [{"type": "keyword", "keyword": "Hidden"}, {"type": "spell", "effect": {"type": "sequence", "pendingValue": {"source": 0}, "effects": [{"type": "banish", "target": {"type": "unit"}}, {"type": "play", "target": {"type": "pending-value"}, "ignoreCost": true, "toLocation": "same"}]}}],
+      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [0].)\nBanish a unit, then its owner plays it to the same location, ignoring its cost.",
+      "abilities": [
+        {
+          "type": "keyword",
+          "keyword": "Hidden"
+        },
+        {
+          "type": "spell",
+          "effect": {
+            "type": "sequence",
+            "pendingValue": {
+              "source": 0
+            },
+            "effects": [
+              {
+                "type": "banish",
+                "target": {
+                  "type": "unit"
+                }
+              },
+              {
+                "type": "play",
+                "target": {
+                  "type": "pending-value"
+                },
+                "ignoreCost": true,
+                "toLocation": "same"
+              }
+            ]
+          }
+        }
+      ],
       "parseSuccess": true,
       "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/7c670dc3d997c52b90d67043989b53c67a72f4c4-744x1039.png?accountingTag=RB",
       "illustrator": null,
@@ -2438,9 +2528,20 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "Equip [body] ([body]: Attach this to a unit you control.)",
-      "abilities": [],
-      "parseSuccess": false,
+      "rulesText": "Equip [body] ([body]: Attach this to a unit you control.)\nI can't be moved by enemy spells and abilities.",
+      "effectText": "I can't be moved by enemy spells and abilities.",
+      "abilities": [
+        {
+          "cost": {
+            "power": [
+              "body"
+            ]
+          },
+          "keyword": "Equip",
+          "type": "keyword"
+        }
+      ],
+      "parseSuccess": true,
       "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/22aae23e1ac1797beb50f3f735becfe65b51ee02-744x1039.png?accountingTag=RB",
       "illustrator": null,
       "errata": null
@@ -3099,7 +3200,7 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [energy_0].)\nI have +1 [Might] for each other unit you control here with my name.\nYour deck can have any number of cards named Spiderling.",
+      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [0].)\nI have +1 [Might] for each other unit you control here with my name.\nYour deck can have any number of cards named Spiderling.",
       "abilities": [
         null,
         null
@@ -3161,7 +3262,7 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [energy_0].)\nWhen you play me from face down, you may empower something here. Disempower it at end of turn.",
+      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [0].)\nWhen you play me from face down, you may empower something here. Disempower it at end of turn.",
       "abilities": [
         null,
         null
@@ -3693,7 +3794,7 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [energy_0].)\nI have [Shield 3] while I'm at a battlefield with exactly one other unit you control. (+3 [Might] while I'm a defender.)",
+      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [0].)\nI have [Shield 3] while I'm at a battlefield with exactly one other unit you control. (+3 [Might] while I'm a defender.)",
       "abilities": [
         {
           "type": "keyword",
@@ -3704,13 +3805,17 @@
           "condition": {
             "type": "and",
             "conditions": [
-              { "type": "while-at-battlefield" },
+              {
+                "type": "while-at-battlefield"
+              },
               {
                 "type": "exists-here",
                 "target": {
                   "type": "unit",
                   "excludeSelf": true,
-                  "quantity": { "exactly": 1 }
+                  "quantity": {
+                    "exactly": 1
+                  }
                 }
               }
             ]
@@ -4232,7 +4337,7 @@
         "Kennen"
       ],
       "isChampion": true,
-      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [energy_0].)\nWhen you play me or I attack, you may pay [2] to [Stun] a unit. (It doesn't deal combat damage this turn.)\nWhile there's a stunned enemy unit here, I have +2 [Might].",
+      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [0].)\nWhen you play me or I attack, you may pay [2] to [Stun] a unit. (It doesn't deal combat damage this turn.)\nWhile there's a stunned enemy unit here, I have +2 [Might].",
       "abilities": [
         null,
         null
@@ -4287,7 +4392,8 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Equip] [1][order] ([1][order]: Attach this to a unit you control.)\nAs this is attached to a unit, choose another friendly unit. The equipped unit becomes a copy of that unit for as long as this is attached to it.",
+      "rulesText": "[Equip] [1][order] ([1][order]: Attach this to a unit you control.)\nAs this is attached to a unit, choose another friendly unit. The equipped unit becomes a copy of that unit for as long as this is attached to it.\n(I am a copy of the chosen unit.)",
+      "effectText": "(I am a copy of the chosen unit.)",
       "abilities": [
         null,
         null
@@ -5559,7 +5665,7 @@
     "id": "VEN",
     "name": "Vendetta",
     "cardCount": 189,
-    "parsedCount": 123,
+    "parsedCount": 134,
     "errataCount": 2
   }
 }

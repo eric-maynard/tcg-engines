@@ -3,6 +3,7 @@
  *
  *   [Quick-Draw] (This has [Reaction]. When you play it, attach it to a unit you control.)
  *   [Equip] [mind] ([mind]: Attach this to a unit you control.)
+ *   Effect Text: [Shield 2] (+2 [Might] while I'm a defender.)
  *
  * Head-judge checklist (the tricky spots for THIS card):
  *  1. Quick-Draw = [Reaction] on the CARD + a play trigger that attaches it (819.1.d): playing it for
@@ -68,10 +69,13 @@ describe("Cloth Armor (sfd-064-221)", () => {
     const def = (await loadDefaultCardPool()).get(CARD);
     expect(def).toMatchObject({ cardType: "equipment", domain: "mind", energyCost: 1, mightBonus: 0, name: "Cloth Armor" });
     expect(def?.powerCost).toBeUndefined();
+    // Effect Text (gallery `effect`, rule 136 / 150.2 / 718.3): "[Shield 2] (+2 [Might] while I'm a
+    // defender.)" — a keyword bar granted to the equipped unit while attached.
     expect(def?.abilities).toEqual([
       { keyword: "Quick-Draw", type: "keyword" },
       { cost: { power: ["mind"] }, keyword: "Equip", type: "keyword" },
-    ]);
+      { effect: { keyword: "Shield", target: "self", type: "grant-keyword", value: 2 }, effectText: true, type: "static" },
+    ] as never);
     const game = await scenario().hand(P1, CARD, "cloth").build();
     expect(game.state("cloth").keywords).toEqual(["Quick-Draw", "Equip"]);
   });
@@ -265,5 +269,45 @@ describe("Cloth Armor (sfd-064-221)", () => {
     await game.settle();
     expect(game.p1.energy()).toBe(0);
     expect(game.p1.hand()).toHaveLength(handBefore - 1 + 1);
+  });
+
+  // rule 136 / 150.2 / 718.3 — Effect Text (gallery `effect`): "[Shield 2] (+2 :rb_might: while I'm a
+  // defender.)" is a keyword bar conferred on the equipped unit while attached (814: defender-only Might).
+  test("Effect Text [Shield 2]: the BEARER defends at +2 — a 2-Might defender wearing it kills a 3-Might attacker and lives; the Armor itself and other units get nothing", async () => {
+    const game = await scenario()
+      .resources(P1, { energy: 1 })
+      .battlefield("bf1", { controller: P1 })
+      .unit(P1, "bf1", { might: 2, name: "Sentry" }, "sentry")
+      .unit(P1, "base", { might: 2, name: "Squire" }, "squire")
+      .unit(P2, "base", { might: 3, name: "Raider" }, "raider")
+      .hand(P1, CARD, "cloth")
+      .build();
+    await game.p1.play("cloth");
+    await attachTo(game, "sentry");
+    await game.settle();
+    expect(game.state("cloth").attachedTo).toBe("sentry");
+    await game.advanceTurn(); // → P2 (a Cleanup has run: the static grant is in place)
+    expect(game.state("sentry").grantedKeywords).toEqual([{ duration: "static", keyword: "Shield", value: 2 }]);
+    expect(game.state("sentry").might).toBe(2); // +0 bonus; Shield counts only while defending
+    expect(game.state("squire").grantedKeywords).toEqual([]);
+    expect(game.state("cloth").keywords).toEqual(["Quick-Draw", "Equip"]); // 718.2: not the gear's own keyword
+    await game.p2.move("raider", "bf1");
+    expect(game.state("sentry")).toMatchObject({ combatRole: "defender", might: 4 });
+    await game.settle();
+    expect(game.zoneOf("raider")).toBe("trash"); // takes 4 ≥ 3
+    expect(game.zoneOf("sentry")).toBe("battlefield-bf1"); // takes 3 < 4
+    expect(game.gameState.battlefields.bf1?.controller).toBe(P1);
+    // The same fight without the Armor: the bare 2-Might Sentry dies to the Raider.
+    const bare = await scenario()
+      .battlefield("bf1", { controller: P1 })
+      .unit(P1, "bf1", { might: 2, name: "Sentry" }, "sentry")
+      .unit(P2, "base", { might: 3, name: "Raider" }, "raider")
+      .gear(P1, CARD, "cloth") // unattached: confers nothing (136.2.b)
+      .build();
+    await bare.advanceTurn();
+    await bare.p2.move("raider", "bf1");
+    expect(bare.state("sentry")).toMatchObject({ combatRole: "defender", might: 2 });
+    await bare.settle();
+    expect(bare.zoneOf("sentry")).toBe("trash");
   });
 });

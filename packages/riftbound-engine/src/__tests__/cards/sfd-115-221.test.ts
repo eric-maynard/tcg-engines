@@ -2,6 +2,7 @@
  * Trinity Force — sfd-115-221 · Gear (Equipment) · Body · 4 energy · Might bonus +2
  *
  *   [Equip] [body] ([body]: Attach this to a unit you control.)
+ *   Effect Text: When I hold, score 1 point.
  *
  * Rules: 818 (Equip = activated ability of the gear, [body] to attach to a unit you control, target
  * chosen on activation, attach on resolution), 151.2 (activated abilities only in your Main Phase in an
@@ -59,7 +60,12 @@ describe("Trinity Force (sfd-115-221)", () => {
   test("registry payload: Body Equipment, 4 energy, +2 Might bonus, one [Equip] keyword costing exactly [body]", async () => {
     const def = (await loadDefaultCardPool()).get(CARD);
     expect(def).toMatchObject({ cardType: "equipment", domain: "body", energyCost: 4, mightBonus: 2, name: "Trinity Force" });
-    expect(def?.abilities).toEqual([{ cost: { power: ["body"] }, keyword: "Equip", type: "keyword" }]);
+    // Effect Text (gallery `effect`, rule 136 / 150.2 / 718.3): "When I hold, score 1 point." —
+    // conferred on the equipped unit while attached, hence the `effectText: true` entries.
+    expect(def?.abilities).toEqual([
+      { cost: { power: ["body"] }, keyword: "Equip", type: "keyword" },
+      { effect: { amount: 1, type: "score" }, effectText: true, trigger: { event: "hold", on: "self" }, type: "triggered" },
+    ] as never);
   });
 
   test("playing it costs exactly 4 energy (no power) and attaches to nothing; 3 energy is not enough", async () => {
@@ -157,5 +163,43 @@ describe("Trinity Force (sfd-115-221)", () => {
     await game.p1.move("brawler", "bf1");
     expect(game.state("brawler").combatRole).toBe("attacker");
     expect(game.state("brawler").might).toBe(6);
+  });
+
+  // rule 136 / 150.2 / 718.3 — Effect Text (gallery `effect`): "When I hold, score 1 point." is the
+  // WEARER's hold trigger while attached: holding with the bearer is worth 1 (the Hold) + 1 (the effect).
+  test("Effect Text 'When I hold, score 1 point.': holding with the BEARER scores 2 (hold + effect); a bare holder or an unattached Force scores only 1", async () => {
+    const holding = () =>
+      scenario()
+        .resources(P1, { power: { body: 1 } })
+        .battlefield("bf1", { controller: P1 })
+        .unit(P1, "bf1", { might: 2, name: "Holder" }, "holder")
+        .gear(P1, CARD, "tf");
+    const game = await holding().build();
+    await equip(game, "holder");
+    expect(game.state("tf").attachedTo).toBe("holder");
+    await game.advanceTurn(); // → P2
+    expect(game.p1.points()).toBe(0);
+    await game.advanceTurn(); // → P1: Hold step, then the bearer's trigger resolves
+    expect(game.p1.points()).toBe(2);
+    expect(game.chain()).toEqual([]);
+
+    const bare = await holding().build(); // Force lying loose in base: confers nothing (136.2.b)
+    await bare.advanceTurn();
+    await bare.advanceTurn();
+    expect(bare.p1.points()).toBe(1);
+  });
+
+  test("Effect Text: the trigger is the bearer's — a Force worn by a unit in BASE never sees a hold", async () => {
+    const game = await scenario()
+      .resources(P1, { power: { body: 1 } })
+      .battlefield("bf1", { controller: P1 })
+      .unit(P1, "bf1", { might: 2, name: "Holder" }, "holder")
+      .unit(P1, "base", { might: 2, name: "Camper" }, "camper")
+      .gear(P1, CARD, "tf")
+      .build();
+    await equip(game, "camper");
+    await game.advanceTurn();
+    await game.advanceTurn();
+    expect(game.p1.points()).toBe(1); // just the Hold by the bare Holder
   });
 });

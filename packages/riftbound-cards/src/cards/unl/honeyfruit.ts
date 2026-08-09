@@ -10,6 +10,6 @@ export const honeyfruit: GearCard = {
   name: "Honeyfruit",
   rarity: "rare",
   rulesText:
-    "This enters exhausted.\n[Reaction][&gt;] [Exhaust]: [Add] [rainbow]. (Abilities that add resources can't be reacted to.)\n[Level 6][&gt;] [&gt;&gt;][Reaction][&gt;] [Exhaust]: [Add] [1][rainbow]. (Use this ability only while you have 6+ XP.)",
+    "This enters exhausted.\n[Reaction][>] [Exhaust]: [Add] [rainbow]. (Abilities that add resources can't be reacted to.)\n[Level 6][>] [>>][Reaction][>] [Exhaust]: [Add] [1][rainbow]. (Use this ability only while you have 6+ XP.)",
   setId: "UNL",
 };

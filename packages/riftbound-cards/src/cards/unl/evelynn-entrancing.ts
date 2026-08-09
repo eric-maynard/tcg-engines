@@ -48,7 +48,7 @@ export const evelynnEntrancing: UnitCard = {
   name: "Evelynn, Entrancing",
   rarity: "rare",
   rulesText:
-    "[Hidden] (Hide now for [rainbow] to react with later for [energy_0].)\n[Backline] (I must be assigned combat damage last.)\nWhen you play me from face down on your turn, you may move an enemy unit at a different location to my battlefield.",
+    "[Hidden] (Hide now for [rainbow] to react with later for [0].)\n[Backline] (I must be assigned combat damage last.)\nWhen you play me from face down on your turn, you may move an enemy unit at a different location to my battlefield.",
   setId: "UNL",
   tags: ["Evelynn"],
 };

@@ -10,7 +10,7 @@ export const fightOrFlight: SpellCard = {
   name: "Fight or Flight",
   rarity: "common",
   rulesText:
-    "[Hidden] (Hide now for [rainbow] to react with later for [energy_0].)\n[Action] (Play on your turn or in showdowns.)\nMove a unit from a battlefield to its base.",
+    "[Hidden] (Hide now for [rainbow] to react with later for [0].)\n[Action] (Play on your turn or in showdowns.)\nMove a unit from a battlefield to its base.",
   setId: "OGN",
   timing: "action",
 };

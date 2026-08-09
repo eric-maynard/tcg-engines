@@ -37,7 +37,7 @@ export const bushwhack: SpellCard = {
   name: "Bushwhack",
   rarity: "common",
   rulesText:
-    "[Hidden] (Hide now for [rainbow] to react with later for [energy_0].)\nFriendly units enter ready this turn. Play a Gold gear token exhausted.",
+    "[Hidden] (Hide now for [rainbow] to react with later for [0].)\nFriendly units enter ready this turn. Play a Gold gear token exhausted.",
   setId: "SFD",
   timing: "action",
 };

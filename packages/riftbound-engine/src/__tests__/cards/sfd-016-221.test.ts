@@ -2,8 +2,10 @@
  * Recurve Bow — sfd-016-221 · Gear (Equipment) · Fury · 2 energy · Might bonus +0
  *
  *   [Equip] [fury] ([fury]: Attach this to a unit you control.)
+ *   Effect Text: When I attack or defend, deal 2 to an enemy unit here.
  *
- * Rules: 149.1 (gear enters ready), 818 (Equip = "[fury]: Attach this gear to a unit you control", a
+ * Rules: 136 / 150.2 / 718.3 (the Effect Text is appended to the WEARER while attached: "I" is the
+ * equipped unit, so its attack/defend raises the trigger, sourced from the unit), 149.1 (gear enters ready), 818 (Equip = "[fury]: Attach this gear to a unit you control", a
  * targeted activated ability), 434.4 (attaching relocates the gear to the wearer's location — not a
  * Move), 718.2/718.4 (attached: rules text inactive, Might bonus applies — here +0), 719.3.a (rides
  * along with the wearer), 719.5 + 457.1 (wearer leaves the board → detaches in place, recalled to base
@@ -46,7 +48,12 @@ describe("Recurve Bow (sfd-016-221)", () => {
     const def = (await loadDefaultCardPool()).get(CARD);
     expect(def).toMatchObject({ cardType: "equipment", domain: "fury", energyCost: 2, mightBonus: 0, name: "Recurve Bow" });
     expect(def?.powerCost ?? []).toEqual([]);
-    expect(def?.abilities).toEqual([{ cost: { power: ["fury"] }, keyword: "Equip", type: "keyword" }]);
+    // Effect Text (gallery `effect`, rule 136 / 150.2 / 718.3): "When I attack or defend, deal 2 to an enemy unit here." —
+    // conferred on the equipped unit while attached, hence the `effectText: true` entries.
+    expect(def?.abilities).toEqual([
+      { cost: { power: ["fury"] }, keyword: "Equip", type: "keyword" },
+      { effect: { amount: 2, target: { controller: "enemy", location: "here", type: "unit" }, type: "damage" }, effectText: true, trigger: { event: "attack-or-defend", on: "self" }, type: "triggered" },
+    ] as never);
   });
 
   test("play: costs exactly 2 energy (no power), lands in base READY and unattached; 1 energy + lots of fury is not enough", async () => {
@@ -216,16 +223,16 @@ describe("Recurve Bow (sfd-016-221)", () => {
     expect(game.zoneOf("shot")).toBe("trash");
   });
 
-  test("Purifier ('Your Equipment each give [Assault]') should make the +0 Bow's WEARER attack at +1 (818.3 / 718.3) — a 3-Might wearer trades into a 4-Might defender", async () => {
-    // Expected: 3 (printed) + 0 (bonus) + 1 (Assault while attacking) = 4 → the 4-Might defender dies; the wearer takes 4 ≥ 3 and dies too.
-    // Without the legend the same fight leaves the defender alive on 3 damage.
-    // Actual: the static grants "Assault" to the Bow itself (a gear keyword that does nothing); the wearer attacks at 3 and Brute survives.
+  test("Purifier ('Your Equipment each give [Assault]') should make the +0 Bow's WEARER attack at +1 (818.3 / 718.3) — a 3-Might wearer trades into a 6-Might defender already hit for 2 by the Bow's own trigger", async () => {
+    // The Bow's effect text deals 2 to the Brute when the Archer attacks (6 − 2 → needs 4 more).
+    // With Purifier: 3 (printed) + 0 (bonus) + 1 (Assault while attacking) = 4 → the Brute dies; the wearer takes 6 ≥ 3 and dies too.
+    // Without the legend the same fight leaves the Brute alive on 2 + 3 = 5 damage.
     const build = (withLegend: boolean) => {
       const b = scenario()
         .resources(P1, { power: { fury: 1 } })
         .battlefield("bf1", { controller: P2 })
         .unit(P1, "base", { might: 3, name: "Archer" }, "archer")
-        .unit(P2, "bf1", { might: 4, name: "Brute" }, "brute")
+        .unit(P2, "bf1", { might: 6, name: "Brute" }, "brute")
         .gear(P1, CARD, "bow");
       return withLegend ? b.legend(P1, PURIFIER, "purifier") : b;
     };
@@ -244,5 +251,59 @@ describe("Recurve Bow (sfd-016-221)", () => {
     expect(game.zoneOf("brute")).toBe("trash");
     expect(game.zoneOf("archer")).toBe("trash");
     expect(game.zoneOf("bow")).toBe("base"); // recalled after the wearer died
+  });
+
+  test("Effect Text — 'When I attack or defend, deal 2 to an enemy unit here': the WEARER's attack raises its trigger, targeting an enemy at that battlefield, before combat damage (150.2 / 718.3)", async () => {
+    const game = await scenario()
+      .resources(P1, { power: { fury: 1 } })
+      .battlefield("bf1", { controller: P2 })
+      .unit(P1, "base", { might: 3, name: "Archer" }, "archer")
+      .unit(P2, "bf1", { might: 4, name: "Brute" }, "brute")
+      .unit(P2, "base", { might: 1, name: "Camper" }, "camper") // not "here" — never a target
+      .gear(P1, CARD, "bow")
+      .build();
+    await equip(game, "archer");
+    await game.p1.move("archer", "bf1");
+    // One triggered item sourced from the wearer, auto-bound to the only enemy unit here.
+    expect(game.chain()).toEqual([expect.objectContaining({ cardId: "archer", controller: P1, targets: ["brute"], triggered: true })]);
+    await game.p1.passPriority();
+    await game.p2.passPriority();
+    expect(game.state("brute").damage).toBe(2);
+    expect(game.state("camper").damage).toBe(0);
+    await game.settle();
+    expect(game.zoneOf("brute")).toBe("trash"); // 2 + 3 ≥ 4
+    expect(game.zoneOf("archer")).toBe("trash"); // takes 4 ≥ 3
+    expect(game.zoneOf("bow")).toBe("base");
+  });
+
+  test("Effect Text — the WEARER defending raises it too: the attacker takes 2 before combat", async () => {
+    const game = await scenario()
+      .resources(P1, { power: { fury: 1 } })
+      .battlefield("bf1", { controller: P1 })
+      .unit(P1, "bf1", { might: 3, name: "Archer" }, "archer")
+      .unit(P2, "base", { might: 4, name: "Brute" }, "brute")
+      .gear(P1, CARD, "bow")
+      .build();
+    await equip(game, "archer");
+    await game.advanceTurn();
+    await game.p2.move("brute", "bf1");
+    expect(game.chain()).toEqual([expect.objectContaining({ cardId: "archer", controller: P1, targets: ["brute"], triggered: true })]);
+    await game.settle();
+    expect(game.zoneOf("brute")).toBe("trash"); // 2 + 3 ≥ 4
+    expect(game.zoneOf("archer")).toBe("trash");
+    expect(game.gameState.battlefields.bf1?.controller).not.toBe(P2);
+  });
+
+  test("unattached, the Bow confers nothing: a bare attacker raises no trigger", async () => {
+    const game = await scenario()
+      .battlefield("bf1", { controller: P2 })
+      .unit(P1, "base", { might: 3, name: "Archer" }, "archer")
+      .unit(P2, "bf1", { might: 4, name: "Brute" }, "brute")
+      .gear(P1, CARD, "bow")
+      .build();
+    await game.p1.move("archer", "bf1");
+    expect(game.chain()).toEqual([]);
+    await game.settle();
+    expect(game.zoneOf("brute")).toBe("battlefield-bf1"); // only 3 damage
   });
 });

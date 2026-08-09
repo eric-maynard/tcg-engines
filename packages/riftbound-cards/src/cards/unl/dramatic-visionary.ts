@@ -11,6 +11,6 @@ export const dramaticVisionary: UnitCard = {
   name: "Dramatic Visionary",
   rarity: "common",
   rulesText:
-    "[Deathknell][&gt;] [Predict 2]. (When I die, look at the top two cards of your Main Deck. Recycle any of them and put the rest back in any order.)",
+    "[Deathknell][>] [Predict 2]. (When I die, look at the top two cards of your Main Deck. Recycle any of them and put the rest back in any order.)",
   setId: "UNL",
 };

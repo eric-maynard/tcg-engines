@@ -7,6 +7,7 @@
 
 import type { Card } from "@tcg/riftbound-types/cards";
 import { parseAbilities } from "../parser";
+import { parseEquipmentText, withoutEffectText } from "../parser/equipment";
 import { expandHuntKeywords } from "../parser/impl/keywords";
 import { decodeHtmlEntities, hasHtmlEntity } from "./decode-entities";
 
@@ -57,11 +58,17 @@ function enrichCard(raw: Card): Card {
     return card;
   }
 
-  const result = parseAbilities(card.rulesText, {
+  const options = {
     domain: (card as { domain?: string }).domain,
     omitId: true,
     omitText: true,
-  });
+  };
+  // rule 136 / 150.2: a card with an Effect Text box (Equipment) parses its two
+  // boxes apart — the effect-text abilities are the equipped unit's, not the
+  // gear's, and take their conferred shape.
+  const result = card.effectText
+    ? parseEquipmentText(withoutEffectText(card.rulesText, card.effectText), card.effectText, options)
+    : parseAbilities(card.rulesText, options);
   if (!result.success || !result.abilities || result.abilities.length === 0) {
     return card;
   }

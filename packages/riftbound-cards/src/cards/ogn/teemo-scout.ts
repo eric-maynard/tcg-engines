@@ -12,7 +12,7 @@ export const teemoScout: UnitCard = {
   name: "Teemo, Scout",
   rarity: "rare",
   rulesText:
-    "[Hidden] (Hide now for [rainbow] to react with later for [energy_0].)\nWhen you play me, give me +3 [Might] this turn.",
+    "[Hidden] (Hide now for [rainbow] to react with later for [0].)\nWhen you play me, give me +3 [Might] this turn.",
   setId: "OGN",
   tags: ["Teemo"],
 };

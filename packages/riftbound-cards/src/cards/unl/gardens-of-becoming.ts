@@ -38,6 +38,6 @@ export const gardensOfBecoming: BattlefieldCard = {
   id: createCardId("unl-213-219"),
   name: "Gardens of Becoming",
   rarity: "uncommon",
-  rulesText: "Units here have &quot;[Exhaust]: Gain 1 XP.&quot;",
+  rulesText: "Units here have \"[Exhaust]: Gain 1 XP.\"",
   setId: "UNL",
 };

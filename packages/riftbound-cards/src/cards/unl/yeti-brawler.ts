@@ -11,6 +11,6 @@ export const yetiBrawler: UnitCard = {
   name: "Yeti Brawler",
   rarity: "uncommon",
   rulesText:
-    "When I conquer, if you assigned 3 or more excess damage, play two Gold gear tokens exhausted. (They have &quot;[Reaction][&gt;] Kill this, [Exhaust]: [Add] [rainbow].&quot;)",
+    "When I conquer, if you assigned 3 or more excess damage, play two Gold gear tokens exhausted. (They have \"[Reaction][>] Kill this, [Exhaust]: [Add] [rainbow].\")",
   setId: "UNL",
 };

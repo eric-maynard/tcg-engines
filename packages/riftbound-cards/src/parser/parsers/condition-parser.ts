@@ -6,6 +6,7 @@
  */
 
 import type { Condition, Target } from "@tcg/riftbound-types";
+import { wordToNumber } from "../impl/tokens";
 
 // ============================================================================
 // Types
@@ -348,6 +349,14 @@ const WHILE_BUFFED_PATTERN = /^While I'm buffed,?\s*/i;
 const WHILE_AT_BATTLEFIELD_PATTERN = /^While I'm at a battlefield,?\s*/i;
 
 /**
+ * "While I'm at a battlefield with exactly one other unit you control" (ven-117
+ * Stalking Wolf, ven-027 Hand Hammer): at a battlefield AND exactly N other
+ * friendly units share my location — the qualifier must not be dropped.
+ */
+const WHILE_AT_BATTLEFIELD_WITH_EXACTLY_PATTERN =
+  /^While I'm at a battlefield with exactly (one|two|three|four|\d+) other units? you control,?\s*/i;
+
+/**
  * Pattern for "While I'm in combat" condition
  */
 const WHILE_IN_COMBAT_PATTERN = /^While I'm in combat,?\s*/i;
@@ -505,6 +514,30 @@ export function parseConditionFromText(text: string): ConditionParseResult | und
     return {
       condition: { type: "while-buffed" },
       remainingText: text.slice(whileBuffedMatch[0].length),
+      startIndex: 0,
+    };
+  }
+
+  // Try "While I'm at a battlefield with exactly N other unit(s) you control"
+  const withExactlyMatch = WHILE_AT_BATTLEFIELD_WITH_EXACTLY_PATTERN.exec(text);
+  if (withExactlyMatch) {
+    return {
+      condition: {
+        conditions: [
+          { type: "while-at-battlefield" },
+          {
+            target: {
+              controller: "friendly",
+              excludeSelf: true,
+              quantity: { exactly: wordToNumber(withExactlyMatch[1]) },
+              type: "unit",
+            },
+            type: "exists-here",
+          },
+        ],
+        type: "and",
+      } as unknown as Condition,
+      remainingText: text.slice(withExactlyMatch[0].length),
       startIndex: 0,
     };
   }
