@@ -12,6 +12,7 @@ import type {
   GameMoveDefinitions,
 } from "@tcg/core";
 import type { Domain, RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../types";
+import { fireTriggers } from "../../abilities/trigger-runner";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import { withPostMoveCleanup } from "../../cleanup/post-move-cleanup";
 
@@ -284,6 +285,14 @@ const resourceMoveDefs: Partial<
       if (pool) {
         pool.power[domain] = (pool.power[domain] ?? 0) + 1;
       }
+
+      // rule 164.2.b — using a Basic Rune's own "Recycle this: Add [C]" IS
+      // "you recycle a rune", so it must emit the same `recycle` event that an
+      // effect-driven recycle does ("When you recycle a rune, …").
+      fireTriggers(
+        { cardIds: [runeId as string], playerId: playerId as string, type: "recycle" },
+        { cards: context.cards, counters: context.counters, draft, zones: context.zones },
+      );
     },
   },
 

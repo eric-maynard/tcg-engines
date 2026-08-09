@@ -32,6 +32,8 @@ export interface TriggerMatcherState {
   readonly interaction?: {
     readonly showdownStack?: readonly { readonly active?: boolean }[];
   };
+  /** rule 190.4 — battlefield control, for "a battlefield you control" subjects. */
+  readonly battlefields?: Record<string, { readonly controller?: string | null } | undefined>;
 }
 
 /**
@@ -731,6 +733,11 @@ function triggerMatchesEvent(
     if (event.type === "defend" && (event.batchIndex ?? 0) > 0) {
       return false;
     }
+    // rule 466.3.a (sfd-185-221) — a PLAYER wins a combat, so "when you win a
+    // combat" fires once however many of your units survived it.
+    if (event.type === "win-combat" && (event.batchIndex ?? 0) > 0) {
+      return false;
+    }
   } else if (on === "opponent") {
     if ("playerId" in event && event.playerId === card.owner) {
       return false;
@@ -742,7 +749,12 @@ function triggerMatchesEvent(
       controller?: "friendly" | "enemy" | "any" | "actor";
       cardType?: string;
       type?: string;
-      location?: "here" | "from-here" | "battlefield" | "other-battlefield";
+      location?:
+        | "here"
+        | "from-here"
+        | "battlefield"
+        | "other-battlefield"
+        | "friendly-battlefield";
       excludeSelf?: boolean;
       tag?: string;
       filter?: string | readonly string[];
@@ -764,6 +776,25 @@ function triggerMatchesEvent(
     }
     if (filters.includes("spell") && event.type === "choose" && event.sourceType !== "spell") {
       return false;
+    }
+    // rule 164.2.b / 161.2.b (sfd-203-221) — "When you recycle A RUNE": the
+    // recycled subject must be a rune (runes recycle to the Rune Deck);
+    // recycling a Main Deck card is not it. Unknown subject → deny.
+    if (filters.includes("rune")) {
+      const subjectIds =
+        "cardIds" in event && Array.isArray(event.cardIds)
+          ? (event.cardIds as string[])
+          : "cardId" in event && typeof event.cardId === "string"
+            ? [event.cardId]
+            : [];
+      const reg = getGlobalCardRegistry();
+      if (
+        !subjectIds.some(
+          (id) => (reg.get(id) as { cardType?: string } | undefined)?.cardType === "rune",
+        )
+      ) {
+        return false;
+      }
     }
     // rule 708 (ogn-249-298) — "when you play a [Mighty] unit": Mighty is the
     // subject's CURRENT Might (5+) as it is played, so a printed 4 entering
@@ -930,6 +961,21 @@ function triggerMatchesEvent(
               : undefined;
       const cardLoc = card.zone?.replace(/^battlefield-/, "");
       if (evLoc !== cardLoc && evLoc !== card.id) {
+        return false;
+      }
+    }
+    // rule 190.4 (ogn-255-298) — "attacks a battlefield YOU control": the
+    // battlefield the event names must be controlled by this card's controller,
+    // so in a multiplayer game an attack on a THIRD player's battlefield is not
+    // it. An unknown battlefield cannot be judged, so it never fires.
+    if (desc.location === "friendly-battlefield") {
+      const bfId =
+        "battlefieldId" in event && typeof event.battlefieldId === "string"
+          ? event.battlefieldId
+          : "to" in event && typeof event.to === "string"
+            ? event.to.replace(/^battlefield-/, "")
+            : undefined;
+      if (bfId === undefined || state?.battlefields?.[bfId]?.controller !== card.owner) {
         return false;
       }
     }

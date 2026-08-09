@@ -143,7 +143,7 @@ describe("Battle Mistress (sfd-203-221)", () => {
     expect(game.p1.runes()).toHaveLength(1);
   });
 
-  test.failing("BUG: a Basic Rune's own 'Recycle this: Add [C]' (164.2.b) is 'you recycle a rune' but fires no trigger — the recycle → Gold → kill → ready → recycle loop", async () => {
+  test("a Basic Rune's own 'Recycle this: Add [C]' (164.2.b) is 'you recycle a rune' but fires no trigger — the recycle → Gold → kill → ready → recycle loop", async () => {
     // Expected: recycleRune → +1 body AND the "exhaust me?" prompt; yes → Gold #1. A second recycle
     // while exhausted cannot be accepted. Killing an enemy unit readies her; a third recycle → Gold #2.
     // Actual: the recycleRune move emits no `recycle` event, so no prompt ever appears.
