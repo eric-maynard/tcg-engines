@@ -320,6 +320,10 @@ export function optInIsPerformable(
       // board (rule-id: unl-166-219 — Sinister Poro killed as an additional
       // cost while its own attack trigger is still on the chain).
       (optTarget.controller === "friendly" ||
+        // rule 402.4 / 355.8 (rule-id: sfd-138-221 Windsinger) — "another unit AT
+        // A BATTLEFIELD": either player's, but battlefields are fully public, so
+        // an empty candidate set here is just as unambiguous as a friendly one.
+        (optTarget.controller === undefined && optTarget.location === "battlefield") ||
         (optTarget.controller === "enemy" &&
           optTarget.location === "here" &&
           // rule 383.3.a (unl-105-219) — while the source is still on the board
@@ -964,9 +968,15 @@ export function executeResolvedItem(
     // (zero is legal) even when only one linked object is left.
     const idLinked = Array.isArray((target as { filter?: { idIn?: unknown } }).filter?.idIn);
     if (upTo !== undefined && upTo > 1 && (options.length >= 2 || (idLinked && options.length === 1))) {
-      // Multi-pick shapes ("up to N" / "any number of") keep their
-      // accumulate-until-declined prompt at resolution for now.
-      if (finalizeOnly) {
+      // rule 392 / 402.2 (rule-id: ogn-289-298) — a DELAYED ability ("ready up
+      // to 2 runes AT THE END OF THIS TURN") floats on its controller with no
+      // source object holding its choices, so its "up to N" objects are named
+      // while the item is FINALIZED: the accumulate-until-declined prompt is
+      // raised here and the picks (possibly none, rule 355.13) are bound onto
+      // the item, which then resolves with exactly them. An ordinary trigger's
+      // multi-pick (rule-id: ven-sp2-006 Sona) still chooses at resolution, so
+      // it can be responded to first (rule 383.2.a.1).
+      if (finalizeOnly && (resolved as { delayed?: boolean }).delayed !== true) {
         return {};
       }
       draft.pendingChoice = {
@@ -979,6 +989,7 @@ export function executeResolvedItem(
         anyNumber: true,
         maxPicks: upTo,
         picked: [],
+        ...bindTag,
         ...(deflectTax ? { deflectTax: true as const } : {}),
       };
       return undefined;

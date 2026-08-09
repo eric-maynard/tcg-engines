@@ -176,6 +176,25 @@ describe("Windsinger (sfd-138-221)", () => {
     expect(game.zoneOf("homeFoe")).toBe("base");
   });
 
+  // rule 402.4 / 355.8 — with both battlefields empty the "you may" trigger has an
+  // unambiguously empty candidate set, so the controller is never offered the opt-in.
+  test("both battlefields empty: no Yes/No opt-in is ever raised and the chain clears itself", async () => {
+    const game = await scenario()
+      .resources(P1, { energy: 2 })
+      .battlefield("bf1", { controller: P1 })
+      .battlefield("bf2", { controller: P2 })
+      .unit(P1, "base", { might: 1 }, "homeAlly")
+      .hand(P1, CARD, "ws")
+      .build();
+    await game.p1.play("ws", { to: "base" });
+    const t = await drive(game, null);
+    expect(t.askedOptIn).toBe(0);
+    expect(t.offered).toEqual([]);
+    expect(game.decision()).toMatchObject({ context: "main", kind: "action", seat: P1 });
+    expect(game.zoneOf("ws")).toBe("base");
+    expect(game.zoneOf("homeAlly")).toBe("base");
+  });
+
   test("the trigger uses the chain: while it is pending P2 gets a priority window and nothing has been bounced yet", async () => {
     const game = await board().build();
     await game.p1.play("ws", { to: "base" });
