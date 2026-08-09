@@ -266,11 +266,11 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Reaction][&gt;] Kill this, [Exhaust]: [Add] [rainbow]. (Abilities that add resources can't be reacted to.)",
+      "rulesText": "[Reaction][>] Kill this, [Exhaust]: [Add] [rainbow]. (Abilities that add resources can't be reacted to.)",
       "abilities": [
         {
           "effect": {
-            "description": "[&gt;] Kill this, :rb_exhaust:: [Add] :rb_rune_rainbow:",
+            "description": "[>] Kill this, :rb_exhaust:: [Add] :rb_rune_rainbow:",
             "effects": [],
             "type": "sequence"
           },
@@ -770,7 +770,7 @@
       "power": 1,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Hunt 2] (When I conquer or hold, gain 2 XP.)\n[Level 3][&gt;] I have +1 [Might] and enter ready. (While you have 3+ XP, get the effect.)",
+      "rulesText": "[Hunt 2] (When I conquer or hold, gain 2 XP.)\n[Level 3][>] I have +1 [Might] and enter ready. (While you have 3+ XP, get the effect.)",
       "abilities": [
         {
           "keyword": "Hunt",
@@ -779,7 +779,7 @@
         },
         {
           "effect": {
-            "description": "[Level 3][&gt;] I have +1 Might and enter ready",
+            "description": "[Level 3][>] I have +1 Might and enter ready",
             "effects": [],
             "type": "sequence"
           },
@@ -838,7 +838,7 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "When I conquer, if you assigned 3 or more excess damage, play two Gold gear tokens exhausted. (They have &quot;[Reaction][&gt;] Kill this, [Exhaust]: [Add] [rainbow].&quot;)",
+      "rulesText": "When I conquer, if you assigned 3 or more excess damage, play two Gold gear tokens exhausted. (They have \"[Reaction][>] Kill this, [Exhaust]: [Add] [rainbow].\")",
       "abilities": [
         {
           "effect": {
@@ -1120,11 +1120,11 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Legion][&gt;] You may play me from your trash for [3][fury]. (Get the effect if you've played another card this turn.)",
+      "rulesText": "[Legion][>] You may play me from your trash for [3][fury]. (Get the effect if you've played another card this turn.)",
       "abilities": [
         {
           "effect": {
-            "description": "[&gt;] You may play me from your trash for :rb_energy_3::rb_rune_fury:",
+            "description": "[>] You may play me from your trash for :rb_energy_3::rb_rune_fury:",
             "effects": [],
             "type": "sequence"
           },
@@ -1376,7 +1376,7 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Reaction] (Play any time, even before spells and abilities resolve.)\nGive a unit +1 [Might] this turn.\n[Level 6][&gt;] Give it +3 [Might] this turn instead. (While you have 6+ XP, get the effect.)",
+      "rulesText": "[Reaction] (Play any time, even before spells and abilities resolve.)\nGive a unit +1 [Might] this turn.\n[Level 6][>] Give it +3 [Might] this turn instead. (While you have 6+ XP, get the effect.)",
       "abilities": [
         {
           "keyword": "Reaction",
@@ -1638,7 +1638,7 @@
       "power": 1,
       "tags": [],
       "isChampion": false,
-      "rulesText": "Move an enemy unit.\n[Level 6][&gt;] [Stun] an enemy unit. (While you have 6+ XP, get the effect. A stunned unit doesn't deal combat damage this turn.)",
+      "rulesText": "Move an enemy unit.\n[Level 6][>] [Stun] an enemy unit. (While you have 6+ XP, get the effect. A stunned unit doesn't deal combat damage this turn.)",
       "abilities": [
         {
           "effect": {
@@ -1702,7 +1702,7 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Hunt] (When I conquer or hold, gain 1 XP.)\n[Level 6][&gt;] When you play me, draw 1. (While you have 6+ XP, get the effect.)",
+      "rulesText": "[Hunt] (When I conquer or hold, gain 1 XP.)\n[Level 6][>] When you play me, draw 1. (While you have 6+ XP, get the effect.)",
       "abilities": [
         {
           "keyword": "Hunt",
@@ -1884,11 +1884,11 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Action][&gt;] Exhaust a unit you control, [Exhaust]: Move a different unit you control to the location of the unit you exhausted to pay for this ability.",
+      "rulesText": "[Action][>] Exhaust a unit you control, [Exhaust]: Move a different unit you control to the location of the unit you exhausted to pay for this ability.",
       "abilities": [
         {
           "effect": {
-            "description": "[&gt;] Exhaust a unit you control, :rb_exhaust:: Move a different unit you control to the location of the unit you exhausted to pay for this ability",
+            "description": "[>] Exhaust a unit you control, :rb_exhaust:: Move a different unit you control to the location of the unit you exhausted to pay for this ability",
             "effects": [],
             "type": "sequence"
           },
@@ -1954,11 +1954,11 @@
       "power": 1,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Hunt 2] (When I conquer or hold, gain 2 XP.)\n[Level 3][&gt;] I have +1 [Might] and [Deflect]. (While you have 3+ XP, get the effect. Opponents must pay [rainbow] to choose a [Deflect] unit with a spell or ability.)",
+      "rulesText": "[Hunt 2] (When I conquer or hold, gain 2 XP.)\n[Level 3][>] I have +1 [Might] and [Deflect]. (While you have 3+ XP, get the effect. Opponents must pay [rainbow] to choose a [Deflect] unit with a spell or ability.)",
       "abilities": [
         {
           "effect": {
-            "description": "[Level 3][&gt;] I have +1 Might and",
+            "description": "[Level 3][>] I have +1 Might and",
             "effects": [],
             "type": "sequence"
           },
@@ -2044,7 +2044,7 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "This enters exhausted.\n[Reaction][&gt;] [Exhaust]: [Add] [rainbow]. (Abilities that add resources can't be reacted to.)\n[Level 6][&gt;] [&gt;&gt;][Reaction][&gt;] [Exhaust]: [Add] [1][rainbow]. (Use this ability only while you have 6+ XP.)",
+      "rulesText": "This enters exhausted.\n[Reaction][>] [Exhaust]: [Add] [rainbow]. (Abilities that add resources can't be reacted to.)\n[Level 6][>] [>>][Reaction][>] [Exhaust]: [Add] [1][rainbow]. (Use this ability only while you have 6+ XP.)",
       "abilities": [
         {
           "effect": {
@@ -2056,7 +2056,7 @@
         },
         {
           "effect": {
-            "description": "[&gt;] :rb_exhaust:: [Add] :rb_rune_rainbow:",
+            "description": "[>] :rb_exhaust:: [Add] :rb_rune_rainbow:",
             "effects": [],
             "type": "sequence"
           },
@@ -2214,7 +2214,7 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "(Units with 0 [Might] can conquer and hold.)\nWhen you play me, draw 1.\n[Deathknell][&gt;] Choose an opponent. They reveal their hand. You can look at their facedown cards this turn. Gain 1 XP. (When I die, get the effects.)",
+      "rulesText": "(Units with 0 [Might] can conquer and hold.)\nWhen you play me, draw 1.\n[Deathknell][>] Choose an opponent. They reveal their hand. You can look at their facedown cards this turn. Gain 1 XP. (When I die, get the effects.)",
       "abilities": [
         {
           "effect": {
@@ -2238,7 +2238,7 @@
         },
         {
           "effect": {
-            "description": "[&gt;] Choose an opponent. They reveal their hand. You can look at their facedown cards this turn. Gain 1 XP",
+            "description": "[>] Choose an opponent. They reveal their hand. You can look at their facedown cards this turn. Gain 1 XP",
             "effects": [],
             "type": "sequence"
           },
@@ -2455,11 +2455,11 @@
       "power": 3,
       "tags": ["Master Yi"],
       "isChampion": true,
-      "rulesText": "[Level 3][&gt;] I cost [2][calm] less. (While you have 3+ XP, get the effect.)\n[Level 6][&gt;] I cost [4][calm][calm] less instead.\n[Level 11][&gt;] I cost [6][calm][calm][calm] less instead.\n[Level 16][&gt;] I can't be chosen by enemy spells and abilities.",
+      "rulesText": "[Level 3][>] I cost [2][calm] less. (While you have 3+ XP, get the effect.)\n[Level 6][>] I cost [4][calm][calm] less instead.\n[Level 11][>] I cost [6][calm][calm][calm] less instead.\n[Level 16][>] I can't be chosen by enemy spells and abilities.",
       "abilities": [
         {
           "effect": {
-            "description": "[Level 3][&gt;] I cost :rb_energy_2::rb_rune_calm: less",
+            "description": "[Level 3][>] I cost :rb_energy_2::rb_rune_calm: less",
             "effects": [],
             "type": "sequence"
           },
@@ -2467,7 +2467,7 @@
         },
         {
           "effect": {
-            "description": "[Level 6][&gt;] I cost :rb_energy_4::rb_rune_calm::rb_rune_calm: less instead",
+            "description": "[Level 6][>] I cost :rb_energy_4::rb_rune_calm::rb_rune_calm: less instead",
             "effects": [],
             "type": "sequence"
           },
@@ -2475,7 +2475,7 @@
         },
         {
           "effect": {
-            "description": "[Level 11][&gt;] I cost :rb_energy_6::rb_rune_calm::rb_rune_calm::rb_rune_calm: less instead",
+            "description": "[Level 11][>] I cost :rb_energy_6::rb_rune_calm::rb_rune_calm::rb_rune_calm: less instead",
             "effects": [],
             "type": "sequence"
           },
@@ -2483,7 +2483,7 @@
         },
         {
           "effect": {
-            "description": "[Level 16][&gt;] I can't be chosen by enemy spells and abilities",
+            "description": "[Level 16][>] I can't be chosen by enemy spells and abilities",
             "effects": [],
             "type": "sequence"
           },
@@ -2599,11 +2599,11 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Deathknell][&gt;] [Predict 2]. (When I die, look at the top two cards of your Main Deck. Recycle any of them and put the rest back in any order.)",
+      "rulesText": "[Deathknell][>] [Predict 2]. (When I die, look at the top two cards of your Main Deck. Recycle any of them and put the rest back in any order.)",
       "abilities": [
         {
           "effect": {
-            "description": "[&gt;] [Predict 2]",
+            "description": "[>] [Predict 2]",
             "effects": [],
             "type": "sequence"
           },
@@ -2784,11 +2784,11 @@
       "power": 1,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Deathknell][&gt;] Deal 4 to an enemy unit. (When I die, get the effect.)",
+      "rulesText": "[Deathknell][>] Deal 4 to an enemy unit. (When I die, get the effect.)",
       "abilities": [
         {
           "effect": {
-            "description": "[&gt;] Deal 4 to an enemy unit",
+            "description": "[>] Deal 4 to an enemy unit",
             "effects": [],
             "type": "sequence"
           },
@@ -2994,7 +2994,7 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "Deal 3 to an enemy unit. When it dies this turn, play a Gold gear token exhausted. (It has &quot;[Reaction][&gt;] Kill this, [Exhaust]: [Add] [rainbow].&quot;)",
+      "rulesText": "Deal 3 to an enemy unit. When it dies this turn, play a Gold gear token exhausted. (It has \"[Reaction][>] Kill this, [Exhaust]: [Add] [rainbow].\")",
       "abilities": [
         {
           "effect": {
@@ -3067,11 +3067,11 @@
       "power": 1,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Hunt 2] (When I conquer or hold, gain 2 XP.)\n[Level 3][&gt;] I have +1 [Might] and [Ganking]. (While you have 3+ XP, get the effect. A [Ganking] unit can move from battlefield to battlefield.)",
+      "rulesText": "[Hunt 2] (When I conquer or hold, gain 2 XP.)\n[Level 3][>] I have +1 [Might] and [Ganking]. (While you have 3+ XP, get the effect. A [Ganking] unit can move from battlefield to battlefield.)",
       "abilities": [
         {
           "effect": {
-            "description": "[Level 3][&gt;] I have +1 Might and",
+            "description": "[Level 3][>] I have +1 Might and",
             "effects": [],
             "type": "sequence"
           },
@@ -3173,7 +3173,7 @@
       "power": 1,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Temporary] (Kill this at the start of its controller's Beginning Phase, before scoring.)\nWhen you play this, play a ready 3 [Might] Sprite unit token with [Temporary] to your base.\n[Deathknell][&gt;] Repeat this gear's play effect. (When this dies, get the effect.)",
+      "rulesText": "[Temporary] (Kill this at the start of its controller's Beginning Phase, before scoring.)\nWhen you play this, play a ready 3 [Might] Sprite unit token with [Temporary] to your base.\n[Deathknell][>] Repeat this gear's play effect. (When this dies, get the effect.)",
       "abilities": [
         {
           "keyword": "Temporary",
@@ -3197,7 +3197,7 @@
         },
         {
           "effect": {
-            "description": "[&gt;] Repeat this gear's play effect",
+            "description": "[>] Repeat this gear's play effect",
             "effects": [],
             "type": "sequence"
           },
@@ -3709,7 +3709,7 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "Draw 2.\n[Level 6][&gt;] This costs [2] less. (While you have 6+ XP, get the effect.)\n[Level 11][&gt;] This costs [4] less instead.",
+      "rulesText": "Draw 2.\n[Level 6][>] This costs [2] less. (While you have 6+ XP, get the effect.)\n[Level 11][>] This costs [4] less instead.",
       "abilities": [
         {
           "effect": {
@@ -3721,7 +3721,7 @@
         },
         {
           "effect": {
-            "description": "[Level 6][&gt;] This costs :rb_energy_2: less",
+            "description": "[Level 6][>] This costs :rb_energy_2: less",
             "effects": [],
             "type": "sequence"
           },
@@ -3729,7 +3729,7 @@
         },
         {
           "effect": {
-            "description": "[Level 11][&gt;] This costs :rb_energy_4: less instead",
+            "description": "[Level 11][>] This costs :rb_energy_4: less instead",
             "effects": [],
             "type": "sequence"
           },
@@ -3792,11 +3792,11 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Reaction][&gt;] [Exhaust]: [Add] [1]. (Abilities that add resources can't be reacted to.)",
+      "rulesText": "[Reaction][>] [Exhaust]: [Add] [1]. (Abilities that add resources can't be reacted to.)",
       "abilities": [
         {
           "effect": {
-            "description": "[&gt;] :rb_exhaust:: [Add] :rb_energy_1:",
+            "description": "[>] :rb_exhaust:: [Add] :rb_energy_1:",
             "effects": [],
             "type": "sequence"
           },
@@ -3824,7 +3824,7 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Hunt] (When I conquer or hold, gain 1 XP.)\n[Level 6][&gt;] I have +1 [Might]. (While you have 6+ XP, get the effect.)",
+      "rulesText": "[Hunt] (When I conquer or hold, gain 1 XP.)\n[Level 6][>] I have +1 [Might]. (While you have 6+ XP, get the effect.)",
       "abilities": [
         {
           "keyword": "Hunt",
@@ -3832,7 +3832,7 @@
         },
         {
           "effect": {
-            "description": "[Level 6][&gt;] I have +1 Might",
+            "description": "[Level 6][>] I have +1 Might",
             "effects": [],
             "type": "sequence"
           },
@@ -3962,11 +3962,11 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Level 11][&gt;] I have +4 [Might]. (While you have 11+ XP, get the effect.)",
+      "rulesText": "[Level 11][>] I have +4 [Might]. (While you have 11+ XP, get the effect.)",
       "abilities": [
         {
           "effect": {
-            "description": "[Level 11][&gt;] I have +4 Might",
+            "description": "[Level 11][>] I have +4 Might",
             "effects": [],
             "type": "sequence"
           },
@@ -4477,11 +4477,11 @@
       "power": null,
       "tags": ["Master Yi"],
       "isChampion": true,
-      "rulesText": "[Hunt 2] (When I conquer or hold, gain 2 XP.)\n[Level 6][&gt;] I have [Deflect] and [Ganking]. (While you have 6+ XP, opponents must pay [rainbow] to choose me with a spell or ability and I can move from battlefield to battlefield.)",
+      "rulesText": "[Hunt 2] (When I conquer or hold, gain 2 XP.)\n[Level 6][>] I have [Deflect] and [Ganking]. (While you have 6+ XP, opponents must pay [rainbow] to choose me with a spell or ability and I can move from battlefield to battlefield.)",
       "abilities": [
         {
           "effect": {
-            "description": "[Level 6][&gt;] I have",
+            "description": "[Level 6][>] I have",
             "effects": [],
             "type": "sequence"
           },
@@ -5712,7 +5712,7 @@
       "power": null,
       "tags": ["Pyke"],
       "isChampion": true,
-      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [energy_0].)\n[Backline] (I must be assigned combat damage last.)\nOnce each turn, when an enemy unit dies while I'm at a battlefield, play a Gold gear token exhausted. (It has &quot;[Reaction][&gt;] Kill this, [Exhaust]: [Add] [rainbow].&quot;)",
+      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [energy_0].)\n[Backline] (I must be assigned combat damage last.)\nOnce each turn, when an enemy unit dies while I'm at a battlefield, play a Gold gear token exhausted. (It has \"[Reaction][>] Kill this, [Exhaust]: [Add] [rainbow].\")",
       "abilities": [
         {
           "keyword": "Hidden",
@@ -5795,7 +5795,7 @@
       "power": 3,
       "tags": [],
       "isChampion": false,
-      "rulesText": "As you play me, add the Baron Pit battlefield token to the board if it's not there already. If you do, I enter there. (It has &quot;Units can move here from anywhere.&quot;)\nI can't be chosen by enemy spells and abilities.\nOther friendly units have +2 [Might].",
+      "rulesText": "As you play me, add the Baron Pit battlefield token to the board if it's not there already. If you do, I enter there. (It has \"Units can move here from anywhere.\")\nI can't be chosen by enemy spells and abilities.\nOther friendly units have +2 [Might].",
       "abilities": [
         {
           "effect": {
@@ -5972,11 +5972,11 @@
       "power": 1,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Level 3][&gt;] I enter ready. (While you have 3+ XP, get the effect.)",
+      "rulesText": "[Level 3][>] I enter ready. (While you have 3+ XP, get the effect.)",
       "abilities": [
         {
           "effect": {
-            "description": "[Level 3][&gt;] I enter ready",
+            "description": "[Level 3][>] I enter ready",
             "effects": [],
             "type": "sequence"
           },
@@ -6003,7 +6003,7 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Assault] (+1 [Might] while I'm an attacker.)\n[Deathknell][&gt;] Channel 1 rune exhausted. (When I die, get the effect.)",
+      "rulesText": "[Assault] (+1 [Might] while I'm an attacker.)\n[Deathknell][>] Channel 1 rune exhausted. (When I die, get the effect.)",
       "abilities": [
         {
           "keyword": "Assault",
@@ -6012,7 +6012,7 @@
         },
         {
           "effect": {
-            "description": "[&gt;] Channel 1 rune exhausted",
+            "description": "[>] Channel 1 rune exhausted",
             "effects": [],
             "type": "sequence"
           },
@@ -6040,11 +6040,11 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Deathknell][&gt;] Play a 1 [Might] Bird unit token with [Deflect] to your base. (When I die, get the effect. Opponents must pay [rainbow] to choose a [Deflect] unit with a spell or ability.)",
+      "rulesText": "[Deathknell][>] Play a 1 [Might] Bird unit token with [Deflect] to your base. (When I die, get the effect. Opponents must pay [rainbow] to choose a [Deflect] unit with a spell or ability.)",
       "abilities": [
         {
           "effect": {
-            "description": "[&gt;] Play a 1 Might Bird unit token with",
+            "description": "[>] Play a 1 Might Bird unit token with",
             "effects": [],
             "type": "sequence"
           },
@@ -6152,11 +6152,11 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Deathknell][&gt;] If I didn't die alone, draw 1. (When I die, get the effect. I wasn't alone if there were other friendly units here.)",
+      "rulesText": "[Deathknell][>] If I didn't die alone, draw 1. (When I die, get the effect. I wasn't alone if there were other friendly units here.)",
       "abilities": [
         {
           "effect": {
-            "description": "[&gt;] If I didn't die alone, draw 1",
+            "description": "[>] If I didn't die alone, draw 1",
             "effects": [],
             "type": "sequence"
           },
@@ -6332,7 +6332,7 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Vision] (When you play this, look at the top card of your Main Deck. You may recycle it.)\n[Action][&gt;] Kill this, [Exhaust]: Give a unit +2 [Might] this turn.",
+      "rulesText": "[Vision] (When you play this, look at the top card of your Main Deck. You may recycle it.)\n[Action][>] Kill this, [Exhaust]: Give a unit +2 [Might] this turn.",
       "abilities": [
         {
           "effect": {
@@ -6758,7 +6758,7 @@
       "power": 1,
       "tags": ["LeBlanc"],
       "isChampion": true,
-      "rulesText": "[Assault] (+1 [Might] while I'm an attacker.)\n[Deathknell][&gt;] Draw 1. If it's your Beginning Phase, draw 2 instead. (When I die, get the effect.)",
+      "rulesText": "[Assault] (+1 [Might] while I'm an attacker.)\n[Deathknell][>] Draw 1. If it's your Beginning Phase, draw 2 instead. (When I die, get the effect.)",
       "abilities": [
         {
           "keyword": "Assault",
@@ -6767,7 +6767,7 @@
         },
         {
           "effect": {
-            "description": "[&gt;] Draw 1. If it's your Beginning Phase, draw 2 instead",
+            "description": "[>] Draw 1. If it's your Beginning Phase, draw 2 instead",
             "effects": [],
             "type": "sequence"
           },
@@ -7036,7 +7036,7 @@
       "power": 1,
       "tags": [],
       "isChampion": false,
-      "rulesText": "When I move to a battlefield, look at the top 3 cards of your Main Deck. You may reveal a unit from among them and draw it. Recycle the rest.\n[Deathknell][&gt;] Play a unit from your hand to your base, ignoring its Energy cost. (When I die, get the effect. You must still pay its Power cost.)",
+      "rulesText": "When I move to a battlefield, look at the top 3 cards of your Main Deck. You may reveal a unit from among them and draw it. Recycle the rest.\n[Deathknell][>] Play a unit from your hand to your base, ignoring its Energy cost. (When I die, get the effect. You must still pay its Power cost.)",
       "abilities": [
         {
           "effect": {
@@ -7053,7 +7053,7 @@
         },
         {
           "effect": {
-            "description": "[&gt;] Play a unit from your hand to your base, ignoring its Energy cost",
+            "description": "[>] Play a unit from your hand to your base, ignoring its Energy cost",
             "effects": [],
             "type": "sequence"
           },
@@ -7258,7 +7258,7 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[1], [Exhaust]: Return a friendly unit at a battlefield to its owner's hand. Play a Gold gear token exhausted. (It has &quot;[Reaction][&gt;] Kill this, [Exhaust]: [Add] [rainbow].&quot;)",
+      "rulesText": "[1], [Exhaust]: Return a friendly unit at a battlefield to its owner's hand. Play a Gold gear token exhausted. (It has \"[Reaction][>] Kill this, [Exhaust]: [Add] [rainbow].\")",
       "abilities": [
         {
           "cost": {
@@ -7471,11 +7471,11 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Level 6][&gt;] Your units have +1 [Might]. (While you have 6+ XP, get the effect.)\n[Level 11][&gt;] Your units enter ready.",
+      "rulesText": "[Level 6][>] Your units have +1 [Might]. (While you have 6+ XP, get the effect.)\n[Level 11][>] Your units enter ready.",
       "abilities": [
         {
           "effect": {
-            "description": "[Level 6][&gt;] Your units have +1 Might",
+            "description": "[Level 6][>] Your units have +1 Might",
             "effects": [],
             "type": "sequence"
           },
@@ -7483,7 +7483,7 @@
         },
         {
           "effect": {
-            "description": "[Level 11][&gt;] Your units enter ready",
+            "description": "[Level 11][>] Your units enter ready",
             "effects": [],
             "type": "sequence"
           },
@@ -7582,7 +7582,7 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "If you play me to a battlefield, I enter ready.\n[Action][&gt;] [1][rainbow], [Exhaust]: [Stun] an enemy unit attacking here. (It doesn't deal combat damage this turn.)",
+      "rulesText": "If you play me to a battlefield, I enter ready.\n[Action][>] [1][rainbow], [Exhaust]: [Stun] an enemy unit attacking here. (It doesn't deal combat damage this turn.)",
       "abilities": [
         {
           "effect": {
@@ -7594,7 +7594,7 @@
         },
         {
           "effect": {
-            "description": "[&gt;] :rb_energy_1::rb_rune_rainbow:, :rb_exhaust:: [Stun] an enemy unit attacking here",
+            "description": "[>] :rb_energy_1::rb_rune_rainbow:, :rb_exhaust:: [Stun] an enemy unit attacking here",
             "effects": [],
             "type": "sequence"
           },
@@ -7710,11 +7710,11 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Reaction][&gt;] [Exhaust]: [Add] [1]. Spend this Energy only during showdowns. (Abilities that add resources can't be reacted to.)",
+      "rulesText": "[Reaction][>] [Exhaust]: [Add] [1]. Spend this Energy only during showdowns. (Abilities that add resources can't be reacted to.)",
       "abilities": [
         {
           "effect": {
-            "description": "[&gt;] :rb_exhaust:: [Add] :rb_energy_1:. Spend this Energy only during showdowns",
+            "description": "[>] :rb_exhaust:: [Add] :rb_energy_1:. Spend this Energy only during showdowns",
             "effects": [],
             "type": "sequence"
           },
@@ -8305,11 +8305,11 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "Units here have &quot;[Exhaust]: Gain 1 XP.&quot;",
+      "rulesText": "Units here have \"[Exhaust]: Gain 1 XP.\"",
       "abilities": [
         {
           "effect": {
-            "description": "Units here have &quot;:rb_exhaust:: Gain 1 XP.&quot;",
+            "description": "Units here have \":rb_exhaust:: Gain 1 XP.\"",
             "effects": [],
             "type": "sequence"
           },

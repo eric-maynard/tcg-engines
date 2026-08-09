@@ -137,7 +137,7 @@ describe("Dragon Roost (ven-157-166)", () => {
     expect(game.gameState.battlefields.roost?.controller).toBe(P2);
   });
 
-  test.failing("BUG: the Roost's controller can use it too — P2 holding the Roost pays the extra two power and the Drake arrives THERE rather than in base", async () => {
+  test("the Roost's controller can use it too — P2 holding the Roost pays the extra two power and the Drake arrives THERE rather than in base", async () => {
     // Expected: even for the controller the paid play lands on the Roost (a normal play there would also be legal —
     // the point is that the PAID variant exists and routes to this battlefield): 9 energy + 2 power spent.
     // Actual: no paid variant; a play to "roost" costs 9 and leaves the power alone.

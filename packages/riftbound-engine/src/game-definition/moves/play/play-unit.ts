@@ -1657,9 +1657,6 @@ export const playUnit: Defs["playUnit"] = {
       if (standardTiming || reactionWindow) {
         for (const bfId of Object.keys(state.battlefields ?? {})) {
           const bfZoneId = getBattlefieldZoneId(bfId) as string;
-          if (results.some((r) => r.cardId === (cardId as string) && r.location === bfZoneId)) {
-            continue;
-          }
           const pips = battlefieldRedirectPowerFor(bfId, cardId as string);
           if (
             !pips ||
@@ -1674,10 +1671,22 @@ export const playUnit: Defs["playUnit"] = {
           ) {
             continue;
           }
+          const sameDest = results.filter(
+            (r) => r.cardId === (cardId as string) && r.location === bfZoneId,
+          );
+          if (sameDest.some((r) => r.paidAdditionalCost === true)) {
+            continue;
+          }
+          // rule 356.2 — the offer is open to ANY player, the battlefield's own
+          // controller included. Their plain play here is already legal
+          // (355.2.a), so for them it is the PAID variant that still has to be
+          // enumerated rather than the destination skipped entirely.
+          const plainAlreadyOffered = sameDest.length > 0;
           results.push({
             cardId: cardId as string,
             location: bfZoneId,
             playerId: context.playerId as string,
+            ...(plainAlreadyOffered ? { paidAdditionalCost: true } : {}),
           });
         }
       }

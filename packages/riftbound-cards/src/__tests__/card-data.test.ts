@@ -4,9 +4,38 @@
  * Verifies card definitions are properly generated and accessible.
  */
 
+import { readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
 import { SETS, enrichCardsWithStats, getAllCards, getCardRegistry, getRawCards } from "../data";
 import * as cards from "../cards";
+
+const ENTITY = /&(?:#\d+|#x[0-9a-f]+|[a-z]+);/i;
+
+describe("Card text is plain text (no HTML entities)", () => {
+  test("no set JSON rulesText carries an HTML entity", () => {
+    const dir = join(import.meta.dir, "..", "data", "sets");
+    const offenders: string[] = [];
+    for (const file of readdirSync(dir).filter((f) => f.endsWith(".json"))) {
+      const set = JSON.parse(readFileSync(join(dir, file), "utf8")) as {
+        cards?: { id?: string; rulesText?: string }[];
+      };
+      for (const card of set.cards ?? []) {
+        if (typeof card.rulesText === "string" && ENTITY.test(card.rulesText)) {
+          offenders.push(`${file}:${card.id}`);
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  test("no enriched card reaches the engine with an HTML entity in its rulesText", () => {
+    const offenders = getAllCards()
+      .filter((c) => typeof c.rulesText === "string" && ENTITY.test(c.rulesText))
+      .map((c) => c.id);
+    expect(offenders).toEqual([]);
+  });
+});
 
 describe("Card Data", () => {
   test("sets metadata is populated", () => {

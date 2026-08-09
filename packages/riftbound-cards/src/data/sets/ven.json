@@ -17,7 +17,7 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Empower] [5]. This ability costs [3] less if you control 4 or fewer runes. (Pay the cost: Empower me. Use only if not Empowered.)\n[Empowered][&gt;] I have [Deflect] and [Assault 2]. (Opponents must pay [rainbow] to choose me with a spell or ability. +2 [Might] while I'm an attacker.)",
+      "rulesText": "[Empower] [5]. This ability costs [3] less if you control 4 or fewer runes. (Pay the cost: Empower me. Use only if not Empowered.)\n[Empowered][>] I have [Deflect] and [Assault 2]. (Opponents must pay [rainbow] to choose me with a spell or ability. +2 [Might] while I'm an attacker.)",
       "abilities": [
         null
       ],
@@ -503,7 +503,7 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Empower] — Discard 1 (Pay the cost: Empower me. Use only if not Empowered.)\n[Empowered][&gt;] I have +1 [Might].",
+      "rulesText": "[Empower] — Discard 1 (Pay the cost: Empower me. Use only if not Empowered.)\n[Empowered][>] I have +1 [Might].",
       "abilities": [
         {
           "_rule": "827.1.c.1 — Empower — [Cost] is the activated ability '[Cost]: Empower this. Play only if not Empowered.'",
@@ -768,7 +768,7 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Empower] [2][fury] ([2][fury]: Empower me. Use only if not Empowered.)\n[Empowered][&gt;] I have [Assault 3]. (+3 [Might] while I'm an attacker.)",
+      "rulesText": "[Empower] [2][fury] ([2][fury]: Empower me. Use only if not Empowered.)\n[Empowered][>] I have [Assault 3]. (+3 [Might] while I'm an attacker.)",
       "abilities": [],
       "parseSuccess": false,
       "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/3bbeed15ac517c2e39c039e376553ce7e1c65f0c-744x1039.png?accountingTag=RB",
@@ -967,7 +967,7 @@
         "Akali"
       ],
       "isChampion": true,
-      "rulesText": "[Empower] [2][fury] ([2][fury]: Empower me. Use only if not Empowered.)\nWhen I move, you may deal 1 to a unit at a battlefield I moved to or from. If I'm [Empowered], deal 2 instead.\n[Empowered][&gt;] I have +1 [Might].",
+      "rulesText": "[Empower] [2][fury] ([2][fury]: Empower me. Use only if not Empowered.)\nWhen I move, you may deal 1 to a unit at a battlefield I moved to or from. If I'm [Empowered], deal 2 instead.\n[Empowered][>] I have +1 [Might].",
       "abilities": [
         null
       ],
@@ -1147,7 +1147,7 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "When a combat that I was in ends, empower me. (I become Empowered if I'm not already.)\n[Empowered][&gt;] I have +2 [Might].",
+      "rulesText": "When a combat that I was in ends, empower me. (I become Empowered if I'm not already.)\n[Empowered][>] I have +2 [Might].",
       "abilities": [
         null
       ],
@@ -1206,7 +1206,7 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Empower] [3] ([3]: Empower me. Use only if not Empowered.)\n[Empowered][&gt;] I have [Deflect] and [Shield 3]. (Opponents must pay [rainbow] to choose me with a spell or ability.+3 [Might] while I'm a defender.)",
+      "rulesText": "[Empower] [3] ([3]: Empower me. Use only if not Empowered.)\n[Empowered][>] I have [Deflect] and [Shield 3]. (Opponents must pay [rainbow] to choose me with a spell or ability.+3 [Might] while I'm a defender.)",
       "abilities": [
         null
       ],
@@ -1258,7 +1258,7 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Empower] [12]. This ability costs [1] less for each rune you control. (Pay the cost: Empower me. Use only if not Empowered.)\n[Empowered][&gt;] I have +3 [Might].",
+      "rulesText": "[Empower] [12]. This ability costs [1] less for each rune you control. (Pay the cost: Empower me. Use only if not Empowered.)\n[Empowered][>] I have +3 [Might].",
       "abilities": [
         null
       ],
@@ -1614,7 +1614,7 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Deflect] (Opponents must pay [rainbow] to choose me with a spell or ability.)\n[Empower] [7] ([7]: Empower me. Use only if not Empowered.)\n[Empowered][&gt;] I have +7 [Might].",
+      "rulesText": "[Deflect] (Opponents must pay [rainbow] to choose me with a spell or ability.)\n[Empower] [7] ([7]: Empower me. Use only if not Empowered.)\n[Empowered][>] I have +7 [Might].",
       "abilities": [
         null,
         null
@@ -1720,7 +1720,7 @@
         "Nasus"
       ],
       "isChampion": true,
-      "rulesText": "[Deflect 2]\n[Empower] [8]\n[Empowered][&gt;] When I conquer, you score 1 point.",
+      "rulesText": "[Deflect 2]\n[Empower] [8]\n[Empowered][>] When I conquer, you score 1 point.",
       "abilities": [
         null,
         null
@@ -1747,7 +1747,7 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Empower] [2] ([2]: Empower me. Use only if not Empowered.)\nWhen I become [Empowered], [Predict 2]. (Look at the top 2 cards of your Main Deck. Recycle any of them and put the rest back in any order.)\n[Empowered][&gt;] I have +1 [Might].",
+      "rulesText": "[Empower] [2] ([2]: Empower me. Use only if not Empowered.)\nWhen I become [Empowered], [Predict 2]. (Look at the top 2 cards of your Main Deck. Recycle any of them and put the rest back in any order.)\n[Empowered][>] I have +1 [Might].",
       "abilities": [
         null
       ],
@@ -1825,7 +1825,7 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Empower] [12]. This ability costs [1] less for each rune you control. (Pay the cost: Empower me. Use only if not Empowered.)\n[Empowered][&gt;] I have [Deflect] and [Shield 3]. (Opponents must pay [rainbow] to choose me with a spell or ability.+3 [Might] while I'm a defender.)",
+      "rulesText": "[Empower] [12]. This ability costs [1] less for each rune you control. (Pay the cost: Empower me. Use only if not Empowered.)\n[Empowered][>] I have [Deflect] and [Shield 3]. (Opponents must pay [rainbow] to choose me with a spell or ability.+3 [Might] while I'm a defender.)",
       "abilities": [
         null
       ],
@@ -1964,7 +1964,7 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Empower] [3] ([3]: Empower me. Use only if not Empowered.)\n[Empowered][&gt;] Your spells cost [1][rainbow] less, to a minimum of [1].",
+      "rulesText": "[Empower] [3] ([3]: Empower me. Use only if not Empowered.)\n[Empowered][>] Your spells cost [1][rainbow] less, to a minimum of [1].",
       "abilities": [],
       "parseSuccess": false,
       "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/67a5f67bad4d4201b14760206a34c838d7a1e4dc-744x1039.png?accountingTag=RB",
@@ -2014,7 +2014,7 @@
       "power": 1,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Empower] [3] ([3]: Empower me. Use only if not Empowered.)\n[Empowered][&gt;] When I move, draw 1.",
+      "rulesText": "[Empower] [3] ([3]: Empower me. Use only if not Empowered.)\n[Empowered][>] When I move, draw 1.",
       "abilities": [
         null
       ],
@@ -2321,7 +2321,7 @@
         "Mel"
       ],
       "isChampion": true,
-      "rulesText": "When you play me, draw 1.\n[Empower] [3] ([3]: Empower me. Use only if not Empowered.)\n[Empowered][&gt;] Your spells and abilities can't be countered. If a spell or ability you control would give -[Might] to a unit it chooses, it gives an additional -1 [Might].",
+      "rulesText": "When you play me, draw 1.\n[Empower] [3] ([3]: Empower me. Use only if not Empowered.)\n[Empowered][>] Your spells and abilities can't be countered. If a spell or ability you control would give -[Might] to a unit it chooses, it gives an additional -1 [Might].",
       "abilities": [
         null
       ],
@@ -2347,7 +2347,7 @@
       "power": 1,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Empower] [3] ([3]: Empower me. Use only if not Empowered.)\n[Empowered][&gt;] I have +2 [Might] and [Ganking]. (I can move from battlefield to battlefield.)",
+      "rulesText": "[Empower] [3] ([3]: Empower me. Use only if not Empowered.)\n[Empowered][>] I have +2 [Might] and [Ganking]. (I can move from battlefield to battlefield.)",
       "abilities": [],
       "parseSuccess": false,
       "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/54122304a3bb1f989faf124cb74fd7d41b029681-744x1039.png?accountingTag=RB",
@@ -2462,7 +2462,7 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Empower] — [1] or [body] (Pay either cost: Empower me. Use only if not Empowered.)\n[Empowered][&gt;] I have +1 [Might].",
+      "rulesText": "[Empower] — [1] or [body] (Pay either cost: Empower me. Use only if not Empowered.)\n[Empowered][>] I have +1 [Might].",
       "abilities": [
         null
       ],
@@ -2488,7 +2488,7 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "This enters exhausted.\n[Empower] — [1], [Exhaust] (Pay the cost: Empower this. Use only if not Empowered.)\n[Reaction][&gt;] [Exhaust]: [Add] [1]. If this is [Empowered], [Add] [2] instead.",
+      "rulesText": "This enters exhausted.\n[Empower] — [1], [Exhaust] (Pay the cost: Empower this. Use only if not Empowered.)\n[Reaction][>] [Exhaust]: [Add] [1]. If this is [Empowered], [Add] [2] instead.",
       "abilities": [],
       "parseSuccess": false,
       "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/f6a3940440a38e34fe306947d663018dd2df7ca8-744x1039.png?accountingTag=RB",
@@ -2562,7 +2562,7 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Empower] [1][rainbow][rainbow] ([1][rainbow][rainbow]: Empower me. Use only if not Empowered.)\n[Empowered][&gt;] I have +2 [Might].\n[Empowered][&gt;][&gt;&gt;][Deathknell][&gt;] Channel 2 runes exhausted. (When I die while Empowered, get the effect.)",
+      "rulesText": "[Empower] [1][rainbow][rainbow] ([1][rainbow][rainbow]: Empower me. Use only if not Empowered.)\n[Empowered][>] I have +2 [Might].\n[Empowered][>][>>][Deathknell][>] Channel 2 runes exhausted. (When I die while Empowered, get the effect.)",
       "abilities": [
         null,
         null
@@ -2589,7 +2589,7 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Empower] [5][body] ([5][body]: Empower me. Use only if not Empowered.)\n[Empowered][&gt;] When I attack or defend, choose a unit here. Increase my Might to its Might this turn, then give me +1 [Might] this turn.",
+      "rulesText": "[Empower] [5][body] ([5][body]: Empower me. Use only if not Empowered.)\n[Empowered][>] When I attack or defend, choose a unit here. Increase my Might to its Might this turn, then give me +1 [Might] this turn.",
       "abilities": [
         null
       ],
@@ -2764,7 +2764,7 @@
         "Ambessa"
       ],
       "isChampion": true,
-      "rulesText": "[Empower] [3][body] ([3][body]: Empower me. Use only if not Empowered.)\n[Empowered][&gt;] I have +3 [Might] and can't be dealt damage unless I'm in combat.",
+      "rulesText": "[Empower] [3][body] ([3][body]: Empower me. Use only if not Empowered.)\n[Empowered][>] I have +3 [Might] and can't be dealt damage unless I'm in combat.",
       "abilities": [
         {
           "_rule": "827.1.c.1 — Empower — [Cost] is the activated ability '[Cost]: Empower this. Play only if not Empowered.'",
@@ -2974,7 +2974,7 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Empower] [2] ([2]: Empower me. Use only if not Empowered.)\n[Empowered][&gt;] I have +1 [Might] and [Ganking]. (I can move from battlefield to battlefield.)",
+      "rulesText": "[Empower] [2] ([2]: Empower me. Use only if not Empowered.)\n[Empowered][>] I have +1 [Might] and [Ganking]. (I can move from battlefield to battlefield.)",
       "abilities": [],
       "parseSuccess": false,
       "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/18e925b4291231a2045e60d062bd174950316c1d-744x1039.png?accountingTag=RB",
@@ -3493,7 +3493,7 @@
         "Zed"
       ],
       "isChampion": true,
-      "rulesText": "When I conquer, play a 0 [Might] Shadow Clone unit token to your base.\n[Action][&gt;] [1][chaos]: Move me and a Shadow Clone you control to each other's locations.",
+      "rulesText": "When I conquer, play a 0 [Might] Shadow Clone unit token to your base.\n[Action][>] [1][chaos]: Move me and a Shadow Clone you control to each other's locations.",
       "abilities": [
         null
       ],
@@ -3851,7 +3851,7 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Empower] [2] ([2]: Empower me. Use only if not Empowered.)\n[Empowered][&gt;] I have +1 [Might] and [Deflect 2]. (Opponents must pay [rainbow][rainbow] to choose me with a spell or ability.)",
+      "rulesText": "[Empower] [2] ([2]: Empower me. Use only if not Empowered.)\n[Empowered][>] I have +1 [Might] and [Deflect 2]. (Opponents must pay [rainbow][rainbow] to choose me with a spell or ability.)",
       "abilities": [],
       "parseSuccess": false,
       "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/1aaf389ca46bd9122233aadcfd23fee8f9cdfdc9-744x1039.png?accountingTag=RB",
@@ -3901,7 +3901,7 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Empower] — Kill a friendly unit (Pay the cost: Empower me. Use only if not Empowered.)\n[Empowered][&gt;] I have +2 [Might].",
+      "rulesText": "[Empower] — Kill a friendly unit (Pay the cost: Empower me. Use only if not Empowered.)\n[Empowered][>] I have +2 [Might].",
       "abilities": [
         null
       ],
@@ -4003,7 +4003,7 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Empower] [1][order] ([1][order]: Empower me. Use only if not Empowered.)\n[Empowered][&gt;][&gt;&gt;][Deathknell][&gt;] Play two 1 [Might] Recruit unit tokens to your base. (When I die while Empowered, get the effect.)",
+      "rulesText": "[Empower] [1][order] ([1][order]: Empower me. Use only if not Empowered.)\n[Empowered][>][>>][Deathknell][>] Play two 1 [Might] Recruit unit tokens to your base. (When I die while Empowered, get the effect.)",
       "abilities": [
         null,
         null
@@ -4086,7 +4086,7 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Empower] [3][order] ([3][order]: Empower me. Use only if not Empowered.)\n[Empowered][&gt;] Your units that are [Empowered] have +2 [Might] (including me).",
+      "rulesText": "[Empower] [3][order] ([3][order]: Empower me. Use only if not Empowered.)\n[Empowered][>] Your units that are [Empowered] have +2 [Might] (including me).",
       "abilities": [
         null
       ],
@@ -4261,7 +4261,7 @@
         "Ambessa"
       ],
       "isChampion": true,
-      "rulesText": "[Empower] [1][order][order] ([1][order][order]: Empower me. Use only if not Empowered.)\n[Empowered][&gt;] I have [Assault 2]. (+2 [Might] while I'm an attacker.)\n[Empowered][&gt;] When I attack, kill an enemy unit here with less Might than me.",
+      "rulesText": "[Empower] [1][order][order] ([1][order][order]: Empower me. Use only if not Empowered.)\n[Empowered][>] I have [Assault 2]. (+2 [Might] while I'm an attacker.)\n[Empowered][>] When I attack, kill an enemy unit here with less Might than me.",
       "abilities": [
         null
       ],
@@ -4344,7 +4344,7 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Empower] [3][rainbow] ([3][rainbow]: Empower this. Use only if not Empowered.)\n[Action][&gt;] [Exhaust]: If it's your turn, move a friendly unit in a showdown to base and if I'm [Empowered], ready it.",
+      "rulesText": "[Empower] [3][rainbow] ([3][rainbow]: Empower this. Use only if not Empowered.)\n[Action][>] [Exhaust]: If it's your turn, move a friendly unit in a showdown to base and if I'm [Empowered], ready it.",
       "abilities": [],
       "parseSuccess": false,
       "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/0d53b477ed43fb9bbed84858443a606b2b51a2b5-744x1039.png?accountingTag=RB",
@@ -4396,7 +4396,7 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Reaction][&gt;] [rainbow][rainbow], [Exhaust]: [Add] [2]. Spend this Energy only to play units or activated abilities of units.",
+      "rulesText": "[Reaction][>] [rainbow][rainbow], [Exhaust]: [Add] [2]. Spend this Energy only to play units or activated abilities of units.",
       "abilities": [
         null
       ],
@@ -4423,7 +4423,7 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Action] (Play on your turn or in showdowns.)\nThis turn, double a unit's Might and give it &quot;[rainbow][rainbow]: Ready me.&quot;",
+      "rulesText": "[Action] (Play on your turn or in showdowns.)\nThis turn, double a unit's Might and give it \"[rainbow][rainbow]: Ready me.\"",
       "timing": "action",
       "abilities": [
         {
@@ -4492,7 +4492,7 @@
       "power": 1,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Burn 3]. (Put the top 3 cards of your Main Deck into your trash.)\nPlay a 0 [Might] Shadow Clone unit token. (It has &quot;When I attack, you may banish a unit from your trash. If you do, give me [Assault 4] this turn.&quot;)\n[Flow] [1][rainbow][rainbow] (You may play this from your trash for its Flow cost. Then banish it.)",
+      "rulesText": "[Burn 3]. (Put the top 3 cards of your Main Deck into your trash.)\nPlay a 0 [Might] Shadow Clone unit token. (It has \"When I attack, you may banish a unit from your trash. If you do, give me [Assault 4] this turn.\")\n[Flow] [1][rainbow][rainbow] (You may play this from your trash for its Flow cost. Then banish it.)",
       "abilities": [],
       "parseSuccess": false,
       "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/87ccfb8d1c19f402bb37ffa392011ee2f0880aa9-744x1039.png?accountingTag=RB",
@@ -5197,7 +5197,7 @@
         "Renekton"
       ],
       "isChampion": true,
-      "rulesText": "[1]: Give me +1 [Might] this turn.\nWhen my Might becomes 10 or more, empower me.\n[Empowered][&gt;] I have [Ganking] and [Deflect].",
+      "rulesText": "[1]: Give me +1 [Might] this turn.\nWhen my Might becomes 10 or more, empower me.\n[Empowered][>] I have [Ganking] and [Deflect].",
       "abilities": [
         null
       ],
@@ -5285,7 +5285,7 @@
         "Gangplank"
       ],
       "isChampion": true,
-      "rulesText": "[Empower] [body][body]\n[Empowered][&gt;] If a spell or ability that chooses me would stun me, give me -[Might], or return me to hand, give me +3 [Might] instead.",
+      "rulesText": "[Empower] [body][body]\n[Empowered][>] If a spell or ability that chooses me would stun me, give me -[Might], or return me to hand, give me +3 [Might] instead.",
       "abilities": [],
       "parseSuccess": false,
       "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/9d9fd99b083fb7104d533ca0eccb43a47c2cc74a-744x1039.png?accountingTag=RB",
@@ -5396,7 +5396,7 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "When you banish a card you own, empower me.\n[Action][&gt;] Disempower me, [Exhaust]: Discard 1, then draw 1.",
+      "rulesText": "When you banish a card you own, empower me.\n[Action][>] Disempower me, [Exhaust]: Discard 1, then draw 1.",
       "abilities": [],
       "parseSuccess": false,
       "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/75b7ba57a83af496b26d9fe7e8521f9a851bf464-744x1039.png?accountingTag=RB",
@@ -5448,7 +5448,7 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Action][&gt;] [Exhaust]: Give a friendly unit [Tank] this turn.",
+      "rulesText": "[Action][>] [Exhaust]: Give a friendly unit [Tank] this turn.",
       "abilities": [
         null
       ],
@@ -5475,7 +5475,7 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Empower] [2][rainbow][rainbow]\n[1], [Exhaust]: Ready a gear.\n[Empowered][&gt;] [1], [Exhaust]: Ready 2 gear.",
+      "rulesText": "[Empower] [2][rainbow][rainbow]\n[1], [Exhaust]: Ready a gear.\n[Empowered][>] [1], [Exhaust]: Ready 2 gear.",
       "abilities": [],
       "parseSuccess": false,
       "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/f527eb9b02ce62d808ec82e12ac28af5a6bd75fb-744x1039.png?accountingTag=RB",
@@ -5525,7 +5525,7 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "When you play a card from anywhere other than your hand, empower me.\n[Action][&gt;] Disempower me, [Exhaust]: Give a unit [Assault 2] this turn.",
+      "rulesText": "When you play a card from anywhere other than your hand, empower me.\n[Action][>] Disempower me, [Exhaust]: Give a unit [Assault 2] this turn.",
       "abilities": [],
       "parseSuccess": false,
       "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/f208ffb2ee76827cd4c608bcc8e1bcb9380bfa31-744x1039.png?accountingTag=RB",

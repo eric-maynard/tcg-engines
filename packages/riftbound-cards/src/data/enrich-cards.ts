@@ -8,6 +8,20 @@
 import type { Card } from "@tcg/riftbound-types/cards";
 import { parseAbilities } from "../parser";
 import { expandHuntKeywords } from "../parser/impl/keywords";
+import { decodeHtmlEntities, hasHtmlEntity } from "./decode-entities";
+
+/**
+ * Printed text scraped out of HTML can still carry entities (`&gt;`, `&quot;`).
+ * Decode once here so the parser, the engine and any card renderer all see
+ * plain text — no consumer needs its own entity workaround.
+ */
+function decodeCardText(card: Card): Card {
+  const text = (card as { rulesText?: string }).rulesText;
+  if (typeof text !== "string" || !hasHtmlEntity(text)) {
+    return card;
+  }
+  return { ...card, rulesText: decodeHtmlEntities(text) } as Card;
+}
 
 /**
  * Enrich a single card with parsed abilities.
@@ -19,7 +33,7 @@ import { expandHuntKeywords } from "../parser/impl/keywords";
  * `abilities: []` alongside a TODO comment.
  */
 function enrichCard(raw: Card): Card {
-  const card = normalizeSpellTiming(raw);
+  const card = normalizeSpellTiming(decodeCardText(raw));
   // Skip if the card declares an explicit abilities array (hand-authored opt-out).
   // rule 823 / 808.1: Hunt and Deathknell still need their `triggered` sibling
   // here — the engine's trigger matcher only walks `type === "triggered"`

@@ -6925,7 +6925,7 @@
       "power": 1,
       "tags": [],
       "isChampion": false,
-      "rulesText": "[Action] (Play on your turn or in showdowns.)\nMove a friendly unit. You may attach an Equipment with the same controller to it. This turn, that unit has &quot;When I conquer, you may move me to my base.&quot;",
+      "rulesText": "[Action] (Play on your turn or in showdowns.)\nMove a friendly unit. You may attach an Equipment with the same controller to it. This turn, that unit has \"When I conquer, you may move me to my base.\"",
       "abilities": [
         {
           "keyword": "Action",
@@ -7832,11 +7832,11 @@
       "power": null,
       "tags": [],
       "isChampion": false,
-      "rulesText": "While you control this battlefield, friendly legends have &quot;[Exhaust]: Attach an Equipment you control to a unit you control.&quot;",
+      "rulesText": "While you control this battlefield, friendly legends have \"[Exhaust]: Attach an Equipment you control to a unit you control.\"",
       "abilities": [
         {
           "effect": {
-            "description": "While you control this battlefield, friendly legends have &quot;:rb_exhaust:: Attach an Equipment you control to a unit you control.&quot;",
+            "description": "While you control this battlefield, friendly legends have \":rb_exhaust:: Attach an Equipment you control to a unit you control.\"",
             "effects": [],
             "type": "sequence"
           },
