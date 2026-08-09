@@ -542,8 +542,11 @@ export function executeResolvedItem(
     }
     // rule 419.4.a: a spell with no stored chain effect (vanilla/registry
     // lookup) still completes the act of being played — its play triggers
-    // must fire exactly as on the normal path.
-    firePlayedCardTriggers(resolved, draft, context, fallbackPreLen);
+    // must fire exactly as on the normal path (and are owed to the deferred
+    // settle flush when the effect suspended on a prompt).
+    if (!resolutionSuspended(draft)) {
+      firePlayedCardTriggers(resolved, draft, context, fallbackPreLen);
+    }
     return undefined;
   }
 
@@ -1333,7 +1336,13 @@ export function executeResolvedItem(
   ) {
     executeEffect(effect, effectCtx);
   }
-  firePlayedCardTriggers(resolved, draft, context, preLen);
+  // rule 419.4.a / 383.2.c — a resolution that suspended on a prompt has not
+  // completed the play yet, and the triggers it owes are appended AFTER
+  // everything the effect queued. `flushDeferredSpellSettle` fires them once
+  // the last prompt of this resolution is answered.
+  if (!resolutionSuspended(draft)) {
+    firePlayedCardTriggers(resolved, draft, context, preLen);
+  }
 }
 
 /**
@@ -1368,6 +1377,16 @@ function fireFromHiddenTrigger(
 }
 
 /**
+ * rule 359.3.d — the resolution is still mid-effect: a prompt of its own is
+ * outstanding. A stolen item's mode re-choice (752.1) belongs to that item, not
+ * to the resolving spell, so it does not suspend it.
+ */
+function resolutionSuspended(draft: RiftboundGameState): boolean {
+  const choice = draft.pendingChoice as { reChoose?: boolean } | undefined;
+  return choice !== undefined && choice.reChoose !== true;
+}
+
+/**
  * Rule 419.4.a: abilities that trigger on playing a card fire when that act is
  * completed by resolution — not when the card is placed on the chain, and
  * never if the card was countered (425.1.b). `preLen` is the chain length
@@ -1382,6 +1401,10 @@ function firePlayedCardTriggers(
   if (resolved.type !== "spell") {
     return;
   }
+  // rule 419.4.a — the act of playing this spell is now complete. Mark the item
+  // so a settle parked by a mid-resolution prompt does not fire these a second
+  // time (see `settleResolvedSpellCard` / `flushDeferredSpellSettle`).
+  (resolved as { _playTriggersFired?: boolean })._playTriggersFired = true;
   const postLen = draft.interaction?.chain?.items.length ?? 0;
   const trigCtx = {
     cards: context.cards,
@@ -1494,6 +1517,10 @@ export function settleResolvedSpellCard(
     draft.deferredSpellSettle = {
       cardId: resolved.cardId as string,
       controller: resolved.controller as string,
+      // rule 419.4.a — a resolution that suspended on a prompt never reached
+      // the play-trigger step of `executeResolvedItem`; the flush owes it.
+      playTriggersPending:
+        (resolved as { _playTriggersFired?: boolean })._playTriggersFired !== true,
       resolveTo: resolved.resolveTo as string | undefined,
     };
     return;
@@ -1545,16 +1572,19 @@ export function flushDeferredSpellSettle(
     return;
   }
   draft.deferredSpellSettle = undefined;
-  settleResolvedSpellCard(
-    {
-      cardId: parked.cardId,
-      controller: parked.controller,
-      resolveTo: parked.resolveTo,
-      type: "spell",
-    } as unknown as ChainItem,
-    context,
-    draft,
-  );
+  const item = {
+    cardId: parked.cardId,
+    controller: parked.controller,
+    resolveTo: parked.resolveTo,
+    type: "spell",
+  } as unknown as ChainItem;
+  settleResolvedSpellCard(item, context, draft);
+  // rule 419.4.a — "when you play a spell" fires when the play is completed by
+  // resolution. A resolution suspended on a prompt (a target chosen as the
+  // spell resolves) completes here, so its play triggers are owed now.
+  if (parked.playTriggersPending === true) {
+    firePlayedCardTriggers(item, draft, context, draft.interaction?.chain?.items.length ?? 0);
+  }
 }
 
 /**
