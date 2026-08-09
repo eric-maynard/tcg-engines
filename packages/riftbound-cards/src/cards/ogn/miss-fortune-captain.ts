@@ -11,8 +11,10 @@ const abilities: Ability[] = [
       target: { excludeSelf: true, filter: "exhausted", location: "anywhere", type: "unit" },
       type: "ready",
     },
-    // "you may" is expressed as the choice of which exhausted permanent to
-    // ready (rule 355.5.a) — declining is equivalent to having no legal target.
+    // rule 383.3.a — the leading "you may" is decided at FINALIZATION, before
+    // the ability sits on the chain: its controller is asked yes/no first and
+    // only then names the exhausted permanent to ready.
+    optional: true,
     trigger: { event: "move", on: "self", restrictions: [{ type: "first-time-each-turn" }] },
     type: "triggered",
   },
