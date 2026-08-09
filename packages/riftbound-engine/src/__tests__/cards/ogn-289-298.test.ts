@@ -129,12 +129,12 @@ describe("Targon's Peak (ogn-289-298)", () => {
     expect(game.violations()).toEqual([]);
   });
 
-  test.failing("BUG: the choice is made AT END OF TURN (355.5.b): runes that were ready at conquer time and tapped afterwards are the ones readied", async () => {
+  test("the choice is made AT END OF TURN (355.5.b): runes that were ready at conquer time and tapped afterwards are the ones readied", async () => {
     const game = await board(0, 2).hand(P1, { cardType: "unit", energyCost: 2, might: 2, name: "Two-drop" }, "twodrop").build();
     await conquer(game, P1, "raider", "peak");
     expect(game.p1.runes({ ready: true })).toHaveLength(2);
     await game.p1.tapRunes(2);
-    await game.p1.play("twodrop");
+    await game.p1.play("twodrop", { to: "base" });
     await game.settle();
     expect(game.p1.runes({ ready: true })).toHaveLength(0);
     expect(await endTurnTakingRunes(game, P1, 2)).toBe(1);
