@@ -743,6 +743,10 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
           // raised mid-sequence suspends the rest the same way a confirm does.
           (parked?.type === "pick-many" &&
             (parked as { suspendsSequence?: boolean }).suspendsSequence === true) ||
+          // rule 372 — so does the "order your damage replacements" question a
+          // damage step raised: the damage has not been dealt yet.
+          (parked?.type === "order" &&
+            (parked as { suspendsSequence?: boolean }).suspendsSequence === true) ||
           parked?.type === "reveal-and-pick" ||
           // rule 355.4 (unl-202-219 Void Assault) — "Move a friendly unit, then
           // move an enemy unit": when the LATER steps own their own locked
