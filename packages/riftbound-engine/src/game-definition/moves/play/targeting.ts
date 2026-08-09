@@ -688,6 +688,33 @@ export function spellEffectHasLegalTargets(
   if (effect.type === "move" && (effect as { optional?: boolean }).optional === true) {
     return true;
   }
+  // rule 402.3 / 355.8 (sfd-193-221) — "Attach a detached Equipment you control
+  // to a unit you control": both objects are named as the ability is activated,
+  // so with no candidate Equipment (or no candidate holder) there is no legal
+  // activation. Only the fully-descriptive form is gated; pronoun forms
+  // ("attach ME to a unit", "attach IT to me") name their objects elsewhere.
+  if (effect.type === "attach") {
+    const equipment = (effect as { equipment?: unknown }).equipment;
+    const to = (effect as { to?: unknown }).to;
+    const describedEquipment =
+      typeof equipment === "object" &&
+      equipment !== null &&
+      ((equipment as { type?: string }).type === "equipment" ||
+        (equipment as { type?: string }).type === "gear");
+    const describedHolder =
+      typeof to === "object" && to !== null && (to as { type?: string }).type === "unit";
+    if (describedEquipment && describedHolder) {
+      return (
+        targetDescriptorIsSatisfiable(
+          equipment as SpellEffectTargetDescriptor,
+          undefined,
+          ctx,
+          affordable,
+        ) &&
+        targetDescriptorIsSatisfiable(to as SpellEffectTargetDescriptor, undefined, ctx, affordable)
+      );
+    }
+  }
   // Rule 355.8: modal spells — at least one option must have a valid target set.
   if (effect.type === "choice" && Array.isArray(effect.options)) {
     // rule 809.1.b (rule-id: sfd-077-221) — the whole menu is judged before a
@@ -812,6 +839,34 @@ export function spellEffectHasLegalTargets(
     const pair = findReferencePair(effect);
     if (pair) {
       return enumerateReferencePairs(pair, ctx).length > 0;
+    }
+  }
+  // rule 402.2 / 402.3 (rule-id: sfd-193-221) — "Attach a detached Equipment
+  // you control to a unit you control": both objects are chosen as the ability
+  // is activated, so with no legal Equipment (or no unit to hold it) there is
+  // no legal activation at all. Only the fully-descriptive form is gated; the
+  // pronoun forms ("attach ME to a unit", "attach IT to me") name their own
+  // objects and are resolved by the handler itself.
+  if (effect.type === "attach") {
+    const equip = (effect as { equipment?: unknown }).equipment as { type?: string } | undefined;
+    const to = (effect as { to?: unknown }).to as { type?: string } | undefined;
+    if (
+      typeof equip === "object" &&
+      equip !== null &&
+      (equip.type === "equipment" || equip.type === "gear") &&
+      typeof to === "object" &&
+      to !== null &&
+      to.type === "unit"
+    ) {
+      return (
+        targetDescriptorIsSatisfiable(
+          equip as SpellEffectTargetDescriptor,
+          undefined,
+          ctx,
+          affordable,
+        ) &&
+        targetDescriptorIsSatisfiable(to as SpellEffectTargetDescriptor, undefined, ctx, affordable)
+      );
     }
   }
   // rule-id: ogn-198-298 (rule 355.10.a) — an off-board play ("play a unit

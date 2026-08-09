@@ -110,6 +110,86 @@ export function handle_attach(effect: ExecutableEffect, ctx: EffectContext, _h: 
     } as typeof ctx.draft.pendingChoice;
     return;
   }
+  // rule 402.2 (sfd-193-221) — "Attach a detached Equipment you control to a
+  // unit you control": with several candidate Equipment, or several candidate
+  // holders, the CONTROLLER chooses; the first candidate may not be taken
+  // silently. The Equipment is asked first, then the holder; each answer
+  // re-enters this handler with the earlier pick stashed on the effect.
+  // Only the fully-descriptive form ("<equipment descriptor> to <unit
+  // descriptor>") is chooser-driven: "attach ME to a unit", "attach IT (the
+  // card just played) to me" and other pronoun forms name their own objects.
+  const equipDescriptor = effect.equipment as { type?: string } | string | undefined;
+  const toDescriptor = effect.to as { type?: string } | string | undefined;
+  const bothDescribed =
+    typeof equipDescriptor === "object" &&
+    (equipDescriptor?.type === "equipment" || equipDescriptor?.type === "gear") &&
+    typeof toDescriptor === "object" &&
+    toDescriptor?.type === "unit";
+  const phase = (effect as unknown as { _attachPhase?: "equipment" | "unit" })._attachPhase;
+  if (
+    bothDescribed &&
+    (phase !== undefined || ctx.boundTargets === undefined || ctx.boundTargets.length === 0)
+  ) {
+    const pickedNow = ctx.boundTargets?.[0];
+    if (phase === "unit") {
+      const stashedEquipment = (effect as unknown as { _attachEquipmentId?: string })
+        ._attachEquipmentId;
+      if (stashedEquipment !== undefined && pickedNow !== undefined) {
+        attachEquipment(ctx, stashedEquipment, pickedNow);
+      }
+      return;
+    }
+    const { boundTargets: _unboundPick, ...rest } = ctx;
+    const free = rest as EffectContext;
+    let equipmentId = phase === "equipment" ? pickedNow : undefined;
+    if (equipmentId === undefined) {
+      const candidates = getTargetIds(
+        {
+          ...effect,
+          target: { ...(effect.equipment as object), quantity: "all" },
+        } as unknown as ExecutableEffect,
+        free,
+      );
+      if (candidates.length === 0) {
+        return;
+      }
+      if (candidates.length > 1 && !ctx.draft.pendingChoice) {
+        ctx.draft.pendingChoice = {
+          effect: { ...effect, _attachPhase: "equipment" },
+          options: candidates,
+          playerId: ctx.playerId,
+          remaining: 1,
+          sourceCardId: ctx.sourceCardId,
+          type: "choose-target",
+        } as typeof ctx.draft.pendingChoice;
+        return;
+      }
+      equipmentId = candidates[0] as string;
+    }
+    const holders = getTargetIds(
+      {
+        ...effect,
+        target: { ...(effect.to as object), quantity: "all" },
+      } as unknown as ExecutableEffect,
+      free,
+    ).filter((id) => id !== equipmentId);
+    if (holders.length === 0) {
+      return;
+    }
+    if (holders.length === 1 || ctx.draft.pendingChoice) {
+      attachEquipment(ctx, equipmentId, holders[0] as string);
+      return;
+    }
+    ctx.draft.pendingChoice = {
+      effect: { ...effect, _attachEquipmentId: equipmentId, _attachPhase: "unit" },
+      options: holders,
+      playerId: ctx.playerId,
+      remaining: 1,
+      sourceCardId: ctx.sourceCardId,
+      type: "choose-target",
+    } as typeof ctx.draft.pendingChoice;
+    return;
+  }
   const equipTargets = getTargetIds(
     { ...effect, target: effect.equipment } as ExecutableEffect,
     ctx,
