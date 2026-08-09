@@ -179,6 +179,7 @@ export function raisePlayTimeModeChoice(
                 playerId,
                 [options[0] as string],
                 ctx.cards as Parameters<typeof payDeflectSurcharge>[3],
+                ctx.zones as Parameters<typeof payDeflectSurcharge>[4],
               );
             }
             // rule 359.2 — "when you choose me" fires as the choosing spell is finalized.

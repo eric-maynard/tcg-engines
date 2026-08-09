@@ -261,7 +261,7 @@ export function getPlayCostModel(
     }
   }
   if (ctx.targets && ctx.targets.length > 0) {
-    const n = getDeflectSurcharge(state, playerId, [...ctx.targets], ctx.board?.cards, cardId);
+    const n = getDeflectSurcharge(state, playerId, [...ctx.targets], ctx.board?.cards, cardId, ctx.board?.zones);
     if (n > 0) {
       additional.push({
         cost: { power: Array.from({ length: n }, () => "rainbow") },
