@@ -52,7 +52,7 @@ import {
   parseSpendXpToEffect,
 } from "./effects-resources";
 import { parseBanishEffect, parseRecallEffect, parseReturnToHandEffect } from "./effects-return";
-import { parseCreateTokenEffect } from "./effects-tokens";
+import { parseCreateTokenEffect, parseReplaceBattlefieldEffect } from "./effects-tokens";
 import { normalizeTokens, stripReminders } from "./normalize";
 
 export function parseEffect(text: string): Effect | undefined {
@@ -100,6 +100,7 @@ export function parseEffect(text: string): Effect | undefined {
     parseExtraTurnEffect(cleaned) ??
     parseWinGameEffect(cleaned) ??
     parseCreateTokenEffect(cleaned) ??
+    parseReplaceBattlefieldEffect(cleaned) ??
     parseDiscardEffect(cleaned) ??
     parseRecycleEffect(cleaned) ??
     parseAddResourceEffect(cleaned) ??

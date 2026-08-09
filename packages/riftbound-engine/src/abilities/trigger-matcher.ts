@@ -182,6 +182,8 @@ export interface MatchedTrigger {
  */
 const EVENT_MAP: Record<string, string> = {
   attack: "attack",
+  // rule 427 (ven-191-166) — "When you banish a card you own".
+  banish: "banish",
   "become-mighty": "become-mighty",
   buff: "buff",
   "channel-rune": "channel-rune",
@@ -736,6 +738,18 @@ function triggerMatchesEvent(
     // rule 466.3.a (sfd-185-221) — a PLAYER wins a combat, so "when you win a
     // combat" fires once however many of your units survived it.
     if (event.type === "win-combat" && (event.batchIndex ?? 0) > 0) {
+      return false;
+    }
+    // rule 127.1 / 411.4 (rule-id: ven-191-166) — "when you banish a card YOU
+    // OWN": the banisher and the owner must both be this card's controller, so
+    // banishing something out of an opponent's trash never counts.
+    if (event.type === "banish" && event.owner !== undefined && event.owner !== card.owner) {
+      return false;
+    }
+    // rule 441.2.a (rule-id: ven-153-166) — "when you empower something ELSE":
+    // a card is never "something else" to itself, so its own false→true Empower
+    // edge must not re-trigger its own ability.
+    if (event.type === "empower" && event.cardId === card.id) {
       return false;
     }
   } else if (on === "opponent") {

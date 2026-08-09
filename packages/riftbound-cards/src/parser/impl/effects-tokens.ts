@@ -4,9 +4,30 @@
 
 import type {
   CreateTokenEffect,
+  ReplaceBattlefieldEffect,
   TokenDefinition,
 } from "@tcg/riftbound-types/abilities/effect-types";
 import { wordToNumber } from "./tokens";
+
+/** Printed battlefield tokens, by printed name (rule 187.7 / 187.8). */
+const BATTLEFIELD_TOKEN_IDS: Record<string, string> = { brush: "unl-t03" };
+
+/**
+ * rule 438.1 — "replace that battlefield with a Brush battlefield token."
+ * The wording names a battlefield TOKEN, so it is a Replace (the printed
+ * battlefield goes to Banishment, 438.5), not a play.
+ */
+export function parseReplaceBattlefieldEffect(text: string): ReplaceBattlefieldEffect | undefined {
+  const match = text.match(
+    /^replace (?:that|this) battlefield with (?:a|an|the)\s+([\w'\- ]+?)\s+battlefield tokens?\.?$/i,
+  );
+  if (!match?.[1]) {
+    return undefined;
+  }
+  const name = match[1].trim();
+  const id = BATTLEFIELD_TOKEN_IDS[name.toLowerCase()];
+  return { token: id ? { id, name } : { name }, type: "replace-battlefield", which: "that" };
+}
 
 /**
  * Try to parse a create-token effect.

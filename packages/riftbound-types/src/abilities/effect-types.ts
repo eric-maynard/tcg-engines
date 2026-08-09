@@ -591,6 +591,20 @@ export interface CreateTokenEffect {
 }
 
 /**
+ * rule 438.1 — Replace a battlefield with a battlefield TOKEN: the token is
+ * created in the replaced card's place (same slot, same controller, the units
+ * there untouched) and the printed battlefield goes to Banishment ("replaced,
+ * not banished" — 438.5), where a Swap Back (438.7) can bring it out again.
+ */
+export interface ReplaceBattlefieldEffect {
+  readonly type: "replace-battlefield";
+  /** Which battlefield: "that" = the one the trigger's event named. */
+  readonly which: "that";
+  /** The battlefield token to create, by printed name and (when known) card id. */
+  readonly token: { readonly name: string; readonly id?: string };
+}
+
+/**
  * Common token presets
  */
 export const TOKEN_PRESETS = {
@@ -1114,6 +1128,7 @@ export type Effect =
 
   // Tokens
   | CreateTokenEffect
+  | ReplaceBattlefieldEffect
 
   // Keywords
   | GrantKeywordEffect

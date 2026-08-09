@@ -42,6 +42,7 @@ import { handle_winGame } from "./win-game";
 import { handle_banish } from "./banish";
 import { handle_counter } from "./counter";
 import { handle_createToken } from "./create-token";
+import { handle_replaceBattlefield } from "./replace-battlefield";
 import { handle_eachOpponentMay } from "./each-opponent-may";
 import { handle_attach } from "./attach";
 import { handle_attach_or_detach } from "./attach-or-detach";
@@ -134,6 +135,7 @@ export const EFFECT_HANDLERS: Record<string, EffectHandler> = {
   "banish": handle_banish,
   "counter": handle_counter,
   "create-token": handle_createToken,
+  "replace-battlefield": handle_replaceBattlefield,
   // rule-id: sfd-081-221 — "each opponent may …".
   "each-opponent-may": handle_eachOpponentMay,
   "attach": handle_attach,
