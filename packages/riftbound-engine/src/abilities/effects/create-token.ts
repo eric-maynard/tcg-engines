@@ -3,6 +3,7 @@ import type { CardId as CoreCardId } from "@tcg/core";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import { consumeEntersReadyReplacement } from "../../game-definition/moves/play/cost";
+import { offerWeaponmasterEquip } from "../../game-definition/moves/play/weaponmaster";
 import { arriveByEffect } from "./move";
 import { battlefieldForbidsUnitPlays } from "../play-restrictions";
 import { buildConsumedKey, findAllReplacements } from "../replacement-effects";
@@ -324,6 +325,17 @@ export function handle_createToken(effect: ExecutableEffect, ctx: EffectContext,
     // fire after registry registration so trigger effects can resolve it.
     if (tokenDef.type !== "gear") {
       ctx.fireTriggers?.({ cardId: tokenId, playerId: ownerId, type: "play-token-unit" });
+      // rule 185.2.a / 821 (sfd-197-221): playing a unit token IS playing a
+      // unit, so a token with [Weaponmaster] — printed or granted by a static,
+      // which the `play-token-unit` recalc above has already applied — gets the
+      // same "you may Equip for [rainbow] less" offer as a play from hand.
+      offerWeaponmasterEquip(
+        ctx.draft as never,
+        ctx.zones as never,
+        ownerId,
+        tokenId,
+        ctx.cards as never,
+      );
     }
   }
   // rule 190.3.a.1 — unit tokens played to a battlefield their controller does

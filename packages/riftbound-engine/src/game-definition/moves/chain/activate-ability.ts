@@ -940,6 +940,65 @@ export function affordableCostOptionIndices(
   return indices.length > 1 ? indices : undefined;
 }
 
+/** Board access a scaling cost modifier needs on top of the player's rune pool. */
+export type AbilityCostBoard = {
+  battlefields?: Record<string, { controller?: string | null } | undefined>;
+  cards?: {
+    getCardController?: (card: CoreCardId) => CorePlayerId | undefined;
+    getCardMeta?: (card: CoreCardId) => Partial<RiftboundCardMeta> | undefined;
+    getCardOwner?: (card: CoreCardId) => CorePlayerId | undefined;
+  };
+};
+
+/**
+ * rule 356.4 (rule-id: unl-189-219) — count the UNITS this player controls that
+ * have `keyword`, in base and at every battlefield. Printed and granted keywords
+ * both count (rule 806.1); gear and enemy units never do.
+ */
+function friendlyKeywordUnitCount(
+  keyword: string,
+  playerId: string,
+  zones: { getCardsInZone: (zone: CoreZoneId, player?: CorePlayerId) => readonly CoreCardId[] },
+  board?: AbilityCostBoard,
+): number {
+  if (!keyword) {
+    return 0;
+  }
+  const registry = getGlobalCardRegistry();
+  const getMeta = board?.cards?.getCardMeta;
+  const counts = (cardId: CoreCardId): boolean => {
+    if (registry.getCardType(cardId as string) !== "unit") {
+      return false;
+    }
+    if (registry.hasKeyword(cardId as string, keyword)) {
+      return true;
+    }
+    const granted = getMeta?.(cardId)?.grantedKeywords as
+      | readonly { keyword?: string }[]
+      | undefined;
+    return granted?.some((g) => g.keyword === keyword) === true;
+  };
+  let total = 0;
+  for (const cardId of zones.getCardsInZone("base" as CoreZoneId, playerId as CorePlayerId)) {
+    if (counts(cardId)) {
+      total += 1;
+    }
+  }
+  for (const bfId of zones.getCardsInZone("battlefieldRow" as CoreZoneId)) {
+    for (const cardId of zones.getCardsInZone(`battlefield-${bfId as string}` as CoreZoneId)) {
+      const controller =
+        board?.cards?.getCardController?.(cardId) ?? board?.cards?.getCardOwner?.(cardId);
+      if (controller !== playerId) {
+        continue;
+      }
+      if (counts(cardId)) {
+        total += 1;
+      }
+    }
+  }
+  return total;
+}
+
 /**
  * rule 827.1.c.3 (rule-id: ven-001-166) — "This ability costs [N] less if
  * COND" is part of the ability's cost, so both the affordability checks and
@@ -948,12 +1007,13 @@ export function affordableCostOptionIndices(
 export function effectiveAbilityCost(
   ability: { cost?: unknown; costModifier?: unknown; costOptions?: unknown },
   playerId: string,
-  zones: { getCardsInZone: (zone: CoreZoneId, player: CorePlayerId) => readonly CoreCardId[] },
+  zones: { getCardsInZone: (zone: CoreZoneId, player?: CorePlayerId) => readonly CoreCardId[] },
   pool?: { energy: number; power: Record<string, number | undefined> },
   potentialEnergy = 0,
   discount = 0,
   costOptionIndex?: number,
   energyDiscount = 0,
+  board?: AbilityCostBoard,
 ): Record<string, unknown> | undefined {
   const chosenOption = selectCostOption(ability, pool, potentialEnergy, discount, costOptionIndex);
   const baseCost = ability.cost as Record<string, unknown> | undefined;
@@ -971,7 +1031,18 @@ export function effectiveAbilityCost(
   if (!cost || reduction <= 0) {
     return cost;
   }
-  const cond = mod?.condition;
+  const cond = mod?.condition as
+    | { amount?: number; keyword?: string; type?: string }
+    | undefined;
+  if (cond?.type === "per-friendly-unit-with-keyword") {
+    // rule 356.4 / 356.6 (rule-id: unl-189-219) — "costs [1] less for each
+    // friendly unit with [Keyword]": only UNITS I control count (my Temporary
+    // gear and the opponent's Temporary units do not), and the Energy part of
+    // the cost never drops below zero.
+    const units = friendlyKeywordUnitCount(cond.keyword ?? "", playerId, zones, board);
+    const baseEnergy = (cost.energy as number) ?? 0;
+    return { ...cost, energy: Math.max(0, baseEnergy - reduction * units) };
+  }
   if (cond?.type === "per-rune-controlled") {
     // rule 827.1.c.3 (rule-id: ven-032-166) — "costs [1] less for each rune you
     // control": every rune card in my pool counts, ready or exhausted, and the
@@ -1312,6 +1383,7 @@ export const activateAbility: Defs["activateAbility"] = {
         context.zones,
         context.cards,
       ),
+      { battlefields: state.battlefields, cards: context.cards },
     );
     if (effectiveCost) {
       const cost = effectiveCost;
@@ -1769,6 +1841,7 @@ export const activateAbility: Defs["activateAbility"] = {
             context.zones,
             context.cards,
           ),
+          { battlefields: state.battlefields, cards: context.cards },
         );
         if (effectiveCost) {
           const cost = effectiveCost;
@@ -2145,6 +2218,7 @@ export const activateAbility: Defs["activateAbility"] = {
         context.zones,
         context.cards,
       ),
+      { battlefields: draft.battlefields, cards: context.cards },
     );
     // rule 356.4 (rule-id: ven-161-166) — even a costless activation is "the
     // first friendly gear activated ability played this turn".

@@ -7,6 +7,7 @@
 import type { CardId as CoreCardId, PlayerId as CorePlayerId, ZoneId as CoreZoneId } from "@tcg/core";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
 import { getBattlefieldZoneId } from "../../../zones/zone-configs";
+import { hasKeyword } from "../movement/helpers";
 
 interface WeaponmasterDraft {
   battlefields?: Record<string, unknown>;
@@ -20,6 +21,7 @@ interface WeaponmasterZones {
 interface WeaponmasterCards {
   getCardOwner?(cardId: CoreCardId): string | undefined;
   getCardController?(cardId: CoreCardId): string | undefined;
+  getCardMeta?(cardId: CoreCardId): unknown;
 }
 
 /**
@@ -39,7 +41,13 @@ export function offerWeaponmasterEquip(
     return;
   }
   const registry = getGlobalCardRegistry();
-  if (!registry.hasKeyword(cardId, "Weaponmaster")) {
+  // rule 185.2.a / 821 (sfd-197-221 Emperor of the Sands): a unit whose
+  // [Weaponmaster] is GRANTED by a static ("Your Sand Soldiers have
+  // [Weaponmaster]") gets the same offer as one that prints it, so read
+  // printed + granted keywords, not the printed-only registry view.
+  if (
+    !hasKeyword(cardId, "Weaponmaster", cards?.getCardMeta as never)
+  ) {
     return;
   }
   const boardZones: string[] = ["base"];
