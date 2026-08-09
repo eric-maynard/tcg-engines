@@ -31,8 +31,8 @@ import { validateDeck } from "../../validators/deck-validators";
 const CARD = "sfd-191-221";
 const GEARHEAD = "sfd-068-221"; // 3 Might · Each Equipment attached to me gives double its base Might bonus
 const JAX_UNMATCHED = "sfd-054-221"; // 5 Might · Deflect · Your Equipment everywhere have [Quick-Draw]
-const NINE_TAILED_FOX = "ogn-255-298"; // Calm/Mind legend (Ahri)
-const AHRI_ALLURING = "ogn-066-298"; // Calm champion unit (Ahri)
+const FIRE_BELOW = "sfd-189-221"; // Calm/Mind legend (Ornn) — Deathcrown is his Signature card
+const ORNN_BLACKSMITH = "sfd-058-221"; // Calm champion unit (Ornn)
 const BOLT5 = {
   abilities: [{ effect: { amount: 5, target: { type: "unit" }, type: "damage" }, timing: "action", type: "spell" }],
   cardType: "spell",
@@ -128,15 +128,17 @@ describe("Rabadon's Deathcrown (sfd-191-221)", () => {
   // BUG — expected (825.3.a): a deck containing two cards named "Rabadon's Deathcrown" is illegal. Actual: the
   // deck validator only enforces the generic 3-per-name limit (103.2.b) and never reads the Unique keyword,
   // so the two-Deathcrown deck validates clean.
-  test("825.3.a deck construction — a legal 40-card Ahri (Calm/Mind) deck becomes ILLEGAL with a second Deathcrown; one copy is fine", async () => {
+  // rule 103.2.d.2: the Deathcrown is an Ornn Signature card, so the shell must be an Ornn deck —
+  // in an Ahri deck it is illegal for a different reason (SIGNATURE_TAG_MISMATCH).
+  test("825.3.a deck construction — a legal 40-card Ornn (Calm/Mind) deck becomes ILLEGAL with a second Deathcrown; one copy is fine", async () => {
     const pool = await loadDefaultCardPool();
     const crown = pool.get(CARD)!;
-    const legend = pool.get(NINE_TAILED_FOX)!;
-    const champion = pool.get(AHRI_ALLURING)!;
+    const legend = pool.get(FIRE_BELOW)!;
+    const champion = pool.get(ORNN_BLACKSMITH)!;
     const seen = new Set<string>();
     const playables = pool
       .all()
-      .filter((c) => (c.cardType === "unit" || c.cardType === "spell") && (c.domain === "calm" || c.domain === "mind") && c.isChampion !== true)
+      .filter((c) => (c.cardType === "unit" || c.cardType === "spell") && (c.domain === "calm" || c.domain === "mind") && c.isChampion !== true && (c.tags ?? []).length === 0)
       .filter((c) => (seen.has(c.name ?? "") ? false : Boolean(seen.add(c.name ?? ""))));
     const filler = playables.slice(0, 13).flatMap((c) => [c, c, c]); // 39 cards, 3-ofs
     const rune = pool.all().find((c) => c.cardType === "rune" && c.domain === "calm")!;

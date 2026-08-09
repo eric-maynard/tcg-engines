@@ -8,10 +8,13 @@ export const forgefireCape: EquipmentCard = {
   effectText: "When I attack or defend, deal 2 to all enemy units here.",
   energyCost: 4,
   id: createCardId("sfd-190-221"),
+  // rule 103.2.d: Signature card — legal only in a Ornn Champion Legend deck.
+  isSignature: true,
   mightBonus: 3,
   name: "Forgefire Cape",
   rarity: "epic",
   rulesText:
     "[Unique] (Your deck can have only 1 card with this name.)\n[Equip] [rainbow] ([rainbow]: Attach this to a unit you control.)\nWhen I attack or defend, deal 2 to all enemy units here.",
   setId: "SFD",
+  tags: ["Ornn"],
 };

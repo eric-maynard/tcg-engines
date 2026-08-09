@@ -43,10 +43,13 @@ export const superMegaDeathRocket: SpellCard = {
   domain: ["fury", "chaos"],
   energyCost: 4,
   id: createCardId("ogn-252-298"),
+  // rule 103.2.d: Signature card — legal only in a Jinx Champion Legend deck.
+  isSignature: true,
   name: "Super Mega Death Rocket!",
   rarity: "epic",
   rulesText:
     "Deal 5 to a unit.\nWhen you conquer, you may discard 1 to return this from your trash to your hand.",
   setId: "OGN",
+  tags: ["Jinx"],
   timing: "action",
 };
