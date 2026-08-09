@@ -58,42 +58,61 @@ function buffMightBonus(card) {
   return (card?.meta?.buffed ? 1 : 0) + (card?.meta?.extraBuffs ?? 0);
 }
 
-/** Extract combat-relevant keywords from a card */
+/**
+ * Extract combat-relevant keywords from a card, summing every instance.
+ *
+ * rule 807.2 / 814.2: Assault and Shield STACK — two separate grants of
+ * [Assault 2] are +4 Might, not +2. The engine (operations/combat-role-might.ts)
+ * sums the printed keyword abilities plus EVERY meta.grantedKeywords entry, so
+ * the client must sum too or the board badge and the combat preview understate
+ * the unit's current Might.
+ *
+ * rule 704 (sfd-131-221 Ancient Warmonger): a keyword whose value is a count
+ * ("I have [Assault] equal to the number of enemy units here") prints with no
+ * numeric suffix, so the text regex could only ever guess 1; the engine
+ * recomputes the real value into grantedKeywords. That phrasing sits mid-line,
+ * so only the LEADING keyword run of a rules line counts as this card's own
+ * printed keywords — which also keeps "Other friendly units here have [Shield]"
+ * (a grant to OTHERS) and "deal damage equal to my [Assault]" (a reference) out
+ * of the total.
+ */
 function getCardKeywords(card) {
-  const keywords = [];
-  const seen = new Set();
+  const order = [];
+  const totals = new Map();
+  const addKeyword = (name, value) => {
+    const key = String(name).toLowerCase();
+    let entry = totals.get(key);
+    if (!entry) {
+      entry = { name, value: 0 };
+      totals.set(key, entry);
+      order.push(key);
+    }
+    entry.value += value;
+  };
 
-  // rule 704 (sfd-131-221 Ancient Warmonger): a keyword whose value is a count
-  // ("I have [Assault] equal to the number of enemy units here") prints with no
-  // numeric suffix, so the rulesText regex below can only guess 1. The engine
-  // recomputes the real value into meta.grantedKeywords, so those entries are
-  // authoritative and must be read FIRST — text parsing only fills the gaps.
   const granted = card.meta?.grantedKeywords || [];
   for (const gk of granted) {
-    const key = gk.keyword.toLowerCase();
-    if (!seen.has(key)) {
-      seen.add(key);
-      keywords.push({ name: gk.keyword, value: gk.value ?? 1 });
-    }
+    if (!gk || !gk.keyword) continue;
+    addKeyword(gk.keyword, gk.value ?? 1);
   }
 
-  // Parse from rulesText using [Keyword] or [Keyword N] pattern
-  const text = card.rulesText || "";
+  // Printed keywords: [Keyword] / [Keyword N] at the head of a rules line
+  // (possibly a comma-separated run, e.g. "[Assault 2], [Shield 2] (…)").
   const kwRegex = /\[(Tank|Assault|Shield|Backline|Ganking|Evasive|Rush|Ward)(?:\s+(\d+))?\]/gi;
-  let match;
-  while ((match = kwRegex.exec(text)) !== null) {
-    const name = match[1];
-    const value = match[2] ? parseInt(match[2]) : 1;
-    const key = name.toLowerCase();
-    if (!seen.has(key)) {
-      seen.add(key);
-      keywords.push({ name, value });
+  const leadingRunRegex = /^(?:\[(?:Tank|Assault|Shield|Backline|Ganking|Evasive|Rush|Ward)(?:\s+\d+)?\][\s,]*)+/i;
+  for (const line of String(card.rulesText || "").split("\n")) {
+    const run = line.match(leadingRunRegex);
+    if (!run) continue;
+    kwRegex.lastIndex = 0;
+    let match;
+    while ((match = kwRegex.exec(run[0])) !== null) {
+      addKeyword(match[1], match[2] ? parseInt(match[2]) : 1);
     }
   }
 
   // Only return combat-relevant keywords
   const combatKeywords = ["tank", "assault", "shield", "backline"];
-  return keywords.filter(k => combatKeywords.includes(k.name.toLowerCase()));
+  return order.filter(key => combatKeywords.includes(key)).map(key => totals.get(key));
 }
 
 /** Calculate combat preview: total Might for each side including keyword bonuses */
