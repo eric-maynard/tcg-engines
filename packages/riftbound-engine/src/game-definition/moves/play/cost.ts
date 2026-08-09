@@ -1265,6 +1265,13 @@ export function takeNextPlayDiscount(
     if (entry?.replaces !== "play-cost") {
       continue;
     }
+    // rule 356.1.b (sfd-084-221) — a whole-Energy WAIVER ("play a gear ignoring
+    // its Energy cost") is not a discount: `play-gear.ts` applies it and spends
+    // the one-shot only when the player elects it, so a full-price play must
+    // not consume it here.
+    if ((entry as { ignoreEnergyCost?: boolean }).ignoreEnergyCost === true) {
+      continue;
+    }
     if (entry.owner !== undefined && entry.owner !== playerId) {
       continue;
     }
