@@ -3195,11 +3195,109 @@ function getLockedEnergy(
   const cardType = getGlobalCardRegistry().getCardType(cardId);
   let locked = 0;
   for (const [kind, amount] of Object.entries(entry)) {
-    if (kind !== cardType) {
+    if (!energyEarmarkPermits(state, kind, cardType)) {
       locked += amount ?? 0;
     }
   }
   return Math.min(locked, state.runePools[playerId]?.energy ?? 0);
+}
+
+/**
+ * rule 429.4 (unl-197-219 Scorn of the Moon) — "Spend this Energy only during
+ * showdowns" is a WHEN earmark, not a what: it funds any card type, but only
+ * while a showdown is in progress. Every other earmark names a card type.
+ */
+function energyEarmarkPermits(
+  state: RiftboundGameState,
+  kind: string,
+  cardType: string | undefined,
+): boolean {
+  if (kind === "showdown") {
+    return showdownInProgress(state);
+  }
+  return kind === cardType;
+}
+
+function showdownInProgress(state: RiftboundGameState): boolean {
+  return state.interaction?.showdownStack?.some((sd) => sd.active) ?? false;
+}
+
+/**
+ * rule 429.4 (ogn-247-298 Daughter of the Void) — the Power half of the earmark:
+ * `playerId`'s Rune Pool minus every pip reserved for a purpose OTHER than
+ * `allowedFor`. `allowedFor` is the card type being played, or `"ability:<card
+ * type>"` for an activated ability such as [Equip]; `undefined` hides every
+ * earmarked pip.
+ */
+function earmarkPermits(kind: string, allowedFor: string | undefined): boolean {
+  if (allowedFor === undefined) {
+    return false;
+  }
+  // rule 429.4 — the printed "gear" earmark reads "Use only to play gear or use
+  // gear abilities" (sfd-189-221), so it also funds an Equipment's own
+  // activated abilities; card data types those cards `equipment`.
+  if (kind === "gear") {
+    return (
+      allowedFor === "equipment" ||
+      allowedFor === "gear" ||
+      allowedFor === "ability:equipment" ||
+      allowedFor === "ability:gear"
+    );
+  }
+  return kind === allowedFor;
+}
+
+export function spendablePowerPool(
+  state: RiftboundGameState,
+  playerId: string,
+  allowedFor: string | undefined,
+): Partial<Record<string, number>> {
+  const pool = state.runePools[playerId]?.power ?? {};
+  const entry = (
+    state as { restrictedPower?: Record<string, Record<string, Record<string, number>>> }
+  ).restrictedPower?.[playerId];
+  const available: Record<string, number> = {};
+  for (const [d, v] of Object.entries(pool)) {
+    if (typeof v === "number" && v > 0) {
+      available[d] = v;
+    }
+  }
+  if (!entry) {
+    return available;
+  }
+  for (const [kind, byDomain] of Object.entries(entry)) {
+    if (earmarkPermits(kind, allowedFor)) {
+      continue;
+    }
+    for (const [domain, count] of Object.entries(byDomain ?? {})) {
+      if (!count) {
+        continue;
+      }
+      available[domain] = Math.max(0, (available[domain] ?? 0) - count);
+    }
+  }
+  return available;
+}
+
+/**
+ * rule 429.4 — an earmark rides on Power still in the pool; once those pips are
+ * spent (necessarily on something the earmark allows) it can no longer tax
+ * later payments. Clamp every ledger entry back to what the pool still holds.
+ */
+function reconcileRestrictedPower(draft: RiftboundGameState, playerId: string): void {
+  const entry = (
+    draft as { restrictedPower?: Record<string, Record<string, Record<string, number>>> }
+  ).restrictedPower?.[playerId];
+  if (!entry) {
+    return;
+  }
+  const pool = draft.runePools[playerId]?.power ?? {};
+  for (const byDomain of Object.values(entry)) {
+    for (const domain of Object.keys(byDomain ?? {})) {
+      const have = (pool as Partial<Record<string, number>>)[domain] ?? 0;
+      byDomain[domain] = Math.min(byDomain[domain] ?? 0, have);
+    }
+  }
 }
 
 /**
@@ -3219,9 +3317,18 @@ function consumeRestrictedEnergy(
     return;
   }
   const cardType = getGlobalCardRegistry().getCardType(cardId);
-  const current = entry[cardType as string];
-  if (current) {
-    entry[cardType as string] = Math.max(0, current - spent);
+  let remaining = spent;
+  for (const kind of Object.keys(entry)) {
+    if (remaining <= 0) {
+      break;
+    }
+    if (!energyEarmarkPermits(draft, kind, cardType)) {
+      continue;
+    }
+    const current = entry[kind] ?? 0;
+    const used = Math.min(current, remaining);
+    entry[kind] = current - used;
+    remaining -= used;
   }
 }
 
@@ -3493,12 +3600,11 @@ export function canPayResourceCost(
   if (!cost.ignoreEnergy && availableEnergy < cost.energy) {
     return false;
   }
-  const remaining: Record<string, number> = {};
-  for (const [d, v] of Object.entries(pool.power)) {
-    if (typeof v === "number" && v > 0) {
-      remaining[d] = v;
-    }
-  }
+  // rule 429.4: Power earmarked "use only to play <another card type>" is
+  // invisible to this play, exactly as earmarked Energy is.
+  const remaining: Record<string, number> = {
+    ...spendablePowerPool(state, playerId, getGlobalCardRegistry().getCardType(cardId)),
+  };
   for (const [domain, need] of Object.entries(cost.named)) {
     if (!need) {
       continue;
@@ -3600,6 +3706,7 @@ export function payResourceCost(
     anyOwed--;
   }
   recordPowerSpent(draft, playerId, powerPipsBefore - totalPowerPips(pool.power));
+  reconcileRestrictedPower(draft, playerId);
 }
 
 /**

@@ -308,7 +308,7 @@ export function parseActivatedAbilityInner(text: string): ActivatedAbility | und
   // Pre-strip "Spend this Energy only during showdowns" trailing restriction so
   // It doesn't break the [Add] match below.
   let preRestrictions: { type: string }[] | undefined;
-  const earlyShowdown = remaining.match(/\s*Spend this Energy only during showdowns\.?\s*$/i);
+  const earlyShowdown = remaining.match(/\s*Spend this Energy only during showdowns\.?(?:\s*\([^)]*\))?\s*$/i);
   if (earlyShowdown) {
     preRestrictions = [{ type: "energy-showdown-only" }];
     remaining = remaining.slice(0, remaining.length - earlyShowdown[0].length).trim();
@@ -317,7 +317,12 @@ export function parseActivatedAbilityInner(text: string): ActivatedAbility | und
   // rule 429.4 (ogs-014-024, sfd-189-221): "Use only to play
   // spells / gear …" restricts what the added resources may pay for. Pre-strip
   // it so it doesn't break the [Add] match below.
-  let addRestriction: "spell" | "gear" | undefined;
+  // rule 429.4 (unl-197-219 Scorn of the Moon): "Spend this Energy only during
+  // showdowns" earmarks the Added Energy the same way, so it also rides on the
+  // [Add] effect — not only on the ability.
+  let addRestriction: "spell" | "gear" | "showdown" | undefined = earlyShowdown
+    ? "showdown"
+    : undefined;
   const useOnlyToPlay = remaining.match(
     /\s*(?:Use|Spend this Energy) only to play (spells?|gear)\b[^.]*\.?(?:\s*\([^)]*\))?\s*$/i,
   );
@@ -442,7 +447,7 @@ export function parseActivatedAbilityInner(text: string): ActivatedAbility | und
   }
 
   // Extract "Spend this Energy only during showdowns" restriction (mana mod)
-  const showdownEnergyOnly = remaining.match(/\s*Spend this Energy only during showdowns\.?\s*$/i);
+  const showdownEnergyOnly = remaining.match(/\s*Spend this Energy only during showdowns\.?(?:\s*\([^)]*\))?\s*$/i);
   if (showdownEnergyOnly) {
     restrictions = [...(restrictions ?? []), { type: "energy-showdown-only" }];
     remaining = remaining.slice(0, remaining.length - showdownEnergyOnly[0].length).trim();
