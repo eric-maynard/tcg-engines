@@ -61,12 +61,16 @@ function renderZones() {
 
   // Deck stacks. W12: the viewing player's main deck is peekable via
   // right-click; opponent decks and the rune deck stay inert.
+  // rule 108.2.d: the trash is Public Information — render it beside the decks
+  // for both players so discarded cards never vanish from the board.
   document.getElementById("player-decks").innerHTML =
     renderDeckStack(zoneForPlayer("mainDeck", viewingPlayer), "Main", { peekable: true }) +
-    renderDeckStack(zoneForPlayer("runeDeck", viewingPlayer), "Rune");
+    renderDeckStack(zoneForPlayer("runeDeck", viewingPlayer), "Rune") +
+    renderTrashStack(zoneForPlayer("trash", viewingPlayer), viewingPlayer);
   document.getElementById("opponent-decks").innerHTML =
     renderDeckStack(zoneForPlayer("mainDeck", opponent), "Main") +
-    renderDeckStack(zoneForPlayer("runeDeck", opponent), "Rune");
+    renderDeckStack(zoneForPlayer("runeDeck", opponent), "Rune") +
+    renderTrashStack(zoneForPlayer("trash", opponent), opponent);
 }
 
 function renderBattlefields() {

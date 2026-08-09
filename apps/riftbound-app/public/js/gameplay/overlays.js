@@ -42,6 +42,14 @@ function showPreview(event, el) {
   img.onerror = function() { this.style.display = "none"; };
   img.onload = function() { this.style.display = "block"; };
 
+  // rule 762: the card this one named (Fallen Feline) is game state that lives
+  // only on meta — the printed image cannot show it.
+  const statsEl = document.getElementById("previewStats");
+  if (statsEl) {
+    const named = typeof card.meta?.namedCard === "string" ? card.meta.namedCard : "";
+    statsEl.textContent = named ? `Named: ${named}` : "";
+  }
+
   // Refuse to preview cards in the opponent's hidden zones outside sandbox
   // mode — even if the thumbnail were a card back, this handler would leak.
   if (!isSandboxGame) {
@@ -197,4 +205,47 @@ function hideDisconnectBanner() {
   const banner = document.getElementById("disconnectBanner");
   if (banner) banner.classList.remove("visible");
   opponentDisconnected = false;
+}
+
+/**
+ * Public-zone viewer (trash, banishment).
+ * rule 108.2.d / 130.6: every card in a Trash is Public Information even while
+ * buried in the pile, so the viewer lists the whole zone for either player.
+ */
+function openZoneViewer(zoneName, pid) {
+  if (document.querySelector(".chain-overlay.visible")) return;
+  if (typeof isChoosingTarget === "function" && isChoosingTarget()) return;
+  const cards = (gameState?.zones?.[zoneName] || []).filter(c => c.owner === pid);
+  let overlay = document.getElementById("zoneViewer");
+  if (!overlay) {
+    overlay = document.createElement("div");
+    overlay.id = "zoneViewer";
+    overlay.className = "card-zoom-overlay";
+    overlay.addEventListener("click", closeZoneViewer);
+    document.body.appendChild(overlay);
+  }
+  const self = typeof viewingPlayer !== "undefined" && pid === viewingPlayer;
+  const title = `${self ? "Your" : "Opponent's"} ${zoneName === "trash" ? "Trash" : zoneName} (${cards.length})`;
+  const items = cards.length === 0
+    ? '<div style="color:#8a80a8; font-size:13px;">Empty</div>'
+    : cards.map(c => {
+        const defId = String(c.definitionId || "").replace(/^player-[12]-/, "");
+        return `<div class="zone-viewer-card" style="width:96px; text-align:center;">
+          <img src="/card-image/${esc(defId)}" alt="${esc(c.name || "")}" style="width:96px; border-radius:6px;">
+          <div style="font-size:11px; color:#cfc6e8;">${esc(c.name || "")}</div>
+        </div>`;
+      }).join("");
+  overlay.innerHTML = `
+    <div class="card-zoom-content" style="max-width:640px;" onclick="event.stopPropagation()">
+      <div class="zoom-name" style="margin-bottom:8px;">${esc(title)}</div>
+      <div style="display:flex; flex-wrap:wrap; gap:8px; max-height:60vh; overflow-y:auto;">${items}</div>
+      <button class="action-bar-btn" style="margin-top:10px;" onclick="closeZoneViewer()">Close</button>
+    </div>
+  `;
+  overlay.classList.add("visible");
+  hidePreview();
+}
+
+function closeZoneViewer() {
+  document.getElementById("zoneViewer")?.classList.remove("visible");
 }
