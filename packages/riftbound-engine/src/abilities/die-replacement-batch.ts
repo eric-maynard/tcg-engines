@@ -185,6 +185,11 @@ function replacementCtx(ctx: Ctx) {
     cards: {
       getCardMeta: (id: CoreCardId) =>
         (ctx.cards?.getCardMeta?.(id) ?? undefined) as Partial<import("../types").RiftboundCardMeta> | undefined,
+      // rule 191.1 / 455 — "friendly"/"enemy" and the zone a board replacement
+      // lives in read off the CONTROLLER: a gear taken with "you control it
+      // until I leave the board" (sfd-109-221 Akshan) still sits in its owner's
+      // base zone while its abilities belong to the thief.
+      getCardController: (id: CoreCardId) => ctx.cards?.getCardController?.(id),
       getCardOwner: (id: CoreCardId) => ctx.cards?.getCardOwner?.(id),
     },
     draft: ctx.draft,
@@ -287,6 +292,30 @@ export function collectDieCandidates(ctx: Ctx, cardId: string): DieReplacementCa
     const n = seen.get(c.key) ?? 0;
     seen.set(c.key, n + 1);
     return n === 0 ? c : { ...c, key: `${c.key}#${n}` };
+  });
+}
+
+/**
+ * rule 372 / 373 (ogn-077-298 Zhonya's Hourglass, sfd-051-221 Guardian Angel) — would a
+ * death of `cardId` right now be replaced by something that removes ITSELF instead, leaving
+ * `cardId` on the board? Callers that must know up front whether a unit survives its own
+ * death — the [Equip] "Kill a friendly unit" cost naming its own holder (sfd-178-221) —
+ * ask here rather than re-deriving the shield. Optional (pay-cost) shields do not count:
+ * they may be declined.
+ */
+export function survivesOwnDeath(
+  ctx: Pick<Ctx, "cards" | "draft" | "zones">,
+  cardId: string,
+): boolean {
+  return collectDieCandidates(ctx as Ctx, cardId).some((c) => {
+    if (c.optional) {
+      return false;
+    }
+    const replacement =
+      c.kind === "bound"
+        ? (c.entry as { replacement?: unknown } | undefined)?.replacement
+        : c.match?.replacement;
+    return effectRemovesSelf(replacement);
   });
 }
 

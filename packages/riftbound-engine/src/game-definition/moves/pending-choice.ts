@@ -1956,7 +1956,10 @@ export const pendingChoiceMoves: Partial<
             beginPlay(
               { cards: context.cards, counters: context.counters, draft, zones: context.zones },
               confirmSpec,
-              { immediate: true },
+              // rule 354.3 — the confirm carries the immediacy `beginPlay` was
+              // originally asked for; an accepted play an effect queued while
+              // it was still resolving stays Pending until that effect ends.
+              { immediate: (choice as { playConfirmImmediate?: boolean }).playConfirmImmediate === true },
             );
           }
           if (!draft.pendingChoice) {

@@ -108,6 +108,7 @@ export interface ReplacementContext {
   readonly cards: {
     getCardOwner: (cardId: CoreCardId) => string | undefined;
     getCardMeta: (cardId: CoreCardId) => Partial<RiftboundCardMeta> | undefined;
+    getCardController?: (cardId: CoreCardId) => string | undefined;
   };
 }
 
@@ -118,13 +119,23 @@ interface BoardCardEntry {
   zone: string;
 }
 
+/**
+ * rule 191.1 / 455 — a card's abilities are controlled by its CONTROLLER, not
+ * its owner: a gear taken with "you control it until I leave the board"
+ * (sfd-109-221 Akshan) still shields the unit it is attached to, and reads
+ * "friendly"/"enemy" from its new controller's seat.
+ */
+function controllerOf(ctx: ReplacementContext, cardId: string, fallback: string): string {
+  return ctx.cards.getCardController?.(cardId as CoreCardId) ?? fallback;
+}
+
 /** Base + battlefield units/gear that can carry a board replacement ability. */
 function collectBoardCards(ctx: ReplacementContext): BoardCardEntry[] {
   const boardCards: BoardCardEntry[] = [];
   for (const playerId of Object.keys(ctx.draft.players)) {
     const baseCards = ctx.zones.getCardsInZone("base" as CoreZoneId, playerId as CorePlayerId);
     for (const cardId of baseCards) {
-      boardCards.push({ id: cardId as string, owner: playerId, zone: "base" });
+      boardCards.push({ id: cardId as string, owner: controllerOf(ctx, cardId as string, playerId), zone: "base" });
     }
     // rule 107.4.c (rule-id: ogn-269-298 The Boss) — the Champion Legend is a
     // Game Object in the (public) Legend Zone, so its passive "If a buffed unit
@@ -138,7 +149,7 @@ function collectBoardCards(ctx: ReplacementContext): BoardCardEntry[] {
     const zone = `battlefield-${bfId}`;
     const bfCards = ctx.zones.getCardsInZone(zone as CoreZoneId);
     for (const cardId of bfCards) {
-      const owner = ctx.cards.getCardOwner(cardId) ?? "";
+      const owner = controllerOf(ctx, cardId as string, ctx.cards.getCardOwner(cardId) ?? "");
       boardCards.push({ id: cardId as string, owner, zone });
     }
   }

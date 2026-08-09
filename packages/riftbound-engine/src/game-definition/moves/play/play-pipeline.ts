@@ -1036,6 +1036,12 @@ export function beginPlay(
   if (spec.declinable === true && !io.draft.pendingChoice) {
     io.draft.pendingChoice = {
       playConfirmSpec: { ...spec, declinable: false },
+      // rule 354.3 (rule-id: ogn-062-298 Reinforce × ogn-194-298 Nocturne) —
+      // saying yes to "you may play me" does not jump the queue: the play is
+      // continued at once only when THIS call asked for it. An instructed play
+      // accepted while an effect is still resolving stays a Pending Item until
+      // that effect (and the older items it queued) has finished.
+      playConfirmImmediate: opts?.immediate === true,
       playerId: spec.playerId,
       resolved: { cardId: spec.cardId, controller: spec.playerId, type: "ability" },
       sourceCardId: spec.sourceCardId ?? spec.cardId,
