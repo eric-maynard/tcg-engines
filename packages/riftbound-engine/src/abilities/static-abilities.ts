@@ -601,6 +601,40 @@ export function evaluateCondition(
 }
 
 /**
+ * rule 208.3 / 476.1 — a gear with the printed [Equip] ability IS Equipment
+ * (set-JSON cards type every non-unit permanent as "gear").
+ */
+function isEquipmentSource(cardId: string): boolean {
+  const registry = getGlobalCardRegistry();
+  const type = registry.get(cardId)?.cardType;
+  return type === "equipment" || (type === "gear" && registry.hasKeyword(cardId, "Equip"));
+}
+
+/**
+ * rule 718 — an attached Equipment's effect text speaks as the equipped unit:
+ * "I"/"me" is the holder. Abilities flagged `effectText` therefore evaluate
+ * their conditions (and trigger subjects) against the holder while attached; an
+ * unattached Equipment, or any non-effectText ability, still speaks as itself.
+ */
+function effectTextSelf(
+  card: BoardCard,
+  ability: { effectText?: boolean },
+  boardCards: BoardCard[],
+  ctx: StaticAbilityContext,
+): BoardCard {
+  if (ability.effectText !== true) {
+    return card;
+  }
+  const attachedTo = (
+    ctx.cards.getCardMeta(card.id as CoreCardId) as { attachedTo?: string } | undefined
+  )?.attachedTo;
+  if (attachedTo === undefined) {
+    return card;
+  }
+  return boardCards.find((c) => c.id === attachedTo) ?? card;
+}
+
+/**
  * Resolve which cards a static ability's effect applies to.
  */
 function resolveStaticTargets(
@@ -615,7 +649,9 @@ function resolveStaticTargets(
       // rule 150.2 — a keyword bar printed on an Equipment applies to the unit
       // it is attached to, and only while it is attached (an unattached
       // Equipment grants nothing).
-      if (ctx !== undefined && getGlobalCardRegistry().get(source.id)?.cardType === "equipment") {
+      // rule 208.3 / 476.1 — set-JSON Equipment keeps the printed type "gear",
+      // so a gear with the printed [Equip] ability counts as Equipment here.
+      if (ctx !== undefined && isEquipmentSource(source.id)) {
         const attachedTo = (
           ctx.cards.getCardMeta(source.id as CoreCardId) as { attachedTo?: string } | undefined
         )?.attachedTo;
@@ -1266,7 +1302,12 @@ export function recalculateStaticEffects(ctx: StaticAbilityContext): boolean {
         if (opts?.onlyMightDependent && (!conditionReadsMight(condition) || pass1Applied.has(abilityKey))) {
           continue;
         }
-        if (condition && !evaluateCondition(condition, card, ctx)) {
+        // rule 718 — while an Equipment is attached, "I"/"me" in its effect text
+        // means the equipped unit, so an `effectText` static evaluates its
+        // condition with the holder as self. The grant target is remapped
+        // separately (`resolveStaticTargets` / `applyStaticEffect`).
+        const conditionSource = effectTextSelf(card, ability as unknown as { effectText?: boolean }, boardCards, ctx);
+        if (condition && !evaluateCondition(condition, conditionSource, ctx)) {
           continue;
         }
         if (allowedEffects === PASS_1_EFFECTS) {
