@@ -163,6 +163,8 @@ export class Game {
   private readonly handles = new Map<Seat, SeatHandle>();
   /** Battlefield whose Cleanup-begun showdown settle() already handed back once. */
   private autoShowdownHandedBack: string | undefined;
+  /** rule 404.2: ids of canAccept:false opt-ins settle() already handed back once (it declines them next time). */
+  private readonly unacceptableOptInsHandedBack = new Set<string>();
 
   constructor(backend: EngineBackend, scripts?: ReadonlyMap<Seat, ScriptSpec>) {
     this.backend = backend;
@@ -537,6 +539,22 @@ export class Game {
         return { decision: null, reason: "game-over", steps };
       }
       let answer = this.takeScripted(d);
+      if (!answer) {
+        // rule 404.2 — an opt-in whose "yes" is not legal (an unpayable "you may pay [cost]
+        // to …") is answerable only with "no", so it must never block settle() for good. It is
+        // handed back ONCE so the caller can observe it (DESIGN.md §Paying costs keeps the
+        // prompt open — a live player may tap runes first and only then accept); settling again
+        // on the same prompt declines it and moves on.
+        if (d.kind === "yes-no" && d.canAccept === false && this.unacceptableOptInsHandedBack.has(d.id)) {
+          const c = coerceAnswer(d, { kind: "yes-no", value: false });
+          if (!isAnswerObject(c)) {
+            throw new HarnessError(c);
+          }
+          answer = c;
+        } else if (d.kind === "yes-no" && d.canAccept === false) {
+          this.unacceptableOptInsHandedBack.add(d.id);
+        }
+      }
       if (!answer) {
         if (d.kind === "action" && (d.context === "main" || d.context === "free")) {
           return { decision: d, reason: "open", steps };

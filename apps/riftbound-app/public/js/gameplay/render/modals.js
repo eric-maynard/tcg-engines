@@ -80,7 +80,13 @@ function pendingChoiceTitle(pending) {
     case "choose-destination": return `Choose where ${promptName(pending.cardId)} goes`;
     case "choose-target":
       // Rule ogn-256-298: "any number of" multi-pick — picks accumulate until Done.
-      if (pending.anyNumber) return `Choose any number of targets${pending.picked?.length ? ` (${pending.picked.length} chosen)` : ""}`;
+      // "up to N" (sfd-101-221) rides anyNumber too, with maxPicks carrying the engine-side cap.
+      if (pending.anyNumber) {
+        const chosen = pending.picked?.length ? ` (${pending.picked.length} chosen)` : "";
+        return typeof pending.maxPicks === "number"
+          ? `Choose up to ${pending.maxPicks} target${pending.maxPicks === 1 ? "" : "s"}${chosen}`
+          : `Choose any number of targets${chosen}`;
+      }
       // Rule 355.14 (ogn-041-298): fixed-total split damage.
       if (pending.assign && typeof pending.total === "number") return `Split ${pending.total} damage${src ? ` from ${src}` : ""}`;
       // rule 372 (RPL): which replacement applies to this death.

@@ -612,6 +612,11 @@
     }
     .rune-stack {
       position: relative;
+      /* Own stacking context: runes.js gives ready runes inline z-index 100+i purely to order
+         them WITHIN the stack. Without isolation those compete globally and paint over the
+         .action-bar (z-index:50) that overlays the same bottom hand row, swallowing clicks on
+         ability buttons. */
+      isolation: isolate;
       /* Wide enough for a full-size rune rotated 90° (154px) — exhausted runes
          tap without shrinking. */
       width: 156px;

@@ -465,3 +465,24 @@ describe("errors are explanatory", () => {
     expect(!wrongKind.ok && wrongKind.error.code).toBe("WRONG_ANSWER_KIND");
   });
 });
+
+describe("passivePolicy / settle()", () => {
+  // rule 404.2 — the opt-in is offered (DESIGN.md §Paying costs keeps the prompt open so a live
+  // player may tap runes and then accept), but its only legal answer is "no": settle() hands it
+  // back ONCE so a caller can observe it, then declines it rather than blocking forever.
+  test("an opt-in with canAccept:false is handed back once, then auto-declined by settle()", async () => {
+    const BLOOD_ROSE = "unl-109-219"; // "When you play a unit, you may pay [1] to gain 1 XP."
+    const game = await scenario().resources(P1, { energy: 3 }).gear(P1, BLOOD_ROSE, "rose").hand(P1, SKULKER, "sk").build();
+    await game.p1.play("sk");
+    expect(game.p1.energy()).toBe(0);
+    expect(game.decision()).toMatchObject({ canAccept: false, kind: "yes-no", seat: P1 });
+    await game.settle(); // handed back once — the prompt is still there for a live player
+    expect(game.decision()).toMatchObject({ canAccept: false, kind: "yes-no", seat: P1 });
+    const r = await game.settle(); // settling again declines it and moves on
+    expect(r.reason).toBe("open");
+    expect(game.decision()).toMatchObject({ context: "main", kind: "action", seat: P1 });
+    expect(game.p1.xp()).toBe(0);
+    expect(game.p1.energy()).toBe(0);
+    expect(game.chain()).toEqual([]);
+  });
+});
