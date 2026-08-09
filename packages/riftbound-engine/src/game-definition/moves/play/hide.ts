@@ -16,8 +16,8 @@ import {
   addToChain,
   createInteractionState,
   getTurnState,
-  hasShowdownPermission,
 } from "../../../chain";
+import { reactionWindowOpen } from "./reaction-window";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
 import { hiddenCapacityAt } from "../../../operations/hidden-capacity";
 import { battlefieldForbidsUnitPlays, playIsForbidden } from "../../../abilities/play-restrictions";
@@ -1012,24 +1012,13 @@ export const revealHidden: Defs["revealHidden"] = {
     ) {
       return false;
     }
-    // rule 811.6 / 335 / 338.1 — playing a card from a facedown zone still
+    // rule 811.6 / 312.1.a / 338.1 — playing a card from a facedown zone still
     // needs Priority: [Reaction] timing adds Closed States, it does not let a
-    // non-Turn-Player act in a Neutral Open State, nor a non-Focus holder act
-    // in a Showdown Open State.
-    {
-      const turnState = getTurnState(state.interaction ?? createInteractionState());
-      if (turnState === "neutral-open" && state.turn.activePlayer !== context.params.playerId) {
-        return false;
-      }
-      if (
-        turnState === "showdown-open" &&
-        !hasShowdownPermission(
-          state.interaction ?? createInteractionState(),
-          context.params.playerId as string,
-        )
-      ) {
-        return false;
-      }
+    // non-Turn-Player act in a Neutral Open State, a non-Focus holder act in a
+    // Showdown Open State, nor anyone but the Priority holder act while a chain
+    // is open. Exactly the window every other play move uses.
+    if (!reactionWindowOpen(state, context.params.playerId as string)) {
+      return false;
     }
     // rule 811.1.d — no legal target at the facedown battlefield ⇒ can't be played.
     if (
