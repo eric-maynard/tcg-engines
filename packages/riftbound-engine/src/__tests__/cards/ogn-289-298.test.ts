@@ -114,7 +114,7 @@ describe("Targon's Peak (ogn-289-298)", () => {
     expect(game.p1.can("tapRune")).toBe(false);
   });
 
-  test.failing("BUG: core line — 3 tapped runes, conquer, end turn → choose 2 → during P2's turn P1 sits on exactly 2 ready runes and 1 exhausted", async () => {
+  test("core line — 3 tapped runes, conquer, end turn → choose 2 → during P2's turn P1 sits on exactly 2 ready runes and 1 exhausted", async () => {
     const game = await board(3).build();
     await conquer(game, P1, "raider", "peak");
     expect(await endTurnTakingRunes(game, P1, 2)).toBe(1);
@@ -122,7 +122,10 @@ describe("Targon's Peak (ogn-289-298)", () => {
     expect(game.phase()).toBe("main");
     expect(game.p1.runes({ ready: true })).toHaveLength(2);
     expect(game.p1.runes({ ready: false })).toHaveLength(1);
-    expect(game.p2.runes({ ready: true })).toHaveLength(2); // P2's own Awaken, nothing to do with the Peak
+    // rule 315.1.b + 315.3.b: P2's own Beginning Phase readies their 2 runes and channels 2 more (also ready).
+    // Nothing to do with the Peak — it only ever touches the conquering player's runes.
+    expect(game.p2.runes({ ready: true })).toHaveLength(4);
+    expect(game.p2.runes({ ready: false })).toHaveLength(0);
     expect(game.violations()).toEqual([]);
   });
 
