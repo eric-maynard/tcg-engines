@@ -4,6 +4,7 @@
 
 export {
   addToChain,
+  advanceFocusAfterPlay,
   allPlayersPassed,
   breakPassSequence,
   collapseTriggerBatch,

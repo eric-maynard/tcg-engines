@@ -14,7 +14,9 @@ import { casterChosenTarget } from "../../../abilities/trigger-target-lock";
 import { resolveTarget } from "../../../abilities/target-resolver";
 import {
   addToChain,
+  advanceFocusAfterPlay,
   createInteractionState,
+  getActiveShowdown,
   getTurnState,
 } from "../../../chain";
 import { reactionWindowOpen } from "./reaction-window";
@@ -1174,6 +1176,14 @@ export const revealHidden: Defs["revealHidden"] = {
     const def = registry.get(cardId);
     const cardType = def?.cardType;
 
+    // rule 340.2.a / 347.1 — revealing a facedown card is PLAYING it
+    // (811.1.c.3), so during a Showdown it is a Focus action just like a play
+    // from hand: Focus passes once it has landed (settled at the tail).
+    const preInteraction = draft.interaction;
+    const wasFocusAction =
+      !preInteraction?.chain?.items.length &&
+      getActiveShowdown(preInteraction ?? createInteractionState())?.focusPlayer === playerId;
+
     // rule 356.1 / 356.3 / 356.4 (rule-id: sfd-146-221) — base cost ignored,
     // opponents' static increases still paid, no discounts applied.
     payRevealSurcharge(draft, playerId, revealSurcharge(draft, playerId, cardId, { cards, zones }));
@@ -1305,5 +1315,19 @@ export const revealHidden: Defs["revealHidden"] = {
       },
       { cards, counters, draft, zones },
     );
+
+    // rule 347.1.a/.b — the Focus action of playing this card started a Chain
+    // (its own play triggers); when THAT chain closes Focus passes to the next
+    // player in Turn Order. 346.1 keeps Focus only for a chain a trigger
+    // OPENED on its own, not for one the play itself queued, so release the
+    // latch. A permanent flipped from Hidden that queues nothing never uses
+    // the Chain (811.1.d.3): there is no chain to close and Focus stays put.
+    if (wasFocusAction && draft.interaction?.chain?.items.length) {
+      draft.interaction = advanceFocusAfterPlay(
+        draft.interaction,
+        playerId as string,
+        draft.pendingChoice !== undefined && draft.pendingChoice !== null,
+      ) as typeof draft.interaction;
+    }
   },
 };

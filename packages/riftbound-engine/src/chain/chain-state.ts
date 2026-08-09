@@ -758,3 +758,49 @@ export function resetShowdownPasses(state: TurnInteractionState): TurnInteractio
     showdownStack: stackCopy,
   };
 }
+
+/**
+ * rule 340.2.a / 347.1 — playing a card during a Showdown is a Focus action:
+ * once it finishes, Focus passes to the next Relevant Player and the pass
+ * sequence restarts (rule 346, so `passedPlayers` is cleared rather than
+ * appended to as a pass would).
+ *
+ * rule 347.1.b — a chain that exists only because the played card's OWN play
+ * triggers queued onto it was not opened by a trigger for rule 346.1 purposes:
+ * clear the latch so Focus still passes when that chain empties. If nothing
+ * queued and no prompt is outstanding, Focus passes right here.
+ *
+ * `playerId` must have held Focus and the chain must have been empty when the
+ * play began (that is what makes it a Focus action).
+ */
+export function advanceFocusAfterPlay(
+  state: TurnInteractionState | null | undefined,
+  playerId: string,
+  hasPendingChoice: boolean,
+): TurnInteractionState | null | undefined {
+  if (!state) {
+    return state;
+  }
+  let next = state;
+  if (next.chain?.openedByTrigger) {
+    next = { ...next, chain: { ...next.chain, openedByTrigger: false } };
+  }
+  if (hasPendingChoice || next.chain?.items.length) {
+    return next;
+  }
+  const showdown = getActiveShowdown(next);
+  if (!showdown || showdown.focusPlayer !== playerId) {
+    return next;
+  }
+  const idx = showdown.relevantPlayers.indexOf(showdown.focusPlayer);
+  if (idx < 0) {
+    return next;
+  }
+  const stack = [...next.showdownStack];
+  stack[stack.length - 1] = {
+    ...showdown,
+    focusPlayer: showdown.relevantPlayers[(idx + 1) % showdown.relevantPlayers.length],
+    passedPlayers: [],
+  };
+  return { ...next, showdownStack: stack };
+}
