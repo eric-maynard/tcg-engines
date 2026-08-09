@@ -298,6 +298,28 @@ describe("Emperor's Divide (sfd-043-221)", () => {
     expect(game.p2.points()).toBe(1);
   });
 
+  test("direct submission (server/REST/AI path, no enumeration): the MOVE ITSELF rejects out-of-pool 'any number' targets", async () => {
+    // rule 355.8 — the enumerator narrows the caster's choices, but a client
+    // that submits params straight to the engine bypasses it; the condition
+    // must re-validate the whole submitted set for an "any number" quantity.
+    const game = await board().build();
+    const submit = (targets: readonly string[]) =>
+      (
+        game.engine as unknown as {
+          executeMove: (
+            id: string,
+            ctx: { params: Record<string, unknown>; playerId: string },
+          ) => { success: boolean };
+        }
+      ).executeMove("playSpell", { params: { cardId: "ed", playerId: P1, targets }, playerId: P1 });
+    expect(submit(["home"]).success).toBe(false); // base unit — not "at a battlefield"
+    expect(submit(["foe"]).success).toBe(false); // enemy unit
+    expect(submit(["a", "far"]).success).toBe(false); // two different battlefields
+    expect(submit(["a", "a"]).success).toBe(false); // same unit named twice
+    expect(submit(["a", "b"]).success).toBe(true); // the legal set still goes through
+    expect(game.p1.resources()).toEqual({ energy: 0, power: {} });
+  });
+
   test("counter-card: with Minotaur Reckoner ('Units can't move to base') in play the chosen unit stays put", async () => {
     // Reckoner's static binds both players' units and effect-driven moves alike; the spell still
     // resolves (and is trashed) but its move instruction cannot be carried out.

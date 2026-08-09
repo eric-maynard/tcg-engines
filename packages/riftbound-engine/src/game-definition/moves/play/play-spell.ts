@@ -892,6 +892,99 @@ export const playSpell: Defs["playSpell"] = {
         }
       }
     }
+    // rule-id: sfd-043-221 (rule 355.8) — "Move ANY NUMBER of friendly units
+    // at a battlefield": an open-ended quantity ("any" / "up to N") is still a
+    // choice from the descriptor's pool, so every submitted id must be legal.
+    // The enumerator narrows this for enumerated play; a direct submission
+    // (server / REST / AI path) reaches the move without it, so the condition
+    // re-checks pool, distinctness, bounds, one-battlefield and total-Might.
+    if (
+      !isCounterSpell &&
+      spellTgt &&
+      typeof spellTgt !== "string" &&
+      (spellAbility?.effect as { type?: string } | undefined)?.type !== "sequence" &&
+      !(spellAbility?.effect as SpellEffectTargetShape).player &&
+      spellTgt.type !== "self" &&
+      spellTgt.type !== "player" &&
+      spellTgt.type !== "battlefield" &&
+      spellTgt.type !== "pending-value" &&
+      spellTgt.type !== "trigger-source" &&
+      context.params.targets?.length
+    ) {
+      const qty = spellTgt.quantity as
+        | { upTo?: number; atLeast?: number; exactly?: number }
+        | "any"
+        | "all"
+        | number
+        | undefined;
+      const isAny = qty === "any";
+      const range =
+        typeof qty === "object" && qty !== null && qty.exactly === undefined ? qty : undefined;
+      if (isAny || (range && (range.upTo !== undefined || range.atLeast !== undefined))) {
+        const mightOf = (id: string) =>
+          getCardEffectiveMight(id, (c) => context.cards.getCardMeta?.(c));
+        const totalMightCap = (spellTgt as { totalMight?: { lte?: number } }).totalMight?.lte;
+        const pool = (
+          resolveTarget(
+            { ...spellTgt, quantity: "all" } as Parameters<typeof resolveTarget>[0],
+            conditionResolverCtx,
+          ) as string[]
+        ).filter((id) => {
+          // rule 355.4.a — a caster-chosen move destination must differ from
+          // the unit's current location; a unit with none is not a legal pick.
+          const dests = chosenMoveDestinations(
+            spellAbility?.effect as SpellEffectTargetShape | undefined,
+            id,
+            conditionResolverCtx,
+          );
+          return (
+            (dests === undefined || dests.length > 0) &&
+            (totalMightCap === undefined || mightOf(id) <= totalMightCap)
+          );
+        });
+        const supplied = context.params.targets as string[];
+        if (!supplied.every((id) => pool.includes(id))) {
+          return false;
+        }
+        // rule 820.2.a — with [Repeat] paid each execution makes its own
+        // choice, so only the per-execution ceiling scales; the shape checks
+        // below judge a single (unrepeated) choice.
+        if (reqRepeatCount === 0) {
+          if (new Set(supplied).size !== supplied.length) {
+            return false;
+          }
+          const max = isAny ? pool.length : (range?.upTo ?? pool.length);
+          if (supplied.length > max || supplied.length < (range?.atLeast ?? 0)) {
+            return false;
+          }
+          // rule 355.11.b — "at A battlefield" / "at the same location" is one
+          // zone per cast, so a chosen set never spans two battlefields.
+          const loc = (spellTgt as { location?: string }).location;
+          if (supplied.length > 1 && (loc === "here" || (isAny && loc === "battlefield"))) {
+            const zone = context.zones.getCardZone(supplied[0] as CoreCardId);
+            if (!supplied.every((id) => context.zones.getCardZone(id as CoreCardId) === zone)) {
+              return false;
+            }
+          }
+          if (
+            totalMightCap !== undefined &&
+            supplied.reduce((sum, id) => sum + mightOf(id), 0) > totalMightCap
+          ) {
+            return false;
+          }
+          if ((spellTgt as { sameController?: boolean }).sameController === true) {
+            const controllerOf = (id: string): string =>
+              (context.cards.getCardController?.(id as CoreCardId) as string | undefined) ??
+              (context.cards.getCardOwner(id as CoreCardId) as string | undefined) ??
+              "";
+            const owner = controllerOf(supplied[0] as string);
+            if (!supplied.every((id) => controllerOf(id) === owner)) {
+              return false;
+            }
+          }
+        }
+      }
+    }
     // rule-id: ogn-220-298 (rule 355.8) — "…at the same battlefield": when a
     // sequence's second slot is `location:"same"`, the supplied pair must share
     // one battlefield zone (a base unit or another battlefield is illegal).
