@@ -883,6 +883,35 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
         }
         return;
       }
+      // rule 371.2 (ogn-269-298 The Boss x ogn-213-298 Hidden Blade / sfd-163-221
+      // Deathgrip) — an optional "you may pay … instead" DIE replacement is
+      // decided AS the kill instruction executes, so the sequence's later
+      // instructions ("Its controller draws 2", "If you do …, Draw 1") must not
+      // run while the question is open. The opt-in reducer owns the deferred
+      // kill and the whole answer chain, so the remainder waits in
+      // `deferredSequenceRest` and runs once nothing is pending.
+      if ((parked as { suspendedDeathCardId?: string } | undefined)?.suspendedDeathCardId !== undefined) {
+        const rest = seq.effects.slice(i + 1);
+        if (rest.length > 0) {
+          // rule 359.3.e.12 — the remainder still names the object the kill
+          // instruction targeted, even though it may never have died.
+          const carry = (subCtx.boundTargets ?? ctx.boundTargets) as readonly string[] | undefined;
+          const restSeq =
+            carry !== undefined && carry.length > 0
+              ? { boundTargetsOverride: [...carry], effects: rest, type: "sequence" }
+              : { effects: rest, independentExecution: true, type: "sequence" };
+          ctx.draft.deferredSequenceRest = [
+            ...(ctx.draft.deferredSequenceRest ?? []),
+            {
+              effect: restSeq,
+              playerId: ctx.playerId,
+              ...(ctx.sourceCardId !== undefined ? { sourceCardId: ctx.sourceCardId } : {}),
+            },
+          ];
+        }
+        carryBattlefieldZone();
+        return;
+      }
     }
   }
 }
