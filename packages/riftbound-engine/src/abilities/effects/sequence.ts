@@ -64,6 +64,19 @@ const PROMPTLESS_STEP_TYPES: readonly string[] = [
   "sequence",
 ];
 
+/** "exhaust me" written as the first step of a sequence — rule 204.3.b cost form. */
+const isSelfExhaustCost = (sub: { type?: string; target?: unknown }): boolean =>
+  sub.type === "exhaust" &&
+  (sub.target === "self" || (sub.target as { type?: string } | undefined)?.type === "self");
+
+/** The source permanent is already exhausted, so an "exhaust me" cost is unpayable. */
+function sourceIsExhausted(ctx: EffectContext): boolean {
+  const meta = ctx.cards.getCardMeta?.(ctx.sourceCardId as CoreCardId) as
+    | { exhausted?: boolean; __flags?: Record<string, boolean> }
+    | undefined;
+  return meta?.__flags?.exhausted === true || meta?.exhausted === true;
+}
+
 const isLeadTarget = (t: SubTarget): boolean =>
   typeof t === "object" && t.type !== "pending-value" && t.location !== "same";
 
@@ -296,6 +309,12 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
       // rule-id: unl-119-219 — "spend 3 XP to deal damage": an unpayable
       // spend-xp cost likewise gates every remaining step.
       if (sub.type === "spend-xp" && !canSpendXp(sub, ctx)) {
+        break;
+      }
+      // rule 204.3.b (rule-id: unl-187-219) — "you may exhaust me TO <payoff>":
+      // the leading self-exhaust is a COST, not an effect. An already-exhausted
+      // source cannot pay it, so nothing after it happens.
+      if (i === 0 && seq.effects.length > 1 && isSelfExhaustCost(sub) && sourceIsExhausted(ctx)) {
         break;
       }
       // rule 383.3.b (rule-id: ven-101-166) — "banish a card from any trash TO
