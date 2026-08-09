@@ -27,6 +27,7 @@ const CARD = "sfd-101-221";
 const WALLOP = "ogn-146-298"; // [Action] 2: you may spend a buff as an additional cost → free. Ready a unit.
 const KRAKEN = "ogn-150-298"; // 3 + [body][body]: spend any number of buffs, −[body] each.
 const SHAMAN = "ogn-147-298"; // 4: When you play me, you may spend a buff to buff me and ready me.
+const SETT = "ogn-164-298"; // "Spend my buff: Give me +4 [Might] this turn."
 
 const goldOf = (game: Game, seat: "p1" | "p2") => game[seat].base().filter((id) => game.state(id).name === "Gold");
 
@@ -176,6 +177,21 @@ describe("Fae Dragon (sfd-101-221)", () => {
     expect(game.state("x").isBuffed).toBe(false);
     expect(game.state("sh")).toMatchObject({ isBuffed: true, isReady: true });
     expect(goldOf(game, "p1")).toHaveLength(1);
+  });
+
+  test("an activated ability's 'Spend my buff:' cost is a spend too (Sett) → one Gold token", async () => {
+    // rule 702.2.b — the buff leaves as the activation cost is paid, so the Dragon sees it just
+    // like Wallop's optional additional cost.
+    const game = await scenario()
+      .resources(P1, { energy: 0 })
+      .unit(P1, "base", CARD, "fae")
+      .unit(P1, "base", SETT, "sett", { buffed: true })
+      .build();
+    await game.p1.activate("sett", 1);
+    await game.settle();
+    expect(game.state("sett").isBuffed).toBe(false);
+    expect(goldOf(game, "p1")).toHaveLength(1);
+    expect(game.state(goldOf(game, "p1")[0] as string)).toMatchObject({ cardType: "gear", isExhausted: true });
   });
 
   test("'When YOU spend': the opponent spending their own buff on their turn gives nobody Gold", async () => {

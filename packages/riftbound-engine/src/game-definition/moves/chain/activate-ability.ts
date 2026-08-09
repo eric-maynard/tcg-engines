@@ -2426,6 +2426,18 @@ export const activateAbility: Defs["activateAbility"] = {
           cardId as CoreCardId,
           { buffed: false } as Partial<RiftboundCardMeta>,
         );
+        // rule 702.2.b: paying a "Spend my buff:" cost is a spend like any
+        // other — "When you spend a buff" fires here too, not only on the
+        // play-time additional-cost paths.
+        fireTriggers(
+          {
+            cardId: cardId as string,
+            playerId: playerId as string,
+            spentFrom: cardId as string,
+            type: "spend-buff",
+          },
+          { cards: context.cards, counters: context.counters, draft, zones: context.zones },
+        );
       }
 
       // rule 827.1.d (ven-087-166 Hextech Disc): paying "Disempower this"
