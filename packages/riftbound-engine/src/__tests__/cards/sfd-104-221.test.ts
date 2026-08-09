@@ -212,6 +212,25 @@ describe("Petricite Monument (sfd-104-221)", () => {
     expect(game.zoneOf("bolt")).toBe("hand");
   });
 
+  test("'friendly' follows CONTROL, not ownership, through the play-a-unit static recompute (rule 108.2)", async () => {
+    const game = await scenario()
+      .resources(P1, { energy: 2 })
+      .gear(P1, CARD, "mon")
+      // owner P2 / controller P1 — "friendly" to the Monument's controller.
+      .card("stolen", { controller: P1, def: { cardType: "unit", might: 3, name: "Stolen" }, owner: P2, zone: "base" })
+      // owner P1 / controller P2 — NOT friendly, even though P1 owns it.
+      .card("lent", { controller: P2, def: { cardType: "unit", might: 3, name: "Lent" }, owner: P1, zone: "base" })
+      .hand(P1, { cardType: "unit", energyCost: 2, might: 2, name: "Latecomer" }, "late")
+      .build();
+    expect(game.state("stolen").grantedKeywords).toEqual(DEFLECT);
+    expect(game.state("lent").grantedKeywords).toEqual([]);
+    // Playing a unit forces a static recompute; it must stay controller-keyed.
+    await game.p1.play("late");
+    expect(game.state("late").grantedKeywords).toEqual(DEFLECT);
+    expect(game.state("stolen").grantedKeywords).toEqual(DEFLECT);
+    expect(game.state("lent").grantedKeywords).toEqual([]);
+  });
+
   test("no printed [Equip]: the Monument is a plain Gear and can never be attached to a unit (rule 476.1)", async () => {
     const game = await scenario()
       .resources(P1, { energy: 3, power: { body: 1 } })

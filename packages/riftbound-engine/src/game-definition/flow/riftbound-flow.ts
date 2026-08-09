@@ -225,6 +225,8 @@ function runHoldScoringStep(context: FlowStepContext): void {
         if (context.cards.updateCardMeta) {
           recalculateStaticEffects({
             cards: {
+              // rule 108.2 — "friendly"/"your" reads CONTROL, not ownership.
+              getCardController: context.cards.getCardController,
               getCardMeta: context.cards.getCardMeta,
               getCardOwner: context.cards.getCardOwner ?? (() => undefined),
               updateCardMeta: context.cards.updateCardMeta,
@@ -388,6 +390,8 @@ function runExpirationStep(context: FlowStepContext): void {
         if (empowerStatusChanged && context.cards.updateCardMeta) {
           recalculateStaticEffects({
             cards: {
+              // rule 108.2 — "friendly"/"your" reads CONTROL, not ownership.
+              getCardController: context.cards.getCardController,
               getCardMeta: context.cards.getCardMeta,
               getCardOwner: context.cards.getCardOwner ?? (() => undefined),
               updateCardMeta: context.cards.updateCardMeta,
@@ -1092,6 +1096,8 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
               if (runesToChannel > 0 && context.cards.updateCardMeta) {
                 recalculateStaticEffects({
                   cards: {
+                    // rule 108.2 — "friendly"/"your" reads CONTROL, not ownership.
+                    getCardController: context.cards.getCardController,
                     getCardMeta: context.cards.getCardMeta,
                     getCardOwner: context.cards.getCardOwner ?? (() => undefined),
                     updateCardMeta: context.cards.updateCardMeta,
