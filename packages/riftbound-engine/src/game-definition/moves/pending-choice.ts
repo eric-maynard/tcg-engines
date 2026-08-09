@@ -38,7 +38,7 @@ import { cleanupAndFireDeaths } from "../../cleanup/post-move-cleanup";
 import type { PostMoveCleanupContext } from "../../cleanup/post-move-cleanup";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import { matchesRevealPickFilter } from "../../operations/reveal-pick-filter";
-import { leaveBoard } from "../../operations/leave-board";
+import { leaveBoard, snapshotLKI } from "../../operations/leave-board";
 import type {
   OrderChoice,
   PendingChoice,
@@ -3174,6 +3174,13 @@ export const pendingChoiceMoves: Partial<
         // Recycle → bottom of main deck (rule: recycle places at bottom).
         if (choice.onPicked === "recycle") {
           moveParams.position = "bottom";
+          // rule 359.3.e.13 / 428.1.a.1.b — a unit recycled off the BOARD is
+          // gone by the time any follow-up reads it ("…by the Might of the unit
+          // you recycled"), so record its last-known state before it moves.
+          const fromZone = context.zones.getCardZone?.(id as CoreCardId) as string | undefined;
+          if (typeof fromZone === "string" && isBoardZone(fromZone)) {
+            snapshotLKI({ cards: context.cards, counters: context.counters, draft, zones: context.zones }, id as string);
+          }
           // rule 424.4.a — recycling puts a card on the bottom of the
           // CORRESPONDING deck; a rune goes to its owner's Rune Deck.
           if (getGlobalCardRegistry().get(id)?.cardType === "rune") {
@@ -3336,9 +3343,12 @@ export const pendingChoiceMoves: Partial<
                 target: pickedCardId as string,
               },
               optional: true,
-              // rule 387.1 — decided when it resolves (after the played card's
-              // own play triggers, which land above it), not at finalization.
-              optionalOnResolution: true,
+              // rule 383.3.a / 402.1 — the leading "you may" of a reflexive
+              // item (387/388) is decided while the item is FINALIZED, before
+              // anyone holds priority; it waits only for the play appended
+              // before it to leave the Chain (337.1.b / 354.2).
+              ...(queuedPlays.length > 0 ? { finalizeAfter: [...queuedPlays] } : {}),
+              status: "pending",
               triggered: true,
               type: "ability",
             } as never,

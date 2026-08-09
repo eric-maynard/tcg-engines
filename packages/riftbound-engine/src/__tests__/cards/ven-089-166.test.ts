@@ -160,6 +160,12 @@ describe("Wild Claw (ven-089-166)", () => {
     await game.p1.pick("drake");
     expect(game.p1.energy()).toBe(0); // 8 - 7 - (6-5)
     await game.settle();
+    // rule 383.3.a / 402.1 — the reflexive "you may … Empower it" is decided at
+    // FINALIZATION, before the play triggers resolve; decline and let them run.
+    if (game.decision()?.kind === "yes-no") {
+      await game.p1.no();
+    }
+    await game.settle();
     expect(game.zoneOf("drake")).toBe("base");
     expect(game.p1.hand()).toEqual(["sixth"]);
   });
