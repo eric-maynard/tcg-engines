@@ -24,7 +24,6 @@ import type {
   FlowDefinition,
 } from "@tcg/core";
 import type { EffectContext } from "../../abilities/effect-executor";
-import { MIGHTY_THRESHOLD, getEffectiveMight } from "../../abilities/effects/_helpers";
 import { recalculateStaticEffects } from "../../abilities/static-abilities";
 import { fireTriggers } from "../../abilities/trigger-runner";
 import type { TriggerRunnerContext } from "../../abilities/trigger-runner";
@@ -152,6 +151,36 @@ function buildFlowEffectContext(
   };
 }
 
+/** rule 709 — a unit is [Mighty] while its current Might is 5 or more. */
+const MIGHTY_THRESHOLD = 5;
+
+/**
+ * rule 710 — a unit's CURRENT Might. Mirrors `effects/_helpers.getEffectiveMight`
+ * against the flow's card store; kept local because importing the effect helpers
+ * from the flow module closes a module cycle that breaks the whole engine build.
+ */
+function flowEffectiveMight(
+  cardId: CoreCardId,
+  cards: { getCardMeta: (cardId: CoreCardId) => Partial<RiftboundCardMeta> },
+): number {
+  const registry = getGlobalCardRegistry();
+  const printedMight = registry.get(cardId as string)?.might ?? 0;
+  if (printedMight === 0) {
+    return 0; // not a unit
+  }
+  const meta = (cards.getCardMeta(cardId) ?? {}) as Partial<RiftboundCardMeta>;
+  const baseMight = meta.baseMightOverride ?? printedMight;
+  const buffBonus = (meta.buffed ? 1 : 0) + (meta.extraBuffs ?? 0);
+  let equipBonus = 0;
+  for (const equipId of meta.equippedWith ?? []) {
+    equipBonus += registry.getMightBonus(equipId as string);
+  }
+  return Math.max(
+    0,
+    baseMight + buffBonus + (meta.mightModifier ?? 0) + (meta.staticMightBonus ?? 0) + equipBonus,
+  );
+}
+
 /** Context shape shared by the flow phase hooks that run a whole turn step. */
 type FlowStepContext = Parameters<typeof buildFlowTriggerContext>[0] & {
   getCurrentPlayer: () => CorePlayerId;
@@ -257,8 +286,17 @@ function runHoldScoringStep(context: FlowStepContext): void {
         }
 }
 
-/** Expiration Step of the Ending Phase (rule 317.2 / 517.2). */
-function runExpirationStep(context: FlowStepContext): void {
+/**
+ * Expiration Step of the Ending Phase (rule 317.2 / 517.2).
+ *
+ * `reloop` enables rule 317.2.f: when this pass adds Pending Items that then
+ * undergo FEPR (Fiora's "you may pay to ready it" off a Might penalty expiring
+ * at 3d), the step starts over once those items are done, so a "this turn"
+ * effect they created — the readied unit's own +2 — is stripped by the SECOND
+ * 3d pass instead of leaking into the next turn.
+ */
+function runExpirationStep(context: FlowStepContext, options?: { reloop?: boolean }): void {
+        const waitingBeforeExpiry = stepMustWaitForChain(context.state);
         // Collect all board cards for cleanup
         const allBoardCards: CoreCardId[] = [];
         for (const pid of Object.keys(context.state.players)) {
@@ -281,10 +319,9 @@ function runExpirationStep(context: FlowStepContext): void {
         // turn" -Might effect expiring here can make a unit BECOME Mighty
         // (5 → 8 does not: it never stopped being Mighty). Snapshot before the
         // expiries so the crossing can be published once they have all landed.
-        const mightSnapshotCtx = buildFlowEffectContext(context);
         const mightBeforeExpiry = new Map<CoreCardId, number>();
         for (const cardId of allBoardCards) {
-          mightBeforeExpiry.set(cardId, getEffectiveMight(cardId as string, mightSnapshotCtx));
+          mightBeforeExpiry.set(cardId, flowEffectiveMight(cardId, context.cards));
         }
         // rule 364 — [Empowered] statics are dependent on the status, so an
         // expiry here has to be re-layered before anything reads Might again.
@@ -609,13 +646,12 @@ function runExpirationStep(context: FlowStepContext): void {
         // undergo FEPR. A unit whose current Might crossed from below 5 to 5+
         // when the "this turn" modifiers expired BECOMES [Mighty] now
         // (rule 709), so publish the event from inside the Expiration Step.
-        const mightAfterCtx = buildFlowEffectContext(context);
         const mightyTriggerCtx = buildFlowTriggerContext(context);
         for (const [cardId, before] of mightBeforeExpiry) {
           if (before >= MIGHTY_THRESHOLD) {
             continue;
           }
-          if (getEffectiveMight(cardId as string, mightAfterCtx) < MIGHTY_THRESHOLD) {
+          if (flowEffectiveMight(cardId, context.cards) < MIGHTY_THRESHOLD) {
             continue;
           }
           fireTriggers(
@@ -626,6 +662,15 @@ function runExpirationStep(context: FlowStepContext): void {
             },
             mightyTriggerCtx,
           );
+        }
+
+        // rule 317.2.f — items added by THIS pass (320.1) undergo FEPR, so once
+        // they are done the Expiration Step is performed again from the start.
+        // The phase's endIf holds the ending phase open meanwhile; its onEnd
+        // takes the deferred pass. Only the first pass may ask for a re-loop, so
+        // the loop always terminates.
+        if (options?.reloop === true && !waitingBeforeExpiry && stepMustWaitForChain(context.state)) {
+          deferStep(context.state, "expiration");
         }
 }
 
@@ -1340,7 +1385,7 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
               if (stepMustWaitForChain(context.state)) {
                 deferStep(context.state, "expiration");
               } else {
-                runExpirationStep(context);
+                runExpirationStep(context, { reloop: true });
               }
             },
 
