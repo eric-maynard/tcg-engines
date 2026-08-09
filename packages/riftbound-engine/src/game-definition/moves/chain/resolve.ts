@@ -364,31 +364,25 @@ export function optInIsPerformable(
     if (
       optTarget !== undefined &&
       typeof optTarget.type === "string" &&
-      // Kept deliberately narrow: only "a unit YOU control …" descriptors, where
-      // an empty candidate set is unambiguous and cannot depend on board state
-      // the resolver reads differently at resolution time — plus "an enemy unit
-      // HERE", whose candidate set is empty whenever the source has left the
-      // board (rule-id: unl-166-219 — Sinister Poro killed as an additional
-      // cost while its own attack trigger is still on the chain).
-      (optTarget.controller === "friendly" ||
-        // rule 402.4 / 355.8 (rule-id: sfd-138-221 Windsinger) — "another unit AT
-        // A BATTLEFIELD": either player's, but battlefields are fully public, so
-        // an empty candidate set here is just as unambiguous as a friendly one.
-        (optTarget.controller === undefined && optTarget.location === "battlefield") ||
-        // rule 402.4 / 355.4.a (rule-id: ogn-067-298 Blitzcrank) — "move AN
-        // ENEMY UNIT to here": every enemy unit in play is public, so an empty
-        // legal set (nothing but Untargetable units, or every enemy already
-        // standing here) is unambiguous and the trigger leaves the Chain
-        // without a Yes/No prompt.
-        (optTarget.controller === "enemy" &&
-          optTarget.location === undefined &&
-          optTarget.type === "unit") ||
-        (optTarget.controller === "enemy" &&
-          optTarget.location === "here" &&
-          // rule 383.3.a (unl-105-219) — while the source is still on the board
-          // "here" is a real place, so the controller is still asked whether to
-          // use the ability; only a source that already left has no "here" at all.
-          !sourceStillOnBoard(resolved.cardId, context))) &&
+      // rule 402.4 — the board is public, so an empty candidate set for ANY
+      // board descriptor ("a non-Dragon unit", "an enemy unit", "another unit at
+      // a battlefield", "a unit you control …") is unambiguous and the item
+      // leaves the Chain with no Yes/No prompt.
+      // "HERE" descriptors stay narrow: rule 359.3.f.2 re-reads "here" (and
+      // self-relative filters such as "with less Might than me") when the
+      // instruction EXECUTES, and a trigger whose source is not a board card at
+      // all — a Legend's "when you conquer or hold … there" (rule-id:
+      // unl-199-219) — names a place this planning context cannot see, so an
+      // empty set now proves nothing and the controller is still asked (rule
+      // 383.3.a, rule-id: unl-105-219). Only the two "here" shapes whose
+      // emptiness IS decisive keep their gate: "a unit YOU control here"
+      // (rule-id: unl-205-219 Abandoned Hall, unl-209-219 Dusk Rose Lab), and an
+      // ENEMY unit here whose source has already left the board and so has no
+      // "here" left at all (rule-id: unl-166-219 — Sinister Poro killed as an
+      // additional cost while its own attack trigger is still on the Chain).
+      (optTarget.location !== "here" ||
+        optTarget.controller === "friendly" ||
+        (optTarget.controller === "enemy" && !sourceStillOnBoard(resolved.cardId, context))) &&
       optTarget.type !== "self" &&
       optTarget.type !== "trigger-source" &&
       optTarget.type !== "player" &&
