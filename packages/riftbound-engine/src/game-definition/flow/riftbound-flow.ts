@@ -24,6 +24,7 @@ import type {
   FlowDefinition,
 } from "@tcg/core";
 import type { EffectContext } from "../../abilities/effect-executor";
+import { MIGHTY_THRESHOLD, getEffectiveMight } from "../../abilities/effects/_helpers";
 import { recalculateStaticEffects } from "../../abilities/static-abilities";
 import { fireTriggers } from "../../abilities/trigger-runner";
 import type { TriggerRunnerContext } from "../../abilities/trigger-runner";
@@ -32,7 +33,15 @@ import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import { getChannelCountLimit } from "../../operations/channel-limits";
 import { hasSkipDrawPhaseGrant } from "../moves/play/cost";
 import { clearDamage, getDamage } from "../../operations/damage-store";
-import { type LeaveBoardContext, removeFromBoard } from "../../operations/leave-board";
+import {
+  type LeaveBoardContext,
+  orderBatchTriggersByTurnOrder,
+  removeFromBoard,
+} from "../../operations/leave-board";
+import {
+  finalizePendingItems,
+  withinMoveReducer,
+} from "../../abilities/trigger-finalization";
 import { emptyRunePoolInPlace } from "../../operations/riftbound-operations";
 import { resetPlaysThisTurn } from "../../operations/plays-this-turn";
 import { relocateAttachedEquipment } from "../moves/movement/helpers";
@@ -195,22 +204,33 @@ function runHoldScoringStep(context: FlowStepContext): void {
         // (054.1 denial, 443.1.a hold-scoped skips; no Final Point restriction
         // for a Hold, 471.1.a.1). rule 383.4.d.2.c: the Hold trigger fires even
         // when the point itself was denied or replaced.
-        for (const [bfId, bf] of Object.entries(context.state.battlefields)) {
-          if (bf.controller === playerId) {
-            const { isScore } = scoreBattlefield(
-              context.state,
-              playerId as PlayerId,
-              bfId,
-              "hold",
-              context,
-            );
-            if (isScore) {
-              // Emit "hold" (+ "score") so triggered abilities fire (e.g. Altar to Unity)
-              for (const event of scoreEvents(playerId as PlayerId, bfId, "hold")) {
-                fireTriggers(event, triggerCtx);
+        // rule 315.2.b.2 — "the Turn Player Holds every Battlefield they Control"
+        // is ONE task, so every Hold trigger of every battlefield is simultaneous
+        // (383.3.d.1). Queue them all as one batch (no per-event finalization),
+        // sort the batch by turn order, then finalize once.
+        const chainLenBefore = context.state.interaction?.chain?.items.length ?? 0;
+        withinMoveReducer(() => {
+          for (const [bfId, bf] of Object.entries(context.state.battlefields)) {
+            if (bf.controller === playerId) {
+              const { isScore } = scoreBattlefield(
+                context.state,
+                playerId as PlayerId,
+                bfId,
+                "hold",
+                context,
+              );
+              if (isScore) {
+                // Emit "hold" (+ "score") so triggered abilities fire (e.g. Altar to Unity)
+                for (const event of scoreEvents(playerId as PlayerId, bfId, "hold")) {
+                  fireTriggers(event, triggerCtx);
+                }
               }
             }
           }
+        });
+        orderBatchTriggersByTurnOrder(context.state, chainLenBefore);
+        if (context.state.pendingChoice === undefined) {
+          finalizePendingItems(context.state, triggerCtx);
         }
 
         // rule 472 / 319.2: the Cleanup at the end of the Scoring Step checks
@@ -256,6 +276,16 @@ function runExpirationStep(context: FlowStepContext): void {
           getCardMeta(cardId: CoreCardId): object | undefined;
           updateCardMeta(cardId: CoreCardId, meta: Record<string, unknown>): void;
         };
+
+        // rule 710 / 709 — a unit is [Mighty] on its CURRENT Might, so a "this
+        // turn" -Might effect expiring here can make a unit BECOME Mighty
+        // (5 → 8 does not: it never stopped being Mighty). Snapshot before the
+        // expiries so the crossing can be published once they have all landed.
+        const mightSnapshotCtx = buildFlowEffectContext(context);
+        const mightBeforeExpiry = new Map<CoreCardId, number>();
+        for (const cardId of allBoardCards) {
+          mightBeforeExpiry.set(cardId, getEffectiveMight(cardId as string, mightSnapshotCtx));
+        }
         // rule 364 — [Empowered] statics are dependent on the status, so an
         // expiry here has to be re-layered before anything reads Might again.
         let empowerStatusChanged = false;
@@ -573,6 +603,29 @@ function runExpirationStep(context: FlowStepContext): void {
             (e) => e?.duration !== "turn",
           );
           context.state.playerDelayedTriggers = remaining.length > 0 ? remaining : undefined;
+        }
+
+        // rule 320.1 / 334.2 — items may be added during a cleanup and then
+        // undergo FEPR. A unit whose current Might crossed from below 5 to 5+
+        // when the "this turn" modifiers expired BECOMES [Mighty] now
+        // (rule 709), so publish the event from inside the Expiration Step.
+        const mightAfterCtx = buildFlowEffectContext(context);
+        const mightyTriggerCtx = buildFlowTriggerContext(context);
+        for (const [cardId, before] of mightBeforeExpiry) {
+          if (before >= MIGHTY_THRESHOLD) {
+            continue;
+          }
+          if (getEffectiveMight(cardId as string, mightAfterCtx) < MIGHTY_THRESHOLD) {
+            continue;
+          }
+          fireTriggers(
+            {
+              cardId: cardId as string,
+              owner: context.cards.getCardOwner?.(cardId) ?? "",
+              type: "become-mighty",
+            },
+            mightyTriggerCtx,
+          );
         }
 }
 
@@ -1254,9 +1307,16 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
             // end-of-turn triggers go on the chain in onBegin; hold the Ending
             // Step until that chain (and any choice it opens) has resolved so
             // the turn doesn't rotate with the trigger still pending.
+            // rule 460 / 461 (same rule the `endTurn` move applies): a showdown
+            // an end-of-turn trigger staged — Aurora playing ogn-161-298 to an
+            // occupied enemy battlefield — is fought inside THIS ending phase,
+            // so the phase also waits while any battlefield is contested.
             endIf: (context) =>
               !(context.state as RiftboundGameState).interaction?.chain?.active &&
-              !(context.state as RiftboundGameState).pendingChoice,
+              !(context.state as RiftboundGameState).pendingChoice &&
+              !Object.values((context.state as RiftboundGameState).battlefields ?? {}).some(
+                (bf) => bf.contested === true,
+              ),
             next: "cleanup",
             onBegin: (context) => {
               context.state.turn = {

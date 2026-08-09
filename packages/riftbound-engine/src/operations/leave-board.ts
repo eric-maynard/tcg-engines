@@ -848,7 +848,10 @@ export function buildLeaveEvent(result: LeaveResult, batchIndex?: number): GameE
  * other player in turn order; within one player the scan order stands (585.1).
  * Only the items this batch added are reordered.
  */
-function orderBatchTriggersByTurnOrder(draft: RiftboundGameState, chainLenBefore: number): void {
+export function orderBatchTriggersByTurnOrder(
+  draft: RiftboundGameState,
+  chainLenBefore: number,
+): void {
   const chain = draft.interaction?.chain;
   const items = chain?.items;
   if (!chain || !items || items.length - chainLenBefore < 2) {
