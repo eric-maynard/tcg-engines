@@ -6,16 +6,25 @@ import type { CounterOperations } from "./counter-operations";
 import type { GameOperations } from "./game-operations";
 import type { ZoneOperations } from "./zone-operations";
 
+/** The slice of the engine's seeded RNG the zone operations need. */
+export interface ZoneRandomSource {
+  random(): number;
+}
+
 /**
  * Create a ZoneOperations implementation backed by InternalState
  *
  * @param state - Internal state to operate on (will be mutated)
  * @param logger - Optional logger for TRACE-level logging
+ * @param rng - Seeded RNG; every shuffle draws from it so replays are
+ *   deterministic. Omitting it falls back to Math.random and makes the game
+ *   non-replayable — engine call sites always pass one.
  * @returns ZoneOperations implementation
  */
 export const createZoneOperations = <TCardDef, TCardMeta>(
   state: InternalState<TCardDef, TCardMeta>,
   logger?: Logger,
+  rng?: ZoneRandomSource,
 ): ZoneOperations => {
   const zoneOps: ZoneOperations = {
     bulkMove: ({ from, to, count, playerId, position = "bottom" }) => {
@@ -323,16 +332,32 @@ export const createZoneOperations = <TCardDef, TCardMeta>(
         return;
       }
 
-      // Simple Fisher-Yates shuffle
-      // Note: In production, this should use a seeded RNG for determinism
       const cards = [...zone.cardIds];
-      for (let i = cards.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        const temp = cards[i];
-        const swapCard = cards[j];
+
+      // A shared zone holds several players' cards (Main Deck / trash are keyed
+      // by owner): shuffling one player's deck must permute only THAT player's
+      // cards and leave every other owner's card in the slot it occupied.
+      const slots: number[] = [];
+      for (let i = 0; i < cards.length; i++) {
+        const cardId = cards[i] as string;
+        if (ownerId !== undefined && state.cards[cardId]?.owner !== ownerId) {
+          continue;
+        }
+        slots.push(i);
+      }
+
+      // Fisher-Yates over the owner's slots, driven by the engine's seeded RNG
+      // so a replay of the same seed produces the same order. Never Math.random.
+      const nextRandom = rng ? () => rng.random() : Math.random;
+      for (let i = slots.length - 1; i > 0; i--) {
+        const j = Math.floor(nextRandom() * (i + 1));
+        const a = slots[i] as number;
+        const b = slots[j] as number;
+        const temp = cards[a];
+        const swapCard = cards[b];
         if (temp && swapCard) {
-          cards[i] = swapCard;
-          cards[j] = temp;
+          cards[a] = swapCard;
+          cards[b] = temp;
         }
       }
 

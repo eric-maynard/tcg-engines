@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import type { CardId, PlayerId, ZoneId } from "../types";
 import type { InternalState } from "../types/state";
 import type { CardZoneConfig } from "../zones";
+import { SeededRNG } from "../rng/seeded-rng";
 import { createCardOperations, createZoneOperations } from "./operations-impl";
 
 describe("Operations Implementation", () => {
@@ -233,6 +234,60 @@ describe("Operations Implementation", () => {
           const cardId = afterShuffle[i] as string;
           expect(state.cards[cardId].position).toBe(i);
         }
+      });
+
+      it("should draw from the supplied seeded RNG, so the same seed shuffles to the same order", () => {
+        const orderFor = (seed: string): string[] => {
+          const state = createTestInternalState();
+          // 20 cards, so agreement between two runs is not coincidence.
+          for (let i = 6; i <= 20; i++) {
+            state.cards[`card-${i}`] = {
+              controller: "player-1" as unknown as PlayerId,
+              definitionId: `spell-${i}`,
+              owner: "player-1" as unknown as PlayerId,
+              position: i,
+              zone: "deck" as ZoneId,
+            };
+            (state.zones.deck.cardIds as unknown as string[]).push(`card-${i}`);
+          }
+          const ops = createZoneOperations(state, undefined, new SeededRNG(seed));
+          ops.shuffleZone("deck" as ZoneId);
+          return [...state.zones.deck.cardIds] as unknown as string[];
+        };
+
+        expect(orderFor("seed-a")).toEqual(orderFor("seed-a"));
+        expect(orderFor("seed-a")).not.toEqual(orderFor("seed-b"));
+      });
+
+      it("should permute ONLY the named owner's cards and leave every other owner's card in its slot", () => {
+        const state = createTestInternalState();
+        // A shared deck zone: p1 owns card-3..5, p2 owns opp-1..3, interleaved.
+        for (let i = 1; i <= 3; i++) {
+          state.cards[`opp-${i}`] = {
+            controller: "player-2" as unknown as PlayerId,
+            definitionId: `opp-spell-${i}`,
+            owner: "player-2" as unknown as PlayerId,
+            position: 0,
+            zone: "deck" as ZoneId,
+          };
+        }
+        state.zones.deck.cardIds = [
+          "card-3",
+          "opp-1",
+          "card-4",
+          "opp-2",
+          "card-5",
+          "opp-3",
+        ] as unknown as CardId[];
+
+        const ops = createZoneOperations(state, undefined, new SeededRNG("owner-filter"));
+        ops.shuffleZone("deck" as ZoneId, "player-1" as unknown as PlayerId);
+
+        const after = [...state.zones.deck.cardIds] as unknown as string[];
+        // P2's cards never moved: same cards, same indices.
+        expect([after[1], after[3], after[5]]).toEqual(["opp-1", "opp-2", "opp-3"]);
+        // P1's cards only ever landed in P1's own slots.
+        expect([after[0], after[2], after[4]].toSorted()).toEqual(["card-3", "card-4", "card-5"]);
       });
     });
 

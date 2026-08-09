@@ -215,7 +215,7 @@ export class RuleEngine<
     // Initialize flow manager if flow definition exists
     if (gameDefinition.flow) {
       // Create operations for flow manager
-      const zoneOps = createZoneOperations(this.internalState);
+      const zoneOps = createZoneOperations(this.internalState, undefined, this.rng);
       const cardOps = createCardOperations<TCardDefinition, TCardMeta>(this.internalState);
       const gameOps = createGameOperations(this.internalState);
 
@@ -484,7 +484,7 @@ export class RuleEngine<
 
     // Task 11.25, 11.26: Add RNG to context for deterministic randomness
     // Also add operations API for zone and card management
-    const zoneOps = createZoneOperations(this.internalState, this.logger.child("zones"));
+    const zoneOps = createZoneOperations(this.internalState, this.logger.child("zones"), this.rng);
     const cardOps = createCardOperations(this.internalState, this.logger.child("cards"));
     const gameOps = createGameOperations(this.internalState, this.logger.child("game"));
     const counterOps = createCounterOperations(this.internalState, this.logger.child("counters"));
@@ -727,7 +727,7 @@ export class RuleEngine<
   private buildMoveContext(
     contextInput: MoveContextInput<any>,
   ): MoveContext<any, TCardMeta, TCardDefinition> {
-    const zoneOps = createZoneOperations(this.internalState, this.logger.child("zones"));
+    const zoneOps = createZoneOperations(this.internalState, this.logger.child("zones"), this.rng);
     const cardOps = createCardOperations(this.internalState, this.logger.child("cards"));
     const gameOps = createGameOperations(this.internalState, this.logger.child("game"));
     const counterOps = createCounterOperations(this.internalState, this.logger.child("counters"));
@@ -1110,7 +1110,7 @@ export class RuleEngine<
   private buildEnumerationContext(
     playerId: PlayerId,
   ): import("../moves/move-enumeration").MoveEnumerationContext<TCardMeta, TCardDefinition> {
-    const zoneOps = createZoneOperations(this.internalState, this.logger.child("zones"));
+    const zoneOps = createZoneOperations(this.internalState, this.logger.child("zones"), this.rng);
     const cardOps = createCardOperations(this.internalState, this.logger.child("cards"));
     const gameOps = createGameOperations(this.internalState, this.logger.child("game"));
     const counterOps = createCounterOperations(this.internalState, this.logger.child("counters"));
