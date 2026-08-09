@@ -61,7 +61,8 @@ function onCardClick(cardId) {
     // requiring a base-cost `move` here made that target set unreachable.
     if (
       repeatVariantsFor(interaction.pendingMoves, next).length > 0 ||
-      additionalCostVariantsFor(interaction.pendingMoves, next).length > 0
+      additionalCostVariantsFor(interaction.pendingMoves, next).length > 0 ||
+      mandatoryCostVariantsFor(interaction.pendingMoves, next).length > 0
     ) {
       interaction.chosenTargets = next;
       interaction.validTargets = remainingTargetIds(
@@ -361,6 +362,34 @@ function additionalCostVariantsFor(moves, chosen) {
   });
 }
 
+/** The card a variant spends for a cost the player gets to choose (discard / sacrifice). */
+function costChoiceId(m) {
+  return m?.params?.discardId ?? m?.params?.sacrificeId ?? (m?.params?.sacrificeIds || [])[0] ?? null;
+}
+
+/**
+ * rule 356.2.a — variants binding exactly `chosen` that differ only in WHICH
+ * card pays a MANDATORY cost (Discard 1, Sacrifice a unit …). These are not
+ * `paidAdditionalCost`, so without this the UI silently submitted the first one
+ * and discarded whatever happened to be first in hand.
+ * Returns [] unless there is a real choice to make.
+ */
+function mandatoryCostVariantsFor(moves, chosen) {
+  const matches = (moves || []).filter(m => {
+    if (!isBaseCostVariant(m) || costChoiceId(m) === null) return false;
+    const t = moveTargetList(m);
+    return t.length === chosen.length && containsTargetMultiset(t, chosen);
+  });
+  const seen = new Set();
+  const unique = matches.filter(m => {
+    const id = costChoiceId(m);
+    if (seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
+  return unique.length > 1 ? unique : [];
+}
+
 /** Short label for the extra cost a paidAdditionalCost variant pays. */
 function additionalCostLabel(m) {
   if (m.params?.discardId) {
@@ -473,13 +502,19 @@ function updateTargetBanner() {
   }
   const repeats = chosen.length === 0 ? [] : repeatVariantsFor(interaction.pendingMoves, chosen);
   const paid = chosen.length === 0 ? [] : additionalCostVariantsFor(interaction.pendingMoves, chosen);
+  // rule 356.2.a — a mandatory cost the player chooses the card for gets one
+  // button per candidate instead of a single "Done" that picks for them.
+  const mandatory = chosen.length === 0 ? [] : mandatoryCostVariantsFor(interaction.pendingMoves, chosen);
   if (chosen.length > 0) {
-    const done = exactTargetVariant(interaction.pendingMoves, chosen);
+    const done = mandatory.length > 0 ? null : exactTargetVariant(interaction.pendingMoves, chosen);
     if (done) {
       buttons.push({
         label: repeats.length > 0 || paid.length > 0 ? "Play" : `Done (${chosen.length})`,
         move: done,
       });
+    }
+    for (const m of mandatory) {
+      buttons.push({ label: additionalCostLabel(m), move: m });
     }
     // rule 573 — one button per extra Repeat the player can pay for.
     for (const m of repeats) {

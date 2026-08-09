@@ -896,10 +896,21 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
     // control — a surviving DEFENDER takes an uncontrolled (or enemy)
     // battlefield even though the other player applied Contested. Taking
     // control they did not already hold is a Conquer (466.5.d, 469.1).
-    if (winner === "defender" && defendersLeft.length > 0) {
-      const defendingPlayer =
-        (cards.getCardController?.(defendersLeft[0] as CoreCardId) as string | undefined) ??
-        (cards.getCardOwner(defendersLeft[0] as CoreCardId) as string | undefined);
+    // rule 466.5.e — the holder is read off who still has units HERE once the
+    // recalls are done, not off who "won": a tie recalls the attackers
+    // (466.1.a.2) and leaves the defenders alone here, so they take control too.
+    const holdersHere = remainingUnits.filter(
+      (id) => getGlobalCardRegistry().getCardType(id as string) === "unit",
+    );
+    const holdingPlayers = new Set(
+      holdersHere.map(
+        (id) =>
+          (cards.getCardController?.(id as CoreCardId) as string | undefined) ??
+          (cards.getCardOwner(id as CoreCardId) as string | undefined),
+      ),
+    );
+    if (holdingPlayers.size === 1) {
+      const defendingPlayer = [...holdingPlayers][0];
       if (defendingPlayer !== undefined && battlefield.controller !== defendingPlayer) {
         battlefield.controller = defendingPlayer;
         const { isScore } = scoreBattlefield(

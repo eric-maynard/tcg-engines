@@ -212,3 +212,27 @@ describe("Tricksy Tentacles (unl-054-219)", () => {
     expect(filter.some((f) => "might" in f && (f.might as { lte?: number }).lte === 8)).toBe(true);
   });
 });
+
+describe("combat at an uncontrolled battlefield (466.5 / 466.5.e)", () => {
+  // Tricksy Tentacles routinely drops enemy units into a battlefield the caster
+  // contests; when both sides survive the combat the attackers are recalled
+  // (466.1.a.2) and the player left standing here Establishes Control — even
+  // though the OTHER player applied Contested (466.5.e).
+  test("attackers recalled after a tie → the defending player alone at the uncontrolled battlefield establishes control and conquers", async () => {
+    const game = await scenario()
+      .battlefield("bf1", { controller: null })
+      .unit(P2, "bf1", { might: 5, name: "D1" }, "d1", { stunned: true })
+      .unit(P2, "bf1", { might: 5, name: "D2" }, "d2", { stunned: true })
+      .unit(P1, "base", { might: 2, name: "Raider" }, "a1")
+      .build();
+    await game.p1.move("a1", "bf1");
+    await game.settle();
+    // both sides survived: the stunned defenders dealt no damage, and 2 damage
+    // is not lethal on either 5-Might defender.
+    expect(game.locationOf("d1")).toBe("bf1");
+    expect(game.locationOf("d2")).toBe("bf1");
+    expect(game.zoneOf("a1")).toBe("base");
+    expect(game.gameState.battlefields.bf1).toMatchObject({ contested: false, controller: P2 });
+    expect(game.p2.points()).toBe(1);
+  });
+});
