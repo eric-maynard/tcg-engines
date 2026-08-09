@@ -43,6 +43,7 @@ import { handle_banish } from "./banish";
 import { handle_counter } from "./counter";
 import { handle_createToken } from "./create-token";
 import { handle_replaceBattlefield } from "./replace-battlefield";
+import { handle_swapBackBattlefield } from "./swap-back-battlefield";
 import { handle_eachOpponentMay } from "./each-opponent-may";
 import { handle_attach } from "./attach";
 import { handle_attach_or_detach } from "./attach-or-detach";
@@ -136,6 +137,8 @@ export const EFFECT_HANDLERS: Record<string, EffectHandler> = {
   "counter": handle_counter,
   "create-token": handle_createToken,
   "replace-battlefield": handle_replaceBattlefield,
+  // rule 438.7 (rule-id: unl-t03) — "replace this with the battlefield it replaced".
+  "swap-back-battlefield": handle_swapBackBattlefield,
   // rule-id: sfd-081-221 — "each opponent may …".
   "each-opponent-may": handle_eachOpponentMay,
   "attach": handle_attach,

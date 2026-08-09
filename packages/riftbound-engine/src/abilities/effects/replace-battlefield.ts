@@ -28,6 +28,14 @@ const BATTLEFIELD_TOKEN_DEFS: Record<string, { name: string; abilities: readonly
         },
         type: "static",
       },
+      // rule 187.8 / 438.7 — "When you score here, you may replace this with
+      // the battlefield it replaced."
+      {
+        effect: { type: "swap-back-battlefield" },
+        optional: true,
+        trigger: { event: "score", on: "self" },
+        type: "triggered",
+      },
     ],
     name: "Brush",
   },

@@ -19,6 +19,15 @@ const abilities: Ability[] = [
     },
     type: "static",
   },
+  // rule 187.8 / 438.7 — "When you score here, you may replace this with the
+  // battlefield it replaced": an optional trigger for whoever scores at this
+  // battlefield (468: Score = Hold OR Conquer).
+  {
+    effect: { type: "swap-back-battlefield" },
+    optional: true,
+    trigger: { event: "score", on: "self" },
+    type: "triggered",
+  } as unknown as Ability,
 ];
 
 export const brush: BattlefieldCard = {
