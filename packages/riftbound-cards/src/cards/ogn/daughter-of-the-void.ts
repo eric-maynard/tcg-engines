@@ -11,13 +11,14 @@ import { createCardId } from "@tcg/riftbound-types/cards";
  * Activated ability: exhaust self to add 1 rainbow power to the rune pool.
  * Timing: reaction (can be used on opponent's turn / during chain).
  *
- * NOTE: "Use only to play spells" restriction is not yet enforced by the engine.
- * The rainbow power is added to the pool and can currently be spent on anything.
+ * rule 429.4: "Use only to play spells" earmarks the added [rainbow] — it may pay only
+ * for spells, never a unit, gear, or an activated ability.
  */
 const abilities: Ability[] = [
   {
     cost: { exhaust: true },
-    effect: { power: ["rainbow"], type: "add-resource" },
+    // rule 429.4: "Use only to play spells" — same earmark the parser emits for Lux, Crownguard.
+    effect: { power: ["rainbow"], restriction: "spell", type: "add-resource" },
     timing: "reaction",
     type: "activated",
   },

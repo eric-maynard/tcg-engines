@@ -1,5 +1,6 @@
 // Effect handler: "add-resource"
 import { getActiveShowdown } from "../../chain";
+import { computeAddResourceBonus } from "../../operations/add-resource-bonus";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import { type EffectHelpers, resolveAmount } from "./_helpers";
 
@@ -63,11 +64,37 @@ export function handle_addResource(effect: ExecutableEffect, ctx: EffectContext,
       // repeats each listed pip X times when the effect carries an amount.
       const rawCount = (effect as { amount?: unknown }).amount;
       const repeats = rawCount === undefined ? 1 : resolveAmount(rawCount as number, ctx);
+      // rule 429.4 (ogn-247-298): "Use only to play spells" earmarks the added
+      // Power exactly as it does Energy — `cost.ts` hides it from plays of any
+      // other card type and from ability activations.
+      const powerRestriction = (effect as { restriction?: string }).restriction;
+      const draft = ctx.draft as {
+        restrictedPower?: Record<string, Record<string, Record<string, number>>>;
+      };
+      let earmark: Record<string, number> | undefined;
+      if (powerRestriction) {
+        draft.restrictedPower ??= {};
+        const forPlayer = (draft.restrictedPower[playerId] ??= {});
+        earmark = forPlayer[powerRestriction] ??= {};
+      }
       for (let i = 0; i < repeats; i++) {
         for (const domain of effect.power) {
           const key = domain as keyof typeof pool.power;
           pool.power[key] = (pool.power[key] ?? 0) + 1;
+          if (earmark) {
+            earmark[domain] = (earmark[domain] ?? 0) + 1;
+          }
         }
+      }
+    }
+    // rule 429.1 — how much is Added is computed as the ability resolves, so a
+    // board static ("your Gold [ADD] an additional [1]") augments this Add.
+    if (energyAmount > 0 || effect.power) {
+      const bonus = computeAddResourceBonus(ctx, playerId, ctx.sourceCardId);
+      pool.energy += bonus.energy;
+      for (const [domain, count] of Object.entries(bonus.power)) {
+        const key = domain as keyof typeof pool.power;
+        pool.power[key] = (pool.power[key] ?? 0) + count;
       }
     }
   }

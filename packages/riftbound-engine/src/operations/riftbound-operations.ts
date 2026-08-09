@@ -167,6 +167,7 @@ export function emptyRunePoolInPlace(
   draft: {
     runePools: Record<string, { energy: number; power: Record<string, number> } | undefined>;
     restrictedEnergy?: Record<string, unknown>;
+    restrictedPower?: Record<string, unknown>;
   },
   playerId: string,
 ): void {
@@ -177,6 +178,9 @@ export function emptyRunePoolInPlace(
   }
   if (draft.restrictedEnergy?.[playerId] !== undefined) {
     delete draft.restrictedEnergy[playerId];
+  }
+  if (draft.restrictedPower?.[playerId] !== undefined) {
+    delete draft.restrictedPower[playerId];
   }
 }
 

@@ -644,12 +644,12 @@ export interface RevealAndPickChoice {
   readonly playIgnoreEnergy?: boolean;
 
   /**
-   * rule 337.1.b / 337.2 (ogn-242-298 Baited Hook): "banish a unit from among
-   * them … and play it" — the play is part of THIS instruction, so it
-   * finalizes as soon as the ability finishes resolving (the player picks a
-   * location and the unit enters the board) instead of waiting on the chain.
+   * rule 419.3 — the play bundle (`moves/play/play-pipeline.ts EffectPlaySpec`,
+   * minus the card) the pick stands for: performer, cost mode, location
+   * constraint, `then`. When absent the legacy `play*` fields above are read
+   * (`pending-choice.ts playSpecFromChoice`).
    */
-  readonly playImmediate?: boolean;
+  readonly playSpec?: unknown;
 
   /**
    * rule 594 (ogn-112-298 Kai'Sa, Evolutionary): "play a spell from your trash
@@ -760,6 +760,13 @@ export interface ChooseTargetChoice {
   readonly type: "choose-target";
   /** Player who chooses the target (the ability's controller). */
   readonly playerId: PlayerId;
+  /**
+   * rule 356.2.a.1 / 357.2 — the pick names the object paying a MANDATORY
+   * additional cost (`playCostId`: kill / return-to-hand) of the pending play
+   * item `playItemId`; recorded on the item, paid when the play is completed.
+   */
+  readonly playItemId?: string;
+  readonly playCostId?: string;
   /** Card that produced the effect (used as the effect's source). */
   readonly sourceCardId: CardId;
   /** The effect to execute once a target is chosen. */
@@ -865,6 +872,12 @@ export interface ChooseDestinationChoice {
   readonly type: "choose-destination";
   /** Player who chooses the destination (the ability's controller). */
   readonly playerId: PlayerId;
+  /**
+   * rule 355.2 — this is the LOCATION of a card an effect is playing (the
+   * pending play item on the Chain, chosen by the player performing the play);
+   * the answer is written on the item and the play continues at finalization.
+   */
+  readonly playItemId?: string;
   /** Unit to move once a destination is chosen. */
   readonly cardId: CardId;
   /** Legal destination zone IDs (base + battlefields, excluding current). */
@@ -1052,32 +1065,21 @@ export interface OptInChoice {
     readonly boundTargets?: readonly string[];
   };
   /**
-   * rule 356.5.a / 356.4.f.1 (unl-139-219 Bone Skewer) — a card being played
-   * to a fixed battlefield "ignoring any and all costs" whose optional
-   * additional cost its player may still DECLARE. The amount is 0 either way;
-   * accepting only records that the cost counts as paid, so "if you paid the
-   * additional cost" riders fire. The play finalizes on either answer.
+   * rule 354.2 / 355.1.a — this question belongs to a card an effect is
+   * PLAYING (the pending play item `playItemId` on the Chain): `playConfirm`
+   * = whether to make the (declinable, 128.6) play at all; otherwise = whether
+   * to pay its optional additional cost `playCostId` (Accelerate / "you may pay
+   * …"; `resolved.optInCost` carries the amount, absent = free — 356.5.a). The
+   * answer is written on the item and the play continues at finalization.
    */
-  readonly instructedPlay?: {
-    readonly cardId: CardId;
-    /** rule 419.1 — the zone the card is played from (it waits in `chain` limbo meanwhile — 354.2). */
-    readonly playFrom?: string;
-    readonly playTo: string;
-    readonly playStun: boolean;
-    /** Fallback controller when the card has no recorded owner. */
-    readonly revealer: PlayerId;
-    /** rule 323.13 — the caster whose effect forces this play (stages the arrival). */
-    readonly stagedBy?: PlayerId;
-  };
-  readonly acceleratePlay?: {
-    readonly cardId: CardId;
-    readonly cost?: { readonly energy?: number; readonly power?: readonly string[] };
-    /**
-     * The unit already entered the board (a play finalized via
-     * choose-destination): accepting only flips it to ready.
-     */
-    readonly readyOnly?: boolean;
-  };
+  readonly playItemId?: string;
+  readonly playCostId?: string;
+  readonly playConfirm?: boolean;
+  /**
+   * rule 128.6 / "you may play it" — asked BEFORE the card goes to the Chain:
+   * accepting starts this play (`play-pipeline.ts beginPlay`).
+   */
+  readonly playConfirmSpec?: unknown;
 }
 
 /**
@@ -1243,6 +1245,17 @@ export interface RiftboundGameState {
    */
   readonly restrictedEnergy?: Record<string, Partial<Record<string, number>>>;
 
+  /**
+   * rule 429.4 (ogn-247-298 Daughter of the Void): the Power half of the same
+   * earmark — "[Add] [rainbow]. Use only to play spells." Per player, per
+   * restriction (card type), how many pips of each Domain in the pool may pay
+   * only for that card type. Emptied with the pools at end of turn.
+   */
+  readonly restrictedPower?: Record<
+    string,
+    Partial<Record<string, Partial<Record<string, number>>>>
+  >;
+
   /** Battlefields conquered this turn (for scoring restrictions) */
   readonly conqueredThisTurn: Record<string, CardId[]>;
 
@@ -1400,6 +1413,14 @@ export interface RiftboundGameState {
     readonly paidIds: readonly string[];
     readonly wasFocusAction: boolean;
   };
+
+  /**
+   * rule 366.1 / 419.1.a — runtime PLAY PERMISSIONS ("you may play it from
+   * your banishment this turn"): `operations/play-permissions.ts`, read by the
+   * `playFromZone` move. Standing permissions printed on cards are derived on
+   * read, never stored here.
+   */
+  playPermissions?: import("../operations/play-permissions").PlayPermission[];
 
   /**
    * rule 356.2 — additional costs paid per played card: the list of paid cost
