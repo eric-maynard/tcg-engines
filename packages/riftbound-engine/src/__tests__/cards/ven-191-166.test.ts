@@ -203,7 +203,7 @@ describe("Master of Shadows (ven-191-166)", () => {
     expect(game.state("mos").isReady).toBe(true); // empowering never exhausts
   });
 
-  test.failing("BUG: Gust Monk (paid) banishing a card out of MY trash is me banishing a card I own → Empowered", async () => {
+  test("Gust Monk (paid) banishing a card out of MY trash is me banishing a card I own → Empowered", async () => {
     // Expected: pick "mine" from the any-trash prompt → it lands in banishment → legend Empowered.
     // Actual: the banish happens but no trigger event exists, so isEmpowered stays false.
     const game = await monkBoard().build();

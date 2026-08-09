@@ -196,10 +196,14 @@ function costChoosesObjects(cost: unknown): boolean {
   if (c.kill === "self") {
     return false;
   }
+  // rule 383.3.b.1 (rule-id: unl-199-219) — "discard N" names only cards in the
+  // payer's own hand, so the pick can be made while the item is still being
+  // finalized; the trigger stays on the Chain with the cost already paid.
+  const discardIsCount = typeof c.discard === "number";
   return (
     c.recycle !== undefined ||
     c.kill !== undefined ||
-    c.discard !== undefined ||
+    (c.discard !== undefined && !discardIsCount) ||
     c.burn !== undefined ||
     c.returnToHand !== undefined
   );
@@ -215,6 +219,15 @@ function costChoosesObjects(cost: unknown): boolean {
  * left, choosing its own Game Objects (rule 402.2).
  * Returns true when it raised a prompt (the payment is made on the answer).
  */
+/**
+ * rule 383.3.b.1 (rule-id: ven-191-166) — paying a cost step is an ordinary
+ * effect, so it can emit an event ("banish a card from a trash") whose triggers
+ * re-enter finalization while the paid steps have not yet been sliced off the
+ * stored effect. Items in this set are passed over by `finalizePendingItems`
+ * so the same steps are never paid twice.
+ */
+const payingCostSteps = new Set<string>();
+
 function payFinalizationCostSteps(
   draft: RiftboundGameState,
   ctx: FinalizationContext,
@@ -225,7 +238,22 @@ function payFinalizationCostSteps(
   if (!live || effect?.type !== "sequence" || !Array.isArray(effect.effects)) {
     return false;
   }
-  const steps = [...effect.effects] as Record<string, unknown>[];
+  payingCostSteps.add(itemId);
+  try {
+    return payFinalizationCostStepsInner(draft, ctx, itemId, live, effect);
+  } finally {
+    payingCostSteps.delete(itemId);
+  }
+}
+
+function payFinalizationCostStepsInner(
+  draft: RiftboundGameState,
+  ctx: FinalizationContext,
+  itemId: string,
+  live: ChainItem,
+  effect: { effects?: unknown[]; type?: string },
+): boolean {
+  const steps = [...(effect.effects as unknown[])] as Record<string, unknown>[];
   let paid = 0;
   for (let i = 0; i < steps.length; i++) {
     const step = steps[i] as Record<string, unknown>;
@@ -505,6 +533,7 @@ export function finalizePendingItems(draftLike: unknown, ctx: FinalizationContex
     // for an effect-instructed play appended before it (`finalizeAfter`) is
     // passed over until that play has left the Chain.
     const blocked = (it: ChainItem): boolean =>
+      payingCostSteps.has(it.id) ||
       it.finalizeAfter?.some((id) => items?.some((other) => other.id === id)) === true;
     const item = items?.find((it) => it.status === "pending" && !blocked(it));
     if (!items || !item) {
