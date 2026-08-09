@@ -322,22 +322,6 @@ export const equipmentMoves: Partial<
         );
       }
 
-      // rule 818.1.c.3 / 355.10.c (sfd-178-221) — the kill half is paid NOW,
-      // as the ability is activated: it cannot be responded to and is never
-      // refunded if the attach later fizzles. rule 428.1.a.1 — a cost kill is
-      // an Active Kill, so a token ceases to exist (186.1) and `die` fires.
-      const sacrificeId = context.params.sacrificeId as string | undefined;
-      if (equipCost?.killFriendlyUnit && sacrificeId) {
-        const costCtx = buildEffectContext(draft, playerId, equipmentId, context);
-        removeFromBoard(
-          costCtx,
-          [sacrificeId],
-          "trash",
-          { by: playerId as string, kind: "cost", source: equipmentId as string, sourceKind: "ability" },
-          costCtx.fireTriggers,
-        );
-      }
-
       // rule 476.1 / 818.1.c.3 (sfd-150-221 Last Rites) — the non-resource half
       // "Recycle N cards from your trash" is paid NOW, as the ability is
       // activated (377.3 / 357): the payer chooses which N leave the trash
@@ -374,6 +358,25 @@ export const equipmentMoves: Partial<
         },
         Object.keys(draft.players),
       );
+
+      // rule 818.1.c.3 / 355.10.c (sfd-178-221) — the kill half is paid NOW,
+      // as the ability is activated: it cannot be responded to and is never
+      // refunded if the attach later fizzles. rule 428.1.a.1 — a cost kill is
+      // an Active Kill, so a token ceases to exist (186.1) and `die` fires.
+      // rule 428.1.a.1.b / 808.1.d.2 / 818.1.c.1 — the kill is resolved after
+      // `addToChain` so a Deathknell it triggers becomes a Pending item ABOVE
+      // the [Equip] ability and therefore resolves first (340.1 LIFO).
+      const sacrificeId = context.params.sacrificeId as string | undefined;
+      if (equipCost?.killFriendlyUnit && sacrificeId) {
+        const costCtx = buildEffectContext(draft, playerId, equipmentId, context);
+        removeFromBoard(
+          costCtx,
+          [sacrificeId],
+          "trash",
+          { by: playerId as string, kind: "cost", source: equipmentId as string, sourceKind: "ability" },
+          costCtx.fireTriggers,
+        );
+      }
 
       // rule-id: sfd-075-221 — rule 151 / 206.1: [Equip] is an activated
       // ability of a gear (Equipment is a kind of gear), so "when you use an
