@@ -22,6 +22,7 @@ import type { TargetDescriptor } from "../../../abilities/target-resolver";
 import { resolveTarget } from "../../../abilities/target-resolver";
 import { recalculateStaticEffects } from "../../../abilities/static-abilities";
 import { fireTriggers } from "../../../abilities/trigger-runner";
+import { evaluateLegionCondition } from "../../../abilities/legion-conditions";
 import { evaluateWhileLevel } from "../../../abilities/xp-conditions";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
 import { removeFromBoard } from "../../../operations/leave-board";
@@ -1122,6 +1123,11 @@ export const activateAbility: Defs["activateAbility"] = {
         return false;
       }
     }
+    // rule 812.1.c (ogn-253-298): a [Legion] activated ability is only usable
+    // once you have played a card this turn — the count resets every turn.
+    if (abilityCondition?.type === "legion" && !evaluateLegionCondition(state, playerId)) {
+      return false;
+    }
 
     // Rule 580.3 (unl-160-219): "Use this ability only while I'm at a
     // battlefield" attaches a self-at-battlefield restriction to the
@@ -1575,6 +1581,11 @@ export const activateAbility: Defs["activateAbility"] = {
           if (!evaluateWhileLevel(state, playerId, abilityCondition.threshold ?? 0)) {
             continue;
           }
+        }
+        // rule 812.1.c (ogn-253-298): [Legion] gates the activation itself —
+        // skip it until a card has been played this turn.
+        if (abilityCondition?.type === "legion" && !evaluateLegionCondition(state, playerId)) {
+          continue;
         }
 
         // Rule 580.3 (unl-160-219): "Use this ability only while I'm at a
