@@ -65,7 +65,10 @@ async function resolveDeathknellChoosingSkulker(game: Game): Promise<void> {
   const offered = d?.kind === "pick" ? d.options.map((o) => o.card ?? o.key) : [];
   expect(offered).toContain("skulker"); // died in the same event, already in the trash → legal
   expect(offered).not.toContain("glasc"); // cost 5 > 3
-  expect(d?.kind === "pick" ? d.allowDecline : undefined).toBe(true); // "You may"
+  // The leading "You may" was already answered at finalization (402.1). The trash is a PUBLIC zone, so
+  // the unit to play is a target (355.10.a) and the accepted instruction can no longer be declined —
+  // only an impossible one is ignored (359.3.e.6, 128.6 a-contrario).
+  expect(d?.kind === "pick" ? d.allowDecline : undefined).toBe(false);
   await game.p1.pick("skulker");
   // Played ignoring cost: pick a location if asked, then it is on the board and nothing was paid.
   const dest = game.decision();

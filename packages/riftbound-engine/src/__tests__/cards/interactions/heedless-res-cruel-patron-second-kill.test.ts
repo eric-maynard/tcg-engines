@@ -88,7 +88,7 @@ describe("Heedless Resurrection × Cruel Patron — the resurrected unit's own m
     await game.p1.cast("hr", { sacrifice: "victimA" });
     await game.settle();
     const d = game.decision();
-    expect(d).toMatchObject({ kind: "pick", seat: P1 });
+    expect(d).toMatchObject({ allowDecline: false, kind: "pick", min: 1, seat: P1 });
     expect(d?.kind === "pick" ? d.options.map((o) => o.card ?? o.key) : []).toEqual(["patron"]);
     await game.p1.pick("patron");
     expect(game.zoneOf("hr")).toBe("trash");
@@ -171,7 +171,7 @@ describe("Heedless Resurrection × Cruel Patron — the resurrected unit's own m
   // (min 1, no decline) whenever a legal unit exists. Actual: the engine surfaces an optional
   // reveal-and-pick ("… or decline", min 0, allowDecline true) and accepts a decline, leaving Patron in the
   // trash and B alive.
-  test.failing("BUG: (c) the engine lets P1 decline to play Patron after Heedless resolves — 'Play a unit from your trash' from a public zone is not optional (359.3.e.6, 128.6)", async () => {
+  test("(c) P1 cannot decline to play Patron after Heedless resolves — 'Play a unit from your trash' from a public zone is not optional (359.3.e.6, 128.6)", async () => {
     const game = await board().build();
     await game.p1.cast("hr", { sacrifice: "victimA" });
     await game.settle();
@@ -179,9 +179,9 @@ describe("Heedless Resurrection × Cruel Patron — the resurrected unit's own m
     if (d?.kind === "pick") {
       expect(d).toMatchObject({ allowDecline: false, min: 1 });
       await expect(game.p1.decline()).rejects.toThrow();
+      await game.p1.pick("patron");
     }
     // Whether or not a prompt was shown, the only legal end state is Patron played and B dead.
-    await heedlessIntoPatron(game);
     await game.settle();
     expect(game.zoneOf("patron")).toBe("base");
     expect(game.zoneOf("bystB")).toBe("trash");

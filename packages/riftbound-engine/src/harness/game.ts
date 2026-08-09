@@ -66,7 +66,12 @@ export const passivePolicy: Policy = (d) => {
     }
     return undefined;
   }
-  if (d.kind === "pick" && d.options.length === 1 && d.min === 1) {
+  // rule 359.3.e.6 — "play a card from your trash/banishment" is compulsory
+  // (min 1, no decline), but WHICH card is played is still the performer's
+  // announced choice: hand the offer back instead of taking it silently, so the
+  // caller can see the pile the engine offered even when only one card fits.
+  const isPlayFromPile = d.kind === "pick" && d.semantics === "from-revealed" && d.meta?.onPicked === "play";
+  if (d.kind === "pick" && d.options.length === 1 && d.min === 1 && !isPlayFromPile) {
     return { keys: [d.options[0]?.key as string], kind: "pick" };
   }
   // rule 383.3.d — a soft trigger-order offer nobody answered keeps the

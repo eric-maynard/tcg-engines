@@ -241,6 +241,9 @@ describe("via effect from the trash", () => {
       .build();
     await one.p1.cast("spell");
     await one.settle();
+    // rule 359.3.e.6 — the trash is public: the pick is compulsory, but the
+    // performer still names the card.
+    expect(one.decision()).toMatchObject({ allowDecline: false, kind: "pick", min: 1 });
     await one.p1.pick("p");
     await one.settle();
     expect(one.zoneOf("p")).toBe("base");

@@ -218,13 +218,18 @@ describe("Fizz, Trickster (sfd-140-221)", () => {
     if (pick) {
       const r = await game.p1.try((p) => p.pick("vs"));
       expect(r.ok).toBe(false);
-      await game.p1.decline();
+      // The "you may" was accepted above; the trash is PUBLIC, so the spell to play is a target
+      // (355.10.a) and the accepted instruction can no longer be declined (359.3.e.6, 128.6
+      // a-contrario) — an eligible spell must be played. Confront needs no power and no target.
+      const declined = await game.p1.try((p) => p.decline());
+      expect(declined.ok).toBe(false);
+      await game.p1.pick("confront");
     }
     await game.settle();
-    expect(game.state("tgt").damage).toBe(0);
-    expect(game.zoneOf("vs")).toBe("trash");
-    expect(game.p1.hand()).toEqual([]);
-    expect(game.p1.resources()).toEqual({ energy: 3, power: { chaos: 0 } });
+    expect(game.state("tgt").damage).toBe(0); // Void Seeker never happened
+    expect(game.zoneOf("vs")).toBe("trash"); // and it never left the trash
+    expect(game.p1.hand()).toEqual(["d1"]); // Confront's draw
+    expect(game.p1.resources()).toEqual({ energy: 3, power: { chaos: 0 } }); // no Energy spent on the trash spell
   });
 
   test("'you may': declining leaves the trash, deck and hand untouched and Fizz exhausted in base", async () => {

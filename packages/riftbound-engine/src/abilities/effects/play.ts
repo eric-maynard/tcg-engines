@@ -334,9 +334,13 @@ function offerPileCandidates(eff: PlayEffectShape, ctx: EffectContext, pile: "tr
   }
   // rule 355.10: the performer chooses which card to play; the choice is
   // theirs alone, so it is offered even with a single candidate.
+  // rule 359.3.e.6 / 128.6 a-contrario: the trash and banishment are PUBLIC
+  // zones, so "Play a <card> from your trash" is compulsory once a legal
+  // candidate exists — only an explicit "you may" (`eff.optional`) makes the
+  // pick declinable, unlike the hand (branch C, a private zone).
   ctx.draft.pendingChoice = {
     onPicked: "play",
-    optional: true,
+    optional: eff.optional === true,
     playFrom: "trash",
     playSpec: template,
     prompter: ctx.playerId,
