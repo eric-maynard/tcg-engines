@@ -27,7 +27,11 @@ import { evaluateWhileLevel } from "../../../abilities/xp-conditions";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
 import { removeFromBoard } from "../../../operations/leave-board";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../../types";
-import { getDeflectSurcharge } from "../play/cost";
+import {
+  consumeRestrictedEnergyForPurpose,
+  getDeflectSurcharge,
+  lockedEnergyForPurpose,
+} from "../play/cost";
 import type { PlayCostSelection } from "@tcg/riftbound-types";
 import type { SpellEffectTargetShape } from "../play/targeting";
 import {
@@ -1068,6 +1072,24 @@ export function effectiveAbilityCost(
 /**
  * Deduct an activated ability's cost from the player's rune pool.
  */
+/**
+ * rule 429.4 (ven-141-166) — the earmark purpose of activating an ability:
+ * `"ability:<the source card's type>"`, so "…or activated abilities of units"
+ * funds a unit's ability but never a gear's.
+ */
+function abilityEarmarkPurpose(hostCardId: string): string {
+  return `ability:${getGlobalCardRegistry().getCardType(hostCardId) ?? "unknown"}`;
+}
+
+/** rule 429.4 — Energy the earmark hides from activating `hostCardId`'s ability. */
+function lockedAbilityEnergy(
+  state: RiftboundGameState,
+  playerId: string,
+  hostCardId: string,
+): number {
+  return lockedEnergyForPurpose(state, playerId, abilityEarmarkPurpose(hostCardId));
+}
+
 export function deductAbilityCost(
   draft: RiftboundGameState,
   playerId: string,
@@ -1077,6 +1099,8 @@ export function deductAbilityCost(
     getFlag: (cardId: CoreCardId, flag: string) => boolean | undefined;
     setFlag: (cardId: CoreCardId, flag: string, value: boolean) => void;
   },
+  /** rule 429.4 — the ability's source, so an Energy earmark that funds "activated abilities of X" is consumed first. */
+  hostCardId?: string,
 ): void {
   // rule 512.2 / rule-id: unl-135-219 — an XP portion of a cost is spent from
   // the player's XP pool (which lives outside the rune pool, so charge it
@@ -1118,6 +1142,16 @@ export function deductAbilityCost(
       }
     }
     pool.energy = Math.max(0, pool.energy - energyCost);
+    // rule 429.4 — spending on something the earmark allows burns the
+    // earmarked portion first, so it stops taxing later payments.
+    if (hostCardId !== undefined) {
+      consumeRestrictedEnergyForPurpose(
+        draft,
+        playerId,
+        abilityEarmarkPurpose(hostCardId),
+        energyCost,
+      );
+    }
   }
 
   const powerCost = cost.power as string[] | undefined;
@@ -1400,7 +1434,13 @@ export const activateAbility: Defs["activateAbility"] = {
         context.counters as { getFlag: (c: CoreCardId, f: string) => boolean | undefined },
         playerId,
       );
-      if (pool.energy + potentialEnergy < energyCost) {
+      // rule 429.4 — Energy earmarked for another purpose cannot pay here.
+      if (
+        pool.energy -
+          lockedAbilityEnergy(state, playerId as string, cardId as string) +
+          potentialEnergy <
+        energyCost
+      ) {
         return false;
       }
 
@@ -1857,7 +1897,13 @@ export const activateAbility: Defs["activateAbility"] = {
             context.counters as { getFlag: (c: CoreCardId, f: string) => boolean | undefined },
             playerId,
           );
-          if (pool.energy + potentialEnergy < energyCost) {
+          // rule 429.4 — Energy earmarked for another purpose cannot pay here.
+          if (
+            pool.energy -
+              lockedAbilityEnergy(state, playerId as string, entry.hostCardId as string) +
+              potentialEnergy <
+            energyCost
+          ) {
             continue;
           }
           const powerCost = cost.power as string[] | undefined;
@@ -2225,7 +2271,14 @@ export const activateAbility: Defs["activateAbility"] = {
     noteGearAbilityActivation(draft, playerId as string, cardId as string);
     if (costToPay) {
       const cost = costToPay;
-      deductAbilityCost(draft, playerId, cost, context.zones, context.counters);
+      deductAbilityCost(
+        draft,
+        playerId,
+        cost,
+        context.zones,
+        context.counters,
+        cardId as string,
+      );
 
       // rule 135.2.e.5.a: the chosen X leaves the pool as part of paying the
       // cost — [rainbow] out of Power of any Domain, otherwise out of Energy.

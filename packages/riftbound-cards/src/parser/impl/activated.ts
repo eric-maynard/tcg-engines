@@ -320,14 +320,18 @@ export function parseActivatedAbilityInner(text: string): ActivatedAbility | und
   // rule 429.4 (unl-197-219 Scorn of the Moon): "Spend this Energy only during
   // showdowns" earmarks the Added Energy the same way, so it also rides on the
   // [Add] effect — not only on the ability.
-  let addRestriction: "spell" | "gear" | "showdown" | undefined = earlyShowdown
+  // rule 429.4 (ven-141-166 Butcher of the Sands): "only to play units or
+  // activated abilities of units" is the unit-flavoured earmark — the trailing
+  // "or activated abilities of …" clause rides on the same restriction.
+  let addRestriction: "spell" | "gear" | "unit" | "showdown" | undefined = earlyShowdown
     ? "showdown"
     : undefined;
   const useOnlyToPlay = remaining.match(
-    /\s*(?:Use|Spend this Energy) only to play (spells?|gear)\b[^.]*\.?(?:\s*\([^)]*\))?\s*$/i,
+    /\s*(?:Use|Spend this Energy) only to play (spells?|gear|units?)\b[^.]*\.?(?:\s*\([^)]*\))?\s*$/i,
   );
   if (useOnlyToPlay) {
-    addRestriction = useOnlyToPlay[1].toLowerCase().startsWith("spell") ? "spell" : "gear";
+    const noun = (useOnlyToPlay[1] as string).toLowerCase();
+    addRestriction = noun.startsWith("spell") ? "spell" : noun.startsWith("unit") ? "unit" : "gear";
     remaining = remaining.slice(0, remaining.length - useOnlyToPlay[0].length).trim();
   }
 

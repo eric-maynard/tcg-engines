@@ -3232,16 +3232,32 @@ function getLockedEnergy(
   playerId: string,
   cardId: string,
 ): number {
+  return lockedEnergyForPurpose(
+    state,
+    playerId,
+    getGlobalCardRegistry().getCardType(cardId),
+  );
+}
+
+/**
+ * rule 429.4 — the same earmark ledger read for a purpose that is not a card
+ * play: `allowedFor` is the card type being played, or `"ability:<card type>"`
+ * for an activated ability of a card of that type (ven-141-166).
+ */
+export function lockedEnergyForPurpose(
+  state: RiftboundGameState,
+  playerId: string,
+  allowedFor: string | undefined,
+): number {
   const entry = (
     state as { restrictedEnergy?: Record<string, Record<string, number>> }
   ).restrictedEnergy?.[playerId];
   if (!entry) {
     return 0;
   }
-  const cardType = getGlobalCardRegistry().getCardType(cardId);
   let locked = 0;
   for (const [kind, amount] of Object.entries(entry)) {
-    if (!energyEarmarkPermits(state, kind, cardType)) {
+    if (!energyEarmarkPermits(state, kind, allowedFor)) {
       locked += amount ?? 0;
     }
   }
@@ -3251,17 +3267,36 @@ function getLockedEnergy(
 /**
  * rule 429.4 (unl-197-219 Scorn of the Moon) — "Spend this Energy only during
  * showdowns" is a WHEN earmark, not a what: it funds any card type, but only
- * while a showdown is in progress. Every other earmark names a card type.
+ * while a showdown is in progress. Every other earmark names a card type, and
+ * a "…or activated abilities of X" clause extends it to `ability:<X>`.
  */
 function energyEarmarkPermits(
   state: RiftboundGameState,
   kind: string,
-  cardType: string | undefined,
+  allowedFor: string | undefined,
 ): boolean {
   if (kind === "showdown") {
     return showdownInProgress(state);
   }
-  return kind === cardType;
+  if (allowedFor === undefined) {
+    return false;
+  }
+  // rule 429.4 (ven-141-166 Butcher of the Sands) — "only to play units or
+  // activated abilities of units".
+  if (kind === "unit") {
+    return allowedFor === "unit" || allowedFor === "ability:unit";
+  }
+  // rule 429.4 (sfd-189-221) — the printed gear earmark also funds gear
+  // abilities; card data types Equipment cards `equipment`.
+  if (kind === "gear") {
+    return (
+      allowedFor === "gear" ||
+      allowedFor === "equipment" ||
+      allowedFor === "ability:gear" ||
+      allowedFor === "ability:equipment"
+    );
+  }
+  return kind === allowedFor;
 }
 
 function showdownInProgress(state: RiftboundGameState): boolean {
@@ -3356,13 +3391,28 @@ function consumeRestrictedEnergy(
   cardId: string,
   spent: number,
 ): void {
+  consumeRestrictedEnergyForPurpose(
+    draft,
+    playerId,
+    getGlobalCardRegistry().getCardType(cardId),
+    spent,
+  );
+}
+
+/** rule 429.4 — `consumeRestrictedEnergy` for a non-play purpose (see `lockedEnergyForPurpose`). */
+export function consumeRestrictedEnergyForPurpose(
+  draft: RiftboundGameState,
+  playerId: string,
+  allowedFor: string | undefined,
+  spent: number,
+): void {
   const entry = (
     draft as { restrictedEnergy?: Record<string, Record<string, number>> }
   ).restrictedEnergy?.[playerId];
   if (!entry || spent <= 0) {
     return;
   }
-  const cardType = getGlobalCardRegistry().getCardType(cardId);
+  const cardType = allowedFor;
   let remaining = spent;
   for (const kind of Object.keys(entry)) {
     if (remaining <= 0) {
