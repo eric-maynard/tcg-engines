@@ -133,6 +133,45 @@ describe("Udyr, Wildman (ogn-157-298)", () => {
     expect(labels).toHaveLength(3);
   });
 
+  test("all four modes in one turn — the fourth activation auto-locks the sole remaining mode (chain items never share effect nodes with the card registry)", async () => {
+    // rule 355.8 / 402.2 — with one mode left there is nothing to ask, so it is
+    // locked in place. Regression: the lock used to write onto the ability
+    // effect owned by the shared card registry, which immer had deep-frozen
+    // while resolving the FIRST activation → "not extensible" + a dead chain.
+    const game = await scenario()
+      .resources(P1, { energy: 9 })
+      .battlefield("bf1", { controller: P2 })
+      .unit(P2, "bf1", { might: 4 }, "foe")
+      .unit(P1, "base", CARD, "udyr", { buffed: true, exhausted: true })
+      .hand(P1, STAND_UNITED, "su1")
+      .hand(P1, STAND_UNITED, "su2")
+      .hand(P1, STAND_UNITED, "su3")
+      .build();
+
+    const rebuff = async (alias: string) => {
+      await game.p1.cast(alias, { targets: "udyr" });
+      await game.settle();
+      expect(game.state("udyr").isBuffed).toBe(true);
+    };
+
+    await useMode(game, "Ganking");
+    await rebuff("su1");
+    await useMode(game, "Ready");
+    await rebuff("su2");
+    await useMode(game, "Stun", "foe");
+    await rebuff("su3");
+
+    // Only "Deal 2" is left: no menu, it resolves against the sole legal target.
+    await game.p1.activate("udyr");
+    await game.settle();
+    if (game.decision()?.kind === "pick") {
+      await game.p1.pick("foe");
+      await game.settle();
+    }
+    expect(game.state("foe").damage).toBe(2);
+    expect(game.state("foe").isStunned).toBe(true);
+  });
+
   // DESIGN (DESIGN.md §Paying costs): "Spend my buff:" is the whole activation cost — enumerated with an
   // EMPTY pool and charging no energy/power.
   test("DESIGN (buff-spend activation enumerated with an empty pool): a buffed Udyr with 0 energy / 0 power is offered the activation; using it charges nothing but the buff", async () => {

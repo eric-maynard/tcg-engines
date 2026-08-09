@@ -99,6 +99,19 @@ export interface ChainItem {
    */
   readonly optInCost?: unknown;
   /**
+   * rule 402.2 / 404.1 — the opt-in was accepted and its resources paid; the
+   * Game Objects named by `optInCost` (kill / recycle / return …) are still to
+   * be chosen and paid by the finalization dialog before the item is finalized.
+   */
+  readonly objectCostOwed?: boolean;
+  /**
+   * rule 383.3.b.1 / 404.1 / 359.3.e.13 — the objects that paid this item's
+   * base cost at finalization, each with its last-known board state, for
+   * instructions that look back at them ("… by the Might of the unit you
+   * recycled", "if you do").
+   */
+  readonly paidObjects?: readonly { readonly id: string; readonly lki: import("../operations/leave-board").LKISnapshot }[];
+  /**
    * rule 392 (rule-id: ogn-289-298) — a DELAYED triggered ability floating on
    * its controller ("… at the end of this turn"): no source object holds its
    * choices, so its "up to N" objects are named while the item is FINALIZED
@@ -369,6 +382,30 @@ export function breakPassSequence(
 }
 
 /**
+ * rule 355.3 — the choices an object records while it is on the Chain
+ * (`_chosenIndex`, `_chosenTargets`, `_variables`) belong to THAT execution, so
+ * a chain item must own its effect tree outright. Callers routinely hand us the
+ * ability effect straight off the shared card definition registry; storing that
+ * reference makes every later play of the same card read (and immer deep-freeze)
+ * the one shared node, which then throws "not extensible" the moment a
+ * play-time choice is locked in. Structural clone, not `structuredClone`, so an
+ * effect read back out of an immer draft (a Proxy) clones too.
+ */
+function cloneChainEffect<T>(effect: T): T {
+  if (effect === null || typeof effect !== "object") {
+    return effect;
+  }
+  if (Array.isArray(effect)) {
+    return effect.map((entry) => cloneChainEffect(entry)) as unknown as T;
+  }
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(effect as Record<string, unknown>)) {
+    out[key] = cloneChainEffect(value);
+  }
+  return out as T;
+}
+
+/**
  * Start a new chain or add to an existing chain (rule 537).
  *
  * @param state - Current interaction state
@@ -383,6 +420,7 @@ export function addToChain(
 ): TurnInteractionState {
   const chainItem: ChainItem = {
     ...item,
+    ...(item.effect !== undefined ? { effect: cloneChainEffect(item.effect) } : {}),
     id: `chain-${state.nextChainItemId}`,
   };
 

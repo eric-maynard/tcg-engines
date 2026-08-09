@@ -674,6 +674,14 @@ export class RuleEngine<
         success: true,
       };
     } catch (error) {
+      // A throwing reducer leaves `this.currentState` untouched (immer discards
+      // the draft), but `internalState` — zones, card metas, counters — is
+      // mutated in place through the operations handed to the reducer, so a
+      // move that died halfway would otherwise keep whatever it had already
+      // spent (a consumed buff, a discarded card). Roll it back to the
+      // pre-move snapshot so a rejected move is a no-op on BOTH halves.
+      this.internalState = internalStateBefore as typeof this.internalState;
+
       // Log error (ERROR level)
       const errorMessage = error instanceof Error ? error.message : "Move execution failed";
       this.logger.error(`Move execution error: ${moveId}`, {
