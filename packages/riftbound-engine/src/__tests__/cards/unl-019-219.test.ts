@@ -47,7 +47,19 @@ describe("Blighted Battleaxe (unl-019-219)", () => {
     // conferred on the equipped unit while attached, hence the `effectText: true` entries.
     expect(def?.abilities).toEqual([
       { cost: { energy: 1, power: ["fury"] }, keyword: "Equip", type: "keyword" },
-      { effect: { text: "if I didn't conquer this turn, unattach this and deal 4 to me.", type: "raw" }, effectText: true, trigger: { event: "end-of-turn", on: "controller", timing: "at" }, type: "triggered" },
+      {
+        condition: { condition: { event: "conquered", type: "this-turn" }, type: "not" },
+        effect: {
+          effects: [
+            { equipment: { attachedTo: "source", type: "equipment" }, type: "detach" },
+            { amount: 4, target: "self", type: "damage" },
+          ],
+          type: "sequence",
+        },
+        effectText: true,
+        trigger: { event: "end-of-turn", on: "controller", timing: "at" },
+        type: "triggered",
+      },
     ] as never);
   });
 

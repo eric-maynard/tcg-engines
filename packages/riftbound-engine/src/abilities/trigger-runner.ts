@@ -199,6 +199,24 @@ function copiedAttachmentAbilitiesFromLKI(
  * for targeting is the wearer. rule 395 keeps the "with this" bookkeeping on
  * the Equipment, which `linkTo` carries into the banish handler.
  */
+/**
+ * rule 136.2.d — inside conferred Effect Text "this" is the EQUIPMENT while
+ * "I"/"me" is the wearer. The wearer is the ability's source, so the gear id
+ * rides along on every step (nested sequence/conditional bodies included) as
+ * `linkTo` for the handlers that need to name the gear itself.
+ */
+function stampLinkTo(effect: unknown, equipId: string): unknown {
+  if (typeof effect !== "object" || effect === null) {
+    return effect;
+  }
+  const nested = (effect as { effects?: unknown }).effects;
+  return {
+    ...(effect as object),
+    ...(Array.isArray(nested) ? { effects: nested.map((e) => stampLinkTo(e, equipId)) } : {}),
+    linkTo: equipId,
+  };
+}
+
 function attachedEffectTextAbilities(
   meta: Partial<RiftboundCardMeta> | undefined,
 ): TriggerableAbility[] {
@@ -213,11 +231,13 @@ function attachedEffectTextAbilities(
       if (a.type !== "triggered" || a.effectText !== true || !a.trigger) {
         continue;
       }
-      const effect =
-        typeof a.effect === "object" && a.effect !== null
-          ? { ...(a.effect as object), linkTo: equipId as string }
-          : a.effect;
+      const effect = stampLinkTo(a.effect, equipId as string);
       out.push({
+        // rule 383.2.a.1 — a conferred trigger keeps its intervening-if; the
+        // wearer's controller is the one the condition is read against.
+        ...((a as { condition?: unknown }).condition === undefined
+          ? {}
+          : { condition: (a as { condition?: unknown }).condition }),
         effect: effect as never,
         ...(a.optional === true ? { optional: true } : {}),
         trigger: { event: a.trigger.event, on: a.trigger.on ?? "self" },
@@ -451,6 +471,22 @@ export function evaluateTriggerCondition(
     return true;
   }
   const c = condition as { type?: string };
+  if (c.type === "not") {
+    return !evaluateTriggerCondition(
+      (c as { condition?: unknown }).condition,
+      state,
+      controllerId,
+      event,
+      ctx,
+      sourceCardId,
+    );
+  }
+  if (c.type === "this-turn" && (c as { event?: string }).event === "conquered") {
+    // rule 383.2.a.1 (rule-id: unl-019-219, Blighted Battleaxe) — "if I didn't
+    // conquer this turn" reads the controller's conquer ledger for the turn,
+    // not the generic turn-event log (a conquer is never stamped there).
+    return (state.conqueredThisTurn?.[controllerId] ?? []).length > 0;
+  }
   if (c.type === "legion") {
     return evaluateLegionCondition(state, controllerId);
   }

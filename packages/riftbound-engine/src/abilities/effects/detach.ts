@@ -8,6 +8,18 @@ import { type EffectHelpers, getTargetIds } from "./_helpers";
 
 export function handle_detach(effect: ExecutableEffect, ctx: EffectContext, _h: EffectHelpers): void {
   const equipmentDesc = (effect as { equipment?: { attachedTo?: unknown } }).equipment;
+  // rule 136.2.d (rule-id: unl-019-219) — "unattach THIS" inside conferred
+  // Effect Text names the Equipment that printed the text, not whatever else
+  // the wearer carries: `linkTo` carries that id, and an Equipment speaking for
+  // itself falls back to its own.
+  if (equipmentDesc?.attachedTo === "source") {
+    const linkTo = (effect as { linkTo?: unknown }).linkTo;
+    const gearId = typeof linkTo === "string" && linkTo !== "" ? linkTo : ctx.sourceCardId;
+    if (gearId && attachedUnitOf(ctx, gearId) !== undefined) {
+      detachEquipment(ctx, gearId);
+    }
+    return;
+  }
   // rule-id: sfd-107-221 (rule 435) — "Then detach an Equipment from IT": the
   // host is the unit an earlier part of the spell referenced (the Might
   // reference), not a target of this step. Exactly one Equipment comes off, so
