@@ -254,7 +254,7 @@ describe("Loyal Pup × Reaver's Row — defend triggers moving units into / out 
   // triggers nothing; the chain is empty and P2 simply has Focus. Actual: when the Pup lands on the
   // defender-less Row the engine fires BOTH "When you defend" abilities again (Pup + Reaver's Row go
   // back on the chain and P1 is asked the two opt-ins a second time).
-  test.failing("BUG: (d) BOTH accepted, listed order: the Pup arriving after Skulker left must NOT re-trigger 'When you defend' on either card (383.4.f.2.a)", async () => {
+  test("(d) BOTH accepted, listed order: the Pup arriving after Skulker left must NOT re-trigger 'When you defend' on either card (383.4.f.2.a)", async () => {
     const game = await board().build();
     await attackAndAnswer(game, { pup: true, row: true });
     await resolveTop(game); // Row: Skulker → base

@@ -406,6 +406,13 @@ export function handle_createToken(effect: ExecutableEffect, ctx: EffectContext,
         prompt: "Play an additional copy of the token?",
         sourceCardId: ctx.sourceCardId,
         type: "confirm",
+        // rule 375 — the replacing event inherits the generating effect's
+        // modifications and its linked follow-ups: "It becomes a copy of that
+        // unit" names the SAME chosen unit for the additional token, so the
+        // copy-source binding must ride along into the re-entry.
+        ...(ctx.boundTargets && ctx.boundTargets.length > 0
+          ? { boundTargets: [...ctx.boundTargets] }
+          : {}),
       } as typeof ctx.draft.pendingChoice;
     }
   }

@@ -234,7 +234,13 @@ function joinOngoingShowdown(io: ArrivalIO, battlefieldId: string, showdown: Sho
     ),
   };
   bf.showdownComplete = false;
-  assignCombatRoles(io, battlefieldId, attacker, attackers, defenders);
+  // rule 383.4.f.2.a — Defend Triggers are checked ONCE per combat, when the
+  // PLAYER gains the Defender designation. A player already defending this
+  // combat does not defend again because a later unit of theirs arrives — even
+  // if every unit they had there has since left the battlefield.
+  const priorDefender =
+    !upgraded && showdown.defendingPlayer !== undefined ? [showdown.defendingPlayer as string] : [];
+  assignCombatRoles(io, battlefieldId, attacker, attackers, defenders, priorDefender);
 }
 
 /**
@@ -251,6 +257,8 @@ function assignCombatRoles(
   attacker: string,
   attackers: readonly string[],
   defenders: readonly string[],
+  /** rule 383.4.f.2.a — players who already hold the Defender designation in this combat. */
+  alreadyDefendingPlayers: readonly string[] = [],
 ): void {
   const occupants = [...attackers, ...defenders];
   // rule 464.2.c.3 / 383.3.d — all designations of one combat happen at once, so
@@ -270,9 +278,10 @@ function assignCombatRoles(
     }
     return true;
   };
-  const priorDefendingPlayers = new Set(
-    defenders.filter((id) => roleOf(id) === "defender").map((id) => controllerOf(io, id) as string),
-  );
+  const priorDefendingPlayers = new Set([
+    ...alreadyDefendingPlayers,
+    ...defenders.filter((id) => roleOf(id) === "defender").map((id) => controllerOf(io, id) as string),
+  ]);
   for (const id of attackers) {
     if (!stamp(id, "attacker", attacker)) {
       continue;
