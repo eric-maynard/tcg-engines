@@ -31,6 +31,11 @@ import { cleanupAndFireDeaths } from "../cleanup/post-move-cleanup";
 import { continueEffectPlay, isPendingPlayItem } from "../game-definition/moves/play/play-pipeline";
 import { buildEffectContext } from "../game-definition/moves/chain/effect-context";
 import { executeResolvedItem, optInIsPerformable } from "../game-definition/moves/chain/resolve";
+import {
+  killCostCandidates,
+  recycleCostCandidates,
+  returnToHandCostCandidates,
+} from "../game-definition/moves/pending-choice";
 import { raiseChainDestinationChoices } from "../game-definition/moves/play/play-time-destinations";
 import { raisePlayTimeModeChoice } from "../game-definition/moves/play/play-time-modes";
 import { continueRevealSlotLock, isSinglePickSlot } from "../game-definition/moves/play/reveal-target-lock";
@@ -209,6 +214,47 @@ function costChoosesObjects(cost: unknown): boolean {
     c.burn !== undefined ||
     c.returnToHand !== undefined
   );
+}
+
+/**
+ * rule 402.4 / 404.2 (rule-id: sfd-026-221) — an object cost whose candidate set
+ * is EMPTY is not a payment question at all: there is no Game Object to name, so
+ * the Pending Item is removed before it is finalized — no opt-in prompt, no
+ * Chain Item, no Priority window. (A non-empty but unaffordable set still gets
+ * its prompt; see DESIGN.md §Paying costs.)
+ */
+function optInCostObjectsExist(
+  item: ChainItem,
+  draft: RiftboundGameState,
+  // biome-ignore lint/suspicious/noExplicitAny: move context bag is framework-typed
+  context: any,
+): boolean {
+  const cost = item.optInCost as Record<string, unknown> | undefined;
+  if (!cost) {
+    return true;
+  }
+  const player = item.controller as string;
+  const source = item.cardId as string;
+  const recycle = cost.recycle as { amount?: number } | undefined;
+  if (recycle && typeof recycle === "object") {
+    if (recycleCostCandidates(draft, player, source, recycle, context).length < (recycle.amount ?? 1)) {
+      return false;
+    }
+  }
+  const killSpec = cost.kill;
+  if (killSpec !== undefined && killSpec !== "self" && typeof killSpec === "object" && killSpec !== null) {
+    const needed = (killSpec as { amount?: number }).amount ?? 1;
+    if (killCostCandidates(draft, player, source, killSpec, context).length < needed) {
+      return false;
+    }
+  }
+  const bounce = cost.returnToHand;
+  if (bounce !== undefined && typeof bounce === "object" && bounce !== null) {
+    if (returnToHandCostCandidates(draft, player, source, bounce, context).length === 0) {
+      return false;
+    }
+  }
+  return true;
 }
 
 /**
@@ -565,6 +611,11 @@ export function finalizePendingItems(draftLike: unknown, ctx: FinalizationContex
     // Step 1 — rule 402.1 / 383.3.a (+ 383.3.b base cost on the same prompt).
     if (item.optional === true) {
       if (costChoosesObjects(item.optInCost)) {
+        // rule 402.4 — nothing to name ⇒ removed silently, before any Priority.
+        if (!optInCostObjectsExist(item, draft, context)) {
+          removeUnfinalizedItem(draft, item.id);
+          continue;
+        }
         // Deferred: asked (and paid) at resolution by the legacy path.
         patchItem(draft, item.id, { status: "finalized" });
         continue;
