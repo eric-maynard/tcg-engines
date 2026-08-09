@@ -504,10 +504,19 @@ function triggerMatchesEvent(
   // Played: playing a unit token IS playing a unit, so a `play-unit` trigger
   // matches the `play-token-unit` event (a `play-card` trigger still does not).
   const tokenUnitPlay = event.type === "play-token-unit" && triggerEvents.includes("play-unit");
+  // rule 419.1 (ven-197-166) — "when you play a card from anywhere other than
+  // your hand": the `play-card` event narrowed by the play's ORIGIN zone (the
+  // play pipeline stamps `from` — trash, banishment, championZone, facedown-…).
+  const notFromHandPlay =
+    event.type === "play-card" &&
+    triggerEvents.includes("play-card-not-from-hand") &&
+    typeof (event as { from?: unknown }).from === "string" &&
+    (event as { from?: string }).from !== "hand";
   if (
     !triggerEvents.includes(mapped) &&
     !(typedPlay && triggerEvents.includes(typedPlay)) &&
-    !tokenUnitPlay
+    !tokenUnitPlay &&
+    !notFromHandPlay
   ) {
     return false;
   }
