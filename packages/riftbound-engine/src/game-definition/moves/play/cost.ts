@@ -880,14 +880,40 @@ export function boardEntersReadyGrantApplies(
   for (const zoneId of zoneIds) {
     for (const sourceId of zones.getCardsInZone(zoneId as CoreZoneId, playerId as CorePlayerId)) {
       for (const ability of registry.getAbilities(sourceId as string) ?? []) {
-        if (ability?.type !== "static" || (ability as { condition?: unknown }).condition) {
+        if (ability?.type !== "static") {
+          continue;
+        }
+        // rule 824 (rule-id: unl-191-219 Wuju Master) — "[Level 11][>] Your
+        // units enter ready" is a CONDITIONAL board static: it applies only
+        // while the condition holds. A condition this reader cannot evaluate
+        // stays unapplied rather than granting entry readiness blindly.
+        const condition = (ability as { condition?: Record<string, unknown> }).condition;
+        if (
+          condition &&
+          evaluateEnterReadyCondition(
+            condition,
+            state,
+            playerId,
+            sourceId as string,
+            zones,
+            cards,
+            entryZone,
+          ) !== true
+        ) {
           continue;
         }
         const effect = (ability as { effect?: Record<string, unknown> }).effect;
-        if (effect?.type !== "grant-keyword" || effect.keyword !== "EntersReady") {
+        const isBoardEnterReady =
+          effect?.type === "enter-ready" &&
+          typeof effect.target === "object" &&
+          effect.target !== null;
+        if (
+          !isBoardEnterReady &&
+          (effect?.type !== "grant-keyword" || effect.keyword !== "EntersReady")
+        ) {
           continue;
         }
-        const target = effect.target as
+        const target = effect?.target as
           | { controller?: string; type?: string; filter?: string; excludeSelf?: boolean }
           | undefined;
         if (target?.controller && target.controller !== "friendly") {
