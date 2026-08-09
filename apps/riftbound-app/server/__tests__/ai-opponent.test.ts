@@ -212,12 +212,12 @@ describe("act loop", () => {
     await drive(session, ai);
     expect(game.zoneOf("victim")).toBe("trash");
     expect(game.zoneOf("phoenix")).toBe("base");
-    // The pay-to-play trigger is a real yes/no for the model; the single-destination pick is forced locally.
+    // The pay-to-play trigger is the only real decision for the model: the Phoenix returns straight
+    // to base (no destination prompt), so nothing else may reach the model.
     expect(decisionCalls.map((c) => c.meta.decision?.kind)).toEqual(["yes-no"]);
     expect(decisionCalls[0]?.tools.map((t) => t.name)).toEqual(["answer"]);
     expect(decisionCalls[0]?.messages[0]?.content).toContain("PENDING PROMPT for you (yes-no): Pay [1][fury]");
     expect(session.log.some((e) => /🤖 Opus: Pay \[1\]\[fury\].*→ yes — 'free value'/u.test(e.text))).toBe(true);
-    expect(session.log.some((e) => /→ base \(forced\)/u.test(e.text))).toBe(true);
     // A lone "Pass priority" is taken without a model call.
     expect(rec.calls.every((c) => (c.meta.menu?.length ?? 2) > 1)).toBe(true);
   });

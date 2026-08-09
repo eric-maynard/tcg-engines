@@ -310,4 +310,24 @@ describe("Cloth Armor (sfd-064-221)", () => {
     await bare.settle();
     expect(bare.zoneOf("sentry")).toBe("trash");
   });
+
+  // rule 364.3: continuous effects apply the instant the state they depend on changes — attaching an
+  // Equipment must confer its Effect Text statics at once, not only at the next Cleanup.
+  test("a Quick-Draw attach mid-showdown confers [Shield 2] immediately, before any further action (364.3)", async () => {
+    const game = await scenario()
+      .active(P2)
+      .resources(P1, { energy: 1 })
+      .battlefield("bf1", { controller: P1 })
+      .unit(P1, "bf1", { might: 2, name: "Sentry" }, "sentry")
+      .unit(P2, "base", { might: 3, name: "Raider" }, "raider")
+      .hand(P1, CARD, "cloth")
+      .build();
+    await game.p2.move("raider", "bf1");
+    await game.p2.passFocus();
+    await game.p1.play("cloth");
+    await attachTo(game, "sentry");
+    expect(game.state("cloth").attachedTo).toBe("sentry");
+    expect(game.state("sentry").grantedKeywords).toEqual([{ duration: "static", keyword: "Shield", value: 2 }]);
+    expect(game.state("sentry")).toMatchObject({ combatRole: "defender", might: 4 });
+  });
 });

@@ -19,6 +19,7 @@ import type {
 import { addToChain } from "../../chain";
 import { createInteractionState, getTurnState } from "../../chain/chain-state";
 import { dispatchEvent } from "../../events/dispatcher";
+import { recalculateStaticEffects } from "../../abilities/static-abilities";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import { getBattlefieldZoneId } from "../../zones/zone-configs";
 import { removeFromBoard } from "../../operations/leave-board";
@@ -437,7 +438,7 @@ export const equipmentMoves: Partial<
 
       return true;
     },
-    reducer: (_draft, context) => {
+    reducer: (draft, context) => {
       const { equipmentId } = context.params;
 
       // Get the unit it's attached to
@@ -480,6 +481,13 @@ export const equipmentMoves: Partial<
         cardId: equipmentId as CoreCardId,
         targetZoneId: "base" as import("@tcg/core").ZoneId,
       });
+
+      // rule 364.3: the statics the gear conferred end the instant the link does.
+      recalculateStaticEffects({
+        cards: context.cards,
+        draft,
+        zones: context.zones,
+      } as unknown as Parameters<typeof recalculateStaticEffects>[0]);
     },
   },
 };

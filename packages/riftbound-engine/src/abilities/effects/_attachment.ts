@@ -8,9 +8,23 @@
 import type { CardId as CoreCardId, ZoneId as CoreZoneId } from "@tcg/core";
 import type { EffectContext } from "../effect-executor";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
+import { recalculateStaticEffects, type StaticAbilityContext } from "../static-abilities";
 
 function meta(ctx: EffectContext, cardId: string): Record<string, unknown> | undefined {
   return ctx.cards.getCardMeta?.(cardId as CoreCardId);
+}
+
+/**
+ * rule 364.3: continuous effects apply the instant the game state they depend on changes.
+ * The keywords/Might an Equipment confers hang off `meta.equippedWith`, so every attach and
+ * detach has to re-run the static pass here instead of waiting for the next Cleanup.
+ */
+function recalcStatics(ctx: EffectContext): void {
+  recalculateStaticEffects({
+    cards: ctx.cards,
+    draft: ctx.draft,
+    zones: ctx.zones,
+  } as unknown as StaticAbilityContext);
 }
 
 /** The unit an Equipment is currently attached to, if any. */
@@ -71,6 +85,9 @@ export function attachEquipment(ctx: EffectContext, equipmentId: string, unitId:
     ctx.zones.moveCard({ cardId: equipmentId as CoreCardId, targetZoneId: holderZone as CoreZoneId });
   }
 
+  // rule 364.3 — the conferred statics are live before anything else looks at the board.
+  recalcStatics(ctx);
+
   // rule 383.2.c / 401.1: "when you attach an Equipment to me" triggers.
   ctx.fireTriggers?.({
     cardId: unitId,
@@ -111,6 +128,9 @@ export function detachEquipment(ctx: EffectContext, equipmentId: string): void {
   if (unitZone && equipZone !== unitZone) {
     ctx.zones.moveCard({ cardId: equipmentId as CoreCardId, targetZoneId: unitZone as CoreZoneId });
   }
+
+  // rule 364.3 — the conferred statics end the moment the link does.
+  recalcStatics(ctx);
 }
 
 /**
