@@ -10,6 +10,7 @@ import {
   type DamageSource,
   dealDamageBatch,
 } from "../../operations/deal-damage";
+import { getBonusDamage } from "../bonus-damage";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import { type EffectHelpers, getTargetIds, getEffectiveMight, resolveAmount } from "./_helpers";
 
@@ -59,9 +60,15 @@ function dealHits(
   ctx: EffectContext,
   hits: readonly { targetId: string; amount: number }[],
   boundTargets: readonly string[] | undefined,
+  opts?: { noSourceBonus?: boolean },
 ): { dealtTo: string[]; suspended: boolean } {
   const source = damageSourceOf(ctx);
-  const requests: DamageRequest[] = hits.map((h) => ({ amount: h.amount, source, target: h.targetId }));
+  const requests: DamageRequest[] = hits.map((h) => ({
+    amount: h.amount,
+    source,
+    target: h.targetId,
+    ...(opts?.noSourceBonus === true ? { noSourceBonus: true } : {}),
+  }));
   const { results, suspended } = dealDamageBatch(ctx, requests, {
     onNeedsOrder: parkDamageOrderPrompt(effect, ctx, boundTargets),
   });
@@ -203,10 +210,15 @@ export function handle_damage(effect: ExecutableEffect, ctx: EffectContext, h: E
       }
       refId = refOptions[0];
     }
-    const n = Math.max(
+    // rule 715.3 — Bonus Damage is added ONCE to the amount being split (the
+    // CR's own Volibear + Annie example: "6 damage split among up to 6 units"),
+    // never once per chosen target. The pool grows here and each hit is dealt
+    // with `noSourceBonus` so the choke point does not add it again.
+    const splitBase = Math.max(
       0,
       refId ? getEffectiveMight(refId, ctx) : resolveAmount(effect.amount ?? 0, ctx),
     );
+    const n = splitBase > 0 ? splitBase + getBonusDamage(ctx) : 0;
     const legalPool = effect.target
       ? resolveTarget(
           { ...(effect.target as TargetDescriptor), quantity: "all" },
@@ -304,7 +316,7 @@ export function handle_damage(effect: ExecutableEffect, ctx: EffectContext, h: E
       splitHits.push({ amount: assigned[targetId] + surplus, targetId });
       surplus = 0;
     }
-    dealHits(effect, ctx, splitHits, ctx.boundTargets);
+    dealHits(effect, ctx, splitHits, ctx.boundTargets, { noSourceBonus: true });
     return;
   }
   const rawAmount = effect.amount ?? 1;

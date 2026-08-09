@@ -87,6 +87,12 @@ export interface DamageRequest {
   readonly combat?: { readonly role: "attacker" | "defender"; readonly battlefieldId: string };
   /** rule 715 — the caller already folded Bonus Damage into `amount`. */
   readonly noBonus?: boolean;
+  /**
+   * rule 715.3 — split damage: the source's own Bonus Damage was already added
+   * ONCE to the amount being split, so it must not be added again per target.
+   * Location-scoped Bonus Damage (Void Gate) still applies to each unit.
+   */
+  readonly noSourceBonus?: boolean;
 }
 
 export interface DamageModifierNote {
@@ -330,7 +336,7 @@ function bonusFor(io: DamageIO, req: DamageRequest, target: string): number {
     sourceCardId: req.source.cardId ?? "",
     zones: { getCardZone: (id: CoreCardId) => zoneOf(io, id as string), getCardsInZone: io.zones.getCardsInZone.bind(io.zones) },
   } as unknown as EffectContext;
-  return getBonusDamage(ctx) + getLocationBonusDamage(target, ctx);
+  return (req.noSourceBonus === true ? 0 : getBonusDamage(ctx)) + getLocationBonusDamage(target, ctx);
 }
 
 /**
