@@ -9,7 +9,7 @@ import type { CardId as CoreCardId } from "@tcg/core";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import type { RiftboundCardMeta, RiftboundGameState } from "../../types";
 import { canAffordPower } from "./chain/effect-context";
-import { getHybridPipDomains, getInteractiveReduction } from "./play/cost";
+import { getHybridPipDomains, getInteractiveReduction, spendablePowerPool } from "./play/cost";
 
 export interface EquipCost {
   readonly energy: number;
@@ -21,6 +21,13 @@ export interface EquipCost {
    * trash.
    */
   readonly recycleFromTrash?: number;
+  /**
+   * rule 818.1.c.3 (sfd-178-221 Blade of the Ruined King) — "[Equip] —
+   * [order], Kill a friendly unit": the non-resource half of an Equip cost.
+   * Nothing discounts it (821.1.c only waives [rainbow]) and it is unpayable
+   * with no eligible unit besides the one being equipped (358.1).
+   */
+  readonly killFriendlyUnit?: boolean;
 }
 
 /** Cards currently in `playerId`'s trash, when the zone bag is available. */
@@ -44,16 +51,27 @@ export function printedEquipCost(equipmentId: string): EquipCost | undefined {
   const equipAbility = abilities.find(
     (a) => a.type === "keyword" && (a as { keyword?: string }).keyword === "Equip",
   ) as
-    | { cost?: { energy?: number; power?: readonly string[]; recycle?: number } }
+    | {
+        cost?: {
+          energy?: number;
+          power?: readonly string[];
+          recycle?: number;
+          kill?: unknown;
+        };
+      }
     | undefined;
   if (!equipAbility) {
     return undefined;
   }
   const recycle = equipAbility.cost?.recycle;
+  // rule 818.1.c.3 (sfd-178-221) — "Kill a friendly unit" is part of the Equip
+  // cost, paid on activation alongside the pips.
+  const kill = equipAbility.cost?.kill;
   return {
     energy: equipAbility.cost?.energy ?? 0,
     power: hybridizePips(equipmentId, equipAbility.cost?.power ?? []),
     ...(typeof recycle === "number" && recycle > 0 ? { recycleFromTrash: recycle } : {}),
+    ...(kill !== undefined && kill !== null ? { killFriendlyUnit: true } : {}),
   };
 }
 
@@ -133,7 +151,10 @@ export function canPayEquipCost(
     for (const d of cost.power) {
       needed[d] = (needed[d] ?? 0) + 1;
     }
-    if (!canAffordPower(pool.power, needed)) {
+    // rule 429.4: Power earmarked "use only to play spells" (ogn-247-298) can
+    // never fund an activated ability — [Equip] is an ability, not a play —
+    // while the "gear" earmark (sfd-189-221) explicitly does fund it.
+    if (!canAffordPower(spendablePowerPool(state, playerId, "ability:equipment"), needed)) {
       return false;
     }
   }

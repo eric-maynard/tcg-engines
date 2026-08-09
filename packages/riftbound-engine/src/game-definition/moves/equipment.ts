@@ -21,7 +21,9 @@ import { createInteractionState, getTurnState } from "../../chain/chain-state";
 import { dispatchEvent } from "../../events/dispatcher";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import { getBattlefieldZoneId } from "../../zones/zone-configs";
+import { removeFromBoard } from "../../operations/leave-board";
 import { deductAbilityCost } from "./chain/activate-ability";
+import { buildEffectContext } from "./chain/effect-context";
 import { canPayEquipCost, equipCostForTarget, printedEquipCost } from "./equip-cost";
 
 /**
@@ -54,6 +56,22 @@ function equipTimingAllowed(state: RiftboundGameState): boolean {
   }
   const turnState = getTurnState(state.interaction ?? createInteractionState());
   return turnState === "neutral-open";
+}
+
+/**
+ * rule 818.1.c.3 (sfd-178-221 Blade of the Ruined King) — the units that can pay
+ * an Equip cost's "Kill a friendly unit" half: units this player controls, on
+ * board, other than the one being equipped (rule 358.1 — the holder cannot also
+ * be the fodder, since sacrificing it would undo the activation).
+ */
+function equipSacrificeOptions(
+  boardUnits: readonly { id: string; controller: string | undefined }[],
+  playerId: string,
+  holderUnitId: string,
+): string[] {
+  return boardUnits
+    .filter((u) => u.controller === playerId && u.id !== holderUnitId)
+    .map((u) => u.id);
 }
 
 /**
@@ -150,13 +168,30 @@ export const equipmentMoves: Partial<
       const getMeta = (id: CoreCardId) =>
         context.cards.getCardMeta(id) as Partial<RiftboundCardMeta> | undefined;
 
-      const results: { playerId: string; equipmentId: string; unitId: string }[] = [];
+      const unitsWithController = units.map((id) => ({ controller: controllerOf(id), id }));
+
+      const results: {
+        playerId: string;
+        equipmentId: string;
+        unitId: string;
+        sacrificeId?: string;
+      }[] = [];
       for (const equipmentId of equipment) {
         for (const unitId of units) {
           // rule 821.1.c.2 / 356.6: the Equip cost is computed for THIS target —
           // a Might-based reduction makes affordability differ per unit.
           const cost = equipCostForTarget(equipmentId, unitId, getMeta);
           if (cost && !canPayEquipCost(state, playerId, cost, 0, context.zones)) {
+            continue;
+          }
+          // rule 818.1.c.3 / 358.1 (sfd-178-221): the kill half of the Equip
+          // cost needs a friendly unit that is not the one being equipped —
+          // with none, the ability cannot be activated at all.
+          if (cost?.killFriendlyUnit) {
+            const fodder = equipSacrificeOptions(unitsWithController, playerId, unitId);
+            for (const sacrificeId of fodder) {
+              results.push({ equipmentId, playerId, sacrificeId, unitId });
+            }
             continue;
           }
           results.push({ equipmentId, playerId, unitId });
@@ -233,6 +268,29 @@ export const equipmentMoves: Partial<
         return false;
       }
 
+      // rule 818.1.c.3 / 358.1 (sfd-178-221) — "Kill a friendly unit" is part
+      // of the cost: a legal, named victim you control other than the holder
+      // must be supplied, or the Equip cannot be activated.
+      if (equipCost?.killFriendlyUnit) {
+        const sacrificeId = context.params.sacrificeId as string | undefined;
+        if (!sacrificeId || sacrificeId === context.params.unitId) {
+          return false;
+        }
+        if (getGlobalCardRegistry().get(sacrificeId)?.cardType !== "unit") {
+          return false;
+        }
+        const sacZone = context.zones.getCardZone(sacrificeId as CoreCardId);
+        if (!sacZone || !onBoard(sacZone)) {
+          return false;
+        }
+        const sacController =
+          context.cards.getCardController?.(sacrificeId as CoreCardId) ??
+          context.cards.getCardOwner(sacrificeId as CoreCardId);
+        if (sacController !== context.params.playerId) {
+          return false;
+        }
+      }
+
       return true;
     },
     reducer: (draft, context) => {
@@ -251,6 +309,22 @@ export const equipmentMoves: Partial<
           { energy: equipCost.energy, power: [...equipCost.power] },
           context.zones,
           context.counters,
+        );
+      }
+
+      // rule 818.1.c.3 / 355.10.c (sfd-178-221) — the kill half is paid NOW,
+      // as the ability is activated: it cannot be responded to and is never
+      // refunded if the attach later fizzles. rule 428.1.a.1 — a cost kill is
+      // an Active Kill, so a token ceases to exist (186.1) and `die` fires.
+      const sacrificeId = context.params.sacrificeId as string | undefined;
+      if (equipCost?.killFriendlyUnit && sacrificeId) {
+        const costCtx = buildEffectContext(draft, playerId, equipmentId, context);
+        removeFromBoard(
+          costCtx,
+          [sacrificeId],
+          "trash",
+          { by: playerId as string, kind: "cost", source: equipmentId as string, sourceKind: "ability" },
+          costCtx.fireTriggers,
         );
       }
 

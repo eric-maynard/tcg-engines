@@ -10,7 +10,6 @@ import type {
 } from "@tcg/core";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../../types";
 import { createInteractionState, getTurnState } from "../../../chain";
-import { isLegalTiming } from "../../../chain/chain-state";
 import { hasKeyword } from "../movement/helpers";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
 import {
@@ -111,7 +110,11 @@ export const playGear: Defs["playGear"] = {
       context.cards.getCardMeta(id),
     );
     if (quickDraw) {
-      if (!isLegalTiming("reaction", getTurnState(interaction))) {
+      // rule 316.5.b / 338 / 347 — [Reaction] means "any time you may act", not
+      // "any time": in the opponent's Neutral Open state only the turn player
+      // acts, with a chain open only the priority holder, and in a showdown
+      // only the Focus holder.
+      if (!reactionWindowOpen(state, context.params.playerId as string)) {
         return false;
       }
     } else if (gearHasReaction(context.params.cardId as string)) {
@@ -152,6 +155,19 @@ export const playGear: Defs["playGear"] = {
       return false;
     }
 
+    // rule 356.1.b (sfd-084-221) — "you MAY play a gear … ignoring its Energy
+    // cost" is the player's option: `useEnergyWaiver: false` declines it, pays
+    // the printed price and keeps the permission for a later gear.
+    const condWaiverIdx = findEnergyWaiver(
+      state,
+      context.params.playerId as string,
+      context.params.cardId as string,
+    );
+    if (context.params.useEnergyWaiver === true && condWaiverIdx < 0) {
+      return false;
+    }
+    const condUseWaiver = condWaiverIdx >= 0 && context.params.useEnergyWaiver !== false;
+
     if (
       !canAffordCard(
         state,
@@ -162,8 +178,7 @@ export const playGear: Defs["playGear"] = {
           // costs [1] less") price gear plays like every other play.
           board: { cards: context.cards, zones: context.zones },
           chosenTargetId: context.params.chosenTargetId,
-          ignoreEnergyCost:
-            findEnergyWaiver(state, context.params.playerId as string, context.params.cardId as string) >= 0,
+          ignoreEnergyCost: condUseWaiver,
         },
         createMetaAccessor(context.cards),
         getPotentialRuneEnergy(context.zones, context.counters, context.params.playerId),
@@ -188,7 +203,9 @@ export const playGear: Defs["playGear"] = {
       state.turn.activePlayer === (context.playerId as string) &&
       state.turn.phase === "main" &&
       getTurnState(interaction) === "neutral-open";
-    if (!openTurn && !isLegalTiming("reaction", getTurnState(interaction))) {
+    // rule 316.5.b / 338 / 347 — a Reaction window only exists where this
+    // player may act at all.
+    if (!openTurn && !reactionWindowOpen(state, context.playerId as string)) {
       return [];
     }
 
@@ -219,7 +236,7 @@ export const playGear: Defs["playGear"] = {
         ]
       : handCards;
 
-    const results: { playerId: string; cardId: string }[] = [];
+    const results: { playerId: string; cardId: string; useEnergyWaiver?: boolean }[] = [];
     for (const cardId of playableCards) {
       const def = registry.get(cardId as string);
       if (!def || (def.cardType !== "gear" && def.cardType !== "equipment")) {
@@ -227,13 +244,10 @@ export const playGear: Defs["playGear"] = {
       }
       if (
         !openTurn &&
+        // rule 813.1.c.1 (unl-085-219) — [Quick-Draw]/printed [Reaction] gear is
+        // offered wherever its controller may act (checked once above).
         !hasKeyword(cardId as string, "Quick-Draw", (id) => context.cards.getCardMeta(id)) &&
-        // rule 813.1.c.1 (unl-085-219) — printed [Reaction] gear is offered
-        // wherever its controller may act.
-        !(
-          gearHasReaction(cardId as string) &&
-          reactionWindowOpen(state, context.playerId as string)
-        )
+        !gearHasReaction(cardId as string)
       ) {
         continue;
       }
@@ -243,20 +257,34 @@ export const playGear: Defs["playGear"] = {
       // a gear whose Energy cost is discounted or waived.
       // Cards with interactive cost reduction are enumerated against their
       // Base cost; the actual cost is computed per-target at play time.
-      if (
-        !canAffordCard(
+      const affordable = (ignoreEnergyCost: boolean): boolean =>
+        canAffordCard(
           state,
           context.playerId as string,
           cardId as string,
           {
             board: { cards: context.cards, zones: context.zones },
-            ignoreEnergyCost:
-              findEnergyWaiver(state, context.playerId as string, cardId as string) >= 0,
+            ignoreEnergyCost,
           },
           createMetaAccessor(context.cards),
           potential,
-        )
-      ) {
+        );
+
+      // rule 356.1.b (sfd-084-221) — a granted "you MAY play a gear … ignoring
+      // its Energy cost" is optional, so both prices are offered: spending the
+      // permission here, or paying in full and saving it for a later gear.
+      const waived = findEnergyWaiver(state, context.playerId as string, cardId as string) >= 0;
+      if (waived) {
+        if (affordable(true)) {
+          results.push({ cardId: cardId as string, playerId: context.playerId as string, useEnergyWaiver: true });
+        }
+        if (affordable(false)) {
+          results.push({ cardId: cardId as string, playerId: context.playerId as string, useEnergyWaiver: false });
+        }
+        continue;
+      }
+
+      if (!affordable(false)) {
         continue;
       }
 
@@ -278,7 +306,10 @@ export const playGear: Defs["playGear"] = {
     // permission on this play: the Energy is waived, the Power cost is still
     // paid, and a one-shot (`duration: "next"`) permission is used up, so the
     // next gear this turn costs its full price again.
-    const waiverIdx = findEnergyWaiver(draft, playerId as string, cardId as string);
+    const waiverIdx =
+      context.params.useEnergyWaiver === false
+        ? -1
+        : findEnergyWaiver(draft, playerId as string, cardId as string);
     if (waiverIdx >= 0) {
       const active = draft.activeReplacements as EnergyWaiverEntry[];
       if (active[waiverIdx]?.duration === "next") {

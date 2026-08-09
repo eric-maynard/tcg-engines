@@ -227,7 +227,12 @@ export interface RiftboundMoves {
    * interactively by the Might of a chosen target (e.g., Hextech
    * Gauntlets). Ignored for equipment without `interactiveCostReduction`.
    */
-  playGear: { playerId: PlayerId; cardId: CardId; chosenTargetId?: CardId; paidAdditionalCost?: boolean; costs?: PlayCosts };
+  /**
+   * rule 356.1.b (sfd-084-221) — a granted "you MAY play a gear … ignoring its
+   * Energy cost" is optional: `useEnergyWaiver: false` pays the printed price
+   * and keeps the permission for a later gear. Omitted = spend it.
+   */
+  playGear: { playerId: PlayerId; cardId: CardId; chosenTargetId?: CardId; paidAdditionalCost?: boolean; costs?: PlayCosts; useEnergyWaiver?: boolean };
 
   /**
    * Play spell (goes to trash after).
@@ -325,6 +330,18 @@ export interface RiftboundMoves {
     /** rule 356.2.b (ven-023a-166) — card discarded to pay a "you may discard N" additional cost. */
     discardId?: CardId;
     costs?: PlayCosts;
+  };
+
+  /**
+   * rule 366.1 / 419.1.a — play a card from a zone other than hand / Champion
+   * Zone under a PLAY PERMISSION (`operations/play-permissions.ts`); the play
+   * runs through the play pipeline (location / additional costs are prompts).
+   */
+  playFromZone: {
+    playerId: PlayerId;
+    cardId: CardId;
+    /** Which permission the play uses when several cover the card. */
+    permissionId?: string;
   };
 
   // ============================================
@@ -519,7 +536,13 @@ export interface RiftboundMoves {
   // ============================================
 
   /** Attach equipment to a unit */
-  equipCard: { playerId: PlayerId; equipmentId: CardId; unitId: CardId };
+  equipCard: {
+    playerId: PlayerId;
+    equipmentId: CardId;
+    unitId: CardId;
+    /** rule 818.1.c.3 — the friendly unit killed to pay a "Kill a friendly unit" Equip cost. */
+    sacrificeId?: CardId;
+  };
 
   /** Detach equipment from a unit (returns equipment to base) */
   unequipCard: { playerId: PlayerId; equipmentId: CardId };
