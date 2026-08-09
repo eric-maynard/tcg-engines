@@ -1027,7 +1027,7 @@ function hasDomain(def: unknown, want: string): boolean {
  * only while it defends. Mirrors `getCardEffectiveMight`'s role layer without
  * importing the moves layer.
  */
-function combatRoleMightBonus(
+export function combatRoleMightBonus(
   cardId: string,
   meta: Partial<RiftboundCardMeta> | undefined,
 ): number {

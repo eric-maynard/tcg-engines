@@ -2,7 +2,7 @@
 import type { CardId as CoreCardId, PlayerId as CorePlayerId, ZoneId as CoreZoneId } from "@tcg/core";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
-import { type EffectHelpers, getTargetIds, getEffectiveMight, resolveAmount } from "./_helpers";
+import { type EffectHelpers, getTargetIds, getEffectiveMightInRole, resolveAmount } from "./_helpers";
 import { applyMightModifierDelta } from "./might-modifier";
 
 /**
@@ -116,7 +116,9 @@ export function handle_modifyMight(effect: ExecutableEffect, ctx: EffectContext,
     const resolvedAmount = perTargetCount
       ? resolveAmount(effect.amount ?? 0, amountCtx)
       : baseAmount;
-    const mightBefore = getEffectiveMight(targetId, ctx);
+    // rule 807.1.c — the floor is measured against CURRENT Might, which
+    // includes Assault while attacking / Shield while defending.
+    const mightBefore = getEffectiveMightInRole(targetId, ctx);
     // rule-id: ogn-097-298 — "to a minimum of N Might": a penalty can't
     // reduce the unit's Might below the floor (and never raises it).
     let amount = resolvedAmount < 0 ? resolvedAmount - extraReduction : resolvedAmount;

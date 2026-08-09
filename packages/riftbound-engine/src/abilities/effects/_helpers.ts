@@ -13,7 +13,7 @@ import { additionalCostWasPaid } from "../../operations/additional-costs-paid";
 import { effectiveTags } from "../card-tags";
 import { scoreWithinConditionMet } from "../../operations/score-within";
 import type { TargetDescriptor } from "../target-resolver";
-import { boundBattlefieldZone, resolveTarget } from "../target-resolver";
+import { boundBattlefieldZone, combatRoleMightBonus, resolveTarget } from "../target-resolver";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import { findAllReplacements } from "../replacement-effects";
 
@@ -145,6 +145,22 @@ export function getEffectiveMight(cardId: string, ctx: EffectContext): number {
   }
 
   return Math.max(0, baseMight + buffBonus + mightMod + staticBonus + equipBonus);
+}
+
+/**
+ * rule 807.1.c — Assault (attacker) / Shield (defender) is part of the unit's
+ * CURRENT Might while its combat role is stamped. Readers that compare against
+ * a Might floor or threshold must use this, not the role-blind base above.
+ */
+export function getEffectiveMightInRole(cardId: string, ctx: EffectContext): number {
+  const base = getEffectiveMight(cardId, ctx);
+  if (base === 0) {
+    return 0;
+  }
+  const meta = ctx.cards.getCardMeta?.(cardId as CoreCardId) as
+    | Partial<RiftboundCardMeta>
+    | undefined;
+  return base + combatRoleMightBonus(cardId, meta);
 }
 
 /**

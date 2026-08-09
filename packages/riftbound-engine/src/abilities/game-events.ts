@@ -135,7 +135,20 @@ export type GameEvent =
   // rule-id: unl-133-219 — `owner` = moved unit's controller, `movedBy` = the
   // player whose action/effect moved it ("When you move an enemy unit").
   | { type: "move"; cardId: string; from: string; to: string; owner?: string; movedBy?: string }
-  | { type: "take-damage"; cardId: string; amount: number; sourceId?: string }
+  // rule 417 / 437.4 — fired by `operations/deal-damage.ts` once per unit
+  // actually DEALT damage: `amount` = marked (after Bonus / Double / Prevent),
+  // `original` = as instructed/assigned; `combat` = combat damage (465.2.d).
+  | {
+      type: "take-damage";
+      cardId: string;
+      amount: number;
+      sourceId?: string;
+      sourcePlayer?: string;
+      original?: number;
+      kind?: string;
+      combat?: boolean;
+      modifiedBy?: readonly unknown[];
+    }
   | { type: "play-spell"; cardId: string; playerId: string }
   // rule-id: ogn-202-298 — `batchIndex` = position within a single multi-card
   // discard; "When you discard one or more cards" fires only for index 0.
