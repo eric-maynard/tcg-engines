@@ -602,11 +602,16 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
     // rule-id: sfd-165-221 (Glasc Mixologist) — his Deathknell may play a unit
     // back to the battlefield he just died at, which requires that battlefield
     // to still be controlled by his controller.
+    const chainQuiet =
+      !ctx.draft.interaction?.chain?.active && !ctx.draft.pendingChoice && killed.length === 0;
     const isOpenState =
-      !ctx.draft.interaction?.chain?.active &&
-      (ctx.draft.interaction?.showdownStack?.length ?? 0) === 0 &&
-      !ctx.draft.pendingChoice &&
-      killed.length === 0;
+      chainQuiet && (ctx.draft.interaction?.showdownStack?.length ?? 0) === 0;
+    // rule 310.3 / 323.6 — "Showdown Open" is an Open State too: with the chain empty, a
+    // battlefield with no Showdown or Combat ongoing THERE still loses control, even while a
+    // combat runs elsewhere. rule 190.4.b keeps the fighting battlefield's own control frozen.
+    const isOpenHere =
+      chainQuiet &&
+      !(ctx.draft.interaction?.showdownStack ?? []).some((sd) => sd.battlefieldId === bfId);
     if (bf.controller) {
       // rule 323.6 / 127.1: "have a Unit there" follows CONTROL, not ownership — a unit
       // stolen by e.g. Hostile Takeover holds the battlefield for its new controller.
@@ -627,15 +632,18 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
         // every state (not just Open ones) so a unit that arrives and leaves inside one
         // closed window still arms the 323.6 vacancy check below.
         bf.controllerOccupied = true;
-      } else if (isOpenState) {
         // rule 190.3.a: a unit that "otherwise becomes present" (a control change, no move)
         // at a battlefield its controller doesn't control contests it. With no other enemy
         // units there the showdown is non-combat and settles straight into a conquer.
-        if (unitControllers.size === 1 && !bf.contested) {
-          const conqueror = [...unitControllers][0] as string;
-          conquerByPresence(ctx, bfId, conqueror);
-          stateChanged = true;
-        } else if (bf.controllerOccupied) {
+      } else if (isOpenState && unitControllers.size === 1 && !bf.contested) {
+        const conqueror = [...unitControllers][0] as string;
+        conquerByPresence(ctx, bfId, conqueror);
+        stateChanged = true;
+      } else {
+        // A deserted battlefield vacates in any Open State; one still holding enemy units
+        // waits for a fully Open turn so the 190.3.a conquer above gets first refusal.
+        const openForVacancy = isOpenState || (isOpenHere && unitControllers.size === 0);
+        if (openForVacancy && bf.controllerOccupied) {
           // rule 323.6 / 190.4.c — control is lost in cleanup once the controller's
           // units are gone. Control that never rested on a unit here (a seeded board
           // state, or control handed over by an effect) has nothing to vacate, so it

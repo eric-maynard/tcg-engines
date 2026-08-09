@@ -9,6 +9,7 @@ import type {
 } from "@tcg/core";
 import type { GrantedKeyword, RiftboundCardMeta, RiftboundGameState } from "../../../types";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
+import { spendablePowerPool } from "../play/cost";
 
 /**
  * Check if a card has a specific keyword, considering both the card
@@ -76,13 +77,19 @@ export function getMoveEscalationSurcharge(
 
 /**
  * rule 135.2.e.5.a — total POWER of any domain available to pay [rainbow] pips.
+ *
+ * rule 429.4 / 444.1 — a move's applied cost is neither a card play nor an
+ * activated ability, so EVERY earmarked pip ("use only to play gear …") is
+ * hidden from it: `spendablePowerPool` with no allowed purpose.
  */
 export function totalPowerAvailable(state: RiftboundGameState, playerId: string): number {
-  const pool = state.runePools[playerId];
-  if (!pool) {
+  if (!state.runePools[playerId]) {
     return 0;
   }
-  return Object.values(pool.power ?? {}).reduce((sum, n) => sum + (n ?? 0), 0);
+  return Object.values(spendablePowerPool(state, playerId, undefined)).reduce<number>(
+    (sum, n) => sum + (n ?? 0),
+    0,
+  );
 }
 
 /**
