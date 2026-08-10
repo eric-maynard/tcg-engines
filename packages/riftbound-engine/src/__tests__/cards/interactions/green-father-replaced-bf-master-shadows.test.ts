@@ -192,7 +192,7 @@ describe("(e) P2 retakes the Brush, scores it, and swaps back", () => {
     expect(game.decision()).toMatchObject({ context: "main", kind: "action", seat: P2 });
   });
 
-  test.failing("BUG: the card that comes back is the SAME object that waited in P2's banishment (438.7.b 'the original card is returned') — engine deletes the banished card and mints a fresh 'replaced-…' object in the slot (harness cardConservation violation)", async () => {
+  test("the card that comes back is the SAME object that waited in P2's banishment (438.7.b 'the original card is returned') — engine deletes the banished card and mints a fresh 'replaced-…' object in the slot (harness cardConservation violation)", async () => {
     // Expected: the id that sat in P2's banishment is now in the battlefield row and no invariant fires.
     // Actual: that id no longer exists; a new id appears "from nowhere" carrying the bfA definition.
     const { game } = await retake();

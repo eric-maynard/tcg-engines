@@ -98,6 +98,14 @@ export const cardConservation: Invariant = {
         }
       }
       for (const id of Object.keys(cur.cards)) {
+        // rule 438.5.a / 438.7.b — a Replaced battlefield card waits in
+        // Banishment as the SAME object under a new instance id (the token took
+        // over the slot's id): it continues the card that just left the row.
+        const continues = (cur.metas[id] as { replacedFromCardId?: string } | undefined)
+          ?.replacedFromCardId;
+        if (continues !== undefined && prev.cards[continues]) {
+          continue;
+        }
         if (!prev.cards[id] && !isTokenInstance(id, cur.cards[id]?.definitionId)) {
           out.push(`${id} appeared from nowhere`);
         }

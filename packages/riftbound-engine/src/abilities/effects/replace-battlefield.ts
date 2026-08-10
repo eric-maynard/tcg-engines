@@ -91,6 +91,12 @@ export function handle_replaceBattlefield(
     replacedId = `replaced-${battlefieldId}-${replacedSeq++}`;
     ctx.createCardInZone?.(replacedId, "banishment", owner);
     registry.register(replacedId, { ...replacedDef, id: replacedId });
+    // rule 438.5.a / 438.7.b — this is the SAME card continuing under a new
+    // instance id (the token took over the slot's id), not a card conjured from
+    // nowhere: record the object it continues so identity is traceable.
+    ctx.cards.updateCardMeta?.(replacedId as CoreCardId, {
+      replacedFromCardId: battlefieldId,
+    } as unknown as Record<string, unknown>);
   }
 
   // rule 438.1: the token takes the slot itself — same id, so the units there
