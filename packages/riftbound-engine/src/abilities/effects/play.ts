@@ -283,7 +283,15 @@ function specTemplate(eff: PlayEffectShape, ctx: EffectContext, performer: strin
  * actually play right now, and let them pick one (declinable — the pick may
  * always be passed up). Nothing eligible: nothing happens.
  */
-function offerPileCandidates(eff: PlayEffectShape, ctx: EffectContext, pile: "trash" | "banishment"): void {
+function collectPileCandidates(
+  eff: PlayEffectShape,
+  ctx: EffectContext,
+  pile: "trash" | "banishment",
+): {
+  readonly candidates: string[];
+  readonly cards: readonly string[];
+  readonly template: Omit<EffectPlaySpec, "cardId">;
+} {
   const registry = getGlobalCardRegistry();
   const target = eff.target as { type?: string; controller?: string; filter?: unknown } | undefined;
   // rule 356.1.b.1 / 357.2 — "Play a unit from your trash that costs no more
@@ -355,6 +363,44 @@ function offerPileCandidates(eff: PlayEffectShape, ctx: EffectContext, pile: "tr
     }
     return canPerformEffectPlay(io, { ...template, cardId: id });
   });
+  return { candidates, cards, template };
+}
+
+/**
+ * rule 402.3 / 355.16 (unl-148-219 Cursed Sarcophagus) — the cards this "play a
+ * <card> from your trash / banishment" instruction could actually play right
+ * now. `undefined` when the effect is not a pile play. Legality gates read this
+ * BEFORE the ability goes on the chain, so an [Exhaust] cost is never taken for
+ * an activation with no legal option.
+ */
+export function pilePlayCandidateIds(
+  effect: ExecutableEffect | undefined,
+  ctx: EffectContext,
+): readonly string[] | undefined {
+  const eff = effect as unknown as (PlayEffectShape & { type?: string }) | undefined;
+  if (eff === undefined || eff.type !== "play") {
+    return undefined;
+  }
+  if ((eff.from !== "trash" && eff.from !== "banishment") || typeof eff.target !== "object" || eff.target === null) {
+    return undefined;
+  }
+  // rule 402.3 bites on a CHOICE. "Play ALL units banished with this"
+  // (sfd-090-221 The Zero Drive) chooses nothing, so it stays activatable even
+  // with an empty pool — it simply does as much as it can (419.3).
+  if ((eff.target as { quantity?: unknown }).quantity === "all") {
+    return undefined;
+  }
+  return collectPileCandidates(eff, ctx, eff.from).candidates;
+}
+
+/**
+ * rule 355.10 / 419.3.c — offer the eligible pile cards (see
+ * `collectPileCandidates`) and let the performer pick one.
+ */
+function offerPileCandidates(eff: PlayEffectShape, ctx: EffectContext, pile: "trash" | "banishment"): void {
+  const { candidates, cards, template } = collectPileCandidates(eff, ctx, pile);
+  const target = eff.target as { quantity?: unknown } | undefined;
+  const io = ctx as unknown as PlayIO;
   // rule 419.3 (sfd-090-221) — "Play ALL units banished with this": no choice
   // is involved, so every candidate is played, oldest first, with no prompt.
   if ((target as { quantity?: unknown } | undefined)?.quantity === "all") {

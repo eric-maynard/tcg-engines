@@ -118,7 +118,7 @@ describe("Cursed Sarcophagus [Exhaust] — only activatable when a unit banished
   // Expected: neither linked unit can be finalized (Sergeant costs 4 > 3; Grimwyrm costs 4 AND has no battlefield
   // conquered this turn), so per 402.3 / 355.16 the [Exhaust] ability is not a legal activation at all.
   // Actual: `activateAbility:sarc#1` is on the menu; activating exhausts the gear and the resolution plays nothing.
-  test.failing("BUG: (a) with 3 energy and nothing conquered the [Exhaust] ability must be ABSENT from seat.legal() — no banished-with-this unit is playable (402.3, 355.16)", async () => {
+  test("(a) with 3 energy and nothing conquered the [Exhaust] ability must be ABSENT from seat.legal() — no banished-with-this unit is playable (402.3, 355.16)", async () => {
     const game = await ready(3);
     expect(game.p1.can("activate", "sarc")).toBe(false);
     expect(game.p1.legal().some((o) => o.card === "sarc")).toBe(false);
@@ -270,7 +270,7 @@ describe("Cursed Sarcophagus [Exhaust] — only activatable when a unit banished
   // Expected: the sole linked unit has no legal destination, so the ability is absent (402.3) — otherwise P1
   // could exhaust the gear for nothing. Actual: offered; activating exhausts the Sarcophagus and resolves as a
   // no-op (Grimwyrm stays banished).
-  test.failing("BUG: (d) with only Grimwyrm banished and nothing conquered this turn the ability must be ABSENT even at 4 energy (402.3 — no legal option)", async () => {
+  test("(d) with only Grimwyrm banished and nothing conquered this turn the ability must be ABSENT even at 4 energy (402.3 — no legal option)", async () => {
     const game = await ready(4, { sergeant: false });
     expect(game.p1.banishment()).toEqual(["wyrm"]);
     expect(game.p1.can("activate", "sarc")).toBe(false);
@@ -295,7 +295,7 @@ describe("Cursed Sarcophagus [Exhaust] — only activatable when a unit banished
   // Expected: the raw activation is refused as a whole (358.5 / 404): the [Exhaust] cost is part of the undone
   // activation, so the Sarcophagus is still READY, both units still banished, energy 3, chain empty, P1 still in
   // Neutral Open. Actual: accepted — gear exhausted, an ability item sits on the chain and later resolves empty.
-  test.failing("BUG: (e) raw {activate Sarcophagus} on board (a) (3 energy) is refused atomically — gear still ready, Grimwyrm + Sergeant still banished, energy 3, chain empty, still P1's open main phase", async () => {
+  test("(e) raw {activate Sarcophagus} on board (a) (3 energy) is refused atomically — gear still ready, Grimwyrm + Sergeant still banished, energy 3, chain empty, still P1's open main phase", async () => {
     const game = await ready(3);
     const r = await game.p1.try((p) => p.do("activateAbility", RAW_ACTIVATE));
     expect(r.ok).toBe(false);
@@ -306,7 +306,7 @@ describe("Cursed Sarcophagus [Exhaust] — only activatable when a unit banished
     expect(game.decision()).toMatchObject({ context: "main", kind: "action", seat: P1 });
   });
 
-  test.failing("BUG: (e) raw {activate Sarcophagus} on board (d) (only Grimwyrm, nothing conquered) is refused atomically — gear still ready, Grimwyrm still banished, energy 4, chain empty", async () => {
+  test("(e) raw {activate Sarcophagus} on board (d) (only Grimwyrm, nothing conquered) is refused atomically — gear still ready, Grimwyrm still banished, energy 4, chain empty", async () => {
     const game = await ready(4, { sergeant: false });
     const r = await game.p1.try((p) => p.do("activateAbility", RAW_ACTIVATE));
     expect(r.ok).toBe(false);
@@ -314,19 +314,6 @@ describe("Cursed Sarcophagus [Exhaust] — only activatable when a unit banished
     expect(game.p1.banishment()).toEqual(["wyrm"]);
     expect(game.p1.energy()).toBe(4);
     expect(game.chain()).toEqual([]);
-  });
-
-  test("(e) what the engine does today on board (a): the activation goes through, and once both pass it resolves into NOTHING — no unit leaves banishment, no energy is spent, no 'unit played' trigger, but the Sarcophagus has been exhausted for the turn", async () => {
-    const game = await ready(3);
-    await game.p1.do("activateAbility", RAW_ACTIVATE);
-    expect(game.state("sarc").isExhausted).toBe(true);
-    const r = await game.settle();
-    expect(r.reason).toBe("open");
-    expect(game.p1.banishment().sort()).toEqual(["sarge", "wyrm"]);
-    expect(game.p1.energy()).toBe(3);
-    expect(game.chain()).toEqual([]);
-    expect(game.p1.units().sort()).toEqual(["keeper", "runner"]);
-    expect(game.state("sarc").isExhausted).toBe(true); // ← the cost was taken for no effect
   });
 
   // ── (f) timing: showdown ───────────────────────────────────────────────────────────────────────

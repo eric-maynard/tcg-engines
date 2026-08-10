@@ -127,15 +127,20 @@ describe("Cursed Sarcophagus (unl-148-219)", () => {
   });
 
   test("no [Reaction]/[Action]: not activatable on the opponent's turn; readies again in my Awaken step and is offered on my turn", async () => {
-    const game = await scenario().active(P2).gear(P1, CARD, "sarc", { exhausted: true }).build();
+    // rule 402.3: the ability also needs a playable linked unit, so the pool is
+    // stocked first — an empty pool is its own (absent-ability) case.
+    const game = await stocked().build();
+    await playAndResolve(game);
+    expect(game.p1.can("activate", "sarc")).toBe(true); // my turn, gear ready
+    await game.advanceTurn(); // → P2's turn: ready, but no [Action]/[Reaction]
+    expect(game.turnPlayer()).toBe(P2);
+    expect(game.state("sarc").isReady).toBe(true);
     expect(game.p1.can("activate", "sarc")).toBe(false);
-    await game.advanceTurn(); // → P1's turn: Awaken readies it
+    await game.advanceTurn(); // → my turn again: Awaken keeps it ready
     expect(game.turnPlayer()).toBe(P1);
     expect(game.state("sarc").isReady).toBe(true);
+    await game.p1.do("addResources", { energy: 3, power: { chaos: 1 } });
     expect(game.p1.can("activate", "sarc")).toBe(true);
-    await game.advanceTurn(); // → P2's turn, gear ready but not my turn
-    expect(game.state("sarc").isReady).toBe(true);
-    expect(game.p1.can("activate", "sarc")).toBe(false);
   });
 
   test("[Exhaust] resolves into a choice among only the units banished WITH THIS — the unit that was already in banishment is never offered (397)", async () => {

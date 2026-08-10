@@ -48,6 +48,9 @@ import {
   replacementTargetIsClassFilter,
   spellEffectHasLegalTargets,
 } from "../play/targeting";
+import { pilePlayCandidateIds } from "../../../abilities/effects/play";
+import { canPerformEffectPlay } from "../play/play-pipeline";
+import { costModeOfPlayEffect } from "../../../abilities/effects/play";
 import { buildEffectContext, canAffordPower } from "./effect-context";
 import { raisePlayTimeModeChoice } from "../play/play-time-modes";
 
@@ -440,6 +443,60 @@ function exhaustedAllyMoveTargets(
   }
   const movers = resolveTarget({ ...(e.target as TargetDescriptor), quantity: "all" }, resolverCtx);
   return movers.filter((m) => exhaustedAllyPayerPool(effect, m, resolverCtx).length > 0);
+}
+
+/**
+ * rule 402.3 / 355.16 (rule-id: unl-148-219 Cursed Sarcophagus) — an ability
+ * whose effect is a LINKED off-board play ("play a unit banished with this")
+ * has no legal activation while none of the linked cards could actually be
+ * played right now (cost unaffordable, or nowhere legal to enter): its cost
+ * must not be payable for nothing. The candidate list is the one the
+ * resolution offers (`effects/play.ts offerPileCandidates`).
+ */
+function linkedPlayHasNoPlayableCandidate(
+  effect: unknown,
+  // biome-ignore lint/suspicious/noExplicitAny: engine move context is framework-typed
+  context: any,
+  state: RiftboundGameState,
+  hostCardId: string,
+  playerId: string,
+): boolean {
+  const eff = effect as (SpellEffectTargetShape & { linkedToSource?: boolean }) | undefined;
+  if (eff?.linkedToSource !== true) {
+    return false;
+  }
+  const zone = offBoardPlayZone(eff);
+  if (zone === undefined) {
+    return false;
+  }
+  // rule 402.3 bites on a CHOICE. "Play ALL units banished with this"
+  // (sfd-090-221 The Zero Drive) chooses nothing, so it stays activatable with
+  // an empty pool — it simply does as much as it can (419.3).
+  if ((eff.target as { quantity?: unknown } | undefined)?.quantity === "all") {
+    return false;
+  }
+  const linked = ((context.cards?.getCardMeta?.(hostCardId as CoreCardId) as
+    | { exiledByThis?: readonly string[] }
+    | undefined)?.exiledByThis ?? []) as readonly string[];
+  const registry = getGlobalCardRegistry();
+  const wanted = (eff.target as { type?: string } | undefined)?.type;
+  const io = { cards: context.cards, counters: context.counters, draft: state, zones: context.zones };
+  return !linked.some((id) => {
+    if ((context.zones?.getCardZone?.(id as CoreCardId) as string | undefined) !== zone) {
+      return false;
+    }
+    const cardType = registry.getCardType(id as CoreCardId);
+    if (wanted !== undefined && wanted !== "card" && wanted !== cardType) {
+      return false;
+    }
+    return canPerformEffectPlay(io as never, {
+      cardId: id,
+      costMode: costModeOfPlayEffect(eff as never),
+      playerId,
+      sourceCardId: hostCardId,
+      via: "effect",
+    });
+  });
 }
 
 /**
@@ -1781,6 +1838,25 @@ export const activateAbility: Defs["activateAbility"] = {
       return false;
     }
 
+    // rule 402.3 / 355.16 (unl-148-219 Cursed Sarcophagus) — "[Exhaust]: Play a
+    // unit banished with this": when no linked card in the pile can actually be
+    // played right now (unaffordable, or nowhere it may legally enter) the
+    // ability has no legal option, so it cannot be activated at all — the
+    // [Exhaust] cost must never be paid for nothing.
+    const pilePlays = pilePlayCandidateIds(
+      ability.effect as ExecutableEffect | undefined,
+      buildEffectContext(state as never, playerId, cardId, context as never),
+    );
+    if (pilePlays !== undefined && pilePlays.length === 0) {
+      return false;
+    }
+
+    // rule 402.3 / 355.16 (unl-148-219) — a linked off-board play with nothing
+    // playable in its pool is no legal activation at all.
+    if (linkedPlayHasNoPlayableCandidate(ability.effect, context, state, cardId, playerId)) {
+      return false;
+    }
+
     // rule 402.3 (unl-045-219) — "move a DIFFERENT unit you control": with a
     // single unit the mover and the exhaust-payer would have to be the same
     // card, so the ability has no legal activation at all.
@@ -2270,6 +2346,22 @@ export const activateAbility: Defs["activateAbility"] = {
             zones: context.zones,
           })
         ) {
+          continue;
+        }
+
+        // rule 402.3 / 355.16 (unl-148-219) — "play a unit banished with this"
+        // with nothing playable in the pile is not an offerable activation.
+        const pileOptions = pilePlayCandidateIds(
+          ability.effect as ExecutableEffect | undefined,
+          buildEffectContext(state as never, playerId, entry.hostCardId, context as never),
+        );
+        if (pileOptions !== undefined && pileOptions.length === 0) {
+          continue;
+        }
+
+        // rule 402.3 / 355.16 (unl-148-219) — a linked off-board play with
+        // nothing playable in its pool is not offered.
+        if (linkedPlayHasNoPlayableCandidate(ability.effect, context, state, entry.hostCardId, playerId)) {
           continue;
         }
 
