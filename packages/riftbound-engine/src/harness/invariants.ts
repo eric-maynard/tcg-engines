@@ -92,8 +92,12 @@ export const cardConservation: Invariant = {
       }
     }
     if (prev) {
+      // rule 186.1 / 652.3 — a card removed from the game stops being an object;
+      // its owner is kept on the departed-owner record (rule 183), which is what
+      // tells a legitimate removal apart from a card the engine lost.
+      const departed = (cur.state as { departedOwners?: Record<string, string> }).departedOwners ?? {};
       for (const id of Object.keys(prev.cards)) {
-        if (!cur.cards[id] && !isTokenInstance(id, prev.cards[id]?.definitionId)) {
+        if (!cur.cards[id] && !isTokenInstance(id, prev.cards[id]?.definitionId) && departed[id] === undefined) {
           out.push(`${id} vanished`);
         }
       }

@@ -347,7 +347,7 @@ describe("Rule 651.2: Multi-player concede behavior", () => {
 // ---------------------------------------------------------------------------
 
 describe("Rule 652: Removal of a Player", () => {
-  it("Rule 652.1: concede banishes all permanents the removed player owns", () => {
+  it("Rule 652.1 / 652.3: concede banishes every permanent the removed player owns and then takes those cards out of the game", () => {
     const engine = createMinimalGameState({ phase: "main", playerCount: 4 });
     createBattlefield(engine, "bf-1", { controller: P1 });
 
@@ -372,11 +372,11 @@ describe("Rule 652: Removal of a Player", () => {
 
     applyMove(engine, "concede", { playerId: P1 });
 
-    // All three cards are now in the banishment zone.
-    const banished = getCardsInZone(engine, "banishment" as ZoneName, P1);
-    expect(banished).toContain("unit-base");
-    expect(banished).toContain("unit-bf");
-    expect(banished).toContain("spell-hand");
+    // rule 652.3 — the banish of 652.1 is followed by removing the cards from
+    // the game, so they sit in no zone at all (not even banishment).
+    for (const zone of ["base", "battlefield-bf-1", "hand", "banishment"] as const) {
+      expect(getCardsInZone(engine, zone as ZoneName, P1)).toEqual([]);
+    }
   });
 
   it("Rule 652.2: battlefields controlled by the removed player become uncontrolled", () => {
@@ -431,7 +431,7 @@ describe("Rule 652: Removal of a Player", () => {
     "Rule 652.2.c: Continuous effects from removed battlefield immediately cease",
   );
 
-  it("Rule 652.3: all cards the removed player owns are banished (main deck, trash, rune deck)", () => {
+  it("Rule 652.3: all cards the removed player owns leave the game (main deck, trash, rune deck)", () => {
     const engine = createMinimalGameState({ phase: "main", playerCount: 4 });
 
     createCard(engine, "deck-1", { cardType: "spell", owner: P1, zone: "mainDeck" });
@@ -449,11 +449,8 @@ describe("Rule 652: Removal of a Player", () => {
     expect(getCardsInZone(engine, "mainDeck", P1).length).toBe(0);
     expect(getCardsInZone(engine, "trash", P1).length).toBe(0);
     expect(getCardsInZone(engine, "runeDeck", P1).length).toBe(0);
-    const banished = getCardsInZone(engine, "banishment" as ZoneName, P1);
-    expect(banished).toContain("deck-1");
-    expect(banished).toContain("deck-2");
-    expect(banished).toContain("trash-1");
-    expect(banished).toContain("rune-deck-1");
+    // rule 652.3 — removed from the game, so banishment does not keep them either.
+    expect(getCardsInZone(engine, "banishment" as ZoneName, P1)).toEqual([]);
   });
 
   it("Rule 652.3: removed player's rune pool is emptied (energy + power)", () => {

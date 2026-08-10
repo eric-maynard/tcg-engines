@@ -29,6 +29,8 @@
 
 import type { CardId as CoreCardId, PlayerId as CorePlayerId, ZoneId as CoreZoneId } from "@tcg/core";
 import type { PlayerId, RiftboundCardMeta, RiftboundGameState } from "../types/game-state";
+import { recordDepartedOwner } from "./leave-board";
+import { recordPublicReveal } from "./public-reveal";
 
 /**
  * Context APIs the removal pipeline needs. Mirrors the move-reducer
@@ -46,6 +48,8 @@ export interface PlayerRemovalContext {
       targetZoneId: CoreZoneId;
       position?: "top" | "bottom";
     }) => void;
+    /** rule 652.3 — take a card out of the game entirely (absent in reduced harnesses). */
+    removeCardFromGame?: (params: { cardId: CoreCardId }) => void;
   };
 
   cards: {
@@ -125,6 +129,16 @@ export function removePlayer(
     }
   }
 
+  // rule 421.4 — a facedown card that changes zones is revealed by its owner to
+  // all players. 652.1 banishes them on the way out, so the identity lands on
+  // the shared public-reveal record (424.1) before 652.3 takes the card out of
+  // the game and no zone can name it any more.
+  for (const bfId of Object.keys(draft.battlefields ?? {})) {
+    for (const cid of zones.getCardsInZone(`facedown-${bfId}` as CoreZoneId, playerId as CorePlayerId)) {
+      recordPublicReveal({ draft }, playerId, [cid as string]);
+    }
+  }
+
   for (const cid of toBanish) {
     counters.clearAllCounters(cid);
     cards.updateCardMeta(cid, {
@@ -144,6 +158,11 @@ export function removePlayer(
       cardId: cid,
       targetZoneId: "banishment" as CoreZoneId,
     });
+    // rule 652.3 — "Remove all cards they own from the game": after the 652.1
+    // banish the cards are not objects in any zone any more. Ownership survives
+    // the object (rule 183) so later clauses can still read it.
+    recordDepartedOwner(draft, cid as string, cards.getCardOwner(cid) as string | undefined);
+    zones.removeCardFromGame?.({ cardId: cid });
   }
 
   // Rule 652.2: Battlefields previously controlled by the removed player
