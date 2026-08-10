@@ -763,6 +763,14 @@ export function leaveBoard(
 
   // rule 124.1 — the card in its new zone is a new object.
   resetObjectState(ctx, cardId);
+  // rule 124.1 / 427.3 / 397 (sfd-090-221 The Zero Drive) — a card that returns
+  // to a private zone (hand or Main Deck) and is played again is a NEW object
+  // with no memory of what its earlier incarnation banished "with this". The
+  // link survives a move to banishment/trash, where the card is still the
+  // object whose already-activated ability is resolving.
+  if (finalTo === "hand" || finalTo === "deck-top" || finalTo === "deck-bottom") {
+    ctx.cards?.updateCardMeta?.(cardId as CoreCardId, { exiledByThis: undefined });
+  }
   if (isBoardZone(lki.zone)) {
     markNewObjectForChainTargets(ctx.draft, cardId);
     dropFromPendingUnitChoice(ctx.draft, cardId);
