@@ -8,11 +8,14 @@
  * (`effects/move.ts` re-checks the carried choice against it — 359.3.e.5).
  * Leaf module: imports the target resolver only.
  */
-import type { CardId as CoreCardId } from "@tcg/core";
+import type { CardId as CoreCardId, ZoneId as CoreZoneId } from "@tcg/core";
 import type { EffectContext, ExecutableEffect } from "./effect-executor";
 import { getEffectiveMight } from "./effects/_helpers";
 import type { TargetDescriptor } from "./target-resolver";
 import { resolveTarget } from "./target-resolver";
+import { isInvalidMoveDestination } from "../game-definition/moves/movement/helpers";
+import { areAllies } from "../operations/teams";
+import type { PlayerId, RiftboundGameState } from "../types/game-state";
 
 type BattlefieldWhich = string;
 
@@ -50,6 +53,41 @@ export function hasCasterChosenDestination(effect: unknown): boolean {
   return typeof to === "object" && to !== null && typeof to.battlefield === "string";
 }
 
+/**
+ * rule 447.2.b / 462.3 — Invalid Destinations are never OFFERED: a unit can
+ * never land at a battlefield where a teammate of its controller already has
+ * units, nor at one already holding units of two OTHER players (449.2). The
+ * base is always a legal landing spot.
+ *
+ * Only the CHOICE is narrowed, and only while some valid destination survives:
+ * when every destination the wording allows is invalid the list is returned
+ * untouched, so the required move still executes and `effects/move.ts
+ * moveCardWithEvent` turns it into a Recall (447.2.c) — as it also does for a
+ * destination that only became invalid after it was named.
+ */
+export function keepLegalArrivals(zones: string[], moverId: string, ctx: EffectContext): string[] {
+  const controllerOf = (id: string): string | undefined =>
+    (ctx.cards.getCardController?.(id as CoreCardId) ??
+      ctx.cards.getCardOwner(id as CoreCardId)) as string | undefined;
+  const mine = controllerOf(moverId);
+  if (mine === undefined) {
+    return zones;
+  }
+  const state = ctx.draft as RiftboundGameState;
+  const legal = zones.filter(
+    (zone) =>
+      !zone.startsWith("battlefield-") ||
+      !isInvalidMoveDestination(
+        zone,
+        mine,
+        (zoneId) => ctx.zones.getCardsInZone(zoneId as CoreZoneId),
+        controllerOf,
+        (other) => areAllies(state, mine as PlayerId, other as PlayerId),
+      ),
+  );
+  return legal.length > 0 ? legal : zones;
+}
+
 function resolverCtx(ctx: EffectContext): Parameters<typeof resolveTarget>[1] {
   return {
     cards: ctx.cards,
@@ -66,6 +104,8 @@ function resolverCtx(ctx: EffectContext): Parameters<typeof resolveTarget>[1] {
  * `moverId` under `effect`, or `undefined` when the effect has no
  * caster-chosen destination or the mover is not on the board (a card an effect
  * is about to PLAY chooses where it enters as it is played — 354.2 — not here).
+ * These are the destinations the effect's own WORDING allows; a prompt narrows
+ * them further with `keepLegalArrivals` (447.2.b).
  */
 export function moveDestinationOptions(
   effect: ExecutableEffect | unknown,

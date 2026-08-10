@@ -19,7 +19,11 @@
  */
 import type { CardId as CoreCardId } from "@tcg/core";
 import type { EffectContext } from "../../../abilities/effect-executor";
-import { hasCasterChosenDestination, moveDestinationOptions } from "../../../abilities/move-destinations";
+import {
+  hasCasterChosenDestination,
+  keepLegalArrivals,
+  moveDestinationOptions,
+} from "../../../abilities/move-destinations";
 import { collectSequenceTargetSlots, isRestatementOf, type SpellEffectTargetShape } from "./targeting";
 
 // biome-ignore lint/suspicious/noExplicitAny: effect nodes are loosely typed JSON
@@ -140,10 +144,13 @@ export function raisePlayTimeDestinationChoice(
     if (mover === undefined || !isOnBoard(ctx, mover)) {
       continue; // not determinable now — the move asks as it executes
     }
-    const options = moveDestinationOptions(node, mover, ctx);
-    if (options === undefined) {
+    const worded = moveDestinationOptions(node, mover, ctx);
+    if (worded === undefined) {
       continue;
     }
+    // rule 447.2.b / 462.3 — a battlefield the mover may not become present at
+    // (teammate there, or units of two other players) is never offered.
+    const options = keepLegalArrivals(worded, mover, ctx);
     if (options.length === 0) {
       node._dest = null;
       continue;

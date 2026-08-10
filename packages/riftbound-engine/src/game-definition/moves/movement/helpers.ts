@@ -134,6 +134,16 @@ export function isBlockedByTwoOtherPlayers(
   getCardsInZone: (zoneId: CoreZoneId) => readonly CoreCardId[],
   getController: (cardId: string) => string | undefined,
 ): boolean {
+  return otherPlayersWithUnitsAt(battlefieldId, playerId, getCardsInZone, getController).size >= 2;
+}
+
+/** Every player OTHER than `playerId` who has units at `battlefieldId`. */
+export function otherPlayersWithUnitsAt(
+  battlefieldId: string,
+  playerId: string,
+  getCardsInZone: (zoneId: CoreZoneId) => readonly CoreCardId[],
+  getController: (cardId: string) => string | undefined,
+): Set<string> {
   const registry = getGlobalCardRegistry();
   const others = new Set<string>();
   const zoneId = (
@@ -148,7 +158,36 @@ export function isBlockedByTwoOtherPlayers(
       others.add(controller);
     }
   }
-  return others.size >= 2;
+  return others;
+}
+
+/**
+ * rule 447.2.b / 462.3 — a battlefield is an Invalid Destination for a unit of
+ * `playerId` when a TEAMMATE already has units there (teammates never share a
+ * battlefield, and combat is only ever between exactly two players), or when it
+ * already holds units of two OTHER players (449.2). Applies to moves of every
+ * kind — Standard, Ganking and effect-driven.
+ */
+export function isInvalidMoveDestination(
+  battlefieldId: string,
+  playerId: string,
+  getCardsInZone: (zoneId: CoreZoneId) => readonly CoreCardId[],
+  getController: (cardId: string) => string | undefined,
+  isAlly?: (other: string) => boolean,
+): boolean {
+  const others = otherPlayersWithUnitsAt(battlefieldId, playerId, getCardsInZone, getController);
+  if (others.size >= 2) {
+    return true;
+  }
+  if (isAlly === undefined) {
+    return false;
+  }
+  for (const other of others) {
+    if (isAlly(other)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /**
