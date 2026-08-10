@@ -595,10 +595,20 @@ export function evaluateTriggerCondition(
     );
   }
   if (c.type === "this-turn" && (c as { event?: string }).event === "conquered") {
-    // rule 383.2.a.1 (rule-id: unl-019-219, Blighted Battleaxe) — "if I didn't
-    // conquer this turn" reads the controller's conquer ledger for the turn,
-    // not the generic turn-event log (a conquer is never stamped there).
-    return (state.conqueredThisTurn?.[controllerId] ?? []).length > 0;
+    // rule 383.2.a.1 / 383.4.c.2 (rule-id: unl-019-219, Blighted Battleaxe) —
+    // "if I didn't conquer this turn" asks about THIS card: a unit conquers
+    // only when it is present as its controller conquers (383.4.c.2.a), so a
+    // conquest by a sibling unit does not satisfy it. The participants are
+    // stamped as `conquered-with:<cardId>` as the conquer event fires; a
+    // player-scoped reading (no source card) still reads the ledger.
+    const ledger = (state.conqueredThisTurn?.[controllerId] ?? []).length > 0;
+    if (!sourceCardId) {
+      return ledger;
+    }
+    const conquerLog =
+      (state as { turnEvents?: Record<string, readonly string[]> }).turnEvents?.[controllerId] ??
+      [];
+    return conquerLog.includes(`conquered-with:${sourceCardId}`);
   }
   if (c.type === "legion") {
     return evaluateLegionCondition(state, controllerId);
@@ -1945,6 +1955,28 @@ export function fireTriggers(rawEvent: GameEvent, ctx: TriggerRunnerContext): nu
     const turn = (ctx.draft as { turn?: { phase?: string; activePlayer?: string } }).turn;
     if (turn?.phase === "beginning" && turn.activePlayer === event.owner) {
       (draft.turnEvents[event.owner] ??= []).push("friendly-died-in-beginning");
+    }
+  }
+  // rule 383.4.c.2.a (rule-id: unl-019-219, Blighted Battleaxe) — a UNIT
+  // conquers only when it is present as its controller conquers, so record the
+  // participants by card id. "if I didn't conquer this turn" is a per-unit
+  // question; the player-level `conqueredThisTurn` ledger can't answer it.
+  if (event.type === "conquer" && event.playerId && "battlefieldId" in event) {
+    const draft = ctx.draft as { turnEvents?: Record<string, string[]> };
+    draft.turnEvents ??= {};
+    const log = (draft.turnEvents[event.playerId as string] ??= []);
+    for (const id of ctx.zones.getCardsInZone(
+      `battlefield-${event.battlefieldId as string}` as CoreZoneId,
+    )) {
+      const controller =
+        ctx.cards.getCardController?.(id) ?? ctx.cards.getCardOwner(id) ?? undefined;
+      if (controller !== event.playerId) {
+        continue;
+      }
+      const key = `conquered-with:${id as string}`;
+      if (!log.includes(key)) {
+        log.push(key);
+      }
     }
   }
   // rule-id: ogn-100-298 — static keyword grants are otherwise only refreshed
