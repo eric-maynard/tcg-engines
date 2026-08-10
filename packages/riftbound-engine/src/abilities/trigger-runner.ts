@@ -255,6 +255,53 @@ function attachedEffectTextAbilities(
   return out;
 }
 
+/**
+ * rule 136.2.d / 718 (rule-id: sfd-030-221 Skyfall of Areion) — "My hold
+ * effects are also conquer effects, and vice versa." The Equipment's Effect
+ * Text is appended to the WEARER, so "my" is the wearer: every hold-triggered
+ * ability the unit has (printed or conferred by another Equipment such as
+ * Trinity Force) also fires on conquer, and every conquer-triggered ability
+ * also fires on hold. Detected from a `hold-conquer-equivalence` static on the
+ * unit itself or on any Equipment attached to it.
+ */
+function hasHoldConquerEquivalence(
+  cardId: string,
+  meta: Partial<RiftboundCardMeta> | undefined,
+): boolean {
+  const registry = getGlobalCardRegistry();
+  const sources = [cardId, ...(meta?.equippedWith ?? []).map((id) => id as string)];
+  for (const id of sources) {
+    for (const a of registry.getAbilities(id) ?? []) {
+      const effect = (a as { effect?: { type?: string } }).effect;
+      if (a.type === "static" && effect?.type === "hold-conquer-equivalence") {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+/** rule 446 / 450 — the mirrored copies of every hold/conquer trigger. */
+function holdConquerMirroredAbilities(
+  abilities: readonly TriggerableAbility[],
+): TriggerableAbility[] {
+  const out: TriggerableAbility[] = [];
+  for (const a of abilities) {
+    if (a.type !== "triggered") {
+      continue;
+    }
+    const event = a.trigger?.event;
+    if (event !== "hold" && event !== "conquer") {
+      continue;
+    }
+    out.push({
+      ...a,
+      trigger: { ...a.trigger, event: event === "hold" ? "conquer" : "hold" },
+    } as TriggerableAbility);
+  }
+  return out;
+}
+
 function grantedKeywordAbilities(
   meta: Partial<RiftboundCardMeta> | undefined,
 ): TriggerableAbility[] {
@@ -1351,7 +1398,14 @@ export function getBoardCards(
       // rule 150.2 — Effect Text from every Equipment attached to this unit.
       ...attachedEffectTextAbilities(meta),
     ];
-    return granted.length > 0 ? [...printed, ...granted] : printed;
+    const all = granted.length > 0 ? [...printed, ...granted] : printed;
+    // rule-id: sfd-030-221 — Skyfall of Areion makes hold effects conquer
+    // effects and vice versa, for the whole assembled text of the wearer.
+    if (!hasHoldConquerEquivalence(cardId as string, meta)) {
+      return all;
+    }
+    const mirrored = holdConquerMirroredAbilities(all);
+    return mirrored.length > 0 ? [...all, ...mirrored] : all;
   };
 
   // Get cards from all players' bases and legend zones
@@ -1887,9 +1941,19 @@ export function fireTriggers(rawEvent: GameEvent, ctx: TriggerRunnerContext): nu
         sourceCardId: string;
         trigger: { event: string; on?: string };
         effect: unknown;
+        duration?: string;
       }[];
     }
   ).playerDelayedTriggers ?? []) {
+    // rule 317.1 / 392 — "…at the end of THIS turn" names a moment of the turn
+    // it was installed in, not "your turn": it fires in that turn's Ending Step
+    // for its installer even when the turn belongs to the other player (a
+    // conquer trigger that resolved for you on the opponent's turn still pays
+    // out). Only an explicitly player-scoped delayed trigger keeps the
+    // "controller" filter.
+    const thisTurnMoment =
+      pdt.duration !== "permanent" &&
+      (pdt.trigger.event === "end-of-turn" || pdt.trigger.event === "start-of-turn");
     boardCards.push({
       abilities: [
         {
@@ -1897,7 +1961,10 @@ export function fireTriggers(rawEvent: GameEvent, ctx: TriggerRunnerContext): nu
           // knows no source object is holding its choices.
           delayed: true,
           effect: pdt.effect as never,
-          trigger: { event: pdt.trigger.event, on: pdt.trigger.on ?? "controller" },
+          trigger: {
+            event: pdt.trigger.event,
+            on: pdt.trigger.on ?? (thisTurnMoment ? "any-player" : "controller"),
+          },
           type: "triggered",
         } as never,
       ],

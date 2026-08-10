@@ -42,10 +42,14 @@ function withSky(res: { energy?: number; power?: Record<string, number> } = { en
 }
 
 describe("Skyfall of Areion (sfd-030-221)", () => {
-  test("registry payload: Fury equipment, 3 energy, +2 Might bonus, one [Equip] keyword ability costing 1 energy + [fury]", async () => {
+  test("registry payload: Fury equipment, 3 energy, +2 Might bonus, an [Equip] keyword ability costing 1 energy + [fury] and the conferred hold↔conquer static", async () => {
     const def = (await loadDefaultCardPool()).get(CARD);
     expect(def).toMatchObject({ cardType: "equipment", domain: "fury", energyCost: 3, mightBonus: 2, name: "Skyfall of Areion" });
-    expect(def?.abilities).toEqual([{ cost: { energy: 1, power: ["fury"] }, keyword: "Equip", type: "keyword" }]);
+    expect(def?.abilities).toEqual([
+      { cost: { energy: 1, power: ["fury"] }, keyword: "Equip", type: "keyword" },
+      // rule 136.2.d / 718 — "My hold effects are also conquer effects, and vice versa" is Effect Text conferred on the wearer.
+      { effect: { type: "hold-conquer-equivalence" }, effectText: true, type: "static" },
+    ]);
   });
 
   test("play cost is 3 energy and no power: it enters the base ready and UNATTACHED (playing never equips); 2 energy is not enough", async () => {
