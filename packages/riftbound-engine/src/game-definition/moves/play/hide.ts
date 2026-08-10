@@ -37,6 +37,7 @@ import {
   beginRevealPairLock,
   beginRevealSlotLock,
   chargeDeflectFor,
+  fireChooseForBoundTargets,
   filterDeflectAffordable,
   isSinglePickSlot,
 } from "./reveal-target-lock";
@@ -975,7 +976,7 @@ function lockRevealedSpellTarget(
   cardId: string,
   battlefieldId: string | undefined,
   // biome-ignore lint/suspicious/noExplicitAny: engine move context is framework-typed
-  ctx: { cards: any; zones: any },
+  ctx: { cards: any; counters?: any; zones: any },
 ): void {
   if (draft.pendingChoice || battlefieldId === undefined) {
     return;
@@ -1070,6 +1071,8 @@ function lockRevealedSpellTarget(
     }
     // rule 809.1.c.1 — the surcharge is owed as the target is chosen.
     chargeDeflectFor(draft, playerId, cardId, affordable, ctx);
+    // rule 359.2 — no prompt, but the object was still chosen.
+    fireChooseForBoundTargets(draft, playerId, affordable, ctx);
     return;
   }
   draft.pendingChoice = {
@@ -1456,7 +1459,7 @@ export const revealHidden: Defs["revealHidden"] = {
         return;
       }
       // rule 355.5 / 811.1.b — targets are chosen as the card is played.
-      lockRevealedSpellTarget(draft, playerId, cardId, battlefieldId, { cards, zones });
+      lockRevealedSpellTarget(draft, playerId, cardId, battlefieldId, { cards, counters, zones });
       return;
     }
 
@@ -1533,8 +1536,9 @@ export const revealHidden: Defs["revealHidden"] = {
     // player in Turn Order. 346.1 keeps Focus only for a chain a trigger
     // OPENED on its own, not for one the play itself queued, so release the
     // latch. A permanent flipped from Hidden that queues nothing never uses
-    // the Chain (811.1.d.3): there is no chain to close and Focus stays put.
-    if (wasFocusAction && draft.interaction?.chain?.items.length) {
+    // the Chain (811.1.d.3), but playing it was still a Focus action, so its
+    // (trivial) chain closes immediately and Focus passes on all the same.
+    if (wasFocusAction) {
       draft.interaction = advanceFocusAfterPlay(
         draft.interaction,
         playerId as string,

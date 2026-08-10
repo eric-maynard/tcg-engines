@@ -2764,7 +2764,11 @@ export const pendingChoiceMoves: Partial<
           // rule 355.5 / 811.1.b (ogn-220-298): the next slot of a multi-target
           // card played from [Hidden] is asked right away.
           if (!draft.pendingChoice) {
-            continueRevealSlotLock(draft, { cards: context.cards, zones: context.zones });
+            continueRevealSlotLock(draft, {
+              cards: context.cards,
+              counters: context.counters,
+              zones: context.zones,
+            });
           }
           postChoiceCleanup(draft, context);
           return;

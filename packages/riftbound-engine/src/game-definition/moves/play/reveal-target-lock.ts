@@ -23,6 +23,7 @@ import { resolveTarget } from "../../../abilities/target-resolver";
 import { getBattlefieldZoneId } from "../../../zones/zone-configs";
 import { payAnyDomainPower, totalPooledPower } from "../chain/resolve";
 import { getDeflectSurcharge } from "./cost";
+import { fireTriggers } from "../../../abilities/trigger-runner";
 
 /** Minimal move-context surface these helpers need. */
 export interface RevealLockContext {
@@ -30,6 +31,31 @@ export interface RevealLockContext {
   readonly cards: any;
   // biome-ignore lint/suspicious/noExplicitAny: engine move context is framework-typed
   readonly zones: any;
+  // biome-ignore lint/suspicious/noExplicitAny: engine move context is framework-typed
+  readonly counters?: any;
+}
+
+/**
+ * rule 359.2 (rule-id: ogn-292-298) — an object bound WITHOUT a prompt (a lone
+ * legal candidate, rule 402.2) is still CHOSEN as the card is played, so
+ * "when a player chooses …" triggers fire for it exactly as they do for a
+ * prompted pick (which `pending-choice.ts` fires).
+ */
+export function fireChooseForBoundTargets(
+  draft: RiftboundGameState,
+  playerId: string,
+  ids: readonly string[],
+  ctx: RevealLockContext,
+): void {
+  if (!ctx.counters) {
+    return;
+  }
+  for (const cardId of ids) {
+    fireTriggers(
+      { cardId, chooserId: playerId, sourceType: "spell", type: "choose" },
+      { cards: ctx.cards, counters: ctx.counters, draft, zones: ctx.zones },
+    );
+  }
 }
 
 /** In-flight multi-slot lock for one chain item, keyed by that item's id. */
@@ -167,6 +193,8 @@ function advance(
       // A sole candidate binds without asking — its surcharge is still owed.
       chargeDeflectFor(draft, lock.playerId, lock.cardId, options, ctx);
       lock.picked.push(options[0] as string);
+      // rule 359.2 — an auto-bound object is chosen just the same.
+      fireChooseForBoundTargets(draft, lock.playerId, options, ctx);
       continue;
     }
     break;
@@ -250,6 +278,8 @@ export function beginRevealPairLock(
   if (pairs.length === 1) {
     lock.picked = [...(pairs[0] as [string, string])];
     writeLockedTargets(draft, args.itemId, lock);
+    // rule 359.2 — a forced pair is still chosen as the card is played.
+    fireChooseForBoundTargets(draft, args.playerId, lock.picked, ctx);
     return;
   }
   // Several legal pairs: ask for the two objects one prompt at a time, exactly
