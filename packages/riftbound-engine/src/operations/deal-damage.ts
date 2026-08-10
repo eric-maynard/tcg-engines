@@ -627,6 +627,8 @@ export function dealDamageBatch(
       };
       const legacyKind = req.source.kind === "spell" || req.source.kind === "ability" || req.source.kind === "combat" ? req.source.kind : undefined;
       total = addDamage(io, g.target, dealt, {
+        // rule 383.2.c.1 — fresh damage restores kill credit to this source.
+        killCreditStale: undefined,
         lastDamage: record,
         lastDamageSource: legacyKind,
         lastDamagedBy: req.source.player,

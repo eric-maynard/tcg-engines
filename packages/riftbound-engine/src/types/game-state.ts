@@ -73,6 +73,15 @@ export interface RiftboundCardMeta {
    */
   lastDamagedBy?: PlayerId;
   lastDamageSource?: "spell" | "ability" | "combat";
+  /**
+   * rule 383.2.c.1 — kill credit belongs to the damage that made the unit's
+   * damage lethal. A unit that survived a cleanup pass while damaged keeps its
+   * marked damage, but that damage is stale: if a later Might reduction (or any
+   * other change) finishes it off, nobody "killed it with" that old spell.
+   * Set by `cleanup/state-based-checks.ts performCleanup` for survivors, cleared
+   * by fresh damage in `operations/deal-damage.ts`.
+   */
+  killCreditStale?: boolean;
   /** rule 417 / 428.1 — the last damage event DEALT to this unit (`operations/deal-damage.ts`). */
   lastDamage?: import("../operations/deal-damage").DamageRecord;
 
@@ -864,6 +873,20 @@ export interface ChooseTargetChoice {
    */
   readonly total?: number;
   /**
+   * rule 355.14.e–h — with `total`: the split's TARGETS were locked when the
+   * item was finalized (355.14.b), so at resolution `options` are exactly the
+   * still-legal ones and every one of them must receive valid damage
+   * (355.14.f/g: `minPer` ≥ 1, hence `maxPer` = total − (n−1)); when more legal
+   * targets remain than damage (355.14.h) exactly `exactTargets` (= total) of
+   * them receive 1 each and the rest cease being targets. Absent = the legacy
+   * "choose recipients and amounts together" shape (0..total per option).
+   */
+  readonly minPer?: number;
+  readonly maxPer?: number;
+  readonly exactTargets?: number;
+  /** rule 355.14.b / 359.2 — the options were CHOSEN (and paid for) at finalization; the answer only divides. */
+  readonly targetsPreChosen?: true;
+  /**
    * rule-id: ogn-256-298 (rule 355.13) — "any number of <units>": picks
    * accumulate in `picked` until the chooser declines (`accept:false`) or no
    * legal option remains; `options` is re-pruned after each pick against the
@@ -1182,6 +1205,13 @@ export type PendingResume =
    */
   | { readonly kind: "trigger-cost"; readonly itemId: string }
   /**
+   * rule 355.12–355.14 / 402.2 — the answer is the variable-count target SET of
+   * slot `slot` (an effect-node path) of Pending item `itemId`: bound onto the
+   * item, [Deflect] charged per chosen object (809.1.c), "when you choose me"
+   * fired for each (355.14.d), before anyone receives Priority.
+   */
+  | { readonly kind: "target-slot"; readonly itemId: string; readonly slot: string }
+  /**
    * rule 355.11.b — the answer is the subset of the ORIGINAL targets the
    * effect affects; `effect` re-executes with them bound.
    */
@@ -1214,6 +1244,8 @@ export interface PendingItem {
   readonly key: string;
   readonly label?: string;
   readonly cardId?: CardId;
+  /** rule 809.1.c — the [Deflect] surcharge (Power of any Domain) choosing this option incurs. */
+  readonly deflect?: number;
 }
 
 /**
@@ -1249,11 +1281,23 @@ export interface PickManyChoice {
   readonly min: number;
   readonly max: number;
   readonly semantics: "target" | "drop" | "replacement-assign" | "subset";
+  /**
+   * rule 355.13 / 355.14.b — a finalization-time target SET: "split" = the
+   * recipients of split damage (amounts are decided at resolution, 355.14.e),
+   * "upTo" = an "up to N" / "any number of" group. Absent for other picks.
+   */
+  readonly slotSemantics?: "split" | "upTo";
   readonly prompt?: string;
   readonly constraint?: {
     readonly totalMightAtMost?: number;
     // rule 355.11.b — every picked card must share one location.
     readonly sameLocation?: boolean;
+    /**
+     * rule 809.1.d / 356.2.a.2 — the picked set's total [Deflect] surcharge must
+     * be payable from the chooser's pooled Power when the answer is given (a
+     * set the controller cannot afford is not a legal choice).
+     */
+    readonly deflectAffordable?: boolean;
   };
   readonly resume: PendingResume;
   /**

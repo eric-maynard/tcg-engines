@@ -260,6 +260,11 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
     // an undamaged 0-Might unit is alive.
     if ((damage > 0 && damage >= effectiveMight) || anyDamageIsLethal) {
       lethalIds.push(cardId as string);
+    } else if (meta?.lastDamagedBy !== undefined && meta.killCreditStale !== true) {
+      // rule 383.2.c.1 — the unit survived this pass, so its marked damage did
+      // not kill it. If a later Might reduction finishes it off, that old spell
+      // gets no "you kill a unit with a spell" credit (ruling 46208875b334d665).
+      ctx.cards.updateCardMeta(cardId, { killCreditStale: true } as Partial<RiftboundCardMeta>);
     }
   }
   // rule 428.1.a.1.b / 740.2.a — last-known information for every candidate,

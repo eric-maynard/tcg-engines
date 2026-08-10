@@ -417,8 +417,11 @@ export function snapshotLKI(ctx: LeaveBoardContext, cardId: string): LKISnapshot
     empowered: meta.empowered === true || flags.empowered === true,
     exhausted: meta.exhausted === true || flags.exhausted === true,
     isToken: registry.isToken(cardId),
-    lastDamageSource: meta.lastDamageSource,
-    lastDamagedBy: meta.lastDamagedBy,
+    // rule 383.2.c.1 — damage the unit already survived a cleanup pass with is
+    // stale: it credits nobody with the kill when something else finishes the
+    // unit off later (ruling 46208875b334d665).
+    lastDamageSource: meta.killCreditStale === true ? undefined : meta.lastDamageSource,
+    lastDamagedBy: meta.killCreditStale === true ? undefined : meta.lastDamagedBy,
     might,
     owner,
     stunned: meta.stunned === true || flags.stunned === true,
@@ -532,6 +535,7 @@ export function resetObjectState(ctx: LeaveBoardContext, cardId: string): void {
     grantedKeywords: undefined,
     hidden: false,
     hiddenAt: undefined,
+    killCreditStale: undefined,
     lastDamageSource: undefined,
     lastDamagedBy: undefined,
     mightModifier: 0,
