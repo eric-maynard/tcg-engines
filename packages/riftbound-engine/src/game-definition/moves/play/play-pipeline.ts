@@ -28,7 +28,7 @@ import type { RiftboundCardMeta, RiftboundGameState } from "../../../types";
 import { fireTriggers } from "../../../abilities/trigger-runner";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
 import { resolveTarget } from "../../../abilities/target-resolver";
-import { resetObjectState } from "../../../operations/leave-board";
+import { orderBatchTriggersByTurnOrder, resetObjectState } from "../../../operations/leave-board";
 import { noteArrival } from "../../../operations/arrive-at-battlefield";
 import { controlsBattlefield } from "../../../operations/battlefield-control";
 import { notePlayThisTurn } from "../../../operations/plays-this-turn";
@@ -45,7 +45,6 @@ import {
 } from "../../../zones/zone-configs";
 import {
   addToChain,
-  collapseTriggerBatch,
   createInteractionState,
   getActiveShowdown,
   removeChainItem,
@@ -253,7 +252,11 @@ export function enterPlayedPermanent(io: PlayIO, spec: EnterPlayedPermanentSpec)
     if (spec.stun === true) {
       fireTriggers({ cardId, type: "stun" } as Parameters<typeof fireTriggers>[0], trig);
     }
-    collapseTriggerBatch(draft.interaction, chainLenBeforePlayTriggers);
+    // rule 383.3.d.1 — `play-self` and `play-card` publish ONE play, so their
+    // triggers are simultaneous: the turn player appends first, everyone else in
+    // turn order, regardless of which publication raised them (also collapses
+    // the per-event batch stamps).
+    orderBatchTriggersByTurnOrder(draft, chainLenBeforePlayTriggers);
     // The from-Hidden publication of the SAME play happens after this call
     // returns (`hide.ts`), so hand it the batch these triggers share.
     (draft as { lastPlayTriggerBatch?: string }).lastPlayTriggerBatch =

@@ -240,3 +240,50 @@ describe("323.13 / 460 / 461.1 — two Combats staged in the same Closed State: 
     expect(game.violations()).toEqual([]);
   });
 });
+
+describe("323.12 — two Showdown-only (non-Combat) battlefields staged at once: the Turn Player chooses which one begins", () => {
+  /** Scout walks onto empty bfA (trigger → Closed); in response P1 Marches Grunt onto empty bfB; the chain empties with BOTH Showdowns staged. */
+  async function twoStagedShowdowns(manual: boolean): Promise<Game> {
+    const b = scenario()
+      .battlefield("bfA", { controller: null })
+      .battlefield("bfB", { controller: null })
+      .unit(P1, "base", SCOUT(3), "scout")
+      .unit(P1, "base", { might: 3, name: "Grunt" }, "grunt")
+      .deck(P1, ["ogn-001-298", "ogn-001-298"], ["d1", "d2"])
+      .hand(P1, MARCH, "march");
+    const game = await (manual ? b.autoProcedures(false) : b).build();
+    await game.p1.move("scout", "bfA");
+    await game.p1.cast("march", { answers: ["battlefield-bfB"], targets: "grunt" });
+    await game.p1.passPriority();
+    await game.p2.passPriority(); // March resolves
+    expect(game.locationOf("grunt")).toBe("bfB");
+    expect(activeShowdowns(game)).toEqual([]); // both merely staged
+    await game.p1.passPriority();
+    await game.p2.passPriority(); // trigger resolves → Neutral Open with two staged Showdowns
+    expect(game.chain()).toEqual([]);
+    return game;
+  }
+
+  test("the Turn Player is asked which Showdown begins (both battlefields offered, nothing open yet); picking bfB opens bfB only", async () => {
+    const game = await twoStagedShowdowns(true);
+    expect(activeShowdowns(game)).toEqual([]);
+    const d = game.decision();
+    expect(d).toMatchObject({ kind: "action", seat: P1 });
+    const starts = d?.kind === "action" ? d.options.filter((o) => o.moveId === "startShowdown") : [];
+    expect(starts.map((o) => o.key).sort()).toEqual([expect.stringContaining("bfA"), expect.stringContaining("bfB")]);
+    await game.p1.choose(starts.find((o) => o.key.includes("bfB"))!.key);
+    expect(activeShowdowns(game)).toHaveLength(1);
+    expect(topShowdown(game)).toMatchObject({ battlefieldId: "bfB", focusPlayer: P1, isCombatShowdown: false });
+  });
+
+  test("one at a time: the chosen Showdown conquers its battlefield before the other opens; P1 ends with both (+2)", async () => {
+    const game = await twoStagedShowdowns(false);
+    expect(activeShowdowns(game)).toHaveLength(1);
+    await game.settle();
+    await game.settle(); // the second Showdown opens once the first has finished
+    expect(game.gameState.battlefields.bfA).toMatchObject({ contested: false, controller: P1 });
+    expect(game.gameState.battlefields.bfB).toMatchObject({ contested: false, controller: P1 });
+    expect(game.p1.points()).toBe(2);
+    expect(game.violations()).toEqual([]);
+  });
+});

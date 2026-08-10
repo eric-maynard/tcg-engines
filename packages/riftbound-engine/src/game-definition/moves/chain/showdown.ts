@@ -60,18 +60,21 @@ export function refreshAfterShowdownBegan(draft: RiftboundGameState, context: Sh
 }
 
 /**
- * rule 323.13 / 460 / 461.1 — only ONE Combat begins at a time and the TURN
- * PLAYER decides which. With two or more Combats staged — by either player;
- * an off-turn Reaction stages one just the same — and no Showdown-only
- * battlefield (which 323.12 begins first) the Cleanup begins none: the choice
+ * rule 323.12 / 323.13 / 460 / 461.1 — only ONE Showdown begins at a time and
+ * the TURN PLAYER decides which. Showdown-only battlefields go first (323.12)
+ * and Combats after (323.13), but each step is itself a Turn Player choice
+ * whenever two or more of that kind are staged — by either player; an off-turn
+ * Reaction stages one just the same — so the Cleanup begins none and the choice
  * is made with the Turn Player's `startShowdown` step. Exactly one staged
- * Combat leaves nothing to choose, so the Cleanup opens it.
+ * battlefield of the leading kind leaves nothing to choose, so the Cleanup
+ * opens it.
  */
 export function turnPlayerMustChooseStagedCombat(
   draft: RiftboundGameState,
   context: ShowdownStagingContext,
 ): boolean {
   let combats = 0;
+  let showdownOnly = 0;
   for (const [battlefieldId, bf] of Object.entries(draft.battlefields ?? {})) {
     if (!bf?.contested || bf.showdownComplete === true || !bf.contestedBy) {
       continue;
@@ -86,9 +89,16 @@ export function turnPlayerMustChooseStagedCombat(
       return false; // 323.11 re-staging happens first — let the Cleanup run it
     }
     if (!controllers.some((c) => c !== undefined && c !== attacker)) {
-      return false; // a staged Showdown-only battlefield goes first (323.12)
+      showdownOnly += 1; // a staged Showdown-only battlefield goes first (323.12)
+      continue;
     }
     combats += 1;
+  }
+  // rule 323.12 — the Showdown-only step runs before the Combat step, and it is
+  // the Turn Player who names which of those battlefields opens; only a lone
+  // one is begun by the Cleanup without asking.
+  if (showdownOnly > 0) {
+    return showdownOnly > 1;
   }
   return combats > 1;
 }
