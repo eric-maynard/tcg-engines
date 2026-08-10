@@ -1,8 +1,13 @@
 // Effect handler: "sequence"
 import type { CardId as CoreCardId } from "@tcg/core";
+import {
+  cleanupAndFireDeaths,
+  type PostMoveCleanupContext,
+} from "../../cleanup/post-move-cleanup";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import type { TargetDescriptor } from "../target-resolver";
 import { isAllAtOneBattlefield, resolveTarget } from "../target-resolver";
+import { isSlotBound } from "../target-slots";
 import { type EffectHelpers, getTargetIds } from "./_helpers";
 import { findSpendableBuff } from "./spend-buff";
 import { canSpendXp } from "./spend-xp";
@@ -652,6 +657,8 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
       if (
         typeof subTarget === "object" &&
         typeof upToN === "number" &&
+        // rule 402.2 — a set already named when the item was finalized is not asked again.
+        !isSlotBound(sub) &&
         (subCtx.boundTargets === undefined || pvOptions !== undefined) &&
         ctx.draft.pendingChoice === undefined
       ) {
@@ -776,6 +783,25 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
       carryBattlefieldZone();
       if (playedSink !== undefined && playedSink.ids.length > 0) {
         pending = playedSink.ids;
+      }
+      // rule 359.3.e.8 (ogn-248-298 Icathian Rain) — each instruction is followed
+      // by its consequences before the next one runs: a damage step's deaths (and
+      // the die replacements they offer) resolve now, so a replacement-saved unit
+      // is still the same legal target for the instances that follow instead of
+      // the whole spell landing as one batched lethal check. Only between two
+      // DAMAGE instructions: a following clause that talks about this step's
+      // kill ("If this kills it, banish it instead", "Then for each unit this
+      // kills …") is part of the same instruction's consequences and must still
+      // see the death happen after it.
+      if (
+        sub.type === "damage" &&
+        seq.effects[i + 1]?.type === "damage" &&
+        ctx.draft.pendingChoice === undefined &&
+        ctx.cards !== undefined &&
+        ctx.counters !== undefined &&
+        ctx.zones !== undefined
+      ) {
+        cleanupAndFireDeaths(ctx.draft, ctx as unknown as PostMoveCleanupContext);
       }
       // rule 355.8 / 820.2 (unl-182-219) — a step that parked a modal prompt
       // suspends the rest of the sequence: the later Repeat executions must
@@ -910,7 +936,15 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
       // step), so the sequence remainder cannot ride there. Defer it until the
       // whole prompt chain has been answered, or the draw would happen while
       // the player is still deciding what to leave on top.
-      if (parked?.type === "reveal-and-pick" && parked.then !== undefined) {
+      // rule 369.1 / 370.1 (ogn-194-298 Nocturne) — the same holds for the
+      // `confirm` a looked-at card's own "as you look at me" replacement raises
+      // during a [Predict] / look step: its `then` is the rest of THAT step, so
+      // the sequence remainder ("Draw 2") waits for the whole chain instead of
+      // drawing the cards still being looked at.
+      if (
+        (parked?.type === "reveal-and-pick" || parked?.type === "confirm") &&
+        parked.then !== undefined
+      ) {
         const rest = seq.effects.slice(i + 1);
         if (rest.length > 0) {
           const restSeq = { effects: rest, independentExecution: true, type: "sequence" };
@@ -937,11 +971,25 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
         if (rest.length > 0) {
           // rule 359.3.e.12 — the remainder still names the object the kill
           // instruction targeted, even though it may never have died.
-          const carry = (subCtx.boundTargets ?? ctx.boundTargets) as readonly string[] | undefined;
+          // rule 355.8 (ogn-248-298) — but when the steps each own a POSITIONAL
+          // slot, the remainder keeps the LATER slots' picks, not the id this
+          // step just aimed at.
+          const slotK = indepSlots ? indepSlots.findIndex((s) => s.index === i) : -1;
+          const carry =
+            slotK >= 0 && ctx.boundTargets !== undefined
+              ? ctx.boundTargets.slice(slotK + 1)
+              : ((subCtx.boundTargets ?? ctx.boundTargets) as readonly string[] | undefined);
           const restSeq =
-            carry !== undefined && carry.length > 0
-              ? { boundTargetsOverride: [...carry], effects: rest, type: "sequence" }
-              : { effects: rest, independentExecution: true, type: "sequence" };
+            slotK >= 0
+              ? {
+                  boundTargetsOverride: [...(carry ?? [])],
+                  effects: rest,
+                  independentTargets: true,
+                  type: "sequence",
+                }
+              : carry !== undefined && carry.length > 0
+                ? { boundTargetsOverride: [...carry], effects: rest, type: "sequence" }
+                : { effects: rest, independentExecution: true, type: "sequence" };
           ctx.draft.deferredSequenceRest = [
             ...(ctx.draft.deferredSequenceRest ?? []),
             {
