@@ -29,14 +29,25 @@ export function endCombatDesignations(cards: CombatDesignationCards, unitIds: re
     cards.updateCardMeta(id as never, meta as never);
   };
   for (const id of unitIds) {
+    set(id, { combatRole: null } as Partial<RiftboundCardMeta>);
+  }
+  // rule 466.7.c (rule-id: sfd-110-221 Fiora, Peerless) — a "this combat" Might
+  // change expires with the combat wherever the unit ended up: a unit sent home
+  // mid-combat (Fight or Flight) is no longer in `unitIds`, so sweep every card
+  // still carrying a combat-scoped Might change.
+  const combatMightIds =
+    (cards.queryCards?.(
+      (_id, meta) => ((meta as Partial<RiftboundCardMeta>).combatMightModifier ?? 0) !== 0,
+    ) as readonly string[] | undefined) ?? unitIds;
+  for (const id of combatMightIds) {
     const meta = get(id);
     const combatMod = meta?.combatMightModifier ?? 0;
-    set(id, {
-      combatRole: null,
-      ...(combatMod !== 0
-        ? { combatMightModifier: 0, mightModifier: (meta?.mightModifier ?? 0) - combatMod }
-        : {}),
-    } as Partial<RiftboundCardMeta>);
+    if (combatMod !== 0) {
+      set(id, {
+        combatMightModifier: 0,
+        mightModifier: (meta?.mightModifier ?? 0) - combatMod,
+      } as Partial<RiftboundCardMeta>);
+    }
   }
   // rule 466.7 — a `duration:"combat"` grant (Fortified Position's [Shield 2])
   // may sit on a unit that was never here, so sweep every card carrying one.

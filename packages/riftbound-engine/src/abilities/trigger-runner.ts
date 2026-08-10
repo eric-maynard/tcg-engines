@@ -1945,12 +1945,11 @@ export function fireTriggers(rawEvent: GameEvent, ctx: TriggerRunnerContext): nu
       }[];
     }
   ).playerDelayedTriggers ?? []) {
-    // rule 317.1 / 392 — "…at the end of THIS turn" names a moment of the turn
-    // it was installed in, not "your turn": it fires in that turn's Ending Step
-    // for its installer even when the turn belongs to the other player (a
-    // conquer trigger that resolved for you on the opponent's turn still pays
-    // out). Only an explicitly player-scoped delayed trigger keeps the
-    // "controller" filter.
+    // rule 317.1 / 392 (rule-id: ogn-289-298 Targon's Peak) — "…at the end of
+    // THIS turn" names a moment of the turn it was installed in, not "your
+    // turn": a turn-scoped delayed effect fires in that turn's Ending Step for
+    // its installer even when the turn belongs to the other player (a conquer
+    // trigger that resolved for you on the opponent's turn still pays out).
     const thisTurnMoment =
       pdt.duration !== "permanent" &&
       (pdt.trigger.event === "end-of-turn" || pdt.trigger.event === "start-of-turn");
@@ -1963,7 +1962,7 @@ export function fireTriggers(rawEvent: GameEvent, ctx: TriggerRunnerContext): nu
           effect: pdt.effect as never,
           trigger: {
             event: pdt.trigger.event,
-            on: pdt.trigger.on ?? (thisTurnMoment ? "any-player" : "controller"),
+            on: thisTurnMoment ? "any-player" : (pdt.trigger.on ?? "controller"),
           },
           type: "triggered",
         } as never,

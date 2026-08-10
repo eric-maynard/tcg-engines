@@ -224,7 +224,20 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
     // rule-id: sfd-110-221 (rule 466.7.c) — "this combat" Might changes end at
     // Combat Cleanup: revert the combat-scoped portion of mightModifier.
     const expireCombatMight = (): void => {
-      for (const id of unitIds) {
+      // `unitIds` is the snapshot of who was HERE when the resolver started; a
+      // unit sent home mid-combat (Fight or Flight) still carries its "this
+      // combat" buff, so sweep every card holding one rather than the snapshot.
+      const combatMightIds =
+        (
+          cards as unknown as {
+            queryCards?: (
+              predicate: (id: CoreCardId, meta: Record<string, unknown>) => boolean,
+            ) => CoreCardId[];
+          }
+        ).queryCards?.(
+          (_id, meta) => ((meta as Partial<RiftboundCardMeta>).combatMightModifier ?? 0) !== 0,
+        ) ?? unitIds;
+      for (const id of combatMightIds) {
         const m = cards.getCardMeta(id) as Partial<RiftboundCardMeta> | undefined;
         const combatMod = m?.combatMightModifier ?? 0;
         if (combatMod !== 0) {
