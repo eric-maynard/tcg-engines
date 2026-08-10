@@ -2442,6 +2442,13 @@ export const activateAbility: Defs["activateAbility"] = {
     const { playerId, cardId, abilityIndex, sourceCardId, sacrificeId, discardId } =
       context.params;
 
+    // rule 354 / 357.2 / 337.1.b — the activated ability goes on the Chain
+    // BEFORE its costs are paid, so anything paying them puts on the Chain (a
+    // cost kill's Deathknells, 428.1.a.1.b) sits ABOVE it and resolves first
+    // (340.1). Costs are still settled first mechanically here; remember the
+    // depth so the ability can be slotted back underneath those newer items.
+    const chainDepthBeforeCosts = draft.interaction?.chain?.items.length ?? 0;
+
     const registry = getGlobalCardRegistry();
     // For inherited/copied abilities, look up the ability text from the
     // Source card, but pay the cost on the host card (`cardId`).
@@ -2777,6 +2784,21 @@ export const activateAbility: Defs["activateAbility"] = {
       },
       turnOrder,
     );
+    // rule 354 / 357.2 / 337.1.b — slot the ability back UNDER everything that
+    // paying its costs put on the Chain (a cost kill's Deathknells): it was on
+    // the Chain first, so those newer items resolve before it (340.1).
+    {
+      const chain = draft.interaction?.chain;
+      if (chain && chain.items.length > chainDepthBeforeCosts + 1) {
+        const items = [...chain.items];
+        const added = items.pop() as (typeof items)[number];
+        items.splice(chainDepthBeforeCosts, 0, added);
+        draft.interaction = {
+          ...(draft.interaction as NonNullable<typeof draft.interaction>),
+          chain: { ...chain, items },
+        };
+      }
+    }
     // rule-id: sfd-075-221 — rule 206.1: "when you use an activated ability"
     // fires as the ability is activated. Firing it AFTER `addToChain` puts the
     // trigger above the ability on the chain, so it resolves first.
