@@ -1130,6 +1130,22 @@ const JSON_CARD_ENGINE_FLAGS: Record<string, Record<string, unknown>> = {
       },
     ],
   },
+  // rule 054.1 / 369.1 / 718 — Jagged Cutlass: "I can't be moved by enemy
+  // spells and abilities." As Equipment effect text "I" is the holder, so the
+  // continuous static rides the gear and lands on the equipped unit
+  // (resolveStaticTargets → attachedTo). The engine reads the granted
+  // `NoEnemyMove` marker in effects/move.ts moverIsForbidden — the mirror of
+  // Vex's `NoMove`. A Recall is not a Move (456.3) and is unaffected.
+  "ven-073-166": {
+    abilities: [
+      { cost: { power: ["body"] }, keyword: "Equip", type: "keyword" },
+      {
+        effect: { keyword: "NoEnemyMove", type: "grant-keyword" },
+        effectText: true,
+        type: "static",
+      },
+    ],
+  },
   // rule 442.1 / 355.8 — Guttural Roar: "Give a unit +2 [Might] this turn. If
   // it's [Empowered], give it +4 [Might] this turn instead." The "instead"
   // replaces the +2 rather than stacking with it, and the branch is decided from

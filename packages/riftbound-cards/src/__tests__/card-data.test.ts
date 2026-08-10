@@ -105,7 +105,6 @@ const UNSTRUCTURED_EFFECT_TEXT: Record<string, string> = {
   "sfd-073-221": "'I am a <Tag>' (tag grant) has no ability shape",
   "sfd-150-221": "'play a unit from your trash' paying its costs parses to raw text only",
   "sfd-191-221": "controller-wide 'Your spells and abilities deal N Bonus Damage' has no shape (only the '… to units here' aura does)",
-  "ven-073-166": "'can't be moved by enemy spells and abilities' immunity has no shape",
   "ven-137-166": "reminder text only — the copy is the hand-flagged copyChosenUnitToHolder marker",
 };
 

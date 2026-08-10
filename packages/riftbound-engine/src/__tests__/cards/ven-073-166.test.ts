@@ -51,11 +51,13 @@ describe("Jagged Cutlass (ven-073-166)", () => {
     expect(peekDefaultCardPool()?.get(CARD)).toMatchObject({ mightBonus: 2 });
   });
 
-  test("registry payload should carry the [Equip] keyword with cost [body] (the unbracketed 'Equip [body]' line was not parsed at all)", async () => {
-    // Expected (same shape as Pendulum Blade ven-011-166): [{ cost: { power: ["body"] }, keyword: "Equip", type: "keyword" }].
-    // Actual: `abilities` is absent.
+  test("registry payload carries the [Equip] keyword with cost [body] (same shape as Pendulum Blade ven-011-166) plus the conferred 'can't be moved by enemy spells and abilities' static", async () => {
     await scenario().build();
-    expect(peekDefaultCardPool()?.get(CARD)?.abilities).toEqual([{ cost: { power: ["body"] }, keyword: "Equip", type: "keyword" }]);
+    expect(peekDefaultCardPool()?.get(CARD)?.abilities).toEqual([
+      { cost: { power: ["body"] }, keyword: "Equip", type: "keyword" },
+      // rule 054.1 / 718 — effect text speaks as the holder; the marker keyword is read in effects/move.ts.
+      { effect: { keyword: "NoEnemyMove", type: "grant-keyword" }, effectText: true, type: "static" },
+    ]);
   });
 
   test("play cost: 3 energy and no power; it enters the base READY and unattached — playing it attaches nothing and the ally stays at 2; 2 energy → not playable", async () => {

@@ -95,10 +95,16 @@ function moverIsForbidden(ctx: EffectContext, cardId: string): boolean {
   const meta = (
     ctx.cards as { getCardMeta?: (id: CoreCardId) => { grantedKeywords?: { keyword: string }[] } | undefined }
   ).getCardMeta?.(cardId as CoreCardId);
-  if (meta?.grantedKeywords?.some((gk) => gk.keyword === "NoMove") !== true) {
-    return false;
+  const granted = meta?.grantedKeywords ?? [];
+  const isOwnController = ctx.playerId === arrivingController(ctx, cardId);
+  if (granted.some((gk) => gk.keyword === "NoMove") && isOwnController) {
+    return true;
   }
-  return ctx.playerId === arrivingController(ctx, cardId);
+  // rule 054.1 / 369.1 — ven-073-166 (Jagged Cutlass) "I can't be moved by
+  // enemy spells and abilities": the mirror of `NoMove`, binding every player
+  // except the unit's own controller. Player actions (a Standard Move) and a
+  // Recall (456.3) never come through here, so both stay legal.
+  return granted.some((gk) => gk.keyword === "NoEnemyMove") && !isOwnController;
 }
 
 /**
