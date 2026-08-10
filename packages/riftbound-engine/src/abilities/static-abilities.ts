@@ -23,6 +23,7 @@ import { effectiveTags } from "./card-tags";
 import { KEYWORD_DEFINITIONS } from "../keywords/keyword-effects";
 import { getGlobalCardRegistry } from "../operations/card-lookup";
 import { additionalCostWasPaid } from "../operations/additional-costs-paid";
+import { combatRoleMightBonus } from "../operations/combat-role-might";
 import type { GrantedKeyword, RiftboundCardMeta, RiftboundGameState } from "../types";
 
 const MIGHTY_THRESHOLD = 5;
@@ -1077,6 +1078,11 @@ function applyStaticEffect(
         let cur = reg.getMight(targetId) + (meta?.buffed ? 1 : 0) + (meta?.extraBuffs ?? 0);
         cur += (meta?.mightModifier ?? 0) + (meta?.staticMightBonus ?? 0);
         for (const equipId of meta?.equippedWith ?? []) cur += reg.getMightBonus(equipId as string);
+        // rule 477.3.e.1 / 807.1.c — [Assault]/[Shield] is real Might and is an
+        // INCREASE, so it is already in place when this floored decrease is
+        // applied; the floor must be measured against it or the bonus reads as
+        // landing on top of the floor.
+        cur += combatRoleMightBonus(targetId, meta);
         targetAmount = Math.min(0, Math.max(targetAmount, (effect.minimum as number) - cur));
       }
       const current = meta?.staticMightBonus ?? 0;
@@ -1365,7 +1371,33 @@ export function recalculateStaticEffects(ctx: StaticAbilityContext): boolean {
   };
   const pass1Applied = new Set<string>();
 
-  const applyPass = (allowedEffects: Set<string>, opts?: { onlyMightDependent?: boolean }): void => {
+  // rule 477.3.e.1 / .e.2 — inside the arithmetic layer, every INCREASE applies
+  // before any decrease, and decreases apply last. rule 478.1.c / 479 / 479.2 —
+  // a decrease carrying a floor ("-8 [Might], to a minimum of 1") has its
+  // outcome altered by any other decrease, so it Depends on the unlimited ones:
+  // apply those first and the floored one immediately after (never the reverse,
+  // which would let an unlimited decrease push the total under the stated
+  // floor). rule 477.3.b — both are passives, so nothing is snapshotted: the
+  // floor is re-evaluated over whatever total the earlier passes produced.
+  type MightPhase = "increase" | "decrease" | "floored-decrease";
+  const mightPhaseOf = (effect: Record<string, unknown>): MightPhase => {
+    const raw = effect.amount;
+    let negative = false;
+    if (typeof raw === "number") {
+      negative = raw < 0;
+    } else if (raw && typeof raw === "object" && typeof (raw as { multiplier?: number }).multiplier === "number") {
+      negative = ((raw as { multiplier: number }).multiplier ?? 0) < 0;
+    }
+    if (!negative) {
+      return "increase";
+    }
+    return typeof effect.minimum === "number" ? "floored-decrease" : "decrease";
+  };
+
+  const applyPass = (
+    allowedEffects: Set<string>,
+    opts?: { onlyMightDependent?: boolean; mightPhase?: MightPhase },
+  ): void => {
     for (const card of boardCards) {
       const abilities = registry.getAbilities(card.id) ?? [];
 
@@ -1387,7 +1419,10 @@ export function recalculateStaticEffects(ctx: StaticAbilityContext): boolean {
             : [effect];
         const passEffects = candidateEffects.filter((e) => {
           const t = e?.type as string | undefined;
-          return !!t && allowedEffects.has(t);
+          if (!t || !allowedEffects.has(t)) {
+            return false;
+          }
+          return opts?.mightPhase === undefined || mightPhaseOf(e) === opts.mightPhase;
         });
         if (passEffects.length === 0) {
           continue;
@@ -1452,8 +1487,11 @@ export function recalculateStaticEffects(ctx: StaticAbilityContext): boolean {
   applyPass(PASS_0_EFFECTS);
   // Pass 1 — type/ability-setting
   applyPass(PASS_1_EFFECTS);
-  // Pass 2 — arithmetic
-  applyPass(PASS_2_EFFECTS);
+  // Pass 2 — arithmetic, in rule 477.3.e order: increases, then unlimited
+  // decreases, then floor-limited decreases (which Depend on them, 479.2)
+  applyPass(PASS_2_EFFECTS, { mightPhase: "increase" });
+  applyPass(PASS_2_EFFECTS, { mightPhase: "decrease" });
+  applyPass(PASS_2_EFFECTS, { mightPhase: "floored-decrease" });
   // rule 476.3 — re-check Might-dependent ability grants against post-arithmetic Might
   applyPass(PASS_1_EFFECTS, { onlyMightDependent: true });
 
