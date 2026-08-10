@@ -9,6 +9,8 @@
 import type { PlayerId } from "@tcg/core";
 import { getGlobalCardRegistry } from "../operations/card-lookup";
 import { getDepartedOwner } from "../operations/leave-board";
+import { readTurnTrace } from "../game-definition/flow/expiration-step";
+import type { TurnTrace } from "../game-definition/flow/expiration-step";
 import { createPlayableGame } from "../testing/playtest/game-setup";
 import type { DeckConfig } from "../testing/playtest/game-setup";
 import type { RiftboundGameState } from "../types";
@@ -284,6 +286,16 @@ export class Game {
 
   phase(): RiftboundGameState["turn"]["phase"] {
     return this.gameState.turn.phase;
+  }
+
+  /**
+   * Per-turn procedure trace written by the flow: `expiration` lists every pass
+   * of the last Ending Phase's Expiration Step (rule 317.2 — heal → expire →
+   * empty pools; a pass whose `itemsProcessed > 0` was followed by another,
+   * 317.2.f). Survives into the next turn until its own Ending Phase begins.
+   */
+  trace(): TurnTrace {
+    return readTurnTrace(this.gameState);
   }
 
   isOver(): boolean {

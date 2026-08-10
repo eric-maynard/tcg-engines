@@ -86,6 +86,7 @@ export type { ApplyMoveOptions, ApplyMoveResult, EndTurnResult, ProcedureRun } f
 export { observe, listZoneSummaries, isPrivateZone, canSee } from "./observation";
 export { getInternalState, hashEngine, takeSnapshot } from "./internal";
 export type { FullSnapshot, HarnessEngine } from "./internal";
+export type { ExpirationPassTrace, TurnTrace } from "../game-definition/flow/expiration-step";
 export { getActingSeat, getPendingChoiceChooser } from "../views/acting-seat";
 // L0 over the live web client (Playwright resolved lazily at runtime; safe to import headlessly).
 export * as Browser from "./browser";

@@ -3,14 +3,16 @@
  *
  * Implements the official Riftbound turn structure using @tcg/core FlowDefinition.
  *
- * Turn phases (rules 514-517):
- *   1. Awaken     - Ready all game objects (515.1)
- *   2. Beginning  - Start of turn triggers, scoring/holding (515.2)
- *   3. Channel    - Channel 2 runes from rune deck (515.3)
- *   4. Draw       - Draw 1 card, rune pool empties (515.4)
- *   5. Main       - Main phase: play cards, move units, combat (516)
- *   6. Ending     - End of turn triggers, clear damage, cleanup (517)
- *   7. Cleanup    - State-based checks (518-526)
+ * Turn phases (rules 315-317):
+ *   1. Awaken     - Ready all game objects (315.1)
+ *   2. Beginning  - Start of turn triggers, scoring/holding (315.2)
+ *   3. Channel    - Channel 2 runes from rune deck (315.3)
+ *   4. Draw       - Draw 1 card, rune pool empties (315.4)
+ *   5. Main       - Main phase: play cards, move units, combat (316)
+ *   6. Ending     - Ending Step: end of turn triggers (317.1)
+ *   7. Expiration - Expiration Step: heal → expire → empty pools, re-looped
+ *                   while it keeps putting items on the chain (317.2), then
+ *                   the next player becomes Turn Player (317.3)
  *
  * Game segments:
  *   - setup: Place legends, champions, battlefields. Draw initial hand, mulligan.
@@ -23,27 +25,19 @@ import type {
   ZoneId as CoreZoneId,
   FlowDefinition,
 } from "@tcg/core";
-import type { EffectContext } from "../../abilities/effect-executor";
 import { recalculateStaticEffects } from "../../abilities/static-abilities";
 import { fireTriggers } from "../../abilities/trigger-runner";
-import type { TriggerRunnerContext } from "../../abilities/trigger-runner";
 import { addToChain, createInteractionState } from "../../chain/chain-state";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import { getChannelCountLimit } from "../../operations/channel-limits";
 import { hasSkipDrawPhaseGrant } from "../moves/play/cost";
-import { clearDamage, getDamage } from "../../operations/damage-store";
-import {
-  type LeaveBoardContext,
-  orderBatchTriggersByTurnOrder,
-  removeFromBoard,
-} from "../../operations/leave-board";
+import { orderBatchTriggersByTurnOrder } from "../../operations/leave-board";
 import {
   finalizePendingItems,
   withinMoveReducer,
 } from "../../abilities/trigger-finalization";
 import { emptyRunePoolInPlace } from "../../operations/riftbound-operations";
 import { resetPlaysThisTurn } from "../../operations/plays-this-turn";
-import { relocateAttachedEquipment } from "../moves/movement/helpers";
 import {
   beginAdditionalTurn,
   dequeueExtraTurn,
@@ -52,11 +46,17 @@ import {
 import type { PlayerId, RiftboundCardMeta, RiftboundGameState } from "../../types";
 import {
   checkVictory,
-  clearPointsGainedThisTurn,
   refillDeckOrBurnOut,
   scoreBattlefield,
   scoreEvents,
 } from "../../operations/points";
+import {
+  type FlowStepContext,
+  buildFlowTriggerContext,
+  gameHasEnded,
+  stepMustWaitForChain,
+} from "./flow-context";
+import { resetTurnTrace, runExpirationStep } from "./expiration-step";
 
 /**
  * Marker keyword granted by cards whose text reads "Your [Temporary] effects at
@@ -66,146 +66,15 @@ import {
 const SUPPRESS_TEMPORARY_KEYWORD = "SuppressTemporaryHere";
 
 /**
- * Build a TriggerRunnerContext from a flow phase context.
- *
- * Flow hooks receive FlowContext (state, zones, cards) but NOT counters.
- * We provide no-op counter stubs so triggers can execute their effects.
+ * rule 315.2.a→b: a step that follows a trigger step may not run until those
+ * triggers have resolved. The phase's endIf already holds the phase open while
+ * the chain lives; these helpers remember that the step still owes its work so
+ * a later hook runs it exactly once. When nothing went on the chain the step
+ * runs inline. (The Expiration Step keeps its own progress on
+ * `state.turnTrace.expiration` instead — see `expiration-step.ts`.)
  */
-function buildFlowTriggerContext(context: {
-  state: RiftboundGameState;
-  zones: {
-    moveCard: (params: { cardId: CoreCardId; targetZoneId: CoreZoneId }) => void;
-    drawCards: (params: {
-      count: number;
-      from: CoreZoneId;
-      to: CoreZoneId;
-      playerId: CorePlayerId;
-    }) => CoreCardId[];
-    getCardsInZone: (zoneId: CoreZoneId, playerId?: CorePlayerId) => CoreCardId[];
-    getCardZone?: (cardId: CoreCardId) => CoreZoneId | undefined;
-  };
-  cards: {
-    getCardMeta: (cardId: CoreCardId) => Partial<RiftboundCardMeta>;
-    getCardOwner?: (cardId: CoreCardId) => string | undefined;
-    getCardController?: (cardId: CoreCardId) => string | undefined;
-    updateCardMeta?: (cardId: CoreCardId, meta: Partial<RiftboundCardMeta>) => void;
-  };
-}): TriggerRunnerContext {
-  const noop = () => {};
-  return {
-    cards: {
-      getCardMeta: context.cards.getCardMeta as TriggerRunnerContext["cards"]["getCardMeta"],
-      getCardOwner: (context.cards.getCardOwner ??
-        (() => undefined)) as TriggerRunnerContext["cards"]["getCardOwner"],
-      getCardController: context.cards.getCardController,
-      updateCardMeta: context.cards
-        .updateCardMeta as TriggerRunnerContext["cards"]["updateCardMeta"],
-    },
-    counters: {
-      addCounter: noop as TriggerRunnerContext["counters"]["addCounter"],
-      setFlag: noop as TriggerRunnerContext["counters"]["setFlag"],
-    },
-    draft: context.state,
-    zones: {
-      drawCards: context.zones.drawCards as TriggerRunnerContext["zones"]["drawCards"],
-      getCardZone: context.zones.getCardZone as TriggerRunnerContext["zones"]["getCardZone"],
-      getCardsInZone: context.zones.getCardsInZone,
-      moveCard: context.zones.moveCard,
-    },
-  };
-}
-
-/**
- * rule 323.1 / 471.1.a.1 — a player reaching the Victory Score wins the game
- * immediately; the remaining phases of the current turn never happen.
- */
-function gameHasEnded(state: { status?: string }): boolean {
-  return state.status === "finished";
-}
-
-/**
- * rule 370.1 — replacement effects can run from the flow (the Beginning-Phase
- * Temporary kill). The flow context carries no counter store, so back the
- * counter API with card meta, which is what every reader consults.
- */
-function buildFlowEffectContext(
-  context: Parameters<typeof buildFlowTriggerContext>[0] & {
-    cards: { updateCardMeta?: (cardId: CoreCardId, meta: Partial<RiftboundCardMeta>) => void };
-  },
-): EffectContext {
-  const base = buildFlowTriggerContext(context) as unknown as EffectContext;
-  const setMeta = (cardId: CoreCardId, meta: Record<string, unknown>): void => {
-    context.cards.updateCardMeta?.(cardId, meta as Partial<RiftboundCardMeta>);
-  };
-  const noop = () => {};
-  return {
-    ...base,
-    counters: {
-      addCounter: noop,
-      clearCounter: (cardId: CoreCardId, counter: string) => setMeta(cardId, { [counter]: 0 }),
-      // heal writes the resulting damage through updateCardMeta itself.
-      removeCounter: noop,
-      setFlag: (cardId: CoreCardId, flag: string, value: boolean) =>
-        setMeta(cardId, { [flag]: value }),
-    } as unknown as EffectContext["counters"],
-  };
-}
-
-/** rule 709 — a unit is [Mighty] while its current Might is 5 or more. */
-const MIGHTY_THRESHOLD = 5;
-
-/**
- * rule 710 — a unit's CURRENT Might. Mirrors `effects/_helpers.getEffectiveMight`
- * against the flow's card store; kept local because importing the effect helpers
- * from the flow module closes a module cycle that breaks the whole engine build.
- */
-function flowEffectiveMight(
-  cardId: CoreCardId,
-  cards: { getCardMeta: (cardId: CoreCardId) => Partial<RiftboundCardMeta> },
-): number {
-  const registry = getGlobalCardRegistry();
-  const printedMight = registry.get(cardId as string)?.might ?? 0;
-  if (printedMight === 0) {
-    return 0; // not a unit
-  }
-  const meta = (cards.getCardMeta(cardId) ?? {}) as Partial<RiftboundCardMeta>;
-  const baseMight = meta.baseMightOverride ?? printedMight;
-  const buffBonus = (meta.buffed ? 1 : 0) + (meta.extraBuffs ?? 0);
-  let equipBonus = 0;
-  for (const equipId of meta.equippedWith ?? []) {
-    equipBonus += registry.getMightBonus(equipId as string);
-  }
-  return Math.max(
-    0,
-    baseMight + buffBonus + (meta.mightModifier ?? 0) + (meta.staticMightBonus ?? 0) + equipBonus,
-  );
-}
-
-/** Context shape shared by the flow phase hooks that run a whole turn step. */
-type FlowStepContext = Parameters<typeof buildFlowTriggerContext>[0] & {
-  getCurrentPlayer: () => CorePlayerId;
-  cards: {
-    queryCards: (
-      predicate: (cardId: CoreCardId, meta: Partial<RiftboundCardMeta>) => boolean,
-    ) => CoreCardId[];
-    setCardController?: (cardId: CoreCardId, playerId: CorePlayerId) => void;
-    updateCardMeta?: (cardId: CoreCardId, meta: Partial<RiftboundCardMeta>) => void;
-  };
-};
-
-/**
- * rule 315.2.a→b / 317.1→317.2: a step that follows a trigger step may not run
- * until those triggers have resolved. The phase's endIf already holds the phase
- * open while the chain lives; these helpers remember that the step still owes
- * its work so the phase's onEnd runs it exactly once. When nothing went on the
- * chain the step runs inline, as before.
- */
-type DeferredStep = "hold-scoring" | "expiration";
+type DeferredStep = "hold-scoring";
 type DeferredStepState = { __deferredFlowSteps?: Record<string, boolean> };
-
-function stepMustWaitForChain(state: RiftboundGameState): boolean {
-  return (state.interaction?.chain?.active ?? false) || state.pendingChoice !== undefined;
-}
 
 function deferStep(state: RiftboundGameState, step: DeferredStep): void {
   const s = state as RiftboundGameState & DeferredStepState;
@@ -219,6 +88,18 @@ function takeDeferredStep(state: RiftboundGameState, step: DeferredStep): boolea
   }
   s.__deferredFlowSteps = { ...s.__deferredFlowSteps, [step]: false };
   return true;
+}
+
+/**
+ * rule 317.1 / 317.2.e / 460 — the Ending Phase may only move on when no chain
+ * item, prompt, or contested battlefield (a showdown an end-of-turn effect
+ * staged is fought inside this phase) is outstanding.
+ */
+function endingPhaseIsIdle(state: RiftboundGameState): boolean {
+  return (
+    !stepMustWaitForChain(state) &&
+    !Object.values(state.battlefields ?? {}).some((bf) => bf.contested === true)
+  );
 }
 
 /** Scoring Step of the Beginning Phase (rule 315.2.b / 515.2.b). */
@@ -283,394 +164,6 @@ function runHoldScoringStep(context: FlowStepContext): void {
             draft: context.state,
             zones: context.zones,
           });
-        }
-}
-
-/**
- * Expiration Step of the Ending Phase (rule 317.2 / 517.2).
- *
- * `reloop` enables rule 317.2.f: when this pass adds Pending Items that then
- * undergo FEPR (Fiora's "you may pay to ready it" off a Might penalty expiring
- * at 3d), the step starts over once those items are done, so a "this turn"
- * effect they created — the readied unit's own +2 — is stripped by the SECOND
- * 3d pass instead of leaking into the next turn.
- */
-function runExpirationStep(context: FlowStepContext, options?: { reloop?: boolean }): void {
-        const waitingBeforeExpiry = stepMustWaitForChain(context.state);
-        // Collect all board cards for cleanup
-        const allBoardCards: CoreCardId[] = [];
-        for (const pid of Object.keys(context.state.players)) {
-          allBoardCards.push(
-            ...context.zones.getCardsInZone("base" as CoreZoneId, pid as CorePlayerId),
-          );
-        }
-        for (const bfId of Object.keys(context.state.battlefields)) {
-          allBoardCards.push(
-            ...context.zones.getCardsInZone(`battlefield-${bfId}` as CoreZoneId),
-          );
-        }
-
-        const flowCards = context.cards as unknown as {
-          getCardMeta(cardId: CoreCardId): object | undefined;
-          updateCardMeta(cardId: CoreCardId, meta: Record<string, unknown>): void;
-        };
-
-        // rule 710 / 709 — a unit is [Mighty] on its CURRENT Might, so a "this
-        // turn" -Might effect expiring here can make a unit BECOME Mighty
-        // (5 → 8 does not: it never stopped being Mighty). Snapshot before the
-        // expiries so the crossing can be published once they have all landed.
-        const mightBeforeExpiry = new Map<CoreCardId, number>();
-        for (const cardId of allBoardCards) {
-          mightBeforeExpiry.set(cardId, flowEffectiveMight(cardId, context.cards));
-        }
-        // rule 364 — [Empowered] statics are dependent on the status, so an
-        // expiry here has to be re-layered before anything reads Might again.
-        let empowerStatusChanged = false;
-        for (const cardId of allBoardCards) {
-          const meta = context.cards.getCardMeta(cardId);
-          if (!meta) {
-            continue;
-          }
-
-          // Clear all damage from units (rule 517.2.a / 317.2.b) through the
-          // single damage store (counter bag + meta mirror in one write; the
-          // flow has no counter ops, so the store patches the bag via meta).
-          if (getDamage({ cards: flowCards }, cardId as string) > 0) {
-            clearDamage({ cards: flowCards }, cardId as string);
-          }
-
-          // Clear stun at Ending Step (rule 423.1.a.2) — the stun effect writes
-          // counters.setFlag → __flags.stunned; seeds/mirrors use top-level stunned.
-          const stunFlags = (meta as { __flags?: Record<string, boolean> }).__flags;
-          if (meta.stunned || stunFlags?.stunned === true) {
-            context.cards.updateCardMeta(cardId, {
-              __flags: { ...(stunFlags ?? {}), stunned: false },
-              stunned: false,
-            } as Partial<RiftboundCardMeta>);
-          }
-
-          // Expire turn-scoped granted keywords (rule 517.2.b)
-          if (meta.grantedKeywords && meta.grantedKeywords.length > 0) {
-            const remaining = meta.grantedKeywords.filter(
-              (gk: { duration: string }) => gk.duration !== "turn",
-            );
-            context.cards.updateCardMeta(cardId, {
-              grantedKeywords: remaining.length > 0 ? remaining : undefined,
-            });
-          }
-
-          // rule-id: ven-142-166 — expire turn-scoped granted abilities (rule 517.2.b)
-          if (meta.grantedAbilities && meta.grantedAbilities.length > 0) {
-            const remaining = meta.grantedAbilities.filter(
-              (ga: { duration: string }) => ga.duration !== "turn",
-            );
-            context.cards.updateCardMeta(cardId, {
-              grantedAbilities: remaining.length > 0 ? remaining : undefined,
-            });
-          }
-
-          // rule-id: unl-095-219 — expire turn-scoped delayed triggers (rule 517.2.b)
-          if (meta.delayedTriggers && meta.delayedTriggers.length > 0) {
-            const remaining = meta.delayedTriggers.filter(
-              (dt: { duration: string }) => dt.duration !== "turn",
-            );
-            context.cards.updateCardMeta(cardId, {
-              delayedTriggers: remaining.length > 0 ? remaining : undefined,
-            });
-          }
-
-          // rule-id: ven-126-166 — a "this turn" numeric Prevent shield (rule 437.1.b.1.a)
-          // expires unused in the Expiration Step (rule 517.2.b).
-          if ((meta as { damagePreventionShield?: unknown }).damagePreventionShield !== undefined) {
-            context.cards.updateCardMeta(cardId, {
-              damagePreventionShield: undefined,
-              damagePreventionSource: undefined,
-            } as unknown as Partial<RiftboundCardMeta>);
-          }
-
-          // rule-id: ogn-157-298 — "you've not chosen this turn" resets (rule 517.2.b)
-          if (meta.modesChosenThisTurn && meta.modesChosenThisTurn.length > 0) {
-            context.cards.updateCardMeta(cardId, {
-              modesChosenThisTurn: [],
-            } as Partial<RiftboundCardMeta>);
-          }
-
-          // rule 517.2.b — "haven't been dealt damage this turn" gates read this
-          // marker; it is turn-scoped, so forget it once the turn ends.
-          // rule-id: ven-024-166
-          if ((meta as { dealtDamageThisTurn?: boolean }).dealtDamageThisTurn) {
-            context.cards.updateCardMeta(cardId, {
-              dealtDamageThisTurn: false,
-            } as Partial<RiftboundCardMeta>);
-          }
-
-          // rule-id: ven-099-166 — "Disempower it at end of turn" (rule 517.2.b)
-          if ((meta as { empoweredUntilEndOfTurn?: boolean }).empoweredUntilEndOfTurn) {
-            // rule 441.1.c.1 (rule-id: ven-134-166) — losing the status also
-            // zeroes the count, exactly as handle_empower's disempower path
-            // does; otherwise "+2 [Might] for each time I'm [Empowered]"
-            // statics keep paying out on a no-longer-Empowered permanent.
-            context.cards.updateCardMeta(cardId, {
-              empowered: false,
-              empowerCount: 0,
-              empoweredUntilEndOfTurn: false,
-            } as unknown as Partial<RiftboundCardMeta>);
-            empowerStatusChanged = true;
-          }
-
-          // rule-id: ven-035-166 — the mirror "Empower it at end of turn" after
-          // a Disempower (rule 517.2.b); the status returns with no duration.
-          if ((meta as { disempoweredUntilEndOfTurn?: boolean }).disempoweredUntilEndOfTurn) {
-            context.cards.updateCardMeta(cardId, {
-              disempoweredUntilEndOfTurn: false,
-              empowered: true,
-              empowerCount: Math.max(
-                1,
-                (meta as { empowerCount?: number }).empowerCount ?? 0,
-              ),
-            } as unknown as Partial<RiftboundCardMeta>);
-            empowerStatusChanged = true;
-          }
-
-          // rule-id: sfd-194-221 — "the next time … this turn, prevent it" is a
-          // delayed replacement with a turn duration (rule 437.7): an UNUSED
-          // one-shot shield expires now (rule 517.2.b) instead of eating a
-          // later turn's damage.
-          if ((meta as { preventNextDamageInstance?: boolean }).preventNextDamageInstance === true) {
-            context.cards.updateCardMeta(cardId, {
-              preventNextDamageInstance: false,
-            } as unknown as Partial<RiftboundCardMeta>);
-          }
-
-          // Reset turn-scoped Might modifier (rule 517.2.b)
-          if (meta.mightModifier && meta.mightModifier !== 0) {
-            context.cards.updateCardMeta(cardId, { mightModifier: 0 });
-          }
-          // rule-id: sfd-110-221 — combat-scoped portion goes with it.
-          if (meta.combatMightModifier) {
-            context.cards.updateCardMeta(cardId, { combatMightModifier: 0 });
-          }
-        }
-
-        // rule 364 / 828.1.c — [Empowered] came or went above; re-apply statics
-        // now so count-based bonuses ("+2 for each time I'm Empowered") follow.
-        if (empowerStatusChanged && context.cards.updateCardMeta) {
-          recalculateStaticEffects({
-            cards: {
-              // rule 108.2 — "friendly"/"your" reads CONTROL, not ownership.
-              getCardController: context.cards.getCardController,
-              getCardMeta: context.cards.getCardMeta,
-              getCardOwner: context.cards.getCardOwner ?? (() => undefined),
-              updateCardMeta: context.cards.updateCardMeta,
-            },
-            draft: context.state,
-            zones: context.zones,
-          });
-        }
-
-        // rule 317.1 / 455 (sfd-202-221 Hostile Takeover) — "…at end of
-        // turn" control changes expire now: the permanent re-layers to
-        // the next surviving control effect (else its owner) and, when
-        // the effect said so, is recalled to its controller's base.
-        // Recall is not a move (rule 458.1), so board state is kept.
-        for (const cardId of allBoardCards) {
-          const meta = context.cards.getCardMeta(cardId) as
-            | Partial<RiftboundCardMeta>
-            | undefined;
-          const effects = meta?.controlEffects;
-          if (!effects || effects.length === 0) {
-            continue;
-          }
-          const expiring = effects.filter((e) => e.duration === "end-of-turn");
-          if (expiring.length === 0) {
-            continue;
-          }
-          const surviving = effects.filter((e) => e.duration !== "end-of-turn");
-          context.cards.updateCardMeta(cardId, {
-            controlEffects: surviving.length > 0 ? surviving : undefined,
-          } as Partial<RiftboundCardMeta>);
-          const owner = context.cards.getCardOwner?.(cardId);
-          const desired = surviving[surviving.length - 1]?.controllerId ?? owner;
-          if (desired) {
-            context.cards.setCardController?.(cardId, desired as CorePlayerId);
-          }
-          if (expiring.some((e) => e.recallOnExpiry === true)) {
-            const from = context.zones.getCardZone?.(cardId);
-            context.zones.moveCard({ cardId, targetZoneId: "base" as CoreZoneId });
-            // rule 719.3.a — a recall changes the Top-Most card's LOCATION, so
-            // every card attached to it changes location with it.
-            relocateAttachedEquipment(cardId as string, "base", context.cards, {
-              getCardZone: (id) => context.zones.getCardZone?.(id) as string | undefined,
-              moveCard: (args) => context.zones.moveCard(args),
-            });
-            // rule 323.6 / 190.4.c — a battlefield left without a unit
-            // its controller controls is lost immediately (the Ending
-            // Step is an Open State). Only UNITS are a presence there: a gear
-            // left at the battlefield never keeps control (rule 190.3).
-            if (from?.startsWith("battlefield-")) {
-              const bf = context.state.battlefields[from.slice("battlefield-".length)];
-              const stillThere = context.zones
-                .getCardsInZone(from as CoreZoneId)
-                .some(
-                  (id) =>
-                    getGlobalCardRegistry().getCardType(id as string) === "unit" &&
-                    (context.cards.getCardController?.(id) ??
-                      context.cards.getCardOwner?.(id)) === bf?.controller,
-                );
-              if (bf?.controller && !stillThere) {
-                bf.controller = null;
-              }
-            }
-          }
-        }
-
-        // rule-id: ven-113-166 (rule 517.2.b) — turn-scoped granted
-        // [Flow] expires at end of turn. The card sits in the trash, not
-        // on the board, so sweep every card that carries the grant.
-        const flowGrantCards = context.cards.queryCards(
-          (_id, m) => (m as Partial<RiftboundCardMeta>).grantedFlow?.duration === "turn",
-        );
-        for (const cardId of flowGrantCards) {
-          context.cards.updateCardMeta(cardId, {
-            grantedFlow: undefined,
-          } as Partial<RiftboundCardMeta>);
-        }
-
-        // rule-id: ogn-197-298 — "this turn" Might modifiers expire at
-        // end of turn regardless of zone (rule 517.2.b). A unit that left
-        // the board (hand / facedown / etc.) must not carry a stale
-        // modifier into a later replay (e.g. Teemo revealed from Hidden).
-        const staleMightCards = context.cards.queryCards(
-          (_id, m) => ((m as Partial<RiftboundCardMeta>).mightModifier ?? 0) !== 0,
-        );
-        for (const cardId of staleMightCards) {
-          context.cards.updateCardMeta(cardId, {
-            mightModifier: 0,
-          } as Partial<RiftboundCardMeta>);
-        }
-
-        // rule 323.5 / 517.2.b (ven-116-166) — "its base Might becomes N THIS
-        // TURN" ends now: the printed base returns.
-        const setBaseMightCards = context.cards.queryCards(
-          (_id, m) => (m as Partial<RiftboundCardMeta>).baseMightOverride !== undefined,
-        );
-        for (const cardId of setBaseMightCards) {
-          context.cards.updateCardMeta(cardId, {
-            baseMightOverride: undefined,
-          } as Partial<RiftboundCardMeta>);
-        }
-
-        // Empty all rune pools (rule 517.2.c)
-        for (const playerId of Object.keys(context.state.runePools)) {
-          emptyRunePoolInPlace(context.state, playerId);
-        }
-
-        // Clear turn-based tracking
-        const currentPlayer = context.getCurrentPlayer();
-        context.state.conqueredThisTurn[currentPlayer] = [];
-        context.state.scoredThisTurn[currentPlayer] = [];
-        clearPointsGainedThisTurn(context.state);
-        // rule 517.2.b / 364.3.a (unl-108-219 Wily Newtfish) — "you've gained XP
-        // this turn" is turn-scoped tracking and resets with the turn, though the
-        // XP itself persists. getCurrentPlayer() may already be rotated here, and
-        // the turn is over for everyone, so clear the whole ledger.
-        if (context.state.xpGainedThisTurn) {
-          const xpLedger = context.state.xpGainedThisTurn as Record<string, number>;
-          for (const playerId of Object.keys(xpLedger)) {
-            xpLedger[playerId] = 0;
-          }
-        }
-
-        // Clear consumed-next replacement markers so turn-scoped
-        // Single-fire replacements (Tactical Retreat, Highlander, etc.)
-        // Start fresh next turn.
-        if (context.state.consumedNextReplacements) {
-          context.state.consumedNextReplacements = {};
-        }
-        // rule 127 (unl-053-219) — "you can look at their facedown cards THIS
-        // TURN": turn-scoped information grants expire with the turn.
-        if (context.state.visibilityGrants) {
-          const lasting = context.state.visibilityGrants.filter(
-            (g) => g.duration === "permanent",
-          );
-          context.state.visibilityGrants = lasting.length > 0 ? lasting : undefined;
-        }
-        // rule-id: ogn-026-298 — "can't play cards this turn" expires.
-        if (context.state.cannotPlayCardsThisTurn) {
-          context.state.cannotPlayCardsThisTurn = undefined;
-        }
-        // rule-id: sfd-078-221 — an unused "next spell has [Repeat]"
-        // grant expires with the turn.
-        if (context.state.nextSpellRepeat) {
-          context.state.nextSpellRepeat = undefined;
-        }
-        // rule 419.4.a (rule-id: ven-044-166) — per-turn play ordinals of
-        // pending spells do not outlive the turn that recorded them.
-        if ((context.state as { spellPlayOrdinals?: unknown }).spellPlayOrdinals) {
-          (context.state as { spellPlayOrdinals?: unknown }).spellPlayOrdinals = undefined;
-        }
-        // rule-id: unl-007-219 — expire "this turn" runtime replacements
-        // (rule 517.2) so an unspent die→banish rider doesn't leak into
-        // later turns.
-        if (context.state.activeReplacements) {
-          context.state.activeReplacements = (
-            context.state.activeReplacements as { duration?: string }[]
-          ).filter((e) => {
-            if (e?.duration !== "turn" && e?.duration !== "next") {
-              return true;
-            }
-            // rule 391 / 392 (rule-id: ven-044-166) — an untargeted "your next
-            // card costs … less" discount prints no "this turn", so it is a
-            // delayed one-shot that waits for the next card its owner plays
-            // even across the turn boundary. Targeted "next … this turn"
-            // permissions (Jayce, Raging Firebrand) still lapse here (517.2).
-            const entry = e as { replaces?: string; target?: unknown };
-            return e.duration === "next" && entry.replaces === "play-cost" && entry.target === undefined;
-          });
-        }
-        // rule 517.2.b (ogn-053-298) — "this turn" continuous effects expire;
-        // the next static pass drops their Might/keyword contributions.
-        if (context.state.turnStatics) {
-          context.state.turnStatics = undefined;
-        }
-        // rule 517.2.b (rule-id: sfd-166-221) — "this turn" player-scoped
-        // delayed triggers expire with the turn that installed them.
-        if (context.state.playerDelayedTriggers) {
-          const remaining = context.state.playerDelayedTriggers.filter(
-            (e) => e?.duration !== "turn",
-          );
-          context.state.playerDelayedTriggers = remaining.length > 0 ? remaining : undefined;
-        }
-
-        // rule 320.1 / 334.2 — items may be added during a cleanup and then
-        // undergo FEPR. A unit whose current Might crossed from below 5 to 5+
-        // when the "this turn" modifiers expired BECOMES [Mighty] now
-        // (rule 709), so publish the event from inside the Expiration Step.
-        const mightyTriggerCtx = buildFlowTriggerContext(context);
-        for (const [cardId, before] of mightBeforeExpiry) {
-          if (before >= MIGHTY_THRESHOLD) {
-            continue;
-          }
-          if (flowEffectiveMight(cardId, context.cards) < MIGHTY_THRESHOLD) {
-            continue;
-          }
-          fireTriggers(
-            {
-              cardId: cardId as string,
-              owner: context.cards.getCardOwner?.(cardId) ?? "",
-              type: "become-mighty",
-            },
-            mightyTriggerCtx,
-          );
-        }
-
-        // rule 317.2.f — items added by THIS pass (320.1) undergo FEPR, so once
-        // they are done the Expiration Step is performed again from the start.
-        // The phase's endIf holds the ending phase open meanwhile; its onEnd
-        // takes the deferred pass. Only the first pass may ask for a re-loop, so
-        // the loop always terminates.
-        if (options?.reloop === true && !waitingBeforeExpiry && stepMustWaitForChain(context.state)) {
-          deferStep(context.state, "expiration");
         }
 }
 
@@ -1338,12 +831,11 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
           },
 
           /**
-           * Ending Phase (rule 517)
+           * Ending Phase — Ending Step (rule 317.1)
            *
-           * End of turn triggers fire.
-           * Clear all damage from units, expire turn-scoped effects.
-           * Empty all rune pools.
-           * Auto-advances to cleanup.
+           * "At the end of turn" triggers fire and resolve. When nothing went on
+           * the chain the Expiration Step (317.2) starts right here; otherwise
+           * the `expiration` phase picks it up once the chain is gone.
            */
           ending: {
             // rule-id: 517.1-end-of-turn-triggers (ogn-160-298 Dazzling Aurora):
@@ -1354,20 +846,16 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
             // an end-of-turn trigger staged — Aurora playing ogn-161-298 to an
             // occupied enemy battlefield — is fought inside THIS ending phase,
             // so the phase also waits while any battlefield is contested.
-            endIf: (context) =>
-              !(context.state as RiftboundGameState).interaction?.chain?.active &&
-              !(context.state as RiftboundGameState).pendingChoice &&
-              !Object.values((context.state as RiftboundGameState).battlefields ?? {}).some(
-                (bf) => bf.contested === true,
-              ),
-            next: "cleanup",
+            endIf: (context) => endingPhaseIsIdle(context.state as RiftboundGameState),
+            next: "expiration",
             onBegin: (context) => {
               context.state.turn = {
                 ...context.state.turn,
                 phase: "ending",
               };
+              resetTurnTrace(context.state);
 
-              // Rule 517.1: "At the end of your turn" triggers fire for the
+              // Rule 317.1: "At the end of your turn" triggers fire for the
               // turn player. Read turn.activePlayer, not getCurrentPlayer() —
               // callers pre-rotate the flow's current player before endTurn.
               const endingPlayer = context.state.turn.activePlayer;
@@ -1379,16 +867,9 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
               }
 
               // rule 317.1 before 317.2 — "this turn" effects stay live while
-              // an end-of-turn trigger is still on the chain.
-              if (stepMustWaitForChain(context.state)) {
-                deferStep(context.state, "expiration");
-              } else {
-                runExpirationStep(context, { reloop: true });
-              }
-            },
-
-            onEnd: (context) => {
-              if (takeDeferredStep(context.state, "expiration")) {
+              // an end-of-turn trigger is still on the chain; the Expiration
+              // Step then begins in `expiration.onBegin`.
+              if (endingPhaseIsIdle(context.state)) {
                 runExpirationStep(context);
               }
             },
@@ -1397,28 +878,32 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
           },
 
           /**
-           * Cleanup Phase (rules 518-526)
+           * Ending Phase — Expiration Step (rule 317.2), continued.
            *
-           * Run state-based checks: kill units with damage >= might,
-           * remove stale combat roles, recalculate static effects,
-           * remove orphaned hidden cards.
-           * Auto-advances (ends the turn).
+           * Entered whenever the Ending Phase's chain has emptied: runs the
+           * next Expiration pass(es). A pass that put items on the chain
+           * (317.2.e — e.g. "when a unit becomes [Mighty]" off a lapsed
+           * -Might) parks here until they are resolved, then the phase
+           * RE-ENTERS ITSELF (`next: "expiration"`) for the following pass
+           * (317.2.f). Only a pass that processed no item hands the turn to
+           * the next player (317.3) — the next turn never begins while an
+           * expiration-created chain is open. `turn.phase` stays "ending".
            */
-          cleanup: {
-            order: 7,
-            // No 'next' - FlowManager will call transitionToNextTurn()
-            endIf: () => true,
-
+          expiration: {
+            endIf: (context) => endingPhaseIsIdle(context.state as RiftboundGameState),
+            next: "expiration",
             onBegin: (context) => {
-              context.state.turn = {
-                ...context.state.turn,
-                phase: "cleanup",
-              };
-
-              // State-based checks are run by the engine after each move
-              // Via performFullCleanup. The cleanup phase signals that
-              // End-of-turn cleanup is complete and the turn can transition.
+              if (runExpirationStep(context) === "done") {
+                // rule 317.3 — the Ending Phase is complete.
+                context.state.turn = {
+                  ...context.state.turn,
+                  phase: "cleanup",
+                };
+                context.endTurn();
+              }
             },
+
+            order: 7,
           },
         },
       },

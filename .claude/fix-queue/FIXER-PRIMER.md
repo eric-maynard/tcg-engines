@@ -178,7 +178,8 @@ effect and thread it through `reveal-and-pick.then`. If B needs A's object use `
   - conquer / hold / score: built by `E/operations/points.ts scoreEvents` and fired (only when `scoreBattlefield(...).isScore`,
     rule 471.2.c) from `moves/combat/resolve-full-combat.ts`, `conquer-battlefield.ts`, `chain/showdown.ts passShowdownFocus`
     (non-combat close), `combat/score-point.ts`; hold + start-of-turn + ready(awaken) + main-phase + end-of-turn in
-    `E/game-definition/flow/riftbound-flow.ts` (`awaken/beginning/main/ending.onBegin`, ctx from `buildFlowTriggerContext` — no-op counters!).
+    `E/game-definition/flow/riftbound-flow.ts` (`awaken/beginning/main/ending.onBegin`, ctx from `flow/flow-context.ts buildFlowTriggerContext`
+    — no-op counters! `buildFlowEffectContext` = meta-backed counters + `fireTriggers`); become-mighty at 3d expiry: `flow/expiration-step.ts`.
   - discard: `effects/discard.ts`, `moves/discard.ts`, `moves/chain/activate-ability.ts` (discard cost). ready: `effects/ready.ts`, `moves/turn.ts`.
   - buff/stun/empower/gain-xp/become-mighty/recycle: `effects/{buff,stun,empower,gain-xp}.ts`, `_helpers.checkBecomesMighty/resolveAmount`.
   - choose: `play-spell.ts` (at finalize), `activate-ability.ts`, `resolve.ts`, `pending-choice.ts`. attach-equipment: `moves/equipment.ts`, `pending-choice.ts`.
@@ -226,7 +227,7 @@ Recipe — trigger never fires: 1) dump abilities: need `{type:"triggered", trig
    `movedBy`, `killedBy`, `chooserId`)? Else extend `triggerMatchesEvent`. 4) `restrictions`/`condition` type returning false?
 5) Triggered items sit on the chain — answer their FIN prompt (yes()/pick()) right after the triggering verb, then `settle()` to resolve.
 Recipe — "first/only once each turn": implement in `restrictionSatisfied` with a per-card counter on the draft (pattern:
-`draft.turnEvents` written in `fireTriggers`; clear it in flow `ending.onBegin`).
+`draft.turnEvents` written in `fireTriggers`; cleared in flow `turn.onBegin`; "this turn" EFFECTS lapse in `flow/expiration-step.ts` 3d).
 Recipe — "when you kill X with a spell": `die` carries `killedBy/killSource/wasStunned` (kill.ts; damage kills snapshot
 `meta.lastDamagedBy/lastDamageSource` into `performCleanup().deaths`); match with
 `on:{type:"unit", controller:"enemy", actor:"controller", filter:["killed-by-spell"]}`.
@@ -270,7 +271,7 @@ mutation site (wrap the move map with `withPostMoveCleanup`, or recalc at the en
   `moves/combat/resolve-full-combat.ts` which collects keywords from `def.keywords`, `abilities[{type:"keyword", value}]`
   and `meta.grantedKeywords`. Stunned units are NOT zeroed yet — set `dealsNoCombatDamage` when `meta.stunned`.
 - Runtime grants: `effects/grant-keyword.ts` → `meta.grantedKeywords[{keyword, value, duration:"turn"|"permanent"}]`
-  (turn ones expire in flow `ending.onBegin`); statics use `duration:"static"`. Readers: `registry.hasKeyword` = printed only;
+  (turn ones expire at 3d in `flow/expiration-step.ts expireCardTurnEffects`); statics use `duration:"static"`. Readers: `registry.hasKeyword` = printed only;
   `moves/movement/helpers.ts hasKeyword` = printed + granted. "Keyword ignored" is often the wrong reader.
 - Timing: `E/chain/chain-state.ts getTurnState` (`neutral-open|neutral-closed|showdown-open|showdown-closed`),
   `isLegalTiming(timing, state)`: `reaction` always, `action` in *-open, `standard` neutral-open only.
@@ -413,9 +414,38 @@ Recipe — wrong total: assert `computeTotalCost(...).resources` in a unit test 
   chain; `scoreBattlefield(…,"hold")`, `hold`+`score` events, `checkVictory`, static recalc). Manual/sandbox: `moves/combat/score-point.ts`
   (never enumerated), `conquer-battlefield.ts`. `win-conditions/victory.ts` = read-only predicates delegating to points.ts.
 - Battlefield control loss / combat staging: `performCleanup` step 6 (controller cleared in open state with no unit).
-- Deaths happen ONLY in `performCleanup` (damage ≥ might) and `effects/kill.ts`. Flow `ending.onBegin` clears damage, stun,
-  `mightModifier`, turn keywords, rune pools, `activeReplacements` (turn/next). Temporary units are trashed in
-  `beginning.onBegin` by raw `moveCard` — no `die` event (Deathknell / Zhonya bugs).
+- Deaths happen ONLY in `performCleanup` (damage ≥ might) and `effects/kill.ts`. End of turn = TURN STRUCTURE below
+  (`flow/expiration-step.ts`: 3c heal → 3d expire stun/`mightModifier`/turn keywords/`activeReplacements` (turn/next)/… →
+  3e pools). [Temporary] kills are chain items queued in `beginning.onBegin` (816, `temporary-kill` effect → leave-board choke).
+- TURN STRUCTURE (rules 315–317), `E/game-definition/flow/riftbound-flow.ts` phases `awaken → beginning → scoring → channel →
+  draw → main → ending → expiration(self-looping)`; `state.turn.phase` shows `awaken|beginning|channel|draw|main|ending`
+  (`scoring` and `expiration` are flow-internal; phase stays "beginning"/"ending"). A phase whose triggers open a chain HOLDS
+  via `endIf` (chain inactive ∧ no pendingChoice [∧ no contested bf for ending]) and the following step runs when it is
+  re-entered: Beginning Step triggers (315.2.a) → `runHoldScoringStep` deferred to `scoring.onBegin`; Ending Step 317.1
+  ("end-of-turn" event, `ending.onBegin`) → EXPIRATION STEP 317.2 = `flow/expiration-step.ts runExpirationStep/
+  runExpirationPass`: ONE cleanup per pass inside `withinMoveReducer` (320: items may be ADDED, none finalized) —
+  3c `healAllUnits` (damage-store `clearDamage`, board only) → 3d `expireThisTurnEffects` SIMULTANEOUSLY: snapshot every
+  board unit's `getEffectiveMight`, strip per-card turn state (`expireCardTurnEffects`: stun 423.1.a.2, `grantedKeywords/
+  grantedAbilities/delayedTriggers` duration "turn", prevention shields, `modesChosenThisTurn`, `dealtDamageThisTurn`,
+  (dis)empoweredUntilEndOfTurn, `mightModifier`+`combatMightModifier`, `baseMightOverride`), `expireControlEffects` (Hostile
+  Takeover revert + recall), off-board sweeps (`grantedFlow`, stale modifiers), game/player ledgers (`expireGameTurnEffects`:
+  scored/conquered/points/xp ThisTurn, `visibilityGrants`, `cannotPlayCardsThisTurn`, `nextSpellRepeat`, `activeReplacements`
+  turn/next, `turnStatics`, `playerDelayedTriggers`), then `recalculateStaticEffects`, then `_helpers.checkBecomesMighty(id,
+  before, buildFlowEffectContext)` per unit — the SAME choke mid-turn modifier writes use — so "when a unit becomes [Mighty]"
+  (Grand Duelist / Fiora Worthy, 709/710) is queued as a Pending Item from inside the step → 3e `emptyAllRunePools`
+  (`emptyRunePoolInPlace`: energy, power, earmarks — BEFORE anything is finalized, so a trigger cost is payable only by
+  adding runes at the prompt, DESIGN manual-pay) → `orderBatchTriggersByTurnOrder` + `finalizePendingItems` (G7 dialog).
+  `itemsProcessed` = chain ids minted by the pass; > 0 ⇒ 317.2.f: once that chain/prompt/showdown is gone the `expiration`
+  phase re-enters itself and runs the NEXT pass (a "+2 this turn" created by that chain lapses there); a pass with 0 items ⇒
+  `turn.phase="cleanup"`, `context.endTurn()` (317.3). Guard `MAX_EXPIRATION_PASSES`=8 (`guardTripped`). Trace:
+  `state.turnTrace.expiration[] = {pass, steps:["heal","expire","empty-pools"], healed[], expired["<what>:<id>"], events
+  ["become-mighty:<id>"], poolsEmptied{pid:{energy,power}}, itemsProcessed, guardTripped?}` reset in `ending.onBegin`, read
+  with harness `game.trace().expiration` (survives into the next turn). New "this turn" state ⇒ add its lapse to
+  `expireCardTurnEffects`/`expireGameTurnEffects` (+ a `record.expired` label), never to a phase hook. HARNESS: after
+  `endTurn()` a 3d-created trigger shows as a FIN/chain decision while `turnPlayer()` is still the old player and
+  `phase()==="ending"`; `settle()`/`advanceTurn()` carries through the re-loop. Tests: `core-rules/expiration-step.test.ts`,
+  `interactions/watcher-grand-duelist-expiry-reloop`, `fiora-worthy-feline-smoke-second-expiry`. `rules-audit/helpers.ts
+  runPhaseHook(engine,"ending")` still runs EOT triggers + pass 1 inline when the chain is idle.
 Recipe — unit should/shouldn't die: which Might did the lethal check use (SBA: printed+buff+mightModifier+static+equip;
 resolver adds Shield for defenders / Assault for attackers via `lethalThreshold`)? Was `meta.damage` written?
 Recipe — conquer after killing the last defender mid-showdown: `resolveFullCombat` empty-defender branch must treat
@@ -428,7 +458,7 @@ Recipe — stun: `effects/stun.ts` sets flag + `stun` event; zero its combat dam
   `checkReplacement(event, ctx)` (first match by `replaces===event.type` + friendly/enemy owner), `findAllReplacements`,
   `orderReplacementsByOwnerChoice`, `markReplacementConsumed` / `clearConsumedReplacements` (`draft.consumedNextReplacements`).
 - Runtime-installed: `effects/replacement.ts handle_replacement` appends `{...effect, owner, sourceCardId, targetCardIds?}`
-  to `draft.activeReplacements` (bound to targets for `die` / next `take-damage`); purged in flow `ending.onBegin`.
+  to `draft.activeReplacements` (bound to targets for `die` / next `take-damage`); turn/next ones purged at 3d (`flow/expiration-step.ts`).
 - DEATHS go through ONE planner: `E/abilities/die-replacement-batch.ts runDieBatch(ctx, dyingIds, {canPrompt, kill?})`
   (rules 370–373), called by `state-based-checks.ts performCleanup` (whole lethal batch; unreplaced ones are then killed
   together via `leaveBoard(…, {replacements:"skip"})`), `effects/kill.ts killUnits` (whole target batch) and
@@ -631,3 +661,4 @@ prompt — reuse the `opt-in` pattern (`die-replacement-batch.ts offerOptionalSh
 - **Unpayable optional trigger cost** (rule 404.2 says remove silently): DESIGN.md §Paying costs = manual pay → the yes/no IS shown with `canAccept:false` + reason so the player can tap runes and then accept; harness passivePolicy auto-declines it. Tests asserting "no prompt when the cost can't currently be paid" must be rewritten to: prompt offered, canAccept false, 'no'/settle removes the item with nothing paid. EXCEPTION: when a mandatory TARGET/OBJECT set is empty (nothing to kill/return/choose) the item IS removed silently (402.4) — that is not a payment question.
 - **383.3.d same-controller trigger order**: SOFT prompt (stack popup); tests must not require settle() to stop on it.
 - **Bo1 battlefield**: random in duel mode, manual in sandbox.
+- **Ruling vs Core Rules conflicts** (riftjudge data is community-sourced; some entries are self-flagged unverified): when a ruling test contradicts an explicit Core Rule AND an existing green core-rules/ruling test, do NOT flip the engine back and forth — cite both, keep the Core Rule behaviour, rewrite the ruling test's facet to the rule with `// RULING-CONFLICT: riftjudge <id> says X; CR <rule> says Y — engine follows CR`, and note it in your resolution. If two riftjudge rulings disagree with each other, same treatment. Only when the ruling clarifies something the CR leaves open does the ruling win.

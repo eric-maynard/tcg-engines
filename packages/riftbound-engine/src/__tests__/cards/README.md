@@ -118,6 +118,7 @@ argument and the legal values (e.g. ``cast(cleave): needs `targets` — one of: 
 | `game.p1.energy() / power("fury") / resources() / points() / xp()` | numbers |
 | `game.turnPlayer() / turnNumber() / phase() / actingSeat() / isOver() / winner()` | turn state |
 | `game.chain()` | items on the chain `{ cardId, name, controller, triggered }[]` |
+| `game.trace().expiration` | the last Ending Phase's Expiration Step passes (rule 317.2): `{ pass, steps:["heal","expire","empty-pools"], healed[], expired["mightModifier:ally",…], events["become-mighty:ally"], poolsEmptied{seat:{energy,power}}, itemsProcessed }[]` — 2+ entries mean 317.2.f re-looped |
 | `game.gameState` | the raw public `RiftboundGameState` (battlefields[bf].controller, contested, …) |
 | `game.violations()` | invariant violations recorded so far — `expect(game.violations()).toEqual([])` is a free extra oracle |
 
