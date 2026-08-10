@@ -241,9 +241,8 @@ describe("(c) Gust on Kato in response — source gone → NULL Might / NULL key
     expect(game.state("eff")).toMatchObject({ grantedKeywords: [], might: 2 }); // nothing applied early either
   });
 
-  // BUG — expected (359.3.e.12): Kato is in a non-board zone when the effect resolves, so '+Might equal to my
-  // Might' reads NULL and the calculation is ignored → F stays at 2. Actual: the engine still applies +3
-  // (mightModifier 3, F = 5) — it either snapshotted Kato's Might or reads the printed Might of the card in hand.
+  // 359.3.e.12: Kato is in a non-board zone when the effect resolves, so '+Might equal to my Might' reads NULL and
+  // the calculation is ignored → F stays at 2 (a snapshot, or the printed Might of the card in hand, would give 5).
   test("after the trigger resolves F gains NO Might — 'my Might' of a Kato that left the board is null (359.3.e.12), F stays 2", async () => {
     const game = await respondAndResolveResponse("gust");
     const s = await game.settle();
@@ -253,8 +252,8 @@ describe("(c) Gust on Kato in response — source gone → NULL Might / NULL key
     expect(game.state("eff").might).toBe(2);
   });
 
-  // BUG — expected (359.3.e.12): 'my keywords' of a permanent no longer on the board is null → F is granted
-  // nothing. Actual: F is granted Deflect 1 (this turn) — read off the Kato card now sitting in P1's hand.
+  // 359.3.e.12: 'my keywords' of a permanent no longer on the board is null → F is granted nothing (not the
+  // Deflect printed on the Kato card now sitting in P1's hand).
   test("after the trigger resolves F gains NO keywords — 'my keywords' of a Kato that left the board is null (359.3.e.12); F has no Deflect", async () => {
     const game = await respondAndResolveResponse("gust");
     await game.settle();

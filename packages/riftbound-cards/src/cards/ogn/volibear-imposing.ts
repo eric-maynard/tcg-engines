@@ -11,7 +11,9 @@ const abilities: Ability[] = [
     effect: { amount: 1, type: "draw" },
     trigger: {
       event: "move",
-      on: { actor: "opponent", location: "other-battlefield" },
+      // rule 144.3 — the subject is the PLAYER, not the unit: moving several
+      // units together is ONE Standard Move, so `batched` keeps it to one draw.
+      on: { actor: "opponent", batched: true, location: "other-battlefield" },
     },
     type: "triggered",
   },

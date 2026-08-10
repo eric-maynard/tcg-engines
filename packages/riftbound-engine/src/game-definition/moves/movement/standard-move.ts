@@ -356,6 +356,10 @@ export const standardMove: Defs["standardMove"] = {
     payMoveEscalationSurcharge(draft, playerId, surcharge);
 
     const toBase = destination === "base";
+    // rule 144.3 — moving several units together is ONE Standard Move, so the
+    // per-unit events carry their position in that single action: a trigger
+    // templated on the PLAYER ("when an opponent moves") is met only once.
+    let moveBatchIndex = 0;
     for (const unitId of unitIds) {
       // Capture the source zone before the move so the fired event
       // Reports accurate from/to locations.
@@ -381,7 +385,15 @@ export const standardMove: Defs["standardMove"] = {
       // Correctly live in recallUnit which omits this call.
       // rule-id: unl-133-219 — carry mover/owner so actor-scoped triggers match.
       fireTriggers(
-        { cardId: unitId, from: fromZone, movedBy: playerId, owner: playerId, to: toZone, type: "move" },
+        {
+          batchIndex: moveBatchIndex++,
+          cardId: unitId,
+          from: fromZone,
+          movedBy: playerId,
+          owner: playerId,
+          to: toZone,
+          type: "move",
+        },
         { cards: context.cards, counters, draft, zones },
       );
     }

@@ -158,7 +158,18 @@ export type GameEvent =
     }
   // rule-id: unl-133-219 — `owner` = moved unit's controller, `movedBy` = the
   // player whose action/effect moved it ("When you move an enemy unit").
-  | { type: "move"; cardId: string; from: string; to: string; owner?: string; movedBy?: string }
+  // rule 144.3 — a Standard Move of several units is ONE game action, so
+  // `batchIndex` numbers the units of that single move and a player-templated
+  // trigger ("when an opponent moves", `on.batched`) only counts index 0.
+  | {
+      type: "move";
+      cardId: string;
+      from: string;
+      to: string;
+      owner?: string;
+      movedBy?: string;
+      batchIndex?: number;
+    }
   // rule 417 / 437.4 — fired by `operations/deal-damage.ts` once per unit
   // actually DEALT damage: `amount` = marked (after Bonus / Double / Prevent),
   // `original` = as instructed/assigned; `combat` = combat damage (465.2.d).
