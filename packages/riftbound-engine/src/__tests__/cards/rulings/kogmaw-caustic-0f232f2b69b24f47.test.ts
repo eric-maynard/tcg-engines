@@ -63,32 +63,33 @@ describe("Ruling 0f232f2b69b24f47 — combat-death Deathknells chain and resolve
     expect(game.zoneOf("brute")).toBe("battlefield-bf1");
   });
 
-  // Expected: the Deathknell chain is created and resolved during the "units die" sub-step, BEFORE the combat
-  // cleanup heals anyone — so while Kog'Maw's trigger waits on the chain the Brute still carries the 1 combat
-  // damage Kog'Maw dealt. Actual: the engine heals all units (Brute damage 0) before opening the Deathknell's
-  // priority window.
-  test.failing("BUG: ruling 0f232f2b69b24f47 — engine clears combat damage BEFORE the Deathknell chain: Brute should still show 1 damage while Kog'Maw's trigger is pending", async () => {
+  // RULING-CONFLICT: riftjudge 0f232f2b69b24f47 has the Brute still carrying Kog'Maw's 1 combat damage while the
+  // Deathknell waits on the chain; CR 466.1.a.1 fixes the combat-cleanup order as 3a queue the Deathknell, 3b kill,
+  // 3c heal ALL units, with rule 466.2 resolving that chain only afterwards — so the damage is already gone when the
+  // priority window opens. Engine follows CR.
+  test("CR 466.1.a.1 (contra the ruling) — combat damage is healed in step 3c, before the queued Deathknell's priority window: the Brute shows 0 damage while Kog'Maw's trigger is pending", async () => {
     const game = await bruteBoard().build();
     await attackAndTradeBlows(game);
     expect(game.chain()).toEqual([expect.objectContaining({ cardId: "kog", triggered: true })]);
-    expect(game.state("brute").damage).toBe(1); // NOT yet healed — the resolution step has not finished
+    expect(game.state("brute").damage).toBe(0); // healed in 466.1.a.1 step 3c
   });
 
-  // Expected: 1 (combat, uncleared) + 4 (Deathknell) ≥ 5 → Brute dies; bf1 ends with no units. Actual: Brute was
-  // already healed, takes only 4 < 5 and survives; P2 keeps bf1.
-  test.failing("BUG: ruling 0f232f2b69b24f47 — the Deathknell's 4 onto the still-damaged Brute (1 + 4 ≥ 5) should KILL it; engine healed first so Brute survives", async () => {
+  // RULING-CONFLICT (same ruling, downstream): riftjudge expects 1 (uncleared combat damage) + 4 ≥ 5 to kill the
+  // Brute; under CR 466.1.a.1 step 3c the combat damage is gone first, so the Deathknell's 4 alone is < 5 and the
+  // Brute survives at 4 damage, keeping bf1 for P2. Engine follows CR.
+  test("CR 466.1.a.1 (contra the ruling) — the Deathknell's 4 lands on an already-healed Brute (4 < 5): it survives and P2 keeps bf1", async () => {
     const game = await bruteBoard().build();
     await attackAndTradeBlows(game);
     await game.settle();
     expect(game.chain()).toEqual([]);
     expect(game.zoneOf("kog")).toBe("trash");
-    expect(game.zoneOf("brute")).toBe("trash");
-    // Nobody has units left at bf1: no winner, no conquer, bf1 no longer P2's.
-    expect(game.cardsAt("bf1")).toEqual([]);
+    expect(game.zoneOf("brute")).toBe("battlefield-bf1");
+    expect(game.state("brute").damage).toBe(4);
+    // The Brute holds bf1 alone: P1 conquers nothing and P2 keeps the battlefield it already held.
+    expect(game.cardsAt("bf1")).toEqual(["brute"]);
     expect(game.p1.points()).toBe(0);
-    expect(game.p2.points()).toBe(0);
     expect(game.gameState.battlefields.bf1?.contested).toBe(false);
-    expect(game.gameState.battlefields.bf1?.controller).not.toBe(P1);
+    expect(game.gameState.battlefields.bf1?.controller).toBe(P2);
     expect(game.decision()).toMatchObject({ context: "main", kind: "action", seat: P1 });
     expect(game.violations()).toEqual([]);
   });
