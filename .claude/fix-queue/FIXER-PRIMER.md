@@ -778,6 +778,28 @@ prompt — reuse the `opt-in` pattern (`die-replacement-batch.ts offerOptionalSh
     `effect.player` (`draw.ts` `each`, `discard.ts` `opponent`, `choice.ts` chooser/`controllerId`) or condition
     `target-controller`; controller vs owner: `getCardController ?? getCardOwner`.
 
+## 14. Rewind (undo/redo) invariants — read before adding engine state
+- `RuleEngine.undo()/redo()` (core `rule-engine.ts`) restore an `EngineCheckpoint`: `currentState`, `internalState`
+  (zones/cards/metas — restored IN PLACE, never by reference swap: FlowManager ops close over that object), the flow
+  machine (`FlowManager.serializeFlowState/restoreFlowState`), the RNG cursor (`SeededRNG.getState/setState`), the
+  `TrackerSystem`, `gameEnded/gameEndResult`, and `GameDefinition.historyExtension` (Riftbound: the global
+  `CardDefinitionRegistry.snapshotRuntime/restoreRuntime` — instance registrations + copy layers).
+- THEREFORE: any NEW mutable engine state MUST live in one of those places — `draft` (game state), `internalState`
+  (via ctx.zones/cards/counters), card meta, the flow, the rng, trackers, or the registry runtime layer. A module-level
+  `let`, a WeakMap keyed by engine, a field on a move/effect module, `Math.random`, `Date.now()`-derived ids: all break
+  "undo ⇒ identical position / redo ⇒ identical position" (spec: `E/__tests__/core-rules/undo-redo.test.ts`, a
+  32-game property test that hashes state+internal+flow+rng+trackers+registry around EVERY move). If you truly need
+  out-of-engine state, extend `historyExtension` in `E/game-definition/definition.ts`.
+- Undo granularity = undo GROUP: `harness/turn-driver.ts applyMove` wraps "move + endTurn rotation + auto procedures"
+  in `engine.withUndoGroup`; drivers must keep sequencing through `applyMove` (server: `applySessionMove`). Anything a
+  driver does to the engine OUTSIDE executeMove (flow.setCurrentPlayer, applyPatches, replaceCurrentState) must
+  happen inside the same `withUndoGroup` so the group's before/after checkpoints include it.
+- `getReplayHistory()` is the APPLIED prefix (rewound entries are hidden until redone); entries carry `group` and a
+  never-reused `serial` — key side data to `index~serial` (server `anchorKeyAfterLastMove`), not to the bare index.
+- Server: ONE path `apps/riftbound-app/server/rewind.ts rewindSession` (WS + REST); Goldfish actions are skipped,
+  Claude seat debounced + stale decisions dropped (`rewindEpoch`). Harness: `game.undo()/redo()/canUndo()/canRedo()/
+  snapshotHash()` (EngineBackend; sandbox semantics, not transcript steps).
+
 ## Efficiency rules
 - Read the 2–4 relevant files named above in ONE Read/cat call; no grep→sed chains, no `ls`/`find` of the tree.
 - Dump the enriched abilities JSON (§1) before touching engine code — it decides card-def vs parser vs engine in seconds.

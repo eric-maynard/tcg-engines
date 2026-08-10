@@ -192,19 +192,24 @@ export function applyMove(
   params: Record<string, unknown>,
   opts: ApplyMoveOptions = {},
 ): ApplyMoveResult {
-  let next: string | undefined;
-  if (moveId === "endTurn") {
-    const r = endTurn(engine, players, (params.playerId as string | undefined) ?? seat);
-    if (!r.success) {
-      return { error: r.error, errorCode: r.errorCode, next: r.next, procedures: [], success: false };
+  // One undo group per applied move: `engine.undo()` rewinds the move AND the
+  // automatic procedures (and the endTurn rotation's flow adjustments) as one
+  // player-facing action; `engine.redo()` re-applies them together.
+  return engine.withUndoGroup(() => {
+    let next: string | undefined;
+    if (moveId === "endTurn") {
+      const r = endTurn(engine, players, (params.playerId as string | undefined) ?? seat);
+      if (!r.success) {
+        return { error: r.error, errorCode: r.errorCode, next: r.next, procedures: [], success: false };
+      }
+      next = r.next;
+    } else {
+      const r = engine.executeMove(moveId, { params, playerId: seat as PlayerId });
+      if (!r.success) {
+        return { error: r.error, errorCode: r.errorCode, procedures: [], success: false };
+      }
     }
-    next = r.next;
-  } else {
-    const r = engine.executeMove(moveId, { params, playerId: seat as PlayerId });
-    if (!r.success) {
-      return { error: r.error, errorCode: r.errorCode, procedures: [], success: false };
-    }
-  }
-  const procedures = opts.autoProcedures === false ? [] : runProcedures(engine);
-  return { next, procedures, success: true };
+    const procedures = opts.autoProcedures === false ? [] : runProcedures(engine);
+    return { next, procedures, success: true };
+  });
 }

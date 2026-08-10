@@ -129,11 +129,12 @@ function renderLog() {
   // Auto-scroll log to top (newest entries) only when the user was already there
   if (logEl && wasAtNewest) logEl.scrollTop = 0;
 
-  // Update undo/redo button state
+  // Update undo/redo button state from the engine's history cursor
+  // (snapshot.canUndo / snapshot.canRedo — server/snapshot.ts).
   const undoBtn = document.getElementById("undoBtn");
   const redoBtn = document.getElementById("redoBtn");
   if (undoBtn) undoBtn.disabled = !gameState.canUndo;
-  if (redoBtn) redoBtn.disabled = false; // Can't know redo state from server easily; always enable
+  if (redoBtn) redoBtn.disabled = gameState.canRedo === undefined ? false : !gameState.canRedo;
 }
 
 function addLogEntry(text) {
@@ -171,7 +172,7 @@ function handleRewindClick(event) {
  */
 const REWIND_LOG_SENTINEL = "Rewound their last action.";
 
-/** Track the last-seen rewind entry so we only react to new rewinds. */
+/** Track the last-seen rewind entry (its unique key, else HH:MM) so we only react to new rewinds. */
 let lastSeenRewindTimestamp = null;
 
 /**
@@ -188,12 +189,9 @@ function clearInteractionStateOnRewind() {
   if (!newest || newest.text !== REWIND_LOG_SENTINEL) return;
 
   // Dedupe: only react if this is a different rewind than the one we
-  // already processed (timestamp is HH:MM, but combined with text it's a
-  // stable-enough sentinel for per-frame detection).
-  const stamp = newest.timestamp || "";
-  if (stamp === lastSeenRewindTimestamp && log === gameState.log) {
-    // Same entry on a re-render — nothing to do.
-  }
+  // already processed. The server keys every rewind line uniquely
+  // (`after-replay-<i>~<serial>-rw<epoch>`); fall back to HH:MM for legacy frames.
+  const stamp = newest.key || newest.timestamp || "";
   if (stamp === lastSeenRewindTimestamp) return;
   lastSeenRewindTimestamp = stamp;
 

@@ -5,7 +5,6 @@
 
 import { getGlobalCardRegistry } from "@tcg/riftbound";
 import type { PlayerId } from "@tcg/core";
-import { makeLogEntry } from "../src/narrator";
 import { allCards } from "./cards";
 import { SANDBOX_ENABLED, SERVER_ONLY_MOVES } from "./config";
 import { MIN_MAIN_DECK_SIZE, buildDefaultDeck, findCopyLimitViolations, findSideboardViolation } from "./decks";
@@ -15,6 +14,7 @@ import { createGameFromDecks } from "./pregame";
 import { buildAvailableMoves, buildGameSnapshot, buildHistoryLog } from "./snapshot";
 import { type DeckConfig, type RouteCtx, type RouteResult, gameSessions } from "./state";
 import { aiStatus, attachOpponent, parseOpponentSpec, runOpponent } from "./ai-opponent";
+import { rewindSession } from "./rewind";
 import { applySessionMove } from "./turn";
 
 export async function handleGameRoutes(req: Request, url: URL, _ctx: RouteCtx): RouteResult {
@@ -191,47 +191,21 @@ export async function handleGameRoutes(req: Request, url: URL, _ctx: RouteCtx): 
     return json({ log: buildHistoryLog(session) });
   }
 
-  // POST /api/game/:id/undo — undo last move
-  if (pathname.match(/^\/api\/game\/[^/]+\/undo$/) && req.method === "POST") {
+  // POST /api/game/:id/undo|redo — rewind / re-apply the last action (server/rewind.ts)
+  if (pathname.match(/^\/api\/game\/[^/]+\/(undo|redo)$/) && req.method === "POST") {
     const gameId = pathname.split("/")[3];
+    const kind = pathname.endsWith("/redo") ? "redo" : "undo";
     const session = gameSessions.get(gameId);
     if (!session) {return json({ error: "Game not found" }, 404);}
     // REST move surface is a sandbox/test hook only: there is no user→seat
     // binding on this path (body.playerId / ?player= are caller-supplied), so
     // host/join games must use the authenticated WebSocket path instead.
     if (!session.sandbox) {return json({ error: "REST moves are sandbox-only; use the game WebSocket" }, 403);}
-
-    const state = session.engine.getState();
-    if (state.status !== "playing") {
-      return json({ error: "Can only rewind during active gameplay" }, 400);
-    }
-
-    if (session.engine.getReplayHistory().length === 0) {
-      return json({ error: "Nothing to rewind" }, 400);
-    }
-
-    const success = session.engine.undo();
-    if (!success) {return json({ error: "Nothing to rewind" }, 400);}
-
-    session.log.push(makeLogEntry("Rewound their last action.", { rewindable: false }));
-    return json({ state: buildGameSnapshot(session), success: true });
-  }
-
-  // POST /api/game/:id/redo — redo undone move
-  if (pathname.match(/^\/api\/game\/[^/]+\/redo$/) && req.method === "POST") {
-    const gameId = pathname.split("/")[3];
-    const session = gameSessions.get(gameId);
-    if (!session) {return json({ error: "Game not found" }, 404);}
-    // REST move surface is a sandbox/test hook only: there is no user→seat
-    // binding on this path (body.playerId / ?player= are caller-supplied), so
-    // host/join games must use the authenticated WebSocket path instead.
-    if (!session.sandbox) {return json({ error: "REST moves are sandbox-only; use the game WebSocket" }, 403);}
-
-    const success = session.engine.redo();
-    if (!success) {return json({ error: "Nothing to redo" }, 400);}
-
-    session.log.push(makeLogEntry("Move redone."));
-    return json({ state: buildGameSnapshot(session), success: true });
+    const body = (await req.json().catch(() => ({}))) as { playerId?: string };
+    const actor = body.playerId || url.searchParams.get("player") || session.players[0];
+    const r = rewindSession(session, kind, { actor, gameId });
+    if (!r.ok) {return json({ error: r.error }, 400);}
+    return json({ state: buildGameSnapshot(session, actor), steps: r.steps, success: true });
   }
 
   // POST /api/game/:id/tutor {defId, playerId?} — sandbox-only test hook.

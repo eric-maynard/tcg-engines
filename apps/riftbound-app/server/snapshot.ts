@@ -391,17 +391,26 @@ const revealAnchors = new WeakMap<GameSession, Map<string, RevealAnchor>>();
 
 export function anchorKeyAfterLastMove(session: GameSession, suffix = ""): string {
   let index = -1;
+  let serial: number | undefined;
   try {
-    index = session.engine.getReplayHistory().length - 1;
+    const history = session.engine.getReplayHistory();
+    index = history.length - 1;
+    // The entry's serial pins the line to THAT move: after a rewind a different
+    // move can occupy the same index, and the line must not migrate onto it.
+    serial = history[index]?.serial;
   } catch { /* History not available */ }
-  return `after-replay-${index}${suffix ? `-${suffix}` : ""}`;
+  return `after-replay-${index}${serial !== undefined ? `~${serial}` : ""}${suffix ? `-${suffix}` : ""}`;
 }
 
 export function buildHistoryLog(session: GameSession): LogEntry[] {
   const anchored = new Map<number, LogEntry[]>();
   const entries: LogEntry[] = []; // Manual entries (setup messages) first
+  let history: ReturnType<GameSession["engine"]["getReplayHistory"]> = [];
+  try {
+    history = session.engine.getReplayHistory();
+  } catch { /* History not available */ }
   for (const entry of session.log) {
-    const m = entry.key?.match(/^after-replay-(-?\d+)/);
+    const m = entry.key?.match(/^after-replay-(-?\d+)(?:~(\d+))?/);
     if (!m) {
       entries.push(entry);
       continue;
@@ -411,14 +420,15 @@ export function buildHistoryLog(session: GameSession): LogEntry[] {
       entries.push(entry);
       continue;
     }
+    // Rewind consistency: a line anchored to a move that is no longer applied
+    // (rewound, or its slot re-used by a different move) is not shown.
+    if (m[2] !== undefined && history[idx]?.serial !== Number(m[2])) {
+      continue;
+    }
     const list = anchored.get(idx) ?? [];
     list.push(entry);
     anchored.set(idx, list);
   }
-  let history: ReturnType<GameSession["engine"]["getReplayHistory"]> = [];
-  try {
-    history = session.engine.getReplayHistory();
-  } catch { /* History not available */ }
   // rule 424.1 — a reveal presents the card to ALL players. Reveals that park
   // no prompt (Diana, Lunari) are invisible in the move-derived narration
   // below, so name them from the engine's shared reveal record. The record
@@ -740,7 +750,10 @@ export function buildGameSnapshot(session: GameSession, viewingPlayer?: string) 
       ? { ...session.opponent.info, thinking: session.opponent.thinking }
       : undefined,
     battlefields: state.battlefields,
-    canUndo: session.engine.getReplayHistory().length > 0,
+    // Rewind affordances: the engine's history cursor (applied prefix only —
+    // pregame setup moves are refused by server/rewind.ts, not hidden here).
+    canRedo: session.engine.canRedo(),
+    canUndo: session.engine.canUndo() && (state.status === "playing" || (session.sandbox && state.status === "finished")),
     gameId: state.gameId,
     interaction: {
       ...state.interaction,

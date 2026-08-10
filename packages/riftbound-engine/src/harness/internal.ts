@@ -112,3 +112,63 @@ export function hashSnapshot(snap: FullSnapshot): string {
 export function hashEngine(engine: HarnessEngine): string {
   return hashSnapshot(takeSnapshot(engine));
 }
+
+/**
+ * Everything an undo/redo checkpoint restores, detached: the position hash
+ * tests compare across `undo()` / `redo()`. Beyond `takeSnapshot` it covers
+ * the flow machine (segment/phase/step/turn/current player), the seeded RNG
+ * cursor, the per-turn trackers, the game-over latch and the card registry's
+ * runtime layer (instance registrations + copy effects).
+ */
+export interface PositionSnapshot extends FullSnapshot {
+  readonly flow: unknown;
+  readonly rng: unknown;
+  readonly trackers: unknown;
+  readonly gameEnded: boolean;
+  readonly registry: { definitions: readonly string[]; copySources: readonly (readonly [string, string])[] };
+}
+
+export function takePositionSnapshot(engine: HarnessEngine): PositionSnapshot {
+  const priv = engine as unknown as {
+    rng: { getState(): unknown };
+    trackerSystem: { getState(): unknown };
+    gameDefinition: { historyExtension?: { snapshot(): unknown } };
+  };
+  const ext = priv.gameDefinition.historyExtension?.snapshot() as
+    | { definitions: ReadonlyMap<string, { id?: string; name?: string; might?: number }>; copySources: ReadonlyMap<string, string> }
+    | undefined;
+  return {
+    ...takeSnapshot(engine),
+    flow: engine.getFlowManager()?.serializeFlowState(),
+    gameEnded: engine.hasGameEnded(),
+    registry: {
+      copySources: ext ? [...ext.copySources.entries()].sort() : [],
+      definitions: ext ? [...ext.definitions.entries()].map(([k, d]) => `${k}=${d.id ?? ""}/${d.name ?? ""}/${d.might ?? ""}`).sort() : [],
+    },
+    rng: priv.rng.getState(),
+    trackers: priv.trackerSystem.getState(),
+  };
+}
+
+/** Stable hash of a `takePositionSnapshot` (gameId excluded, keys sorted). */
+export function hashPosition(snap: PositionSnapshot): string {
+  const { gameId: _gameId, ...rest } = snap.state as RiftboundGameState & { gameId?: string };
+  return fnv1a(
+    canonicalJson({
+      cards: snap.cards,
+      flow: snap.flow,
+      gameEnded: snap.gameEnded,
+      metas: snap.metas,
+      registry: snap.registry,
+      rng: snap.rng,
+      state: rest,
+      trackers: snap.trackers,
+      zones: snap.zones,
+    }),
+  );
+}
+
+export function hashEnginePosition(engine: HarnessEngine): string {
+  return hashPosition(takePositionSnapshot(engine));
+}
+

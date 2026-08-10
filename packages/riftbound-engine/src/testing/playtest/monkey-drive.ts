@@ -14,6 +14,7 @@
  *   - units that just entered a battlefield must be exhausted (rule 143.4)
  *   - "When I move/arrive/play" rulesText must produce a visible consequence
  *   - no console/page errors
+ *   - Rewind then Redo (pressed at random moments) lands on the SAME snapshot
  * Violations are written per-step and rolled up at the top of trace.json so
  * the workflow can surface them before any agent review.
  *
@@ -133,6 +134,31 @@ const clickables = () => p.evaluate(() => {
 });
 const loc = (key: string) => p.locator(`[data-mkey="${key}"]`).first();
 
+// ───────────────────────── rewind probe ─────────────────────────
+/** The parts of the client snapshot a Rewind→Redo round trip must reproduce exactly (log/seq/dom excluded). */
+const coreState = () => p.evaluate(() => {
+  const gs = (window as any).__rbGameState;
+  if (!gs) return null;
+  const canon = (v: any): any => Array.isArray(v) ? v.map(canon) : v && typeof v === "object" ? Object.fromEntries(Object.keys(v).sort().map(k => [k, canon(v[k])])) : v;
+  return JSON.stringify(canon({
+    turn: gs.turn, status: gs.status, runePools: gs.runePools, players: gs.players, battlefields: gs.battlefields,
+    interaction: gs.interaction, pendingChoice: gs.pendingChoice ?? null, zones: gs.zones, canUndo: gs.canUndo,
+  }));
+});
+const rewindEnabled = () => p.evaluate(() => { const b = document.getElementById("undoBtn") as HTMLButtonElement | null; return !!b && !b.disabled; });
+const redoEnabled = () => p.evaluate(() => { const b = document.getElementById("redoBtn") as HTMLButtonElement | null; return !!b && !b.disabled; });
+/** Wait for the client to receive the rewind frame (log sentinel / redo line as newest entry), bounded. */
+async function waitNewestLog(text: string, ms = 4000) {
+  const t = Date.now();
+  while (Date.now() - t < ms) {
+    const newest = await p.evaluate(() => { const l = (window as any).__rbGameState?.log || []; const e = l[l.length - 1]; return typeof e === "string" ? e : e?.text || ""; });
+    if (newest === text) return true;
+    await p.waitForTimeout(80);
+  }
+  return false;
+}
+let pendingRewindViolation: Violation | null = null;
+
 // ───────────────────────── invariants ─────────────────────────
 type Violation = { rule: string; detail: string; step: number };
 const PENDING_OK = new Set(["resolvePendingChoice", "concede"]);
@@ -204,6 +230,7 @@ async function snap(action: string, target: string, playedCard?: any) {
   const errsNow = errs.splice(0);
   const stWithErrs = { ...st, errs: errsNow };
   const invariantViolations = checkInvariants(stepN, prevState, stWithErrs, action, target, playedCard);
+  if (pendingRewindViolation) { invariantViolations.push(pendingRewindViolation); pendingRewindViolation = null; }
   allViolations.push(...invariantViolations);
   trace.push({ step: n, action, target, shot: `${n}.png`, errs: errsNow, invariantViolations, ...st });
   const vTag = invariantViolations.length ? ` INV[${invariantViolations.map(v => v.rule).join(",")}]` : "";
@@ -269,6 +296,24 @@ for (let i = 0; i < STEPS; i++) {
       if (rand() < 0.6) intent = { kind: "score" };
     } else if (r < 0.35 && runes.length) {
       const c = pick(runes); await loc(c.key).click({ timeout: 3000 }); did = "click-rune"; tgt = c.label;
+    } else if (r < 0.43 && (await rewindEnabled())) {
+      // Press Rewind at a random moment; half the time press Redo right after and
+      // check the HARD invariant: Rewind→Redo reproduces the pre-rewind snapshot.
+      const before = await coreState();
+      await p.click("#undoBtn", { timeout: 3000 });
+      const gotUndo = await waitNewestLog("Rewound their last action.");
+      did = "rewind"; tgt = gotUndo ? "ok" : "no rewind frame";
+      if (gotUndo && rand() < 0.5 && (await redoEnabled())) {
+        await p.click("#redoBtn", { timeout: 3000 });
+        const gotRedo = await waitNewestLog("Move redone.");
+        await p.waitForTimeout(200);
+        const after = await coreState();
+        did = "rewind+redo"; tgt = gotRedo ? "ok" : "no redo frame";
+        if (gotRedo && before !== after) {
+          pendingRewindViolation = { rule: "undo-redo-roundtrip", detail: `Rewind→Redo changed the snapshot (before ${before?.length}b, after ${after?.length}b)`, step: stepN };
+        }
+      }
+      intent = null;
     } else if (r < 0.60 && subs.length) {
       const c = pick(subs); await loc(c.key).click({ timeout: 3000 }); did = "click-sub"; tgt = c.label;
       const m = c.label.match(/Play (?:Unit|Spell|Gear)[:\s]+(.+)/i);

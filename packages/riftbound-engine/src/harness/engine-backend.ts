@@ -23,7 +23,7 @@ import {
 } from "./decision";
 import type { DecisionContext, NarrowResult } from "./decision";
 import type { FullSnapshot, HarnessEngine } from "./internal";
-import { getInternalState, hashSnapshot, peekCurrentState, replaceCurrentState, takeSnapshot } from "./internal";
+import { getInternalState, hashEnginePosition, hashSnapshot, peekCurrentState, replaceCurrentState, takeSnapshot } from "./internal";
 import type { RiftboundGameState } from "../types/game-state";
 import type { Invariant } from "./invariants";
 import { DEFAULT_INVARIANTS, runInvariants } from "./invariants";
@@ -165,6 +165,55 @@ export class EngineBackend implements GameBackend {
   stateHash(): string {
     this.activate();
     return hashSnapshot(takeSnapshot(this.engine));
+  }
+
+  /**
+   * Hash of the COMPLETE position — state, zones/cards/metas, flow machine,
+   * RNG cursor, trackers, game-over latch, registry runtime layer. Equal
+   * hashes ⇔ the engine will behave identically from here (same legal moves,
+   * same next shuffle). What undo/redo tests assert on.
+   */
+  snapshotHash(): string {
+    this.activate();
+    return hashEnginePosition(this.engine);
+  }
+
+  canUndo(): boolean {
+    return this.engine.canUndo();
+  }
+
+  canRedo(): boolean {
+    return this.engine.canRedo();
+  }
+
+  /**
+   * Rewind the last applied action (the move + its automatic procedures —
+   * one undo group), sandbox semantics: any seat, any time, mid-prompt /
+   * mid-chain / mid-showdown / after the winning move. Drops a parked
+   * follow-up. Not recorded in the transcript (a transcript of a session that
+   * rewound no longer replays to `finalHash`).
+   */
+  undo(): boolean {
+    this.activate();
+    this.parked = undefined;
+    const ok = this.engine.undo();
+    if (ok) {
+      this.seqNo += 1;
+      this.prevSnap = takeSnapshot(this.engine);
+    }
+    return ok;
+  }
+
+  /** Re-apply the last rewound action; false once a new move truncated it. */
+  redo(): boolean {
+    this.activate();
+    this.parked = undefined;
+    const ok = this.engine.redo();
+    if (ok) {
+      this.seqNo += 1;
+      this.prevSnap = takeSnapshot(this.engine);
+    }
+    return ok;
   }
 
   cardState(card: CardRef): CardState {
@@ -512,17 +561,21 @@ export class EngineBackend implements GameBackend {
     // mid-game, so the escape hatch stages a pregame window around a setup-only
     // move and restores the playing state afterwards; the move itself (draw
     // replacements, then Recycle the set-aside cards) is the engine's own.
-    const restore = SETUP_ONLY_MOVES.has(moveId) ? this.enterPregameWindow(seat) : undefined;
-    try {
-      return this.execute(
-        seat,
-        { id: d?.id ?? `d${this.seqNo}:${seat}:raw`, kind: "action" },
-        { args: { params }, key: `${moveId}:raw`, kind: "action" },
-        { moveId, params: { playerId: seat, ...params }, playerId: seat },
-      );
-    } finally {
-      restore?.();
-    }
+    // One undo group around the staged window too, so `undo()` lands on the
+    // position before the window was opened (not inside it).
+    return this.engine.withUndoGroup(() => {
+      const restore = SETUP_ONLY_MOVES.has(moveId) ? this.enterPregameWindow(seat) : undefined;
+      try {
+        return this.execute(
+          seat,
+          { id: d?.id ?? `d${this.seqNo}:${seat}:raw`, kind: "action" },
+          { args: { params }, key: `${moveId}:raw`, kind: "action" },
+          { moveId, params: { playerId: seat, ...params }, playerId: seat },
+        );
+      } finally {
+        restore?.();
+      }
+    });
   }
 
   /**

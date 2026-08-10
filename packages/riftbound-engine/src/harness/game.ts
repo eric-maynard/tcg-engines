@@ -695,6 +695,37 @@ export class Game {
     return this.backend.transcript();
   }
 
+  /**
+   * Rewind the last action (move + automatic procedures) — see
+   * `EngineBackend.undo`. Sandbox semantics; scripted answers are untouched.
+   */
+  undo(): boolean {
+    return this.backend.undo();
+  }
+
+  /** Re-apply the last rewound action (false once a new move was made). */
+  redo(): boolean {
+    return this.backend.redo();
+  }
+
+  canUndo(): boolean {
+    return this.backend.canUndo();
+  }
+
+  canRedo(): boolean {
+    return this.backend.canRedo();
+  }
+
+  /**
+   * Stable hash of the complete engine position (state + zones/cards/metas +
+   * flow + RNG cursor + trackers + game-over latch + registry runtime layer).
+   * `stateHash()` covers only what an observer can see; this one also proves
+   * the NEXT shuffle / phase transition will be identical.
+   */
+  snapshotHash(): string {
+    return this.backend.snapshotHash();
+  }
+
   stateHash(): string {
     return this.backend.stateHash();
   }

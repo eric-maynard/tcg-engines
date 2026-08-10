@@ -43,12 +43,13 @@ document.addEventListener("keydown", (e) => {
     }
   }
 
-  // Ctrl+Z = Undo, Ctrl+Shift+Z / Ctrl+Y = Redo
-  if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) {
+  // Ctrl+Z = Undo, Ctrl+Shift+Z / Ctrl+Y = Redo (Shift reports the key as "Z").
+  const k = typeof e.key === "string" ? e.key.toLowerCase() : "";
+  if ((e.ctrlKey || e.metaKey) && k === "z" && !e.shiftKey) {
     e.preventDefault();
     requestUndo();
   }
-  if ((e.ctrlKey || e.metaKey) && (e.key === "y" || (e.key === "z" && e.shiftKey))) {
+  if ((e.ctrlKey || e.metaKey) && (k === "y" || (k === "z" && e.shiftKey))) {
     e.preventDefault();
     requestRedo();
   }

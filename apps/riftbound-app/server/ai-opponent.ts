@@ -1196,6 +1196,9 @@ export function forcedChoice(session: GameSession, prompt: PromptBundle): Choice
   return { fallback: false, label: `${describeAnswer(session, d, answer)} (forced)`, moves: [outcome.move], rationale: "" };
 }
 
+/** `#decide` result when a rewind invalidated the position mid-thought. */
+const STALE = Symbol("stale-decision");
+
 export class ClaudeOpponent implements OpponentHandle {
   readonly model: ModelKey;
   readonly modelId: string;
@@ -1374,11 +1377,19 @@ export class ClaudeOpponent implements OpponentHandle {
     return undefined;
   }
 
-  /** Ask the model for one action (≤3 attempts on invalid output), else the Goldfish move. */
-  async #decide(session: GameSession): Promise<Choice | null> {
+  /**
+   * Ask the model for one action (≤3 attempts on invalid output), else the
+   * Goldfish move. `STALE` when a Rewind/Redo changed the position while the
+   * model was thinking (the answer is for a position that no longer exists and
+   * must not even be re-validated against the new one).
+   */
+  async #decide(session: GameSession, epoch: number): Promise<Choice | null | typeof STALE> {
     let retryNote: string | undefined;
     if (!this.disabledReason) {
       for (let attempt = 0; attempt < 3; attempt++) {
+        if (rewindEpoch(session) !== epoch) {
+          return STALE;
+        }
         const prompt = buildPrompt(session, this.seat, this.#memory, this.info.label, retryNote);
         // No real choice (a lone "Pass priority", a single forced pick): don't spend a call.
         const forced = forcedChoice(session, prompt);
@@ -1388,6 +1399,9 @@ export class ClaudeOpponent implements OpponentHandle {
         let out: ModelToolUse | undefined;
         try {
           out = await this.#askWithLookups(session, prompt);
+          if (rewindEpoch(session) !== epoch) {
+            return STALE;
+          }
         } catch (error) {
           const e = error as AiCallError;
           console.log(`[ai] ${this.modelId} call failed: ${this.#redact(e.message)}`);
@@ -1622,17 +1636,17 @@ export class ClaudeOpponent implements OpponentHandle {
         this.thinking = true;
         this.#pushStatus(session);
       }
-      let choice: Choice | null;
+      let choice: Choice | null | typeof STALE;
       if (actions >= this.#opts.maxActionsPerSegment) {
         const fb = goldfishFallbackMove(session, this.seat);
         choice = fb ? { fallback: true, label: fb.label, moves: [{ moveId: fb.moveId, params: fb.params, playerId: fb.playerId }], rationale: "action cap reached" } : null;
       } else {
-        choice = await this.#decide(session);
+        choice = await this.#decide(session, epoch);
       }
       // A Rewind/Redo landed while the model was thinking: the choice was made
       // for a position that no longer exists — drop it (never re-validate it
       // against the rewound state) and let the debounce timer re-arm the seat.
-      if (rewindEpoch(session) !== epoch || Date.now() < this.holdUntil) {
+      if (choice === STALE || rewindEpoch(session) !== epoch || Date.now() < this.holdUntil) {
         this.staleDiscards++;
         console.log(`[ai] discarded a stale decision after a rewind (epoch ${epoch} → ${rewindEpoch(session)})`);
         if (Date.now() < this.holdUntil) {
@@ -1760,14 +1774,14 @@ export function runOpponent(session: GameSession, opts: { humanSeat?: string; ga
 
 const pendingTimers = new WeakMap<GameSession, ReturnType<typeof setTimeout>>();
 
-/** Debounce before the Claude seat answers a rewound position (ms). */
-export const REWIND_REARM_MS = 3000;
+/** Debounce before the Claude seat answers a rewound position (ms). Mutable so tests can shorten it. */
+export const aiTiming = { rewindRearmMs: 3000 };
 
 /**
  * Debounced re-arm for the Claude seat only (undo/redo can hand it the cursor
  * back). The Goldfish keeps its historical behaviour of acting on moves only.
  */
-export function scheduleOpponent(session: GameSession, opts: { humanSeat?: string; gameId?: string } = {}, delayMs = REWIND_REARM_MS): void {
+export function scheduleOpponent(session: GameSession, opts: { humanSeat?: string; gameId?: string } = {}, delayMs = aiTiming.rewindRearmMs): void {
   const ai = session.opponent;
   if (ai?.info.kind !== "claude") {
     return;

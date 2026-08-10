@@ -80,6 +80,32 @@ Rule 383.3.d ("the controller selects the order to place simultaneous triggers o
 - Targeted spells/abilities enter a targeting mode: legal targets glow, click to choose, Esc cancels. Never auto-pick a target.
 - Card zoom (double-click) never sits above a modal: opening the chain / pending-choice / play-cost modal closes it, Esc or backdrop click closes it, and it won't open while a modal is up.
 
+## Rewind (undo / redo)
+- Sidebar **Rewind** (`R` / `Backspace` / `Ctrl/Cmd+Z`, or the ↺ on a log line) and **Redo** (`Ctrl+Shift+Z` / `Ctrl+Y`).
+  Rewind = enabled iff `snapshot.canUndo`, Redo iff `snapshot.canRedo` (the engine's history cursor).
+- ONE Rewind takes back one player-facing ACTION: the move plus every automatic procedure the server ran after it
+  (combat resolution, showdown close, chain resolve) — never half of it. It restores the COMPLETE position: board,
+  hands/decks (order included), rune pools, phase/turn/priority/focus, open prompt, chain contents and bound targets,
+  the RNG (a rewound shuffle re-deals the same cards on Redo), "this turn" trackers, and a finished game's result.
+  Works mid-prompt (lands before the move that opened the prompt), mid-chain, mid-showdown, across End Turn.
+- Redo re-applies exactly what was rewound; taking any NEW action after a Rewind discards the redo branch (standard).
+- The pregame (deck setup, mulligans) is never rewindable: "Nothing to rewind" at the first action of the game.
+- Goldfish practice: a Rewind takes back the HUMAN's last action and silently skips every Goldfish action that followed
+  it, including priority passes the Goldfish driver made on your behalf (Rewind right after End Turn = your End Turn
+  AND the Goldfish's whole turn come back in one click; if start-of-turn triggers made YOU pass priority since, those
+  passes are your actions and come back first, one per click). Redo replays them the same way. The Goldfish never
+  acts on a rewind and the board is never parked on the Goldfish's turn, so it never "runs away".
+- VS Claude: one action per Rewind (Claude's included). Claude is re-armed ~3 s after the LAST Rewind/Redo click
+  (debounce, so several clicks land first) and any decision it was computing for the pre-rewind position is thrown
+  away, never applied to the rewound board. Rewinding into Claude's turn lets it reconsider (it may play differently).
+- Match log: narration of rewound moves disappears (it is derived from the applied history) together with its side
+  lines ("Turn passed to …", "Combat resolved …", 🤖 lines); every Rewind appends "Rewound their last action." (Redo:
+  "Move redone.") as the newest line — the client clears targeting/armed hotkeys and flashes the board on it.
+- OPEN DESIGN QUESTION — "Rewind allowed in duel / vs-AI?": today ANY seat may Rewind/Redo ANY action (the opponent's
+  too) while the game is `playing`; the sandbox (Goldfish / VS Claude) may additionally take back the winning move of a
+  finished game, a duel may not. Whether hosted duels should restrict Rewind (own actions only / opponent consent /
+  off) is undecided — do not change who may undo without a decision here.
+
 ## Pregame
 - Mulligan: 4 large cards, hover for full image, Keep/Send-back
 - No other modals (peek dialog, help, etc.) may appear over the pregame overlay

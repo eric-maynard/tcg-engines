@@ -191,6 +191,24 @@ export class FlowManager<TState, TCardMeta = any> {
   }
 
   /**
+   * Put the machine back at a position captured by `serializeFlowState()`
+   * without running any hook (the game state that goes with it already holds
+   * their effects). Used by RuleEngine undo/redo; pending transition flags are
+   * cleared because a checkpoint is only ever taken between moves.
+   */
+  restoreFlowState(state: SerializedFlowState, gameState?: TState): void {
+    this.restoreFromSerialized(state);
+    this.pendingEndGameSegment = false;
+    this.pendingEndPhase = false;
+    this.pendingEndStep = false;
+    this.pendingEndTurn = false;
+    this.isTransitioning = false;
+    if (gameState !== undefined) {
+      this.gameState = gameState;
+    }
+  }
+
+  /**
    * Serialize current flow state for persistence
    *
    * Use case: Save game state to database for later replay/restoration

@@ -6,6 +6,8 @@
  */
 
 import type { GameDefinition } from "@tcg/core";
+import type { RegistryRuntimeSnapshot } from "../operations/card-lookup";
+import { getGlobalCardRegistry } from "../operations/card-lookup";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../types";
 import { createPlayerView } from "../views/player-view";
 import { riftboundZones } from "../zones/zone-configs";
@@ -61,4 +63,17 @@ export const riftboundDefinition: GameDefinition<
   // Player view - in tabletop simulator, most info is public
   // Only hide opponent's hand and facedown cards
   playerView: (state, playerId) => createPlayerView(state, playerId),
+
+  // Undo/redo (Rewind): the process-global card registry is engine state that
+  // lives outside state/internalState — tokens and duplicates register
+  // instances, copy effects (rule 477.1.b) and battlefield replacement rewrite
+  // definitions — so it rides on every history checkpoint.
+  historyExtension: {
+    restore: (snapshot) => {
+      if (snapshot) {
+        getGlobalCardRegistry().restoreRuntime(snapshot as RegistryRuntimeSnapshot);
+      }
+    },
+    snapshot: () => getGlobalCardRegistry().snapshotRuntime(),
+  },
 };

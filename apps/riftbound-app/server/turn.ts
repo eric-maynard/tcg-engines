@@ -13,7 +13,7 @@
 import { applyMove } from "@tcg/riftbound/harness";
 import type { ApplyMoveResult, ProcedureRun } from "@tcg/riftbound/harness";
 import { actorName, makeLogEntry } from "../src/narrator";
-import { buildAvailableMoves, buildGameSnapshot } from "./snapshot";
+import { anchorKeyAfterLastMove, buildAvailableMoves, buildGameSnapshot } from "./snapshot";
 import type { GameSession } from "./state";
 
 export type SessionMoveResult = ApplyMoveResult;
@@ -33,7 +33,10 @@ function logProcedures(session: GameSession, runs: readonly ProcedureRun[]): voi
     }
     if (run.moveId === "resolveFullCombat") {
       session.log.push(
-        makeLogEntry(`Combat resolved at ${String(run.params.battlefieldId ?? "")}.`, { rewindable: true }),
+        makeLogEntry(`Combat resolved at ${String(run.params.battlefieldId ?? "")}.`, {
+          key: anchorKeyAfterLastMove(session, `proc${session.log.length}`),
+          rewindable: true,
+        }),
       );
     }
   }
@@ -75,7 +78,12 @@ export function applySessionMove(
     // their triggers sit on the chain; the flow finishes the rotation itself.
     if (after.turn.phase !== "ending") {
       const actualNext = after.turn.activePlayer || result.next || getNextPlayer(session, playerId);
-      session.log.push(makeLogEntry(`Turn passed to ${session.playerNames[actualNext] ?? actualNext}.`));
+      // Anchored to the endTurn entry so a Rewind of the turn drops the line too.
+      session.log.push(
+        makeLogEntry(`Turn passed to ${session.playerNames[actualNext] ?? actualNext}.`, {
+          key: anchorKeyAfterLastMove(session, `turn${session.log.length}`),
+        }),
+      );
     }
   }
   logProcedures(session, result.procedures);
@@ -96,7 +104,9 @@ export function sandboxAutoPlay(session: GameSession, goldfish: string): void {
   const act = (seat: string, moveId: string, params: Record<string, unknown>, line?: string): boolean => {
     const r = applySessionMove(session, seat, moveId, params);
     if (r.success && line) {
-      session.log.push(makeLogEntry(line, { rewindable: true }));
+      session.log.push(
+        makeLogEntry(line, { key: anchorKeyAfterLastMove(session, `gf${session.log.length}`), rewindable: true }),
+      );
     }
     return r.success;
   };
@@ -122,7 +132,9 @@ export function sandboxAutoPlay(session: GameSession, goldfish: string): void {
       chain.items.length > 0 &&
       chain.items.every((it: { controller?: string; triggered?: boolean }) => it.controller === goldfish && it.triggered)
     ) {
-      if (act(human, "passChainPriority", { playerId: human })) { acted = true; continue; }
+      // `sandboxAuto` marks the pass as made BY the Goldfish driver on the human's
+      // behalf (server/rewind.ts skips it like any Goldfish action).
+      if (act(human, "passChainPriority", { playerId: human, sandboxAuto: true })) { acted = true; continue; }
     }
 
     // Auto-pass chain priority if Goldfish has it

@@ -49,20 +49,38 @@ export interface RewindResult {
   steps: number;
 }
 
+type Entry = ReturnType<GameSession["engine"]["getReplayHistory"]>[number];
+
+/**
+ * Seat an action is attributed to for the Goldfish skip: its initiator, except
+ * that a pass the Goldfish driver made ON THE HUMAN'S BEHALF (turn.ts
+ * sandboxAutoPlay, `params.sandboxAuto`) counts as the Goldfish's.
+ */
+function actorOf(entry: Entry | undefined, goldfish: string | undefined): string | undefined {
+  if (!entry) {
+    return undefined;
+  }
+  const params = entry.context?.params as { sandboxAuto?: boolean } | undefined;
+  if (goldfish && params?.sandboxAuto === true) {
+    return goldfish;
+  }
+  return entry.context?.playerId as string | undefined;
+}
+
 /** Seat that initiated the action ending at the applied tail (first entry of its undo group). */
-function tailActor(session: GameSession): string | undefined {
+function tailActor(session: GameSession, goldfish?: string): string | undefined {
   const history = session.engine.getReplayHistory();
   let i = history.length - 1;
   const group = history[i]?.group;
   while (i > 0 && group !== undefined && history[i - 1]?.group === group) {
     i--;
   }
-  return history[i]?.context?.playerId as string | undefined;
+  return actorOf(history[i], goldfish);
 }
 
 /** Seat that initiated the next redoable action, if any. */
-function nextRedoActor(session: GameSession): string | undefined {
-  return session.engine.peekRedo()?.context?.playerId as string | undefined;
+function nextRedoActor(session: GameSession, goldfish?: string): string | undefined {
+  return actorOf(session.engine.peekRedo(), goldfish);
 }
 
 /** The Goldfish seat of a Goldfish sandbox session (undefined for duels and vs-Claude). */
@@ -116,13 +134,13 @@ export function rewindSession(
       return true;
     };
     // Goldfish sandbox: skip back over the Goldfish's own actions first…
-    while (goldfish && engine.canUndo() && tailActor(session) === goldfish && steps < 64) {
+    while (goldfish && engine.canUndo() && tailActor(session, goldfish) === goldfish && steps < 64) {
       if (!undoOnce()) {
         break;
       }
     }
     // …then take back the human's action.
-    const tookBackOwn = engine.canUndo() && tailActor(session) !== goldfish && undoOnce();
+    const tookBackOwn = engine.canUndo() && tailActor(session, goldfish) !== goldfish && undoOnce();
     if (!tookBackOwn) {
       // Only Goldfish actions (or nothing) were rewindable: put them back so
       // the position never parks on an undriven Goldfish turn.
@@ -138,7 +156,7 @@ export function rewindSession(
     if (engine.redo()) {
       steps++;
     }
-    while (goldfish && engine.canRedo() && nextRedoActor(session) === goldfish && steps < 64) {
+    while (goldfish && engine.canRedo() && nextRedoActor(session, goldfish) === goldfish && steps < 64) {
       if (!engine.redo()) {
         break;
       }

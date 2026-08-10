@@ -14,7 +14,8 @@ import {
   createGameOperations,
   createZoneOperations,
 } from "../operations/operations-impl";
-import { SeededRNG } from "../rng/seeded-rng";
+import type { SerializedFlowState } from "../flow/flow-manager";
+import { SeededRNG, type SeededRNGState } from "../rng/seeded-rng";
 import { TelemetryManager, type TelemetryOptions } from "../telemetry";
 import type { PlayerId } from "../types/branded";
 import { createPlayerId } from "../types/branded-utils";
@@ -75,6 +76,43 @@ export interface ReplayHistoryEntry<TParams = any, TCardMeta = any, TCardDefinit
   internalStateBefore?: unknown;
   /** Snapshot of internalState after this move (for redo) */
   internalStateAfter?: unknown;
+  /** Everything that defines the position before this move (undo target). */
+  before?: EngineCheckpoint;
+  /** Everything that defines the position after this move and its flow transitions (redo target). */
+  after?: EngineCheckpoint;
+  /**
+   * Undo group. Consecutive entries sharing a group are one player-facing
+   * action (a move plus the automatic procedures a driver fired after it) and
+   * are rewound / redone together.
+   */
+  group?: number;
+  /**
+   * Monotonic per-engine identity of this entry (never reused). After a
+   * rewind + a new move, index N holds a DIFFERENT entry; consumers that key
+   * side data "to the move at index N" compare the serial too.
+   */
+  serial?: number;
+}
+
+/**
+ * A complete, detached engine position: game state, internal state (zones /
+ * cards / metas), flow machine position, RNG cursor, trackers, game-over
+ * latch and the game definition's `historyExtension` snapshot. Restoring one
+ * is exact — the next shuffle after a rewind deals the same cards.
+ */
+export interface EngineCheckpoint<TState = unknown> {
+  readonly state: TState;
+  readonly internalState: unknown;
+  readonly flow?: SerializedFlowState;
+  readonly rng: SeededRNGState;
+  readonly trackers: Record<string, (PlayerId | "global")[]>;
+  readonly gameEnded: boolean;
+  readonly gameEndResult?: {
+    winner?: PlayerId;
+    reason: string;
+    metadata?: Record<string, unknown>;
+  };
+  readonly extension?: unknown;
 }
 
 /**
@@ -133,6 +171,11 @@ export class RuleEngine<
     reason: string;
     metadata?: Record<string, unknown>;
   };
+  /** Undo grouping: nesting depth of beginUndoGroup(), the open group's id and its start checkpoint. */
+  private undoGroupDepth = 0;
+  private undoGroupCounter = 0;
+  private entrySerial = 0;
+  private openUndoGroup?: { id: number; before?: EngineCheckpoint<TState> };
 
   /**
    * Create a new RuleEngine instance
@@ -561,8 +604,12 @@ export class RuleEngine<
     let patches: Patch[] = [];
     let inversePatches: Patch[] = [];
 
-    // Snapshot internalState before move for undo support
+    // Snapshot internalState before move for undo support (and for rolling a
+    // throwing reducer back). Inside an undo group the group's start
+    // checkpoint is the undo target of its first recorded move.
     const internalStateBefore = structuredClone(this.internalState);
+    const groupBefore = this.openUndoGroup?.before;
+    const before = groupBefore ?? this.checkpoint(internalStateBefore);
 
     try {
       this.currentState = produce(
@@ -576,19 +623,24 @@ export class RuleEngine<
         },
       );
 
-      // Snapshot internalState after move for redo support
-      const internalStateAfter = structuredClone(this.internalState);
+      if (this.openUndoGroup && groupBefore) {
+        this.openUndoGroup.before = undefined;
+      }
 
-      // Task 11.10: Update history (store full context for replay)
-      this.addToHistory({
+      // Task 11.10: Update history (store full context for replay). The
+      // `after` checkpoint is completed below, once flow transitions ran.
+      const historyEntry: ReplayHistoryEntry = {
+        before,
         context: contextWithOperations,
-        internalStateAfter,
-        internalStateBefore,
+        group: this.openUndoGroup?.id ?? ++this.undoGroupCounter,
+        internalStateBefore: before.internalState,
         inversePatches,
         moveId,
         patches,
+        serial: ++this.entrySerial,
         timestamp: Date.now(),
-      });
+      };
+      this.addToHistory(historyEntry);
 
       // Add automatic base history entry for successful move
       this.moveHistory.addEntry({
@@ -640,6 +692,11 @@ export class RuleEngine<
         this.currentState = this.flowManager.getGameState();
       }
 
+      // Redo target: the position AFTER the move and every transition it set
+      // off (a turn's onBegin draw included), not just the reducer's patches.
+      historyEntry.after = this.checkpoint();
+      historyEntry.internalStateAfter = historyEntry.after.internalState;
+
       // Log successful completion (DEBUG level)
       const duration = Date.now() - startTime;
       this.logger.debug(`Move completed: ${moveId}`, {
@@ -679,8 +736,13 @@ export class RuleEngine<
       // mutated in place through the operations handed to the reducer, so a
       // move that died halfway would otherwise keep whatever it had already
       // spent (a consumed buff, a discarded card). Roll it back to the
-      // pre-move snapshot so a rejected move is a no-op on BOTH halves.
-      this.internalState = internalStateBefore as typeof this.internalState;
+      // pre-move snapshot so a rejected move is a no-op on BOTH halves —
+      // in place, because the FlowManager's operations close over this very
+      // object.
+      this.assignInternalState(internalStateBefore);
+      if (this.flowManager) {
+        this.flowManager.syncState(this.currentState);
+      }
 
       // Log error (ERROR level)
       const errorMessage = error instanceof Error ? error.message : "Move execution failed";
@@ -1189,7 +1251,153 @@ export class RuleEngine<
    * @returns Array of history entries with full context, patches, and inverse patches
    */
   getReplayHistory(): readonly ReplayHistoryEntry<any, TCardMeta, TCardDefinition>[] {
-    return this.history;
+    // Only the APPLIED prefix: entries past the cursor were rewound and are
+    // kept solely so redo() can re-apply them.
+    if (this.historyIndex >= this.history.length - 1) {
+      return this.history;
+    }
+    return this.history.slice(0, this.historyIndex + 1);
+  }
+
+  /**
+   * Cursor into the replay history: `applied` entries are in effect,
+   * `redoable` more were rewound and can be re-applied (until a new move
+   * truncates them). `undoGroups` / `redoGroups` count player-facing actions
+   * (see `beginUndoGroup`).
+   */
+  getHistoryPosition(): { applied: number; redoable: number; undoGroups: number; redoGroups: number } {
+    const countGroups = (from: number, to: number): number => {
+      let n = 0;
+      let last: number | undefined;
+      for (let i = from; i < to; i++) {
+        const g = this.history[i]?.group;
+        if (g === undefined || g !== last) {
+          n++;
+        }
+        last = g;
+      }
+      return n;
+    };
+    return {
+      applied: this.historyIndex + 1,
+      redoGroups: countGroups(this.historyIndex + 1, this.history.length),
+      redoable: this.history.length - 1 - this.historyIndex,
+      undoGroups: countGroups(0, this.historyIndex + 1),
+    };
+  }
+
+  /** True when undo() has something to rewind. */
+  canUndo(): boolean {
+    return this.historyIndex >= 0;
+  }
+
+  /** True when redo() has a rewound action to re-apply. */
+  canRedo(): boolean {
+    return this.historyIndex < this.history.length - 1;
+  }
+
+  /** The first rewound entry redo() would re-apply (its whole group follows), if any. */
+  peekRedo(): ReplayHistoryEntry<any, TCardMeta, TCardDefinition> | undefined {
+    return this.canRedo() ? this.history[this.historyIndex + 1] : undefined;
+  }
+
+  /**
+   * Open an undo group: every move executed until the matching
+   * `endUndoGroup()` is ONE player-facing action for undo()/redo() (a driver
+   * wraps "the move + the automatic procedures it fires" in one). Nested
+   * calls join the outer group. The group's undo target is the position at
+   * THIS call, so out-of-move adjustments a driver makes before the first
+   * move (e.g. pointing the flow at the next player) are rewound too.
+   */
+  beginUndoGroup(): void {
+    this.undoGroupDepth++;
+    if (this.undoGroupDepth === 1) {
+      this.openUndoGroup = { before: this.checkpoint(), id: ++this.undoGroupCounter };
+    }
+  }
+
+  /**
+   * Close the group opened by `beginUndoGroup()`. The redo target of the
+   * group's last recorded move is refreshed to the position NOW, so
+   * out-of-move adjustments made after it are re-applied by redo() as well.
+   */
+  endUndoGroup(): void {
+    if (this.undoGroupDepth === 0) {
+      return;
+    }
+    this.undoGroupDepth--;
+    if (this.undoGroupDepth > 0) {
+      return;
+    }
+    const group = this.openUndoGroup;
+    this.openUndoGroup = undefined;
+    const last = this.history[this.historyIndex];
+    if (group && last && last.group === group.id && this.historyIndex === this.history.length - 1) {
+      last.after = this.checkpoint();
+      last.internalStateAfter = last.after.internalState;
+    }
+  }
+
+  /** Run `fn` inside an undo group (see `beginUndoGroup`). */
+  withUndoGroup<T>(fn: () => T): T {
+    this.beginUndoGroup();
+    try {
+      return fn();
+    } finally {
+      this.endUndoGroup();
+    }
+  }
+
+  /**
+   * Capture the complete engine position. `internalState` may be supplied
+   * when the caller already holds a fresh clone.
+   */
+  private checkpoint(internalState?: unknown): EngineCheckpoint<TState> {
+    return {
+      extension: this.gameDefinition.historyExtension?.snapshot(),
+      flow: this.flowManager?.serializeFlowState(),
+      gameEndResult: this.gameEndResult ? structuredClone(this.gameEndResult) : undefined,
+      gameEnded: this.gameEnded,
+      internalState: internalState ?? structuredClone(this.internalState),
+      rng: this.rng.getState(),
+      state: this.currentState,
+      trackers: this.trackerSystem.getState(),
+    };
+  }
+
+  /** Put the engine at `cp` — every part of the position, atomically. */
+  private restoreCheckpoint(cp: EngineCheckpoint<TState>): void {
+    this.currentState = cp.state;
+    this.assignInternalState(cp.internalState as InternalState<TCardDefinition, TCardMeta>);
+    if (this.flowManager && cp.flow) {
+      this.flowManager.restoreFlowState(cp.flow, this.currentState);
+    } else if (this.flowManager) {
+      this.flowManager.syncState(this.currentState);
+    }
+    this.rng.setState(cp.rng);
+    this.trackerSystem.setState(cp.trackers);
+    this.gameEnded = cp.gameEnded;
+    this.gameEndResult = cp.gameEndResult ? structuredClone(cp.gameEndResult) : undefined;
+    if (this.gameDefinition.historyExtension) {
+      this.gameDefinition.historyExtension.restore(cp.extension);
+    }
+  }
+
+  /**
+   * Replace the CONTENTS of `internalState` with a copy of `snapshot`, keeping
+   * the object itself: the FlowManager's zone/card operations were created
+   * once over this object, so swapping the reference would leave every later
+   * flow hook (channel, draw…) mutating an orphan.
+   */
+  private assignInternalState(snapshot: InternalState<TCardDefinition, TCardMeta>): void {
+    const copy = structuredClone(snapshot) as unknown as Record<string, unknown>;
+    const live = this.internalState as unknown as Record<string, unknown>;
+    for (const key of Object.keys(live)) {
+      if (!(key in copy)) {
+        delete live[key];
+      }
+    }
+    Object.assign(live, copy);
   }
 
   /**
@@ -1206,7 +1414,7 @@ export class RuleEngine<
   getPatches(sinceIndex = 0): Patch[] {
     const patches: Patch[] = [];
 
-    for (let i = sinceIndex; i < this.history.length; i++) {
+    for (let i = sinceIndex; i <= this.historyIndex; i++) {
       const entry = this.history[i];
       if (entry) {
         patches.push(...entry.patches);
@@ -1243,7 +1451,7 @@ export class RuleEngine<
    * @returns True if undo succeeded, false if no moves to undo
    */
   undo(): boolean {
-    if (this.historyIndex < 0) {
+    if (this.historyIndex < 0 || this.undoGroupDepth > 0) {
       return false;
     }
 
@@ -1252,19 +1460,19 @@ export class RuleEngine<
       return false;
     }
 
-    // Apply inverse patches to revert the move using Immer's applyPatches
-    // Type assertion is safe here because Immer patches preserve the type
-    this.currentState = immerApplyPatches(
-      this.currentState as object,
-      entry.inversePatches,
-    ) as TState;
-
-    // Restore internalState (zones, cards, metas) to pre-move snapshot
-    if (entry.internalStateBefore) {
-      this.internalState = structuredClone(entry.internalStateBefore) as typeof this.internalState;
+    // Rewind the whole group (the move + the automatic procedures recorded
+    // with it) to the position before its first move.
+    let first = this.historyIndex;
+    while (first > 0 && entry.group !== undefined && this.history[first - 1]?.group === entry.group) {
+      first--;
+    }
+    const target = this.history[first];
+    if (!target?.before) {
+      return false;
     }
 
-    this.historyIndex--;
+    this.restoreCheckpoint(target.before as EngineCheckpoint<TState>);
+    this.historyIndex = first - 1;
     return true;
   }
 
@@ -1278,7 +1486,7 @@ export class RuleEngine<
    * @returns True if redo succeeded, false if no moves to redo
    */
   redo(): boolean {
-    if (this.historyIndex >= this.history.length - 1) {
+    if (this.historyIndex >= this.history.length - 1 || this.undoGroupDepth > 0) {
       return false;
     }
 
@@ -1287,16 +1495,22 @@ export class RuleEngine<
       return false;
     }
 
-    // Apply forward patches to redo the move using Immer's applyPatches
-    // Type assertion is safe here because Immer patches preserve the type
-    this.currentState = immerApplyPatches(this.currentState as object, entry.patches) as TState;
-
-    // Restore internalState (zones, cards, metas) to post-move snapshot
-    if (entry.internalStateAfter) {
-      this.internalState = structuredClone(entry.internalStateAfter) as typeof this.internalState;
+    // Re-apply the whole group: jump to the position after its last move.
+    let last = this.historyIndex + 1;
+    while (
+      last < this.history.length - 1 &&
+      entry.group !== undefined &&
+      this.history[last + 1]?.group === entry.group
+    ) {
+      last++;
+    }
+    const target = this.history[last];
+    if (!target?.after) {
+      return false;
     }
 
-    this.historyIndex++;
+    this.restoreCheckpoint(target.after as EngineCheckpoint<TState>);
+    this.historyIndex = last;
     return true;
   }
 

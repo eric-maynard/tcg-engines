@@ -258,4 +258,22 @@ export interface GameDefinition<
    * ```
    */
   telemetryHooks?: TelemetryHooks;
+
+  /**
+   * OPTIONAL: state a move can change that lives OUTSIDE the engine (a
+   * process-global card registry a copy effect rewrites, say). The engine's
+   * undo/redo checkpoints carry `snapshot()` and hand it back to `restore()`,
+   * so a rewind puts that state back too. Keep the snapshot cheap — it is taken
+   * around every executed move.
+   */
+  historyExtension?: HistoryExtension;
+}
+
+/**
+ * Out-of-engine state captured with every undo/redo checkpoint
+ * (see `GameDefinition.historyExtension`).
+ */
+export interface HistoryExtension {
+  snapshot: () => unknown;
+  restore: (snapshot: unknown) => void;
 }

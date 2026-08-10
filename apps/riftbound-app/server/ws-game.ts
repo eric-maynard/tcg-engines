@@ -11,7 +11,8 @@ import { gameLogger } from "./log";
 import { buildPregamePayload, handlePregameMessage } from "./pregame";
 import { buildAvailableMoves, buildGameSnapshot } from "./snapshot";
 import { type RouteCtx, type RouteResult, type WsData, broadcast, gameSessions } from "./state";
-import { runOpponent, scheduleOpponent } from "./ai-opponent";
+import { runOpponent } from "./ai-opponent";
+import { rewindSession } from "./rewind";
 import { applySessionMove } from "./turn";
 
 // GET /ws/game/:id?player=X — upgrade to game WebSocket
@@ -195,68 +196,15 @@ export function gameWsMessage(ws: ServerWebSocket<WsData>, msg: Record<string, u
     broadcast(session, pingMsg);
   }
 
-  if (msg.type === "undo") {
-    const undoState = session.engine.getState();
-    if (undoState.status !== "playing") {
-      ws.send(JSON.stringify({ error: "Can only rewind during active gameplay", type: "error" }));
-      return;
+  if (msg.type === "undo" || msg.type === "redo") {
+    // One shared path (server/rewind.ts): engine undo/redo of a whole action,
+    // sentinel log line, monotonic seq, AI re-arm + stale-decision discard,
+    // and a state_update for EVERY client (the requester included).
+    const r = rewindSession(session, msg.type, { actor: playerId, gameId });
+    if (!r.ok) {
+      ws.send(JSON.stringify({ error: r.error, requestId: msg.requestId, type: "error" }));
     }
-    if (session.engine.getReplayHistory().length === 0) {
-      ws.send(JSON.stringify({ error: "Nothing to rewind", type: "error" }));
-      return;
-    }
-    const success = session.engine.undo();
-    if (!success) {
-      ws.send(JSON.stringify({ error: "Nothing to rewind", type: "error" }));
-      return;
-    }
-    // W8: emit the canonical "Rewound their last action." line (non-rewindable
-    // So rewinding a rewind is impossible) with a fresh timestamp. This matches
-    // The REST handler path above and gives the client a stable sentinel to
-    // Detect and clear in-progress UI state on.
-    session.log.push(makeLogEntry("Rewound their last action.", { rewindable: false }));
-    session.seq++;
-    // A rewind can hand the cursor back to the AI seat; re-arm it after a
-    // debounce so several rewind clicks land first.
-    scheduleOpponent(session, { gameId, humanSeat: playerId });
-    // Broadcast updated state to all clients
-    for (const [, client] of session.clients) {
-      const clientMoves = buildAvailableMoves(session, client.playerId);
-      try {
-        client.ws.send(JSON.stringify({
-          moveId: "undo",
-          moves: clientMoves,
-          playerId,
-          seq: session.seq,
-          state: buildGameSnapshot(session, client.playerId),
-          type: "state_update",
-        }));
-      } catch { /* Disconnected */ }
-    }
-  }
-
-  if (msg.type === "redo") {
-    const success = session.engine.redo();
-    if (!success) {
-      ws.send(JSON.stringify({ error: "Nothing to redo", type: "error" }));
-      return;
-    }
-    session.log.push(makeLogEntry("Move redone."));
-    session.seq++;
-    scheduleOpponent(session, { gameId, humanSeat: playerId });
-    for (const [, client] of session.clients) {
-      const clientMoves = buildAvailableMoves(session, client.playerId);
-      try {
-        client.ws.send(JSON.stringify({
-          moveId: "redo",
-          moves: clientMoves,
-          playerId,
-          seq: session.seq,
-          state: buildGameSnapshot(session, client.playerId),
-          type: "state_update",
-        }));
-      } catch { /* Disconnected */ }
-    }
+    return;
   }
 
   if (msg.type === "leave_game") {
