@@ -945,6 +945,13 @@ export interface ChooseTargetChoice {
    * may" whose choice this pick is.
    */
   readonly optional?: true;
+  /**
+   * rule 355.2 / 355.10.e (ogn-187-298 Whirlwind) — the PLAYER makes this pick
+   * as the effect resolves; the effect never targets what they name. So no
+   * [Deflect] surcharge and no "when you choose me" / "when a player chooses a
+   * friendly unit here with a spell" trigger fires off the answer.
+   */
+  readonly notTargeting?: true;
 }
 
 /**

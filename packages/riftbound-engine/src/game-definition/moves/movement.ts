@@ -6,6 +6,7 @@
 
 import type { GameMoveDefinitions } from "@tcg/core";
 import { withPostMoveCleanup } from "../../cleanup/post-move-cleanup";
+import { withStaticMightWatch } from "../../cleanup/static-might-watch";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../types";
 import { gankingMove } from "./movement/ganking-move";
 import { recallGear } from "./movement/recall-gear";
@@ -21,9 +22,14 @@ import { standardMove } from "./movement/standard-move";
  */
 export const movementMoves: Partial<
   GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>
-> = withPostMoveCleanup({
-  standardMove,
-  gankingMove,
-  recallUnit,
-  recallGear,
-});
+> = withStaticMightWatch(
+  // rule 522 / 709: the Cleanup's static re-application can push a moved unit
+  // over 5 Might — that crossing "becomes [Mighty]", so the watch sits outside
+  // the cleanup wrapper and compares once the statics are in.
+  withPostMoveCleanup({
+    standardMove,
+    gankingMove,
+    recallUnit,
+    recallGear,
+  }),
+);

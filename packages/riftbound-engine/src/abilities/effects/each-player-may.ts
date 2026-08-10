@@ -82,6 +82,10 @@ export function handle_eachPlayerMay(
       anyNumber: true,
       effect: inner,
       maxPicks: 1,
+      // rule 355.2 / 355.10.e — the PLAYER chooses here, the spell never
+      // targets what they name: no [Deflect] tax, no "when you choose me" /
+      // "chooses a friendly unit here with a spell" trigger off the answer.
+      notTargeting: true,
       options: options as CoreCardId[],
       playerId: chooser,
       remaining: options.length,

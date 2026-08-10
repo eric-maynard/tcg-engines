@@ -2916,11 +2916,15 @@ export const pendingChoiceMoves: Partial<
             getGlobalCardRegistry().get(choice.sourceCardId as string)?.cardType === "spell"
               ? "spell"
               : "ability";
-          for (const id of pickedSoFar) {
-            fireTriggers(
-              { cardId: id, chooserId: choice.playerId, sourceCardId: choice.sourceCardId as string, sourceType, type: "choose" },
-              trigCtx,
-            );
+          // rule 355.2 / 355.10.e (ogn-187-298) — a pick the PLAYER makes at
+          // resolution is not targeting, so nothing was "chosen with a spell".
+          if (choice.notTargeting !== true) {
+            for (const id of pickedSoFar) {
+              fireTriggers(
+                { cardId: id, chooserId: choice.playerId, sourceCardId: choice.sourceCardId as string, sourceType, type: "choose" },
+                trigCtx,
+              );
+            }
           }
           // rule 355.4 (unl-198-219) — the battlefield the effect had already
           // chosen ("…move a unit to THAT battlefield. Then … units there")
