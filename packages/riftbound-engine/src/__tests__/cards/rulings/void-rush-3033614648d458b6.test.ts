@@ -50,6 +50,11 @@ const assault = (game: Game, unit: string) => game.state(unit).grantedKeywords.f
 describe("Ruling 3033614648d458b6 — Void Rush discounts only the base cost of the card it plays; Repeat is a separate, full-price additional cost", () => {
   test("base cost: Blood Rush ([1]) played off Void Rush costs [1] − [2] → nothing — P1's remaining energy is untouched; it resolves once (one unit gains Assault 2) and the un-banished Skulker is drawn", async () => {
     const game = await rushIntoBloodRush(3); // 1 energy left after Void Rush
+    // rule 820.1.c.1 / 356.2.b — with [1] still in the pool the [Repeat] tier is
+    // payable, so playing the spell offers it; this line is about the BASE cost,
+    // so decline it.
+    expect(game.decision()).toMatchObject({ kind: "yes-no", seat: P1, source: { cardId: "br" } });
+    await game.p1.no();
     // Blood Rush's object is chosen as it is played.
     expect(game.decision()).toMatchObject({ kind: "pick", seat: P1 });
     await game.p1.pick("allyA");

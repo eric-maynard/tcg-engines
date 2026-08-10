@@ -199,7 +199,7 @@ describe("Fizz → Bellows Breath from trash × Helm of Suppression × Eager App
   // Expected (419.3.b, 820.1.c.1, 356.2.b.1): the trash play still runs Make Choices, so P1 may elect [Repeat].
   // Actual: the effect-play path (putPlayedSpellOnChain via "effect") never offers a spell's Repeat — P1 goes
   // straight to the priority window over a Repeat-less Bellows.
-  test.failing("BUG: (a) the Fizz-played Bellows Breath OFFERS its [Repeat] [1][mind] election (419.3.b, 820.1.c.1)", async () => {
+  test("(a) the Fizz-played Bellows Breath OFFERS its [Repeat] [1][mind] election (419.3.b, 820.1.c.1)", async () => {
     const game = await fizzPlaysBellows();
     expect(await bellowsDialog(game, true, [["v1", "v2"], ["v1", "v2"]])).toBe(true);
   });
@@ -207,7 +207,7 @@ describe("Fizz → Bellows Breath from trash × Helm of Suppression × Eager App
   // Expected: 0 (ignored base) +1 (Repeat) +1 (Helm) = 2 → Apprentice −1 → 1 energy; power [mind]+[mind] → pool
   // 3/2 → 2/0. Compared with (b) (1 energy + 1 mind) Repeat really cost +0 energy +1 mind here (356.4.f). Actual: no
   // Repeat election exists, so only 1 energy + 1 mind is ever charged.
-  test.failing("BUG: (a)(b) Repeat elected under Helm + Apprentice: exactly 1 energy + [mind][mind] (pool 3/2 → 2/0) — i.e. Repeat's net extra cost over the no-Repeat line is +0 energy +1 mind (356.1.b.3, 356.3, 356.4.e/f)", async () => {
+  test("(a)(b) Repeat elected under Helm + Apprentice: exactly 1 energy + [mind][mind] (pool 3/2 → 2/0) — i.e. Repeat's net extra cost over the no-Repeat line is +0 energy +1 mind (356.1.b.3, 356.3, 356.4.e/f)", async () => {
     const game = await fizzPlaysBellows();
     expect(await bellowsDialog(game, true, [["v1", "v2"], ["v1", "v2"]])).toBe(true);
     expect(game.p1.resources()).toEqual({ energy: 2, power: { chaos: 0, mind: 0 } });
@@ -216,7 +216,7 @@ describe("Fizz → Bellows Breath from trash × Helm of Suppression × Eager App
 
   // Expected: no Helm → 0 + 1 (Repeat) = 1 → Apprentice's floor leaves it at 1 → 1 energy + 2 mind (3/2 → 2/0).
   // Actual: no Repeat election on the effect-play path.
-  test.failing("BUG: (c) NO Helm, Repeat elected: 0+1 = 1 → floor moot → 1 energy + [mind][mind] (pool 3/2 → 2/0)", async () => {
+  test("(c) NO Helm, Repeat elected: 0+1 = 1 → floor moot → 1 energy + [mind][mind] (pool 3/2 → 2/0)", async () => {
     const game = await fizzPlaysBellows({ helm: false });
     expect(await bellowsDialog(game, true, [["v1", "v2"], ["v1", "v2"]])).toBe(true);
     expect(game.p1.resources()).toEqual({ energy: 2, power: { chaos: 0, mind: 0 } });
@@ -224,7 +224,7 @@ describe("Fizz → Bellows Breath from trash × Helm of Suppression × Eager App
 
   // Expected (820.2 / 820.3.a): both executions' target sets are named at play time; on resolution V1 and V2 (2 Might)
   // take 1 then 1 and die — from ONE chain item. Actual: no Repeat, and (see below) no targets are ever chosen.
-  test.failing("BUG: (a) with Repeat the instructions run TWICE from one chain item: V1 and V2 named for both executions at play time take 1+1 each and die (820.2, 820.3.a)", async () => {
+  test("(a) with Repeat the instructions run TWICE from one chain item: V1 and V2 named for both executions at play time take 1+1 each and die (820.2, 820.3.a)", async () => {
     const game = await fizzPlaysBellows();
     expect(await bellowsDialog(game, true, [["v1", "v2"], ["v1", "v2"]])).toBe(true);
     expect(bellowsOnChain(game)).toHaveLength(1);
@@ -248,7 +248,7 @@ describe("Fizz → Bellows Breath from trash × Helm of Suppression × Eager App
   // of P1, made before P2's priority window, and on resolution each named unit takes 1 — V1 and V2 end at 1 damage
   // (2 Might, they survive). Actual: the effect-play never asks for Bellows' target set and the spell resolves
   // dealing nothing at all.
-  test.failing("BUG: (d) the base variant's single execution: P1 names {V1, V2} at play time (a FIN pick before P2's window) and each takes exactly 1 on resolution (355.5, 820.2)", async () => {
+  test("(d) the base variant's single execution: P1 names {V1, V2} at play time (a FIN pick before P2's window) and each takes exactly 1 on resolution (355.5, 820.2)", async () => {
     const game = await fizzPlaysBellows({ mind: 1, spare: 1 });
     await bellowsDialog(game, false, [["v1", "v2"]]);
     expect(lastTargetPick).toMatchObject({ kind: "pick", seat: P1, timing: "FIN" });

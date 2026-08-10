@@ -2780,11 +2780,24 @@ export const pendingChoiceMoves: Partial<
         // of a card an effect is playing: recorded on the pending play item.
         const playItemId = (choice as { playItemId?: string }).playItemId;
         if (playItemId !== undefined) {
+          // rule 356.2.b (unl-170-219) — the same prompt serves the card's
+          // OPTIONAL kill cost, which may also be declined (357.3 keeps the
+          // decline off the table when it would strand the play).
+          const optionalCost = (choice as { playCostOptional?: boolean }).playCostOptional === true;
+          if (optionalCost && choice.optional && context.params.accept === false) {
+            draft.pendingChoice = undefined;
+            recordEffectPlayAnswer(draft, playItemId, { kind: "kill", objectId: null });
+            return;
+          }
           if (!choice.options.includes(picked)) {
             return;
           }
           draft.pendingChoice = undefined;
-          recordEffectPlayAnswer(draft, playItemId, { kind: "mandatory", objectId: picked });
+          recordEffectPlayAnswer(
+            draft,
+            playItemId,
+            optionalCost ? { kind: "kill", objectId: picked } : { kind: "mandatory", objectId: picked },
+          );
           return;
         }
         // rule 355.8 / 820.2 (unl-182-219) — the target of a mode chosen while

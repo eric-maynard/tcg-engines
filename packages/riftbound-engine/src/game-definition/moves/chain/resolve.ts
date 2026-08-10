@@ -1143,6 +1143,16 @@ export function executeResolvedItem(
     ) {
       return {};
     }
+    // rule 355.11.b (rule-id: sfd-080-221 Bellows Breath) — on a SPELL "units
+    // at the same location" is a GROUP requirement on the chosen set, not a
+    // location relative to the spell: a spell on the Chain stands nowhere, so
+    // resolving "here" against its own zone would leave no candidate at all.
+    // The pool is every matching unit; `isLegalMultiTargetSet` holds the picks
+    // to one shared location.
+    const spellGroupLocation =
+      resolved.type === "spell" &&
+      (target as { location?: unknown }).location === "here" &&
+      hiddenZone === undefined;
     let options = resolveTarget(
       { ...target, quantity: "all" },
       {
@@ -1152,7 +1162,7 @@ export function executeResolvedItem(
         draft,
         playerId: resolved.controller,
         sourceCardId: resolved.cardId,
-        sourceZone: baseCtx.sourceZone,
+        ...(spellGroupLocation ? {} : { sourceZone: baseCtx.sourceZone }),
         triggerSourceId,
         triggerZones,
         zones: baseCtx.zones,
@@ -1637,6 +1647,35 @@ function firePlayedCardTriggers(
   context: Parameters<typeof buildEffectContext>[3],
   _preLen: number,
 ): void {
+  // rule 419.4.a (patch 2026-07-17, rule-id: ven-192-166, ruling
+  // 802009794e24c451) — "when you PLAY … an activated ability" completes with
+  // that ability's RESOLUTION, not with its activation, and it completes even
+  // when the source left play in response so the ability itself did nothing
+  // (rule 359.3.e). Triggered items are not played, so only real activations
+  // qualify.
+  if (resolved.type === "ability") {
+    if (resolved.triggered === true || (resolved as { _playTriggersFired?: boolean })._playTriggersFired === true) {
+      return;
+    }
+    (resolved as { _playTriggersFired?: boolean })._playTriggersFired = true;
+    const activation = resolved as {
+      _activationEnergyCost?: number;
+      _activationSourceType?: string;
+    };
+    fireTriggers(
+      {
+        cardId: resolved.cardId,
+        energyCost: activation._activationEnergyCost ?? 0,
+        playerId: resolved.controller,
+        ...(activation._activationSourceType !== undefined
+          ? { sourceType: activation._activationSourceType }
+          : {}),
+        type: "play-activated-ability",
+      },
+      { cards: context.cards, counters: context.counters, draft, zones: context.zones },
+    );
+    return;
+  }
   if (resolved.type !== "spell") {
     return;
   }

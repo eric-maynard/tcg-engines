@@ -70,8 +70,10 @@ import {
   consumeEntersReadyReplacement,
   createMetaAccessor,
   discountOptionalPlayCost,
+  getEffectiveSpellRepeatCost,
   getGrantedAcceleratePlayCost,
   getOptionalPlayCost,
+  getSacrificeCostDiscount,
   hasStaticEffect,
   opponentsRestrictedToBase,
   optionalPlayCostOffered,
@@ -459,7 +461,14 @@ export function playDestinationOptions(
  */
 export function putPlayedSpellOnChain(
   io: PlayIO,
-  spec: { cardId: string; playerId: string; resolveTo?: "trash" | "mainDeck" | "banishment"; via?: PlayVia },
+  spec: {
+    cardId: string;
+    playerId: string;
+    resolveTo?: "trash" | "mainDeck" | "banishment";
+    via?: PlayVia;
+    /** rule 820 — extra executions bought with an elected [Repeat] (0 = none). */
+    repeatCount?: number;
+  },
 ): void {
   const { draft, zones } = io;
   const spellEffect = (getGlobalCardRegistry().getAbilities(spec.cardId) ?? []).find(
@@ -493,6 +502,26 @@ export function putPlayedSpellOnChain(
   }
   notePlayThisTurn(draft, spec.playerId, spec.cardId);
   bindPlayedSpellTarget(io, spec.cardId, spec.playerId, spellEffect as SpellTargetShape | undefined);
+  // rule 820.2 / 820.3.a — an elected [Repeat] runs the SAME instructions again
+  // from ONE Chain item. The targets named while the item was finalized belong
+  // to the whole play, so every execution runs against them; the copies are
+  // distinct objects because each execution owns its own mode/target locks
+  // (820.2), and no Cleanup runs between them (ruling 87d4521ad1764eb1).
+  const repeatN = Math.max(0, spec.repeatCount ?? 0);
+  if (repeatN > 0 && spellEffect) {
+    const items = draft.interaction?.chain?.items as { id: string; cardId: string; effect?: unknown }[] | undefined;
+    const idx = (items?.length ?? 0) - 1;
+    if (items && idx >= 0 && items[idx]?.cardId === spec.cardId) {
+      items[idx] = {
+        ...items[idx],
+        effect: {
+          _repeatExecutions: true,
+          effects: Array.from({ length: 1 + repeatN }, () => structuredClone(spellEffect)),
+          type: "sequence",
+        },
+      } as (typeof items)[number];
+    }
+  }
 }
 
 interface SpellTargetShape {
@@ -632,12 +661,17 @@ export interface EffectPlaySpec {
   readonly offerOptionalCosts?: boolean;
 }
 
+/** rule 820.1.c.1 — the offer id an elected [Repeat] carries on an instructed play. */
+const REPEAT_COST_ID = "repeat";
+
 /** rule 356.2.b — an optional additional resource cost the performer may elect (already discounted). */
 interface OptionalCostOffer {
   readonly id: string;
   readonly energy: number;
   readonly power: readonly string[];
   readonly entersReady: boolean;
+  /** rule 820.1.c — extra executions bought when this offer is the spell's [Repeat]. */
+  readonly repeatCount?: number;
 }
 
 /** Dialog progress recorded on the pending item between answers. */
@@ -652,6 +686,12 @@ interface EffectPlayProgress {
   /** Objects paying a mandatory additional cost (kill a friendly unit …). */
   readonly mandatoryObjects?: readonly string[];
   readonly mandatoryAsked?: boolean;
+  /**
+   * rule 356.2.b — objects paying the card's OPTIONAL "kill a friendly unit"
+   * additional cost. undefined = not decided yet; null = declined / none.
+   */
+  readonly killObjects?: readonly string[] | null;
+  readonly killAsked?: boolean;
 }
 
 /** The Chain item of a card an effect is playing (type "permanent"/"spell", status pending). */
@@ -764,6 +804,7 @@ function costExtrasFor(
   spec: EffectPlaySpec,
   optional?: OptionalCostOffer | null,
   location?: string,
+  killVictim?: string,
 ): { extras: CostExtras; free: boolean } {
   const board =
     typeof io.zones?.getCardsInZone === "function" && typeof io.cards?.getCardOwner === "function"
@@ -788,7 +829,15 @@ function costExtrasFor(
       extras.altCost = { energy: getGlobalCardRegistry().getEnergyCost(spec.cardId) ?? 0, power: [] };
       break;
     case "reduce":
-      extras.additionalCost = { energy: -(mode.energy ?? 0) };
+      // rule 356.1.b (ruling 3033614648d458b6, ogn-113-298 Void Rush) — the
+      // instruction's "reducing its cost by [N]" discounts the card's BASE
+      // Energy only: whatever it does not use is lost, it never pays an
+      // additional cost the performer elects on top (a [Repeat] tier).
+      extras.additionalCost = {
+        energy: -(optional?.id === REPEAT_COST_ID
+          ? Math.min(mode.energy ?? 0, getGlobalCardRegistry().getEnergyCost(spec.cardId) ?? 0)
+          : (mode.energy ?? 0)),
+      };
       if (mode.power) {
         extras.waivePower = { ...mode.power };
       }
@@ -801,10 +850,35 @@ function costExtrasFor(
       break;
   }
   if (optional && !free) {
-    extras.additionalCost = {
-      energy: (extras.additionalCost?.energy ?? 0) + optional.energy,
-      power: [...(extras.additionalCost?.power ?? []), ...optional.power],
-    };
+    if (optional.id === REPEAT_COST_ID) {
+      // rule 820.1.c.1 / 356.2.b.1 — an elected [Repeat] is priced by the ONE
+      // cost model (tiers, "[Repeat] costs less" statics, discounts that may
+      // eat into it — 356.4.f), exactly as on a hand cast.
+      extras.repeatCount = (extras.repeatCount ?? 0) + (optional.repeatCount ?? 1);
+    } else {
+      extras.additionalCost = {
+        energy: (extras.additionalCost?.energy ?? 0) + optional.energy,
+        power: [...(extras.additionalCost?.power ?? []), ...optional.power],
+      };
+    }
+  }
+  // rule-id: unl-170-219 (rules 356.1.c, 356.4.d.1) — electing the optional
+  // "kill a friendly unit" cost discounts the play by the victim's PRINTED
+  // cost; the kill itself is paid in step 4 (357.2).
+  if (killVictim && !free) {
+    const discount = getSacrificeCostDiscount(spec.cardId, killVictim);
+    if (discount) {
+      extras.additionalCost = {
+        energy: (extras.additionalCost?.energy ?? 0) - discount.energy,
+        power: [...(extras.additionalCost?.power ?? [])],
+      };
+      for (const [domain, pips] of Object.entries(discount.power)) {
+        extras.waivePower = {
+          ...(extras.waivePower ?? {}),
+          [domain]: (extras.waivePower?.[domain] ?? 0) + (pips ?? 0),
+        };
+      }
+    }
   }
   // rule 356.2.b.1 — the destination's own additional cost is added AFTER the
   // base cost is fixed, so a base discounted to 0 still pays it.
@@ -865,6 +939,12 @@ export function canPerformEffectPlay(io: PlayIO, spec: EffectPlaySpec): boolean 
   if (canPayResourceCost(draft, spec.playerId, spec.cardId, cost)) {
     return true;
   }
+  // rule 356.2.b / 419.3.b — a play that only becomes affordable by electing
+  // its optional kill cost is still a play the performer can complete.
+  const optionalKill = optionalKillCost(spec);
+  if (optionalKill && payableKillVictims(io, spec, optionalKill).length > 0) {
+    return true;
+  }
   // rule 429.3.a / 444.2.c (ruling cac9ff02562631c6, ogn-194-298 Nocturne) — a
   // DECLINABLE instructed play opens a confirm prompt that is itself the play's
   // Pay step, and rune [Add] abilities stay usable inside it
@@ -910,6 +990,56 @@ function withRecyclableRunes(io: PlayIO, playerId: string): RiftboundGameState {
     }
   }
   return { ...draft, runePools: { ...draft.runePools, [playerId]: { ...pool, power } } } as RiftboundGameState;
+}
+
+/**
+ * rule 356.2.b — the card's OPTIONAL "kill a friendly unit as an additional
+ * cost" (unl-170-219 Atakhan), if any. A play an EFFECT instructs runs every
+ * normal step of Play (419.3.b), so the election is offered there too.
+ */
+function optionalKillCost(spec: EffectPlaySpec): OptionalPlayCost | undefined {
+  if (spec.offerOptionalCosts === false) {
+    return undefined;
+  }
+  const printed = getOptionalPlayCost(spec.cardId);
+  return printed?.kind === "kill" && printed.mandatory !== true ? printed : undefined;
+}
+
+/** Can the performer still pay this play (with `killVictim`'s discount, if elected)? */
+function canPayEffectPlay(
+  io: PlayIO,
+  spec: EffectPlaySpec,
+  location?: string,
+  killVictim?: string,
+): boolean {
+  const { draft } = io;
+  const { extras, free } = costExtrasFor(io, spec, undefined, location, killVictim);
+  if (free || draft.runePools[spec.playerId] === undefined) {
+    return true;
+  }
+  const meta = typeof io.cards?.getCardMeta === "function" ? createMetaAccessor(io.cards) : undefined;
+  return canPayResourceCost(
+    draft,
+    spec.playerId,
+    spec.cardId,
+    computePlayResourceCost(draft, spec.playerId, spec.cardId, extras, meta, false),
+  );
+}
+
+/**
+ * rule 357.3 — the victims the performer may elect for the optional kill cost:
+ * only those that leave the rest of the play payable (a payment that strands
+ * the play is never offered).
+ */
+function payableKillVictims(
+  io: PlayIO,
+  spec: EffectPlaySpec,
+  cost: OptionalPlayCost,
+  location?: string,
+): string[] {
+  return mandatoryCostCandidates(io, spec, cost).filter((id) =>
+    canPayEffectPlay(io, spec, location, id),
+  );
 }
 
 /** rule 356.2.a.1 — the card's MANDATORY additional cost (kill / return-to-hand), if any. */
@@ -1147,6 +1277,51 @@ function payableOptionalCost(
 }
 
 /**
+ * rule 419.3.b / 820.1.c.1 / 356.2.b.1 (rule-id: sfd-080-221 Bellows Breath ×
+ * sfd-140-221 Fizz) — a spell an EFFECT plays runs every step of the play
+ * process, Make Choices included, so its printed (or granted) [Repeat] is
+ * offered there exactly as on a hand cast. One extra execution is offered at a
+ * time, and only while the rest of the play stays payable with it (357.3).
+ * Tiers that ask for a DISCARD are not offered here — the instructed-play
+ * dialog has no pitch step.
+ */
+function payableRepeatCost(io: PlayIO, spec: EffectPlaySpec): OptionalCostOffer | undefined {
+  const { draft, cards, zones } = io;
+  if (spec.offerOptionalCosts === false) {
+    return undefined;
+  }
+  const board =
+    typeof zones?.getCardsInZone === "function" && typeof cards?.getCardOwner === "function"
+      ? { cards, zones }
+      : undefined;
+  const tiers = getEffectiveSpellRepeatCost(draft, spec.playerId, spec.cardId, board);
+  const tier = tiers?.[0];
+  if (!tier || (tier as { discard?: number }).discard) {
+    return undefined;
+  }
+  const offer: OptionalCostOffer = {
+    energy: tier.energy ?? 0,
+    entersReady: false,
+    id: REPEAT_COST_ID,
+    power: [...(tier.power ?? [])],
+    repeatCount: 1,
+  };
+  const { extras, free } = costExtrasFor(io, spec, offer);
+  if (free || draft.runePools[spec.playerId] === undefined) {
+    return offer;
+  }
+  const meta = typeof cards?.getCardMeta === "function" ? createMetaAccessor(cards) : undefined;
+  return canPayResourceCost(
+    draft,
+    spec.playerId,
+    spec.cardId,
+    computePlayResourceCost(draft, spec.playerId, spec.cardId, extras, meta, false),
+  )
+    ? offer
+    : undefined;
+}
+
+/**
  * rule 356.4.f — what electing `offer` ACTUALLY adds to this play's Total Cost.
  * Additional costs join the total BEFORE discounts, so a discount that
  * overflowed the printed Energy cost (Reinforce's "reducing its cost by [5]")
@@ -1330,12 +1505,48 @@ export function continueEffectPlay(io: PlayIO, item: PendingPlayItem): "prompted
     patchPlayItem(draft, item.id, { mandatoryObjects });
   }
 
+  // rule 355.1.a / 356.2.b / 419.3.b — the OPTIONAL "kill a friendly unit"
+  // additional cost is elected on an instructed play exactly as on a hand play;
+  // the victim is named here and killed below, before the unit enters (357.2).
+  const optionalKill = optionalKillCost(spec);
+  let killObjects = progress.killObjects;
+  if (!isSpell && optionalKill && killObjects === undefined) {
+    const candidates = payableKillVictims(io, spec, optionalKill, location);
+    if (candidates.length > 0 && progress.killAsked !== true) {
+      patchPlayItem(draft, item.id, { killAsked: true });
+      draft.pendingChoice = {
+        effect: { type: "noop" },
+        options: candidates,
+        // rule 357.3 — declining is offered only while the play stays payable
+        // without the discount; otherwise the election is mandatory in fact.
+        optional: canPayEffectPlay(io, spec, location),
+        playCostId: "kill",
+        playCostOptional: true,
+        playItemId: item.id,
+        playerId: spec.playerId,
+        remaining: 1,
+        sourceCardId: spec.cardId,
+        type: "choose-target",
+      } as unknown as RiftboundGameState["pendingChoice"];
+      return "prompted";
+    }
+    killObjects = null;
+    patchPlayItem(draft, item.id, { killObjects: null });
+  }
+
   // rule 355.1.a / 356.2.b — the OPTIONAL additional cost is still the
-  // performer's to elect (never for a spell here: its riders are play params).
+  // performer's to elect (for a spell that election is its [Repeat]; its other
+  // riders are play params of a hand cast).
   let optional = progress.optional;
-  if (!isSpell && optional === undefined) {
-    const offer =
-      spec.offerOptionalCosts === false ? undefined : payableOptionalCost(io, spec, location);
+  if (optional === undefined) {
+    const offer = isSpell
+      ? // rule 419.3.b / 820.1.c.1 — a spell's own riders are play params on a
+        // hand cast, but the ONE election an instructed play still owes its
+        // performer is its [Repeat] additional cost.
+        payableRepeatCost(io, spec)
+      : spec.offerOptionalCosts === false
+        ? undefined
+        : payableOptionalCost(io, spec, location);
     if (offer && progress.offered === undefined) {
       patchPlayItem(draft, item.id, { offered: offer });
       const free = spec.costMode.kind === "ignore-any-and-all";
@@ -1367,7 +1578,7 @@ export function continueEffectPlay(io: PlayIO, item: PendingPlayItem): "prompted
 
   // rule 357 — pay: resources through the ONE cost computation, then the
   // mandatory object cost through its effect (a real kill / bounce — 357.2.a).
-  const { extras, free } = costExtrasFor(io, spec, optional ?? undefined, location);
+  const { extras, free } = costExtrasFor(io, spec, optional ?? undefined, location, killObjects?.[0]);
   const meta = typeof io.cards?.getCardMeta === "function" ? createMetaAccessor(io.cards) : undefined;
   if (!free && draft.runePools[spec.playerId] !== undefined) {
     const cost = computePlayResourceCost(draft, spec.playerId, spec.cardId, extras, meta, false);
@@ -1408,6 +1619,15 @@ export function continueEffectPlay(io: PlayIO, item: PendingPlayItem): "prompted
       computePlayResourceCost(draft, spec.playerId, spec.cardId, extras, meta, true),
     );
   }
+  // rule 357.2 / 428.1 — the elected kill is a real kill, paid before the unit
+  // enters, and routed through the kill effect so Deathknell / die replacements
+  // apply (a replaced cost-kill still counts as paid — 357.2.a).
+  for (const objectId of killObjects ?? []) {
+    executeEffect({ target: { type: "unit" }, type: "kill" } as never, {
+      ...buildEffectContext(draft, spec.playerId, spec.cardId, io as never),
+      boundTargets: [objectId],
+    });
+  }
   for (const objectId of mandatoryObjects ?? []) {
     executeEffect(
       {
@@ -1431,6 +1651,7 @@ export function continueEffectPlay(io: PlayIO, item: PendingPlayItem): "prompted
   }
   const paidIds = [
     ...(optional ? [optional.id] : []),
+    ...(killObjects && killObjects.length > 0 ? ["kill"] : []),
     ...(mandatoryObjects && mandatoryObjects.length > 0 && mandatory ? [mandatory.kind] : []),
   ];
   let enteredAt: string | undefined;
@@ -1438,6 +1659,8 @@ export function continueEffectPlay(io: PlayIO, item: PendingPlayItem): "prompted
     putPlayedSpellOnChain(io, {
       cardId: spec.cardId,
       playerId: spec.playerId,
+      // rule 820.1.c — the [Repeat] elected (and paid) above buys the extra executions.
+      ...(optional?.id === REPEAT_COST_ID ? { repeatCount: optional.repeatCount ?? 1 } : {}),
       resolveTo: spec.recycleAfter ? "mainDeck" : "trash",
       via: spec.via,
     });
@@ -1495,7 +1718,8 @@ export function recordEffectPlayAnswer(
     | { readonly kind: "confirm"; readonly accept: boolean }
     | { readonly kind: "location"; readonly zoneId: string }
     | { readonly kind: "optional"; readonly accept: boolean }
-    | { readonly kind: "mandatory"; readonly objectId: string },
+    | { readonly kind: "mandatory"; readonly objectId: string }
+    | { readonly kind: "kill"; readonly objectId: string | null },
 ): void {
   const item = pendingPlayItems(draft).find((it) => it.id === itemId);
   if (!item) {
@@ -1510,6 +1734,12 @@ export function recordEffectPlayAnswer(
       return;
     case "mandatory":
       patchPlayItem(draft, itemId, { mandatoryObjects: [answer.objectId] });
+      return;
+    // rule 356.2.b — the optional kill cost: a named victim, or null (declined).
+    case "kill":
+      patchPlayItem(draft, itemId, {
+        killObjects: answer.objectId === null ? null : [answer.objectId],
+      });
       return;
     case "optional":
       patchPlayItem(draft, itemId, {

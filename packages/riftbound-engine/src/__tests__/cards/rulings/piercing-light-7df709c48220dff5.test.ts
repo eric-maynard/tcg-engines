@@ -10,8 +10,8 @@
  *    executes twice, and afterwards Fizz's rider recycles it.
  * Rules: 820 (Repeat: optional additional cost chosen as you play the spell), 356 (additional costs), 346 (playing a card via an
  *        effect is still playing it), Fizz text.
- * ENGINE: the Repeat half is a known RULING-CONFLICT — a spell's riders are `playSpell` move params, so an effect-played
- *        spell is never offered its optional additional cost (see the last test).
+ * ENGINE: the effect-play pipeline offers the spell's [Repeat] as the optional additional cost of that play
+ *        (`play-pipeline.ts continueEffectPlay`), so the ruling's repeated line is playable (see the last test).
  */
 import { describe, expect, test } from "bun:test";
 import type { Decision, Game } from "../../../harness";
@@ -48,7 +48,10 @@ async function fizzPlaysLight(game: Game, onDecision?: (d: Decision) => Promise<
     if (onDecision && (await onDecision(d))) {
       continue;
     }
-    if (d.kind === "pick" && d.seat === P1) {
+    if (d.kind === "yes-no" && d.seat === P1 && d.source?.cardId === "pl") {
+      // rule 820.1.c.1 — the [Repeat] election on the effect-play; unrepeated lines decline it.
+      await game.p1.no();
+    } else if (d.kind === "pick" && d.seat === P1) {
       await game.p1.pick((d.options.find((o) => o.card === "pl") ?? d.options[0]!).key);
     } else if (d.kind === "action" && d.context === "chain") {
       await game.seat(d.seat).passPriority();
@@ -93,17 +96,13 @@ describe("Ruling 7df709c48220dff5 — Fizz replays Piercing Light from trash; En
     expect(game.violations()).toEqual([]);
   });
 
-  // RULING-CONFLICT: by rule 820 / 356.2.b the [Repeat] is an optional additional cost the performer may elect while
-  // playing the spell, and playing it off Fizz's trigger is still playing it (346) — so the ruling says P1 could pay
-  // [2][fury] and get two executions. The engine cannot: a SPELL's riders (repeatCount, targets) are parameters of the
-  // `playSpell` MOVE, and the effect-play pipeline explicitly skips the optional-additional-cost offer for spells
-  // (`play-pipeline.ts finishPlayItem`: "never for a spell here: its riders are play params"). An effect-played spell
-  // therefore always runs unrepeated; the Repeat's [2] and the second [fury] stay in the pool.
-  test("RULING-CONFLICT (effect-played spells take no riders): no [Repeat] is ever offered, so Fizz's Piercing Light runs once and the Repeat resources stay unspent", async () => {
+  // rule 820 / 356.2.b / 346 (ruling 7df709c48220dff5) — playing a card off an effect is still playing it, so the
+  // performer may elect the spell's [Repeat] and pay it IN FULL ([2][fury]) on top of the ignored base Energy; two
+  // executions then run from the ONE Chain item and Fizz's rider still recycles the spell afterwards.
+  test("the [Repeat] IS offered on the effect-play and costs [2][fury] in full: two executions run from one chain item and the lead target takes 2+2 and dies", async () => {
     const game = await board().build();
     let repeatOffered = false;
     await fizzPlaysLight(game, async (d) => {
-      // Any opt-in / amount prompt about Piercing Light before it finalizes would be the Repeat payment.
       if (d.seat === P1 && d.source?.cardId === "pl" && (d.kind === "yes-no" || d.kind === "integer")) {
         repeatOffered = true;
         await (d.kind === "yes-no" ? game.p1.yes() : game.p1.chooseX(1));
@@ -111,13 +110,32 @@ describe("Ruling 7df709c48220dff5 — Fizz replays Piercing Light from trash; En
       }
       return false;
     });
-    expect(repeatOffered).toBe(false);
-    expect(game.p1.resources()).toEqual({ energy: 2, power: { chaos: 0, fury: 1 } }); // only the base [fury] was paid
+    expect(repeatOffered).toBe(true);
+    expect(game.p1.resources()).toEqual({ energy: 0, power: { chaos: 0, fury: 0 } }); // [2][fury] on top of the base [fury]
+    expect(game.chain().filter((c) => c.cardId === "pl" && !c.triggered)).toHaveLength(1); // ONE item (820.3.a)
     lightTargets(game);
     await game.settle();
-    expect(game.state("X")).toMatchObject({ damage: 2 }); // one execution only — both survive
-    expect(game.state("Y")).toMatchObject({ damage: 2 });
+    expect(game.zoneOf("X")).toBe("trash"); // 2 + 2 on a 4-Might unit
     expect(game.zoneOf("pl")).toBe("mainDeck"); // Fizz's rider still recycles it
     expect(game.violations()).toEqual([]);
+  });
+
+  // Expected (820.2): EVERY execution of the repeated spell makes its own choices as the spell is played, so the
+  // second execution names its own "…then deal 2 to up to one other unit" — X and Y each take 2 twice and both die.
+  // Actual: an effect-played spell binds ONE target set at finalization and both executions run against it, so the
+  // second execution's "other unit" is never named and Y is only damaged once.
+  test.failing("BUG: with Repeat both executions name their own targets, so X and Y each take 2+2 and both die (820.2)", async () => {
+    const game = await board().build();
+    await fizzPlaysLight(game, async (d) => {
+      if (d.seat === P1 && d.source?.cardId === "pl" && (d.kind === "yes-no" || d.kind === "integer")) {
+        await (d.kind === "yes-no" ? game.p1.yes() : game.p1.chooseX(1));
+        return true;
+      }
+      return false;
+    });
+    lightTargets(game);
+    await game.settle();
+    expect(game.zoneOf("X")).toBe("trash");
+    expect(game.zoneOf("Y")).toBe("trash");
   });
 });

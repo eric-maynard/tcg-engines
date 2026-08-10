@@ -214,7 +214,7 @@ describe("Here to Help → Atakhan onto the held Vaults of Helia: −[3], +[1] a
   // Actual: the effect-play dialog never offers the kill (only Accelerate/pay-style optional costs are), so
   // Atakhan is only ever priced at 8 + [order]×3 — at {4, 2} he is not even offered.
 
-  test.failing("BUG: (a) pool {4, order 2}: Atakhan is offered and, killing Qiyana as the additional cost, costs exactly 4 energy + 2 order → pool 0/0 (356.2.b.1, 356.4.d.1, 419.3.b)", async () => {
+  test("(a) pool {4, order 2}: Atakhan is offered and, killing Qiyana as the additional cost, costs exactly 4 energy + 2 order → pool 0/0 (356.2.b.1, 356.4.d.1, 419.3.b)", async () => {
     const game = await board().build();
     await holdVaultsThenFloat(game, { energy: 4, order: 2 });
     await castAndResolveHereToHelp(game);
@@ -224,7 +224,7 @@ describe("Here to Help → Atakhan onto the held Vaults of Helia: −[3], +[1] a
     expect(game.p1.resources()).toEqual({ energy: 0, power: { body: 0, order: 0 } });
   });
 
-  test.failing("BUG: (a) the kill is PAID before he enters (357.2): Qiyana → trash, then Atakhan enters the Vaults exhausted; the Recruit is untouched; Here to Help → trash", async () => {
+  test("(a) the kill is PAID before he enters (357.2): Qiyana → trash, then Atakhan enters the Vaults exhausted; the Recruit is untouched; Here to Help → trash", async () => {
     const game = await board().build();
     await holdVaultsThenFloat(game, { energy: 4, order: 2 });
     await castAndResolveHereToHelp(game);
@@ -244,7 +244,7 @@ describe("Here to Help → Atakhan onto the held Vaults of Helia: −[3], +[1] a
   // Help resolves and Atakhan is played, so Qiyana IS a legal victim and Atakhan lands on the Vaults; P1
   // never loses control. Actual: unobservable through Here to Help — the kill is never offered (see (a)).
 
-  test.failing("BUG: (f) via Here to Help, Qiyana — the lone unit on the Vaults — is offered as the victim, Atakhan still enters the Vaults and P1 controls it afterwards (355.16 does not bite, 187.4.c)", async () => {
+  test("(f) via Here to Help, Qiyana — the lone unit on the Vaults — is offered as the victim, Atakhan still enters the Vaults and P1 controls it afterwards (355.16 does not bite, 187.4.c)", async () => {
     const game = await board().build();
     await holdVaultsThenFloat(game, { energy: 4, order: 2 });
     await castAndResolveHereToHelp(game);
@@ -288,7 +288,7 @@ describe("Here to Help → Atakhan onto the held Vaults of Helia: −[3], +[1] a
   // cost: 8 energy + 3 order AND the Recruit ceases to exist (186.1). Actual: no kill is offered, so the
   // Recruit survives (the 8 + 3 price happens to coincide).
 
-  test.failing("BUG: (b) pool {8, order 3}: electing to kill the Recruit token is possible — it dies for nothing (discount 0): pool 0/0, Recruit gone, Qiyana stays, Atakhan on the Vaults", async () => {
+  test("(b) pool {8, order 3}: electing to kill the Recruit token is possible — it dies for nothing (discount 0): pool 0/0, Recruit gone, Qiyana stays, Atakhan on the Vaults", async () => {
     const game = await board().build();
     await holdVaultsThenFloat(game, { energy: 8, order: 3 });
     await castAndResolveHereToHelp(game);
@@ -307,7 +307,7 @@ describe("Here to Help → Atakhan onto the held Vaults of Helia: −[3], +[1] a
   // way through is killing Qiyana — the kill cannot be declined and the Recruit is not a candidate (either
   // would strand the play at 8 + [order]×3). Actual: Atakhan is absent from the offer altogether.
 
-  test.failing("BUG: (d) pool {4, order 2}: Atakhan IS offered; the kill is then mandatory-in-fact (not declinable) and its candidate set is {Qiyana} only — kill-token / no-kill variants are absent, not offered-then-rejected (357.3)", async () => {
+  test("(d) pool {4, order 2}: Atakhan IS offered; the kill is then mandatory-in-fact (not declinable) and its candidate set is {Qiyana} only — kill-token / no-kill variants are absent, not offered-then-rejected (357.3)", async () => {
     const game = await board().build();
     await holdVaultsThenFloat(game, { energy: 4, order: 2 });
     await castAndResolveHereToHelp(game);
