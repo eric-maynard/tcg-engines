@@ -7,6 +7,7 @@ import { fireTriggers } from "../../../abilities/trigger-runner";
 import { createInteractionState, getTurnState } from "../../../chain";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../../types";
 import { checkVictory, scoreBattlefield, scoreEvents } from "../../../operations/points";
+import { orderBatchTriggersByTurnOrder } from "../../../operations/leave-board";
 import { canPlayerScoreAtBattlefield } from "../../../operations/scoring-rules";
 
 type Defs = GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>;
@@ -85,11 +86,16 @@ export const scorePoint: Defs["scorePoint"] = {
     // Rule 632.2 / 471.2: emit the score event so battlefield score abilities
     // (on-conquer / on-hold) fire — only when the battlefield actually Scored.
     if (isScore) {
+      // rule 383.3.d.1 — the method event and `score` publish ONE Score, so the
+      // triggers they raise are simultaneous: turn player appends first, then
+      // everyone else in turn order.
+      const chainLenBefore = draft.interaction?.chain?.items.length ?? 0;
       for (const event of scoreEvents(playerId, battlefieldId, method, {
         previousController: prevController,
       })) {
         fireTriggers(event, { cards, counters, draft, zones });
       }
+      orderBatchTriggersByTurnOrder(draft, chainLenBefore);
     }
 
     // rule 472 / 319.1 — the Cleanup after this action checks victory.

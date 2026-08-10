@@ -46,6 +46,7 @@ import { fireTriggers, type TriggerRunnerContext } from "../abilities/trigger-ru
 import { isResolvingChainItem } from "../chain/resolution-guard";
 import type { PlayerId, RiftboundGameState } from "../types";
 import { isPresenceUnit, stageContested } from "./arrive-at-battlefield";
+import { orderBatchTriggersByTurnOrder } from "./leave-board";
 import { type PointsIO, scoreBattlefield, scoreEvents } from "./points";
 
 /** Minimal operation bag: every cleanup / move / flow / effect context is a superset. */
@@ -279,9 +280,15 @@ export function establishControl(
       })
     : [];
   if (opts.fire && events.length > 0) {
+    // rule 383.3.d.1 — `conquer` and `score` are two publications of ONE Score,
+    // so the triggers they raise are simultaneous: the turn player appends to
+    // the Chain first and everyone else in turn order, regardless of which
+    // publication raised them or who did the scoring.
+    const chainLenBefore = draft.interaction?.chain?.items.length ?? 0;
     for (const event of events) {
       fireTriggers(event, opts.fire);
     }
+    orderBatchTriggersByTurnOrder(draft, chainLenBefore);
     return { changed: true, events: [], isScore, previousController };
   }
   return { changed: true, events, isScore, previousController };

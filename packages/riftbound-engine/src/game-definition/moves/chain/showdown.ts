@@ -22,6 +22,7 @@ import { cleanupAndFireDeaths, type PostMoveCleanupContext } from "../../../clea
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../../types";
 import type { GameEvent } from "../../../abilities/game-events";
 import { settleControlByRemainingUnits } from "../../../operations/battlefield-control";
+import { orderBatchTriggersByTurnOrder } from "../../../operations/leave-board";
 
 type Defs = GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>;
 
@@ -180,6 +181,10 @@ export const passShowdownFocus: Defs["passShowdownFocus"] = {
         }
       }
       draft.interaction = endShowdownState(draft.interaction);
+      // rule 383.3.d.1 — `conquer` and `score` are two publications of ONE
+      // Score, so the triggers they raise are simultaneous: the TURN player
+      // appends to the Chain first and the others in turn order, whoever scored.
+      const chainLenBeforeConquer = draft.interaction?.chain?.items.length ?? 0;
       for (const event of conquerEvents) {
         fireTriggers(event, {
           cards: context.cards,
@@ -188,6 +193,7 @@ export const passShowdownFocus: Defs["passShowdownFocus"] = {
           zones: context.zones,
         });
       }
+      orderBatchTriggersByTurnOrder(draft, chainLenBeforeConquer);
       // rule 323.13 / 344.2 — the Cleanup that follows a closed Showdown begins
       // the next staged one (e.g. a Combat that waited behind a Non-Combat
       // Showdown at another battlefield).

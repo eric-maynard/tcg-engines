@@ -179,6 +179,16 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
     stateChanged = true;
   }
 
+  // Step 0c — rule 522 / 142.4.b: continuous effects are always applied, so the
+  // lethal check below must read a Might that already accounts for everything
+  // the preceding game action changed (a resolving spell reaching the trash
+  // raises Dr. Mundo's trash-count Might before its own damage is checked —
+  // ruling d34bdb4129a3eb07). Step 3 re-runs this after the kills, for the
+  // statics the deaths themselves invalidate.
+  if (recalculateStaticEffects({ cards: ctx.cards, draft: ctx.draft, zones: ctx.zones })) {
+    stateChanged = true;
+  }
+
   // Step 1: Kill units with damage >= might (rule 520)
   const registry = getGlobalCardRegistry();
   const allBoardZones = getBoardZoneIds(ctx);

@@ -22,6 +22,7 @@ import {
 import { reactionWindowOpen } from "./reaction-window";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
 import { hiddenCapacityAt } from "../../../operations/hidden-capacity";
+import { notePlayThisTurn } from "../../../operations/plays-this-turn";
 import { battlefieldForbidsUnitPlays, playIsForbidden } from "../../../abilities/play-restrictions";
 import { computeStaticCostIncrease } from "../../../operations/static-cost-reduction";
 import type { CostReductionContext } from "../../../operations/static-cost-reduction";
@@ -1396,6 +1397,15 @@ export const revealHidden: Defs["revealHidden"] = {
     );
 
     if (cardType === "spell") {
+      // rule 811.1.c.3 / 419.4.b — flipping a facedown card PLAYS it, so it
+      // counts in the played-this-turn tally (Legion, 724) exactly like a cast
+      // from hand: the spell counts as it goes on the chain, resolve or not
+      // (425.1.b). Permanents are counted by `enterPlayedPermanent` below.
+      if (draft.cardsPlayedThisTurn) {
+        draft.cardsPlayedThisTurn[playerId] = (draft.cardsPlayedThisTurn[playerId] ?? 0) + 1;
+      }
+      // rule 356.4 — identity ledger for shape-scoped per-turn cost modifiers.
+      notePlayThisTurn(draft, playerId, cardId as string);
       // Rule 723.1.c.3: playing a card from facedown opens a chain.
       // Push the spell onto the chain and move the physical card to
       // Trash (where resolved spells live).
