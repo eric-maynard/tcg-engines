@@ -13,6 +13,7 @@ import {
   toBattlefieldId,
 } from "../../operations/arrive-at-battlefield";
 import { keepLegalArrivals, moveDestinationOptions } from "../move-destinations";
+import { attachedUnitOf, detachEquipment } from "./_attachment";
 
 /**
  * rule 190.3.a / 450 — pure-data Contested mark for callers that only hold the
@@ -112,6 +113,17 @@ export function moveCardWithEvent(
   targetZoneId: string,
 ): string {
   const from = ctx.zones.getCardZone(cardId as CoreCardId) ?? "";
+  // rule 434.4 / 435.1 (rule-id: sfd-109-221 Akshan) — an attached card lives
+  // wherever its holder is, so moving the EQUIPMENT itself elsewhere breaks the
+  // attachment: detach first instead of dragging the holder's conferred Might
+  // along into the new zone.
+  const attachedHolder = attachedUnitOf(ctx, cardId);
+  if (
+    attachedHolder !== undefined &&
+    ctx.zones.getCardZone(attachedHolder as CoreCardId) !== targetZoneId
+  ) {
+    detachEquipment(ctx, cardId);
+  }
   // rule 350.1 / 054.1 / unl-150-219 (Vex): the unit's controller was told it
   // "can't move it this turn" — that player's own effects move it nowhere.
   if (moverIsForbidden(ctx, cardId)) {

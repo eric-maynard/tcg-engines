@@ -9,6 +9,11 @@ import { createCardId } from "@tcg/riftbound-types/cards";
  *
  * rule 355.10.e — the "unless" clause hands the decision to the chosen unit's
  * controller: either the caster draws 2, or the unit is dealt 6.
+ *
+ * rule 359.3.f — "Choose an enemy unit" carries NO location clause, so the
+ * descriptor must not claim one: `location:"anywhere"` marks a target that
+ * deliberately reaches private zones, which would keep a unit Retreated to its
+ * owner's hand in response a legal target and mark 6 damage on a card in hand.
  */
 const abilities: Ability[] = [
   {
@@ -24,7 +29,7 @@ const abilities: Ability[] = [
         },
       ],
       player: "target-controller",
-      target: { controller: "enemy", location: "anywhere", type: "unit" },
+      target: { controller: "enemy", type: "unit" },
       type: "choice",
     },
     timing: "reaction",

@@ -52,6 +52,16 @@ export function attachEquipment(ctx: EffectContext, equipmentId: string, unitId:
   ) {
     return;
   }
+  // rule 434.1 / 359.3.e.11 (rule-id: sfd-109-221 Akshan × unl-128-219) — an
+  // Equipment attaches to a UNIT, and a card sitting in a hand, deck, trash or
+  // banishment is not one. A holder that left the board before the instruction
+  // resolved makes the attach impossible, so it is ignored — the Equipment must
+  // never be dragged off the board after it.
+  const HOLDER_OFF_BOARD_ZONES = ["hand", "mainDeck", "trash", "banishment", "runeDeck", "chain"];
+  const holderZone = ctx.zones?.getCardZone?.(unitId as CoreCardId) as string | undefined;
+  if (typeof holderZone === "string" && HOLDER_OFF_BOARD_ZONES.includes(holderZone)) {
+    return;
+  }
 
   const previous = attachedUnitOf(ctx, equipmentId);
   if (previous) {
@@ -80,7 +90,6 @@ export function attachEquipment(ctx: EffectContext, equipmentId: string, unitId:
   // rule 434.4: an attached card is wherever its holder is, so an Equipment
   // already on the board travels to the unit's zone. Off-board Equipment (still
   // being played) is placed by the play path, not here.
-  const holderZone = ctx.zones.getCardZone(unitId as CoreCardId);
   const equipZone = ctx.zones.getCardZone(equipmentId as CoreCardId);
   if (
     holderZone !== undefined &&

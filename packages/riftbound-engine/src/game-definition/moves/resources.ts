@@ -44,6 +44,13 @@ function runeAddAllowedDuringChoice(state: RiftboundGameState, playerId: string)
   if (!pending) {
     return true;
   }
+  // rule 204.3.b / 444.2.c (rule-id: ogn-268-298 Bullet Time) — "pay any amount
+  // of [rainbow]" is paid ON RESOLUTION, and that prompt IS the Pay step: the
+  // payer may crack Reaction [Add] abilities (exhaust a rune for Energy,
+  // recycle one for Power) to raise the amount before naming it.
+  if (pending.type === "pay-x") {
+    return pending.playerId === playerId;
+  }
   if (pending.type !== "opt-in" || pending.playerId !== playerId) {
     return false;
   }

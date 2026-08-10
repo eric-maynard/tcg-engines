@@ -18,6 +18,16 @@ export function handle_takeControl(effect: ExecutableEffect, ctx: EffectContext,
   // resolution (Possession) leaves nobody contesting, so the Cleanup just drops the status.
   const targets = getTargetIds(effect, ctx);
   const untilLeaves = effect.duration === "until-leaves";
+  // rule 455 / 359.3.e.11 (rule-id: sfd-109-221 × unl-128-219) — "you control it
+  // UNTIL I leave the board" is a duration that is already over when the source
+  // left before the ability resolved (bounced in response, rule 376): the control
+  // effect would end the instant it began, so it is never created at all.
+  if (untilLeaves) {
+    const sourceZone = ctx.zones.getCardZone(ctx.sourceCardId as CoreCardId) as string | undefined;
+    if (typeof sourceZone !== "string" || !(sourceZone === "base" || sourceZone.startsWith("battlefield"))) {
+      return;
+    }
+  }
   for (const targetId of targets) {
     const meta = ctx.cards.getCardMeta?.(targetId as CoreCardId) as
       | Partial<RiftboundCardMeta>
