@@ -66,8 +66,15 @@ export function handle_choosePerLocation(
   const picked = ctx.boundTargets;
   if (picked) {
     const seen = new Set<string>();
+    // rule 355.5 / 359.3.e.5 — each object was chosen FOR one location; one that
+    // is somewhere else by resolution (Flashed home, moved) fails the "at each
+    // location" restriction and is simply not affected. Never re-target.
+    const chosenAt = ctx.draft.perLocationTargets?.[ctx.sourceCardId];
     for (const id of picked) {
       const key = locationKey(id, ctx);
+      if (chosenAt?.[id] !== undefined && chosenAt[id] !== key) {
+        continue;
+      }
       if (seen.has(key)) {
         continue;
       }
@@ -138,6 +145,16 @@ export function raiseChoosePerLocationChoice(
   // rule 355.13: "up to one at EACH location" — the cap is the number of
   // distinct locations that hold a candidate, and declining is always legal.
   const locations = new Set(pool.map((id) => locationKey(id, ctx)));
+  // rule 355.5 / 359.3.e.5 — a candidate is chosen FOR the location it sits at
+  // NOW (the whole answer is given before anyone gets Priority, so this is also
+  // where it was when picked). Remember that, so a unit Flashed elsewhere
+  // before the ability resolves fails the restriction instead of being followed
+  // to its new location — and the ability never re-targets.
+  (ctx.draft as { perLocationTargets?: Record<string, Record<string, string>> }).perLocationTargets =
+    {
+      ...(ctx.draft.perLocationTargets ?? {}),
+      [ctx.sourceCardId]: Object.fromEntries(pool.map((id) => [id, locationKey(id, ctx)])),
+    };
   ctx.draft.pendingChoice = {
     anyNumber: true,
     ...(deflectTax ? { deflectTax: true as const } : {}),

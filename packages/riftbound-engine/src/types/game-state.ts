@@ -1356,6 +1356,15 @@ export interface RiftboundGameState {
   readonly restrictedEnergy?: Record<string, Partial<Record<string, number>>>;
 
   /**
+   * rule 106 / 355.5 / 359.3.e.5 (unl-118-219 Elder Dragon): "choose up to one
+   * enemy unit at EACH location" locks every named object to the location it
+   * was chosen FOR. Keyed by the choosing ability's source card, then object id
+   * → location key. An object that sits elsewhere when the ability resolves
+   * fails the restriction and is simply not affected — no re-targeting.
+   */
+  readonly perLocationTargets?: Record<string, Record<string, string>>;
+
+  /**
    * rule 429.4 (ogn-247-298 Daughter of the Void): the Power half of the same
    * earmark — "[Add] [rainbow]. Use only to play spells." Per player, per
    * restriction (card type), how many pips of each Domain in the pool may pay
