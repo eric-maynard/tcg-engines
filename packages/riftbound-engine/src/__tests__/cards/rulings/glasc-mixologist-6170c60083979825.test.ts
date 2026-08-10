@@ -89,9 +89,17 @@ describe("Ruling 6170c60083979825 — Karthus returned by the first Temporary-ki
   test("ruling 6170c60083979825 — engine kills the two Temporary Mixologists one at a time instead of simultaneously", async () => {
     const game = await board().build();
     await game.p2.endTurn();
-    // Pass priority until the first non-priority prompt (the first Deathknell opt-in).
-    for (let i = 0; i < 8 && game.decision()?.kind === "action"; i++) {
-      await game.acting().pass();
+    // Pass priority until the first non-priority prompt (the first Deathknell opt-in). rule 383.3.d — both
+    // [Temporary] triggers are P1's and source-bound, so a soft `order` prompt comes first; take the listed order.
+    for (let i = 0; i < 8; i++) {
+      const d = game.decision();
+      if (d?.kind === "order" && d.defaultable) {
+        await game.acceptTriggerOrder();
+      } else if (d?.kind === "action") {
+        await game.acting().pass();
+      } else {
+        break;
+      }
     }
     expect(game.decision()).toMatchObject({ kind: "yes-no", seat: P1 });
     expect(game.zoneOf("glascA")).toBe("trash");

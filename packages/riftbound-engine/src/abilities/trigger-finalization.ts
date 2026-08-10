@@ -955,6 +955,13 @@ function offerPendingCostTriggerOrder(draft: RiftboundGameState, ctx: Finalizati
   return true;
 }
 
+/**
+ * Effect kinds whose serialized form names no target because they always act on
+ * their OWN source — they are source-bound exactly as a written `"self"` is.
+ * rule 816.1 — [Temporary]'s "kill me" on two permanents is two different kills.
+ */
+const IMPLICIT_SELF_EFFECTS: ReadonlySet<string> = new Set(["temporary-kill"]);
+
 /** Shared 383.3.d chooser/grouping for `fresh` candidate items; true when a prompt was raised. */
 function raiseTriggerOrderPrompt(
   draft: RiftboundGameState,
@@ -981,7 +988,10 @@ function raiseTriggerOrderPrompt(
   // permanents, so their controller really does get to order them.
   const signature = (it: ChainItem): string => {
     const json = JSON.stringify(it.effect ?? null);
-    const sourceBound = /"self"|"trigger-source"|"here"|"source"|"same"/.test(json);
+    const kind = (it.effect as { type?: string } | undefined)?.type;
+    const sourceBound =
+      /"self"|"trigger-source"|"here"|"source"|"same"/.test(json) ||
+      (kind !== undefined && IMPLICIT_SELF_EFFECTS.has(kind));
     return `${sourceBound ? it.cardId : ""}|${json}`;
   };
   // rule 383.3.d — only abilities that triggered SIMULTANEOUSLY are ordered by
