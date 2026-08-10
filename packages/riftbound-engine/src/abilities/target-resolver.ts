@@ -377,12 +377,18 @@ export function resolveTarget(
     ctx.cards.getCardController?.(id as CoreCardId) ??
     ctx.cards.getCardOwner(id as CoreCardId) ??
     "";
+  // rule 489.8.e / 740.1.a — in team modes "friendly" also covers a teammate's
+  // objects (and "enemy" excludes them); `areAllies` degrades to plain identity
+  // in solo games, so non-team behaviour is unchanged.
   if (target.controller === "friendly") {
-    filtered = filtered.filter((id) => controllerOf(id) === ctx.playerId);
+    filtered = filtered.filter((id) => {
+      const controller = controllerOf(id);
+      return controller !== "" && areAllies(ctx.draft, ctx.playerId, controller);
+    });
   } else if (target.controller === "enemy") {
     filtered = filtered.filter((id) => {
       const controller = controllerOf(id);
-      return controller !== ctx.playerId && controller !== "";
+      return controller !== "" && !areAllies(ctx.draft, ctx.playerId, controller);
     });
   }
 
