@@ -2118,6 +2118,14 @@ export interface CostExtras {
    */
   additionalCost?: { energy?: number; power?: readonly string[] };
   /**
+   * rule 357.3 / 805.1.a.1 — PAY-TIME hint only (it never changes what the
+   * play costs): pips of a separate cost of this same play that is settled
+   * afterwards and can only be paid from these Domains (an [Accelerate] pip of
+   * the card's Domain alongside a battlefield's any-Domain redirect pips), so
+   * this payment's any-Domain pips leave them alone.
+   */
+  reservePower?: readonly string[];
+  /**
    * rule 356.5 (ogn-146-298) — the paid optional additional cost says to
    * ignore the card's cost: nothing is paid at all.
    */
@@ -3387,14 +3395,23 @@ export function getHybridPipDomains(cardId: string): string[] | undefined {
 /**
  * Drain one Power from the most-stocked eligible domain in `pool`. Returns
  * false if nothing eligible remains.
+ *
+ * rule 357.3 / 805.1.a.1 — `reserve` names Power a SEPARATE cost of the same
+ * play still has to be paid from (an [Accelerate] pip of the card's own Domain
+ * settled after this one): an any-Domain pip spends a domain the reservation
+ * does not need, so a payable assignment is never destroyed by pay order.
  */
 function drainOnePowerPip(
   pool: Partial<Record<string, number>>,
   eligible: (domain: string) => boolean,
+  reserve?: Partial<Record<string, number>>,
 ): boolean {
   const key = Object.entries(pool)
     .filter(([d, v]) => (v ?? 0) > 0 && eligible(d))
-    .sort(([, a], [, b]) => (b ?? 0) - (a ?? 0))[0]?.[0];
+    .sort(
+      ([da, a], [db, b]) =>
+        (b ?? 0) - (reserve?.[db] ?? 0) - ((a ?? 0) - (reserve?.[da] ?? 0)) || (b ?? 0) - (a ?? 0),
+    )[0]?.[0];
   if (key === undefined) {
     return false;
   }
@@ -3804,7 +3821,12 @@ export function computePlayResourceCost(
   // rule 353.3 → 353.4 (rule-id: ogn-084-298 × sfd-146-221): increases join the
   // total cost BEFORE any reduction, so a discount — and its own minimum — is
   // measured against the INCREASED cost, not the printed one.
-  const increased = Math.max(0, baseCost.energy + modifier) + boardIncrease.energy + runtimeIncrease;
+  // rule 820.1.c.1 / 356.2.b.1 — the [Repeat] surcharge is an ADDITIONAL COST of
+  // this play, so it joins the total before any discount: rule 356.4.f lets a
+  // discount eat an additional cost, and a discount's own minimum (356.4.e) is
+  // measured against that total, not against the printed Energy alone.
+  const increased =
+    Math.max(0, baseCost.energy + modifier) + boardIncrease.energy + runtimeIncrease + repeatSurcharge;
   // rule 356.4.e: a discount's minimum binds only that discount, and the payer
   // orders discounts — floored board auras go first so unfloored ones aren't lost.
   const discounted =
@@ -3813,7 +3835,6 @@ export function computePlayResourceCost(
     0,
     Math.max(0, discounted) +
       xEnergy +
-      repeatSurcharge +
       applyDiscountOverflowToAdditionalCost(extras.additionalCost?.energy ?? 0, discounted),
   );
 
@@ -3983,6 +4004,11 @@ export function payResourceCost(
   playerId: string,
   cardId: string,
   cost: PlayResourceCost,
+  /**
+   * rule 357.3 — Power (per Domain) that a SEPARATE cost of this same play is
+   * still owed and can only take from those Domains; any-Domain pips avoid it.
+   */
+  reserve?: Partial<Record<string, number>>,
 ): void {
   const pool = draft.runePools[playerId];
   if (!pool || cost.free) {
@@ -4020,14 +4046,14 @@ export function payResourceCost(
   let hybridOwed = cost.hybrid?.n ?? 0;
   const hybridDomains = cost.hybrid?.domains;
   while (hybridDomains && hybridOwed > 0) {
-    if (!drainOnePowerPip(anyPool, (d) => d === "rainbow" || hybridDomains.includes(d))) {
+    if (!drainOnePowerPip(anyPool, (d) => d === "rainbow" || hybridDomains.includes(d), reserve)) {
       break;
     }
     hybridOwed--;
   }
   let anyOwed = cost.any;
   while (anyOwed > 0) {
-    if (!drainOnePowerPip(anyPool, () => true)) {
+    if (!drainOnePowerPip(anyPool, () => true, reserve)) {
       break;
     }
     anyOwed--;
@@ -4077,5 +4103,12 @@ export function deductCost(
   if (cost.free) {
     return;
   }
-  payResourceCost(draft, playerId, cardId, cost);
+  // rule 357.3 — keep the Domains a later half of this play's cost needs.
+  const reserve: Partial<Record<string, number>> = {};
+  for (const pip of extras.reservePower ?? []) {
+    if (pip !== "rainbow") {
+      reserve[pip] = (reserve[pip] ?? 0) + 1;
+    }
+  }
+  payResourceCost(draft, playerId, cardId, cost, reserve);
 }

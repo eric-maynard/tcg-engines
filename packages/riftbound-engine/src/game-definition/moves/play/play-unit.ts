@@ -2134,6 +2134,18 @@ export const playUnit: Defs["playUnit"] = {
       location as string | undefined,
       paidAdditionalCost === true,
     );
+    // rule 357.3 / 805.1.a.1 (ven-016-166 × ven-157-166) — the optional
+    // additional cost elected on this same play (Accelerate's pip of the
+    // card's own Domain) is settled AFTER this payment, so the printed cost's
+    // any-Domain pips — a battlefield's redirect pips included — must not
+    // spend the Domain it is the only legal payment for.
+    const reservePower =
+      paidAdditionalCost === true && (optional?.kind === "accelerate" || optional?.kind === "pay")
+        ? applyPowerWaiversToPips(
+            discountOptionalPlayCost(draft, playerId, optional.cost, board)?.power ?? [],
+            pipOverflow,
+          )
+        : undefined;
     deductCost(
       draft,
       playerId,
@@ -2155,6 +2167,7 @@ export const playUnit: Defs["playUnit"] = {
             }
           : {}),
         ...(waivePower ? { waivePower } : {}),
+        ...(reservePower && reservePower.length > 0 ? { reservePower } : {}),
       },
       createMetaAccessor(context.cards),
       // rule 357.1.a: tap ready runes for any Energy shortfall at Pay time.

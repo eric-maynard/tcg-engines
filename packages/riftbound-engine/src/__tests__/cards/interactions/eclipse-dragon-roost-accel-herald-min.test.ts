@@ -241,7 +241,7 @@ describe("Eclipse Dragon × Dragon Roost × Herald of Scales — two independent
   // the Roost's any-domain pips first (largest pool first, then insertion order — here it consumes the lone fury),
   // finds no fury left for Accelerate and silently drops it: 6 energy + fury + 1 calm, Dragon EXHAUSTED, 1 calm and
   // 1 energy left over.
-  test.failing("BUG: (e) pool {7, fury:1, calm:2}: 'both' is legal only as fury→Accelerate, calm×2→Roost — the engine must find that assignment: pool → 0/0/0 and the Dragon enters READY at the Roost", async () => {
+  test("(e) pool {7, fury:1, calm:2}: 'both' is legal only as fury→Accelerate, calm×2→Roost — the engine must find that assignment: pool → 0/0/0 and the Dragon enters READY at the Roost", async () => {
     const game = await board({ energy: 7, power: { fury: 1, calm: 2 } }).build();
     expect(variants(game)).toContainEqual(v("roost", true));
     await game.p1.play("dragon", { accelerate: true, to: "roost" });

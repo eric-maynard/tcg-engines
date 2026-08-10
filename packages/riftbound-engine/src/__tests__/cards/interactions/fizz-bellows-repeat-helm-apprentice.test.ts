@@ -297,7 +297,7 @@ describe("Fizz → Bellows Breath from trash × Helm of Suppression × Eager App
   // (its floor of 1 is respected) → 1 energy + 2 mind. Actual: the engine floors Apprentice against the BASE energy
   // alone (1 → stays 1) and adds the Repeat energy afterwards → 2 energy; the discount never reaches the additional
   // cost although 356.4.f says it may.
-  test.failing("BUG: control (hand cast, NO Helm, Apprentice): Repeat = 1+1 = 2 → Apprentice −1 → 1 energy + 2 mind — a floored discount still eats into the Repeat cost (356.4.e, 356.4.f)", async () => {
+  test("control (hand cast, NO Helm, Apprentice): Repeat = 1+1 = 2 → Apprentice −1 → 1 energy + 2 mind — a floored discount still eats into the Repeat cost (356.4.e, 356.4.f)", async () => {
     const rep = await board({ helm: false, spare: 7, mind: 3 }).build();
     await rep.p1.cast("bbHand", { repeat: 1, targets: ["v1", "v2"] });
     expect(rep.p1.resources()).toEqual({ energy: 9, power: { chaos: 1, mind: 1 } });
