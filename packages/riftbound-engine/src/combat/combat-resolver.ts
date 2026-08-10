@@ -411,6 +411,31 @@ export function planDamageAssignment(
  * still lacks it, then (only once everything is lethal) pile the excess.
  * Zero-valued buckets are omitted so allocations compare canonically.
  */
+/**
+ * rule 465.2.c.8 — a unit carrying BOTH [Tank] and [Backline] is not
+ * unconstrained: the ASSIGNING player must honour one of the two keywords for
+ * it — serve it FIRST (Tank) or LAST (Backline), never in between. Each map
+ * below pins every flexible unit to one concrete tier; an assignment is legal
+ * exactly when it is legal under at least one of these readings.
+ */
+function tierReadings(plan: DamageAssignmentPlan): Record<string, number>[] {
+  const base: Record<string, number> = {};
+  for (const id of plan.order) {
+    base[id] = plan.tier[id] ?? 1;
+  }
+  let readings: Record<string, number>[] = [base];
+  for (const id of plan.order) {
+    if ((plan.tier[id] ?? 1) !== FLEXIBLE_TIER) {
+      continue;
+    }
+    readings = readings.flatMap((r) => [
+      { ...r, [id]: 0 },
+      { ...r, [id]: 2 },
+    ]);
+  }
+  return readings;
+}
+
 export function enumerateDamageAssignments(
   plan: DamageAssignmentPlan,
   cap = 200,
@@ -430,7 +455,11 @@ export function enumerateDamageAssignments(
       out.push(canonical);
     }
   };
-  const walk = (alloc: Record<string, number>, remaining: number): void => {
+  const walk = (
+    tier: Record<string, number>,
+    alloc: Record<string, number>,
+    remaining: number,
+  ): void => {
     if (out.length >= cap) {
       return;
     }
@@ -448,21 +477,15 @@ export function enumerateDamageAssignments(
       }
       return;
     }
-    // rule 465.2.c.8 — a Tank+Backline unit sits in no tier: it is always a
-    // legal next recipient, and it never holds back the other tiers either.
-    const tiered = nonLethal.filter((id) => (plan.tier[id] ?? 1) !== FLEXIBLE_TIER);
-    const minTier = tiered.length > 0 ? Math.min(...tiered.map((id) => plan.tier[id] ?? 1)) : undefined;
-    const candidates = nonLethal.filter(
-      (cand) =>
-        (plan.tier[cand] ?? 1) === FLEXIBLE_TIER ||
-        (minTier !== undefined && (plan.tier[cand] ?? 1) === minTier),
-    );
-    for (const id of candidates) {
+    const minTier = Math.min(...nonLethal.map((id) => tier[id] ?? 1));
+    for (const id of nonLethal.filter((cand) => (tier[cand] ?? 1) === minTier)) {
       const give = Math.min(remaining, (plan.need[id] ?? 0) - (alloc[id] ?? 0));
-      walk({ ...alloc, [id]: (alloc[id] ?? 0) + give }, remaining - give);
+      walk(tier, { ...alloc, [id]: (alloc[id] ?? 0) + give }, remaining - give);
     }
   };
-  walk({}, plan.total);
+  for (const reading of tierReadings(plan)) {
+    walk(reading, {}, plan.total);
+  }
   return out;
 }
 
@@ -491,6 +514,16 @@ export function isLegalDamageAssignment(
   if (sum !== plan.total) {
     return false;
   }
+  // rule 465.2.c.8 — legal under ANY one honoured reading of the Tank+Backline
+  // units is legal; legal under none (served in the middle) is not.
+  return tierReadings(plan).some((tier) => isLegalUnderTiers(plan, alloc, tier));
+}
+
+function isLegalUnderTiers(
+  plan: DamageAssignmentPlan,
+  alloc: Record<string, unknown>,
+  tier: Record<string, number>,
+): boolean {
   const got = (id: string): number => (alloc[id] as number | undefined) ?? 0;
   const lethal = (id: string): boolean => got(id) >= (plan.need[id] ?? 0);
   const everyoneLethal = plan.order.every((id) => lethal(id));
@@ -507,13 +540,10 @@ export function isLegalDamageAssignment(
     }
     // 815.1.b / 826.4.b: nothing lands in a later tier while an earlier-tier
     // unit lacks lethal.
-    // rule 465.2.c.8 — a Tank+Backline unit is bound by neither tier, in
-    // either direction: it may be served early or skipped entirely.
-    if (n > 0 && (plan.tier[id] ?? 1) !== FLEXIBLE_TIER) {
-      const myTier = plan.tier[id] ?? 1;
+    if (n > 0) {
+      const myTier = tier[id] ?? 1;
       for (const other of plan.order) {
-        const otherTier = plan.tier[other] ?? 1;
-        if (otherTier !== FLEXIBLE_TIER && otherTier < myTier && !lethal(other)) {
+        if ((tier[other] ?? 1) < myTier && !lethal(other)) {
           return false;
         }
       }
