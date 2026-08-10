@@ -3,7 +3,7 @@ import type { CardId as CoreCardId } from "@tcg/core";
 import type { TargetDescriptor } from "../target-resolver";
 import { resolveTarget } from "../target-resolver";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
-import { type EffectHelpers, getEffectiveMightInRole } from "./_helpers";
+import { type EffectHelpers, getActualMightInRole } from "./_helpers";
 import { applyMightModifierDelta } from "./might-modifier";
 import { isBattlefieldZone } from "../../zones/zone-configs";
 
@@ -66,8 +66,11 @@ export function handle_swapMight(effect: ExecutableEffect, ctx: EffectContext, _
   // rule 433 / 807.1.c — the swap reads CURRENT Might, which includes the
   // Assault / Shield bonus of a unit that holds a combat role right now
   // (ruling 6ca8dbf1edd07e15).
-  const aBefore = getEffectiveMightInRole(a, ctx);
-  const bBefore = getEffectiveMightInRole(b, ctx);
+  // rule 143.2.b.1 — the difference is sized from the ACTUAL Mights: a unit at
+  // a negative Might is only TREATED as 0 when its Might is referenced, never
+  // when an effect calculates an increase/decrease from it.
+  const aBefore = getActualMightInRole(a, ctx);
+  const bBefore = getActualMightInRole(b, ctx);
   // rule 433.1.a/433.1.b — a swap is ONE difference turned into TWO independent
   // modifiers; replacing one side never recalculates the other.
   applyMightModifierDelta(a, bBefore - aBefore, ctx);

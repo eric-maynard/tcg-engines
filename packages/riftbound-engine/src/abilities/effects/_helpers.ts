@@ -253,6 +253,43 @@ export function getEffectiveMightInRole(cardId: string, ctx: EffectContext): num
 }
 
 /**
+ * rule 143.2.b.1 — a Might below 0 is only TREATED as 0 when it is REFERENCED;
+ * an effect that CALCULATES a Might increase or decrease (a swap's difference)
+ * uses the ACTUAL value. Same sum as {@link getEffectiveMight}, unclamped.
+ */
+export function getActualMight(cardId: string, ctx: EffectContext): number {
+  const registry = getGlobalCardRegistry();
+  const def = registry.get(cardId);
+  const printedMight = def?.might ?? 0;
+  if (printedMight === 0) {
+    return 0;
+  } // Not a unit
+  const meta = ctx.cards.getCardMeta?.(cardId as CoreCardId) as
+    | Partial<RiftboundCardMeta>
+    | undefined;
+  const baseMight = meta?.baseMightOverride ?? printedMight;
+  const buffBonus = (meta?.buffed ? 1 : 0) + (meta?.extraBuffs ?? 0);
+  const mightMod = meta?.mightModifier ?? 0;
+  const staticBonus = meta?.staticMightBonus ?? 0;
+  let equipBonus = 0;
+  for (const equipId of meta?.equippedWith ?? []) {
+    equipBonus += registry.getMightBonus(equipId);
+  }
+  return baseMight + buffBonus + mightMod + staticBonus + equipBonus;
+}
+
+/** rule 143.2.b.1 × 807.1.c — {@link getActualMight} plus the current combat-role bonus. */
+export function getActualMightInRole(cardId: string, ctx: EffectContext): number {
+  if ((getGlobalCardRegistry().get(cardId)?.might ?? 0) === 0) {
+    return 0;
+  }
+  const meta = ctx.cards.getCardMeta?.(cardId as CoreCardId) as
+    | Partial<RiftboundCardMeta>
+    | undefined;
+  return getActualMight(cardId, ctx) + combatRoleMightBonus(cardId, meta);
+}
+
+/**
  * Sum every instance of a numeric keyword on a card (rule 807.2, 807.3):
  * printed instances (flat `keywords` or `keyword` abilities) plus every granted
  * instance on meta. A valueless instance counts as 1 (rule 807.1.b.3).

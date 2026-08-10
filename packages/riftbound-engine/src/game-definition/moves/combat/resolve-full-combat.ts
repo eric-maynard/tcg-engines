@@ -665,6 +665,24 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
         target: unitId,
       });
     }
+    // ruling a07c6b97df7477e0 (rules 322 / 323 / 391) — a unit that is dealt
+    // LETHAL combat damage while carrying a bound "kill it the next time it
+    // takes damage" replacement (ogn-254-298) faces TWO independent deaths in
+    // this Cleanup: the lethal-damage death and the delayed kill. A single-use
+    // die replacement (Zhonya's Hourglass) can only replace ONE of them, so
+    // note them here and re-mark the survivor below.
+    const twoDeaths = new Set<string>(
+      [...attackerUnits, ...defenderUnits]
+        .filter(
+          (u) =>
+            u.diesOnAnyDamage === true &&
+            u.immuneToDamage !== true &&
+            (result.damageAssignment[u.id] ?? 0) >=
+              combatLethalMight(u, attackerIds.has(u.id) ? "attacker" : "defender") &&
+            (result.damageAssignment[u.id] ?? 0) > 0,
+        )
+        .map((u) => u.id),
+    );
     dealDamageBatch(damageIO, damageRequests);
 
     // rule 466.1 (Combat Cleanup): combat deaths are ordinary deaths — reap
@@ -698,6 +716,19 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
       // rule 391 (ogn-254-298 / ogn-221-298) — a "when it takes damage, kill
       // it" effect already removed this unit inside the damage batch.
       if (!stillHere.has(unit.id)) {
+        // ruling a07c6b97df7477e0 — …unless a die replacement replaced THAT
+        // death and left the unit alive elsewhere (recalled, healed): its
+        // lethal combat damage is a second, unreplaced death, so mark it again
+        // and let the Combat Cleanup reap it.
+        if (twoDeaths.has(unit.id)) {
+          const zone = zones.getCardZone(unit.id as CoreCardId) as string | undefined;
+          if (zone === "base" || (typeof zone === "string" && zone.startsWith("battlefield-"))) {
+            setDamage(context, unit.id, Math.max(1, unit.baseMight), {
+              lastDamageSource: "combat",
+              lastDamagedBy: unit.owner === attackingPlayer ? defenderUnits[0]?.owner : attackingPlayer,
+            });
+          }
+        }
         continue;
       }
       if (killedSet.has(unit.id)) {
