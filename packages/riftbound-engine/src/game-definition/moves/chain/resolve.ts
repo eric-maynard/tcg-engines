@@ -44,6 +44,7 @@ import {
   isLegalMultiTargetSet,
   type SpellEffectTargetShape,
 } from "../play/targeting";
+import { isPendingPlayItem } from "../play/play-pipeline";
 import { deductAbilityCost } from "./activate-ability";
 import { buildEffectContext } from "./effect-context";
 import { openPendingContestedShowdown } from "./showdown";
@@ -727,6 +728,7 @@ export function executeResolvedItem(
   // resolution. Drop it; if nothing legal is left the item still resolves but
   // does nothing (rule 359.3.e.5).
   let mistargeted = false;
+  let vacatedTargetSlots: number[] | undefined;
   if (boundTargets && boundTargets.length > 0) {
     const resolverCtx = {
       cards: baseCtx.cards,
@@ -906,9 +908,29 @@ export function executeResolvedItem(
     const rebornTargets = newObjectTargetsFor(draft, resolved.id);
     const stillSameObject = (id: string): boolean =>
       reachesPrivateZones || !rebornTargets.includes(id);
+    // rule 811.1.d.2 / 359.3.e.5 (ogn-213-298 × ogn-199-298) — a card played
+    // from face down may only affect objects at the battlefield it was hidden
+    // at, and that scope is re-read on resolution: a target swapped to another
+    // battlefield in response is no longer legal. Same exemptions as the
+    // choose-time filter — a pulled-in object (811.1.d.2.a) and a swap partner
+    // ("at another location") are judged elsewhere.
+    const hiddenScopeExempt =
+      hiddenZone === undefined ||
+      reachesPrivateZones ||
+      // A swap names objects "at another location" by definition (ogn-199-298
+      // Tideturner, unl-083-219 Smoke and Mirrors), so its pair can never all
+      // stand at the Hidden battlefield.
+      effect.type === "swap-locations" ||
+      (effect.type === "move" && (effect as { swap?: unknown }).swap === true) ||
+      hiddenChoiceIsPulledIn(effect as unknown as SpellEffectTargetShape);
+    const hiddenStillMatches = (id: string): boolean =>
+      hiddenScopeExempt ||
+      draft.battlefields?.[id] !== undefined ||
+      baseCtx.zones.getCardZone(id as CoreCardId) === hiddenZone;
     const legal = boundTargets.filter(
       (id) =>
         stillSameObject(id) &&
+        hiddenStillMatches(id) &&
         stillOnBoard(id) &&
         locationStillMatches(id) &&
         mightStillMatches(id) &&
@@ -928,6 +950,20 @@ export function executeResolvedItem(
         effect.type === "fight" &&
         typeof (effect as { attacker?: unknown }).attacker === "object" &&
         typeof (effect as { defender?: unknown }).defender === "object";
+      // rule 359.3.e.5 / 355.8 (ogn-029-298 × sfd-163-221) — repeated
+      // instructions each own a POSITIONAL slot ("Deal 3 to a unit. Deal 3 to a
+      // unit."), and the compacted list below would slide a later pick into an
+      // earlier instruction and leave the last one begging for a fresh target.
+      // Record which slots lost their pick so the sequence skips exactly those.
+      if (
+        effect.type === "sequence" &&
+        (effect as { independentTargets?: boolean }).independentTargets === true
+      ) {
+        const stillLegal = new Set(legal);
+        vacatedTargetSlots = boundTargets.flatMap((id, at) =>
+          stillLegal.has(id) ? [] : [at],
+        );
+      }
       boundTargets = legal;
       mistargeted = legal.length === 0 || linkedFight;
     }
@@ -1000,9 +1036,15 @@ export function executeResolvedItem(
     // itself ("play a unit from your trash", ogn-196-298): the trash is a
     // PUBLIC zone, so that unit IS a target — chosen as the item is finalized
     // and locked onto it, not re-picked as the instruction resolves.
+    // rule 397 / 355.10 (unl-148-219 Cursed Sarcophagus) — "play a unit
+    // banished with this" names cards in BANISHMENT, which the board resolver
+    // does not scan either: a prompt here would offer units on the board. The
+    // play handler gathers the linked banished cards itself.
     !(
       effect.type === "play" &&
       ((effect as { from?: unknown }).from === "hand" ||
+        ((effect as { from?: unknown }).from === "banishment" &&
+          (target as { location?: unknown }).location !== "banishment") ||
         ((effect as { from?: unknown }).from === "trash" &&
           (target as { location?: unknown }).location !== "trash"))
     ) &&
@@ -1378,6 +1420,7 @@ export function executeResolvedItem(
     ...baseCtx,
     ...(mergedVariables ? { variables: mergedVariables } : {}),
     ...(boundTargets ? { boundTargets } : {}),
+    ...(vacatedTargetSlots && vacatedTargetSlots.length > 0 ? { vacatedTargetSlots } : {}),
     ...(triggerSourceId ? { triggerSourceId } : {}),
     // rule 404.1 / 359.3.e.13 — the objects that paid this trigger's base cost
     // at finalization (with their last-known board state).
@@ -1550,6 +1593,41 @@ function firePlayedCardTriggers(
   // BEFORE these triggers, so they are finalized first (the replayed unit is on
   // the board when an Abandoned Hall trigger picks its target) and, being
   // older, resolve after them (340.1). Nothing is reordered.
+  seatPlayTriggersUnderResolutionTriggers(draft, _preLen, postLen);
+}
+
+/**
+ * rule 338 / 339 / 340.1 (ruling 702f8c518c53d85b) — the act of playing a spell
+ * is complete as the spell's resolution ends, so its play triggers are pending
+ * BEFORE anything the cards that resolution played go on to trigger ([Vision]
+ * on a Recruit token Recruit the Vanguard played). Those consequential triggers
+ * must therefore finalize LAST and sit above the play trigger, which resolves
+ * after them. Only triggered items are lifted: pending PLAYS the spell queued
+ * stay below (they are older, finalize first and resolve last, 354.2).
+ */
+function seatPlayTriggersUnderResolutionTriggers(
+  draft: RiftboundGameState,
+  preLen: number,
+  firedAt: number,
+): void {
+  const items = draft.interaction?.chain?.items as ChainItem[] | undefined;
+  if (items === undefined || items.length <= firedAt) {
+    return;
+  }
+  let insertAt = firedAt;
+  for (let i = Math.max(preLen, 0); i < firedAt; i++) {
+    const item = items[i];
+    if (item === undefined || isPendingPlayItem(item) || item.triggered !== true) {
+      continue;
+    }
+    insertAt = i;
+    break;
+  }
+  if (insertAt >= firedAt) {
+    return;
+  }
+  const fired = items.splice(firedAt, items.length - firedAt);
+  items.splice(insertAt, 0, ...fired);
 }
 
 /**

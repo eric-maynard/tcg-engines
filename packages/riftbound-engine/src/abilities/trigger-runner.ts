@@ -249,8 +249,57 @@ export function attachedEffectTextAbilities(
         ...(a.optional === true ? { optional: true } : {}),
         trigger: { event: a.trigger.event, on: a.trigger.on ?? "self" },
         type: "triggered",
-      });
+      } as TriggerableAbility);
     }
+  }
+  return out;
+}
+
+/**
+ * rule 823.2 — a unit that has [Hunt] and is granted [Hunt] (Hunter's Machete's
+ * conferred Effect Text, say) does not get two triggered abilities: the values
+ * SUM into a single "Hunt N". Collapse every Hunt trigger for the same event
+ * into one ability whose gain-xp amount is the total, so the hold/conquer
+ * window raises exactly one chain item (and there is no order to ask about).
+ *
+ * Hunt's expansion is its shape — "When I conquer/hold, gain N XP" with no
+ * intervening if — which is also the reminder text every printing of it uses.
+ */
+function sumHuntTriggers(abilities: readonly TriggerableAbility[]): TriggerableAbility[] {
+  const isHunt = (a: TriggerableAbility): boolean => {
+    if (a.type !== "triggered" || (a as { condition?: unknown }).condition !== undefined) {
+      return false;
+    }
+    const trigger = a.trigger as { event?: string; on?: string } | undefined;
+    if ((trigger?.event !== "hold" && trigger?.event !== "conquer") || trigger.on !== "self") {
+      return false;
+    }
+    return (a as { effect?: { type?: string } }).effect?.type === "gain-xp";
+  };
+  if (abilities.filter(isHunt).length < 2) {
+    return [...abilities];
+  }
+  const out: TriggerableAbility[] = [];
+  const firstIndexByEvent = new Map<string, number>();
+  for (const a of abilities) {
+    if (!isHunt(a)) {
+      out.push(a);
+      continue;
+    }
+    const event = String(a.trigger?.event ?? "");
+    const amount = Number((a as { effect?: { amount?: number } }).effect?.amount ?? 1);
+    const at = firstIndexByEvent.get(event);
+    if (at === undefined) {
+      firstIndexByEvent.set(event, out.length);
+      out.push(a);
+      continue;
+    }
+    const merged = out[at] as TriggerableAbility & { effect?: { amount?: number } };
+    const effect = (merged.effect ?? {}) as { amount?: number };
+    out[at] = {
+      ...merged,
+      effect: { ...effect, amount: Number(effect.amount ?? 1) + amount },
+    } as TriggerableAbility;
   }
   return out;
 }
@@ -1402,10 +1451,10 @@ export function getBoardCards(
     // rule-id: sfd-030-221 — Skyfall of Areion makes hold effects conquer
     // effects and vice versa, for the whole assembled text of the wearer.
     if (!hasHoldConquerEquivalence(cardId as string, meta)) {
-      return all;
+      return sumHuntTriggers(all);
     }
     const mirrored = holdConquerMirroredAbilities(all);
-    return mirrored.length > 0 ? [...all, ...mirrored] : all;
+    return sumHuntTriggers(mirrored.length > 0 ? [...all, ...mirrored] : all);
   };
 
   // Get cards from all players' bases and legend zones
@@ -1692,6 +1741,20 @@ function battlefieldOfCard(ctx: TriggerRunnerContext, cardId: string): string | 
 }
 
 export function fireTriggers(rawEvent: GameEvent, ctx: TriggerRunnerContext): number {
+  // rule 185 / 052 (ogn-235-298 Karma, Channeler) — "when you recycle one or
+  // more CARDS to your Main Deck": a token is not a card, so it is never among
+  // the subjects a recycle trigger counts, and an all-token recycle raises
+  // nothing at all.
+  if (rawEvent.type === "recycle") {
+    const reg = getGlobalCardRegistry();
+    const realCards = rawEvent.cardIds.filter((id) => !reg.isToken(id));
+    if (realCards.length === 0) {
+      return 0;
+    }
+    if (realCards.length !== rawEvent.cardIds.length) {
+      rawEvent = { ...rawEvent, cardIds: realCards };
+    }
+  }
   // rule 359.2 / rule-id: sfd-195-221 — a `choose` event names the chooser but
   // not the chosen card's side; stamp the subject's CURRENT controller here so
   // "when you choose a friendly unit" descriptors have an owner to judge.
