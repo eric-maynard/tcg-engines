@@ -32,7 +32,12 @@ export function handle_swapBackBattlefield(
   const tokenCardId = slot.id ?? slotKey;
   const registry = getGlobalCardRegistry();
   const meta = ctx.cards.getCardMeta?.(tokenCardId as CoreCardId) ?? {};
-  let replacedId = (meta as { replacedBattlefieldCardId?: string }).replacedBattlefieldCardId;
+  let replacedId = (meta as { replacedBattlefieldCardId?: string | null }).replacedBattlefieldCardId;
+  if (replacedId === null) {
+    // 438.6 / 186.1 → 438.7.c — the replaced object was itself a token, so it
+    // ceased to exist and nothing waits in Banishment: the swap does nothing.
+    return;
+  }
   if (replacedId === undefined) {
     // 438.7.c — the displaced card is the battlefield waiting in Banishment.
     const banished = ctx.zones.getCardsInZone("banishment" as CoreZoneId) ?? [];
