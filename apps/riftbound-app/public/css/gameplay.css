@@ -633,37 +633,42 @@
       margin-bottom: 2px;
       pointer-events: none;
     }
+    /* [rule:ui-rune-row-stable] A rune's layout box and stacking NEVER change on
+       hover or on a neighbour's tap: no translate/scale/z-index on :hover (the
+       lift shifted the hit-box onto the next card in the fan, the z-drop put it
+       under its neighbours, and the row flickered). Hover is a non-layout
+       highlight (gold ring + brightness) on the strip the player is pointing
+       at; the large floating preview beside the pool is what makes the rune
+       readable. runes.js keeps DOM order and fan offsets stable across
+       re-renders and patches the existing nodes, so :hover survives updates. */
     .rune-stack .card {
       position: absolute;
       width: 110px;
       min-width: 110px;
       height: 154px;
       left: 23px;
-      transition: transform 0.15s;
+      transform: none;
+      transition: transform 0.15s, box-shadow 0.12s, filter 0.12s;
       cursor: pointer;
     }
-    /* Hover brings the rune to the front of its fan (that is what makes a
-       lower rune readable/clickable); the lift stays small so the card never
-       leaves the clipped grid — a 24px/1.2× lift poked out of the top of the
-       pool, got cut off, and put its top strip under the resource bar. */
-    .rune-stack .card:not(.exhausted):hover {
-      z-index: 20 !important;
-      transform: translateY(-6px) scale(1.05) !important;
+    .rune-stack .card:hover {
+      transform: none;
+      border-color: #ffd070;
+      box-shadow: 0 0 0 2px #ffd070, 0 6px 18px rgba(0, 0, 0, 0.6);
+      filter: brightness(1.18);
     }
-    /* Exhausted runes rotate 90° (tabletop tap convention) in addition to the
-       overlay dim from .card--exhausted::before.
-       [rule:ui-rune-exhausted-overlay] The card keeps its full size when tapped;
-       the stack is 156px wide so the rotated 154px footprint (centered on the
-       card) stays inside it instead of spilling past the clipped grid edge. */
+    /* Exhausted runes rotate 90° (tabletop tap) inside a FIXED slot: the
+       rotation is anchored so the tapped card occupies the top 110px of its own
+       154px slot, spanning the 156px-wide stack (x 1..155) — it never leaves the
+       clipped grid, never covers the strip of the rune above it, and its own
+       top strip stays visible full-width when later runes fan over it.
+       [rule:ui-rune-exhausted-overlay] dim + lock icon come from .card--exhausted. */
     .rune-stack .card.card--exhausted,
-    .rune-stack .card.exhausted {
-      transform: rotate(90deg);
-      transform-origin: center;
-    }
-    .rune-stack .card.exhausted:hover,
-    .rune-stack .card.card--exhausted:hover {
-      z-index: 20 !important;
-      transform: translateY(-4px) rotate(90deg) !important;
+    .rune-stack .card.exhausted,
+    .rune-stack .card.card--exhausted:hover,
+    .rune-stack .card.exhausted:hover {
+      transform-origin: 0 0;
+      transform: translateX(132px) rotate(90deg);
     }
     .rune-stack .card .card-name {
       display: none;
@@ -685,8 +690,12 @@
       font-size: 9px;
       letter-spacing: 0;
     }
-    .rune-stack.rune-stack--compact .card:not(.exhausted):hover {
-      transform: translateY(-10px) scale(1.15) !important;
+    /* 70×98 card rotated into the 100px-wide compact stack: x 1..99. */
+    .rune-stack.rune-stack--compact .card.card--exhausted,
+    .rune-stack.rune-stack--compact .card.exhausted,
+    .rune-stack.rune-stack--compact .card.card--exhausted:hover,
+    .rune-stack.rune-stack--compact .card.exhausted:hover {
+      transform: translateX(84px) rotate(90deg);
     }
     #opponent-runePool.rune-pool-grid {
       align-self: center;
@@ -1579,62 +1588,87 @@
     /* ============================================
        Card Preview Tooltip
        ============================================ */
+    /* Cost / domain tokens rendered by iconify(): coloured pills keeping the printed text. */
+    .ico { display: inline-block; padding: 0 4px; border-radius: 4px; font-weight: 700; font-size: 0.92em; line-height: 1.35; background: #2e2950; color: #e8e2ff; }
+    .ico-num { background: #3a3560; }
+    .ico-fury { background: #6a2020; color: #ffd0d0; }
+    .ico-calm { background: #1e4a64; color: #cfeeff; }
+    .ico-mind { background: #4a2464; color: #f0d8ff; }
+    .ico-body { background: #245a2a; color: #d4ffd8; }
+    .ico-chaos { background: #64401a; color: #ffe2c4; }
+    .ico-order { background: #5e5a1a; color: #fffbc4; }
+    .ico-rainbow { background: linear-gradient(90deg, #6a2020, #5e5a1a, #245a2a, #1e4a64, #4a2464); color: #fff; }
+    .ico-might { background: #503a1a; color: #ffe0b0; }
+
+    /* [rule:ui-hover-preview] One floating panel for every card surface
+       (overlays.js showPreview): large art + name/type + FULL rules text +
+       cost/might/state. position:fixed and pointer-events:none so it can never
+       shift layout or steal the hover from the card under the cursor; above
+       every overlay/modal (pregame 2500, prompts 3000–9100, zoom 10000). */
     .card-preview {
       display: none;
       position: fixed;
-      width: 280px;
-      background: transparent;
-      border: none;
-      border-radius: 8px;
-      padding: 0;
-      /* Must sit above the pregame overlay (z-index 2500) so hover detail is
-         visible during mulligan. */
-      z-index: 10000;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+      width: 300px;
+      max-height: calc(100vh - 16px);
+      overflow: hidden;
+      background: rgba(20, 18, 34, 0.97);
+      border: 1px solid #4a3f6a;
+      border-radius: 10px;
+      padding: 8px;
+      z-index: 10050;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.7);
       pointer-events: none;
+      color: #e0dced;
     }
+    .card-preview.card-preview--landscape { width: 420px; }
 
     .card-preview.visible { display: block; }
 
     .card-preview img {
-      width: 280px;
+      width: 100%;
       height: auto;
+      max-height: 60vh;
+      object-fit: contain;
       border-radius: 8px;
       display: block;
-    }
-
-    .card-preview .preview-name,
-    .card-preview .preview-type,
-    .card-preview .preview-text,
-    .card-preview .preview-stats {
-      display: none;
+      background: #0e0a1c;
     }
 
     .card-preview .preview-name {
       font-weight: 700;
-      font-size: 13px;
-      color: #e0dced;
-      margin-bottom: 4px;
+      font-size: 15px;
+      color: #f0ecff;
+      margin: 8px 2px 2px;
     }
 
     .card-preview .preview-type {
       font-size: 10px;
-      color: #6a6288;
+      color: #8a82a6;
       text-transform: uppercase;
-      margin-bottom: 4px;
+      letter-spacing: 0.8px;
+      margin: 0 2px 6px;
     }
 
     .card-preview .preview-text {
-      font-size: 12px;
-      color: #b0a8c8;
-      line-height: 1.4;
+      font-size: 13px;
+      color: #d0c8e8;
+      line-height: 1.45;
+      margin: 0 2px;
+      white-space: pre-line;
     }
 
     .card-preview .preview-stats {
       display: flex;
-      gap: 8px;
-      margin-top: 6px;
+      flex-wrap: wrap;
+      gap: 4px 6px;
+      margin: 8px 2px 0;
       font-size: 11px;
+    }
+    .card-preview .preview-stats span {
+      padding: 2px 7px;
+      border-radius: 5px;
+      background: #24203c;
+      color: #c8c0e0;
     }
 
     /* ============================================
@@ -3149,6 +3183,115 @@
       color: #8a82a6;
       cursor: pointer;
       font-size: 12px;
+    }
+
+    /* reveal-and-pick (look / Vision / Predict / reveal-and-choose): one column
+       per card = tile + name + a button that names what clicking does; no
+       layout shift on hover; selected state for multi-pick. */
+    .choice-modal.rp-wide { max-width: 900px; max-height: calc(100vh - 24px); overflow-y: auto; }
+    .rp-cards.rp-cards--many .rp-pick { width: 118px; }
+    .rp-cards.rp-cards--lots .rp-pick { width: 100px; }
+    .rp-cards--many .rp-card-btn, .rp-cards--lots .rp-card-btn { font-size: 11px; padding: 6px 4px; }
+    .rp-instruction {
+      margin: 6px 0 2px;
+      padding: 7px 10px;
+      border-radius: 6px;
+      background: #2a2440;
+      color: #ffe7a8;
+      font-size: 13px;
+      line-height: 1.35;
+    }
+    .rp-cards {
+      flex-wrap: wrap;
+      align-items: stretch;
+      gap: 14px;
+      padding: 14px 0 8px;
+      min-height: 0;
+    }
+    .rp-pick {
+      width: 150px;
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 5px;
+    }
+    .rp-pick .choice-modal-card {
+      width: 100%;
+      margin: 0;
+      position: relative;
+      border: 2px solid transparent;
+      transition: box-shadow .12s ease, border-color .12s ease;
+    }
+    .rp-pick .choice-modal-card:hover {
+      transform: none;
+      margin: 0;
+      border-color: #ffd070;
+      box-shadow: 0 8px 24px rgba(255,208,112,.35);
+    }
+    .rp-pick--no .choice-modal-card { opacity: .45; cursor: not-allowed; }
+    .rp-pick--no .choice-modal-card:hover { border-color: transparent; box-shadow: 0 6px 20px rgba(0,0,0,.6); }
+    .rp-pick--on .choice-modal-card,
+    .rp-card.rp-picked {
+      border-color: #50c878;
+      box-shadow: 0 0 0 2px #50c878, 0 8px 24px rgba(80,200,120,.35);
+    }
+    .rp-check {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      background: #50c878;
+      color: #10201a;
+      font-weight: 800;
+      font-size: 11px;
+      padding: 2px 7px;
+      border-radius: 10px;
+      pointer-events: none;
+    }
+    .rp-card-name { text-align: center; font-size: 12px; color: #cfc8ee; min-height: 15px; }
+    .rp-card-btn { text-align: center; padding: 8px 6px; font-size: 12px; font-weight: 600; }
+    .rp-card-btn.chosen { background: #1f3a2c; }
+    .rp-card-no {
+      text-align: center;
+      font-size: 11px;
+      color: #a8a0c0;
+      padding: 6px 4px;
+      border: 1px dashed #4a3f6a;
+      border-radius: 6px;
+    }
+    .rp-card-no small { display: block; color: #7a7296; font-size: 10px; margin-top: 2px; }
+    .rp-actions { flex-direction: row; flex-wrap: wrap; justify-content: center; }
+    .rp-actions .choice-modal-btn { text-align: center; min-width: 180px; }
+    .rp-confirm { background: #244a34; border-color: #50c878; font-weight: 700; }
+    .rp-confirm:disabled { cursor: not-allowed; }
+    .rp-decline { background: #2a2645; }
+    .rp-rules { margin-top: 4px; font-size: 11px; color: #8a82a6; text-align: center; }
+    .rp-empty { color: #8a82a6; font-size: 13px; padding: 20px; }
+
+    /* The asking card inside opt-in / confirm / choose-mode prompts. */
+    .prompt-source {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      margin: 10px 0 4px;
+      padding: 8px;
+      border-radius: 8px;
+      background: #211d36;
+      border: 1px solid #3a3560;
+      text-align: left;
+    }
+    .prompt-source-img { width: 120px; border-radius: 6px; flex-shrink: 0; box-shadow: 0 4px 14px rgba(0,0,0,.5); }
+    .prompt-source-text { min-width: 0; flex: 1; }
+    .prompt-source-name { font-weight: 700; font-size: 14px; color: #f0ecff; margin-bottom: 4px; }
+    .prompt-source-rules { font-size: 12px; color: #cfc8ee; line-height: 1.4; white-space: pre-line; }
+    .prompt-source-cost {
+      margin-top: 8px;
+      padding: 6px 8px;
+      border-radius: 6px;
+      background: #3a2a1a;
+      border: 1px solid #c08040;
+      color: #ffd9a0;
+      font-size: 12px;
+      font-weight: 600;
     }
 
     /* ============================================

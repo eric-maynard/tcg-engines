@@ -40,11 +40,13 @@ function renderZones() {
 
   // Rune pools — the player's pile fans out to whatever height its row really
   // has (never clipped, never over the Legend/Champion); the opponent's is compact.
+  // [rule:ui-rune-row-stable] patched in place (keyed by card id), not rebuilt,
+  // so the rune under the cursor keeps its node, :hover and tap animation.
   const myPool = document.getElementById("player-runePool");
-  myPool.innerHTML = renderRuneStacks(zoneForPlayer("runePool", viewingPlayer), {
+  patchInnerHTML(myPool, renderRuneStacks(zoneForPlayer("runePool", viewingPlayer), {
     maxHeight: typeof runePoolRoom === "function" ? runePoolRoom(myPool) : undefined,
-  });
-  document.getElementById("opponent-runePool").innerHTML = renderRuneStacks(zoneForPlayer("runePool", opponent), { compact: true });
+  }));
+  patchInnerHTML(document.getElementById("opponent-runePool"), renderRuneStacks(zoneForPlayer("runePool", opponent), { compact: true }));
 
   // Legend and Champion zones
   const playerLegend = zoneForPlayer("legendZone", viewingPlayer);

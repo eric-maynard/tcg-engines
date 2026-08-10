@@ -94,6 +94,10 @@ const ops = {
     await page.mouse.click(a.x, a.y);
     return true;
   },
+  async mouseMove(a) {
+    await page.mouse.move(a.x, a.y, { steps: a.steps || 1 });
+    return true;
+  },
   async screenshot(a) {
     await page.screenshot({ path: a.path, fullPage: !!a.fullPage });
     return a.path;

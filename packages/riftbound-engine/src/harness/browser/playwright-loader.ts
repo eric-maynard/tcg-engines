@@ -32,7 +32,7 @@ export interface PwPage {
   addInitScript(script: { content: string } | string): Promise<void>;
   locator(selector: string): PwLocator;
   keyboard: { press(key: string): Promise<void> };
-  mouse: { click(x: number, y: number): Promise<void> };
+  mouse: { click(x: number, y: number): Promise<void>; move(x: number, y: number, opts?: { steps?: number }): Promise<void> };
   screenshot(opts: { path: string; fullPage?: boolean }): Promise<unknown>;
   url(): string;
   close(): Promise<void>;
@@ -96,7 +96,7 @@ export function guardPage(page: PwPage, ms: number): PwPage {
     isClosed: () => page.isClosed(),
     keyboard: { press: (k) => withTimeout(page.keyboard.press(k), ms, `keyboard.press(${k})`) },
     locator: (sel) => wrapLocator(page.locator(sel), sel),
-    mouse: { click: (x, y) => withTimeout(page.mouse.click(x, y), ms, "mouse.click") },
+    mouse: { click: (x, y) => withTimeout(page.mouse.click(x, y), ms, "mouse.click"), move: (x, y, o) => withTimeout(page.mouse.move(x, y, o), ms, "mouse.move") },
     on: (e, h) => page.on(e, h),
     route: page.route ? (pat, h) => withTimeout((page.route as NonNullable<PwPage["route"]>).call(page, pat, h), ms, "route") : undefined,
     screenshot: (o) => withTimeout(page.screenshot(o), ms, "screenshot"),

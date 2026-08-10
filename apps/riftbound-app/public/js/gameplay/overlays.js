@@ -2,91 +2,210 @@
 
 const ICON_TOKENS = ["rainbow", "fury", "mind", "body", "calm", "chaos", "order", "might", "t"];
 
+// Cost / domain tokens become coloured pills that KEEP their printed text
+// ("[2]", "[fury]") — the same spelling the action bar and buttons use, so a
+// title never reads "equip X for  less?" and textContent stays the rules text.
 function iconify(text) {
   let html = esc(text || "");
-  html = html.replace(/\[(\d+)\]/g, '<span class="ico ico-num">$1</span>');
+  html = html.replace(/\[(\d+)\]/g, '<span class="ico ico-num">[$1]</span>');
   for (const tok of ICON_TOKENS) {
-    const re = new RegExp("\\[" + tok + "\\]", "gi");
-    html = html.replace(re, `<span class="ico ico-${tok}"></span>`);
+    const re = new RegExp("\\[(" + tok + ")\\]", "gi");
+    html = html.replace(re, `<span class="ico ico-${tok}">[$1]</span>`);
   }
   return html;
 }
 
-function showPreview(event, el) {
-  const defId = el.dataset.defId || "";
-  const imgId = defId.replace(/^player-[12]-/, "");
-  const cardId = el.dataset.cardId || "";
+// ============================================================================
+// Hover preview — ONE floating panel (#cardPreview: position:fixed,
+// pointer-events:none, above every overlay) for every card surface: hand,
+// base and battlefield units, the battlefield cards themselves (.bf-art),
+// legend/champion, runes, the top of a trash pile, showdown/mulligan cards
+// and the card tiles inside prompts. It shows the large art PLUS the full
+// rules text, is placed beside (never over) the hovered element, appears on
+// mouseover and hides on mouseout. Driven by one delegated listener so every
+// element carrying data-card-id / data-def-id gets it — the inline
+// onmouseenter="showPreview(event, this)" attributes are the same call.
+// ============================================================================
+let _previewEl = null;      // element the panel currently describes
+let _previewHideTimer = null;
+const PREVIEW_HIDE_DELAY_MS = 60; // bridge the gap between two adjacent cards without a flash
 
-  // Find card data in game state
+/** The hover-able card surface for a DOM node (or null). */
+function previewSurface(node) {
+  if (!node || typeof node.closest !== "function") return null;
+  if (node.closest("#cardPreview, #hover-preview")) return null;
+  return node.closest(".card[data-card-id], .card[data-def-id], .bf-art[data-card-id], .choice-modal-card[data-card-id], .prompt-source[data-card-id], .deck-stack[data-card-id], .showdown-card[data-card-id], .zone-viewer-card[data-card-id]");
+}
+
+/** Card snapshot for an element: any zone (battlefieldRow included), else a def-only stub. */
+function previewCardFor(el) {
+  const cardId = el.dataset.cardId || "";
   let card = null;
-  if (gameState?.zones) {
+  if (cardId && gameState?.zones) {
     for (const zoneCards of Object.values(gameState.zones)) {
-      const found = zoneCards.find(c => c.id === cardId);
+      const found = (zoneCards || []).find(c => c && c.id === cardId);
       if (found) { card = found; break; }
     }
   }
+  if (card) return card;
+  const defId = el.dataset.defId || "";
+  if (!defId && !cardId) return null;
+  const name = el.querySelector?.(".card-name, .sc-name, .fallback-name")?.textContent || el.getAttribute("title") || el.getAttribute("aria-label") || "";
+  return { id: cardId, definitionId: defId || cardId, name, cardType: el.classList.contains("bf-art") ? "battlefield" : "" };
+}
 
+function _previewCostText(card) {
+  const energy = typeof card.effectiveEnergyCost === "number" ? card.effectiveEnergyCost : card.energyCost;
+  const power = Array.isArray(card.effectivePowerCost) ? card.effectivePowerCost : (Array.isArray(card.powerCost) ? card.powerCost : []);
+  const parts = [];
+  if (energy != null) parts.push(`Cost ${energy}${power.length ? " + " + power.map(p => `[${p}]`).join("") : ""}`);
+  if (card.might != null) {
+    const eff = Math.max(0, card.might + (card.meta?.mightModifier ?? 0) + (card.meta?.staticMightBonus ?? 0) + (card.meta?.buffed ? 1 : 0) + (card.meta?.extraBuffs ?? 0) + (card.meta?.equipmentMightBonus ?? 0));
+    parts.push(eff !== card.might ? `Might ${eff} (printed ${card.might})` : `Might ${card.might}`);
+  }
+  return parts.join(" · ");
+}
+
+function _previewStateText(card, el) {
+  const bits = [];
+  if (card.cardType === "battlefield") {
+    const bf = gameState?.battlefields?.[card.id];
+    if (bf) bits.push(bf.controller ? `Held by ${bf.controller === viewingPlayer ? "you" : pName(bf.controller)}` : "Uncontrolled", ...(bf.contested ? ["contested"] : []));
+  }
+  if (card.meta?.exhausted) bits.push(card.cardType === "rune" ? "Exhausted (tapped)" : "Exhausted");
+  if (card.meta?.damage > 0) bits.push(`Damage ${card.meta.damage}`);
+  if (card.meta?.stunned) bits.push("Stunned");
+  if (card.meta?.buffed) bits.push("Buffed");
+  if (typeof card.meta?.namedCard === "string" && card.meta.namedCard) bits.push(`Named: ${card.meta.namedCard}`); // rule 762
+  const zone = el.dataset.zone || "";
+  if (zone === "runePool" && card.owner === viewingPlayer) bits.push("click: exhaust for 1 energy · right-click: recycle for 1 power");
+  return bits.join(" · ");
+}
+
+function showPreview(eventOrEl, maybeEl) {
+  const el = maybeEl || (eventOrEl && eventOrEl.nodeType === 1 ? eventOrEl : null);
+  if (!el) return;
+  const previewEl = document.getElementById("cardPreview");
+  if (!previewEl) return;
+  const card = previewCardFor(el);
   if (!card) return;
-
-  // Runes: suppress the zoom popout — the stacked rune pool is dense and the
-  // hover preview obscures neighbouring runes. Checked both by cardType and
-  // by container so opponent-owned runes (whose cardType may be redacted)
-  // are covered too.
-  if (card.cardType === "rune" || el.closest(".rune-stack")) {
-    return;
-  }
-
-  const preview = document.getElementById("cardPreview");
-  const img = document.getElementById("previewImg");
-  img.src = `/card-image/${imgId}`;
-  img.onerror = function() { this.style.display = "none"; };
-  img.onload = function() { this.style.display = "block"; };
-
-  // rule 762: the card this one named (Fallen Feline) is game state that lives
-  // only on meta — the printed image cannot show it.
-  const statsEl = document.getElementById("previewStats");
-  if (statsEl) {
-    const named = typeof card.meta?.namedCard === "string" ? card.meta.namedCard : "";
-    statsEl.textContent = named ? `Named: ${named}` : "";
-  }
 
   // Refuse to preview cards in the opponent's hidden zones outside sandbox
   // mode — even if the thumbnail were a card back, this handler would leak.
   if (!isSandboxGame) {
     const zone = el.dataset.zone || el.closest("[data-zone]")?.dataset.zone;
-    const owner = el.dataset.owner || el.closest("[data-owner]")?.dataset.owner;
-    if (owner && owner !== viewingPlayer && (zone === "hand" || zone === "mainDeck" || zone === "runeDeck")) {
-      return;
-    }
+    const owner = el.dataset.owner || el.closest("[data-owner]")?.dataset.owner || card.owner;
+    if (owner && owner !== viewingPlayer && (zone === "hand" || zone === "mainDeck" || zone === "runeDeck")) return;
   }
+  if (el.classList.contains("facedown") && !el.dataset.defId) return;
 
-  // Position
-  const rect = el.getBoundingClientRect();
-  const previewEl = document.getElementById("cardPreview");
-  const pregameVisible =
-    document.getElementById("pregameOverlay")?.classList.contains("visible") ||
-    document.getElementById("coinOverlay")?.classList.contains("visible");
+  if (_previewHideTimer !== null) { clearTimeout(_previewHideTimer); _previewHideTimer = null; }
+  _previewEl = el;
+
+  const imgId = String(card.definitionId || el.dataset.defId || card.id || "").replace(/^player-[12]-(?:(?:main|rune)-\d+-|legend-|champion-|bf-)?/, "");
+  const img = document.getElementById("previewImg");
+  const nextSrc = imgId ? `/card-image/${encodeURIComponent(imgId)}` : "";
+  if (img.getAttribute("data-current") !== nextSrc) {
+    img.setAttribute("data-current", nextSrc);
+    img.style.display = nextSrc ? "block" : "none";
+    img.onerror = function() { this.style.display = "none"; };
+    img.onload = function() { this.style.display = "block"; };
+    if (nextSrc) img.src = nextSrc; else img.removeAttribute("src");
+  }
+  img.alt = card.name || "";
+  const landscape = card.cardType === "battlefield";
+  previewEl.classList.toggle("card-preview--landscape", landscape);
+
+  const domain = Array.isArray(card.domain) ? card.domain.join(" / ") : (card.domain || "");
+  document.getElementById("previewName").textContent = card.name || "";
+  document.getElementById("previewType").textContent = [card.cardType || "", domain].filter(Boolean).join(" — ");
+  // Printed tokens ([2], [fury], [Exhaust]) stay literal — same spelling as the action bar.
+  const textEl = document.getElementById("previewText");
+  textEl.textContent = card.rulesText || "";
+  textEl.style.display = card.rulesText ? "" : "none";
+  const stats = [_previewCostText(card), _previewStateText(card, el)].filter(Boolean);
+  const statsEl = document.getElementById("previewStats");
+  statsEl.innerHTML = stats.map(s => `<span>${esc(s)}</span>`).join("");
+  statsEl.style.display = stats.length ? "" : "none";
+
   // Reveal before measuring so offsetHeight/Width reflect the populated panel.
   previewEl.classList.add("visible");
-  const previewH = previewEl.offsetHeight || 420;
-  const previewW = previewEl.offsetWidth || 236;
-  // Mulligan/coin overlay: place the detail panel above the hand row so it
-  // never covers the instruction line / Keep Hand button that sit below it,
-  // and never runs off the bottom viewport edge.
-  let left = Math.max(8, Math.min(rect.left, window.innerWidth - previewW - 8));
-  let top = rect.top - previewH - 12;
-  // Viewport clamp — keep the whole panel on-screen.
-  if (top + previewH > window.innerHeight - 8) top = window.innerHeight - previewH - 8;
-  if (top < 8) top = 8;
-
-  previewEl.style.left = left + "px";
-  previewEl.style.top = top + "px";
-  previewEl.classList.add("visible");
+  positionPreview(el, previewEl);
 }
 
-function hidePreview() {
-  document.getElementById("cardPreview").classList.remove("visible");
+/**
+ * Beside the hovered thing, never over it (and never over the rest of a rune
+ * fan / hand row): right of it if there is room, else left; hand & mulligan
+ * cards get it above the row. Always clamped inside the viewport.
+ */
+function positionPreview(el, previewEl) {
+  const anchor = el.closest(".rune-pool-grid") || el.closest(".rune-stack") || el;
+  const rect = anchor.getBoundingClientRect();
+  const w = previewEl.offsetWidth || 300;
+  const h = previewEl.offsetHeight || 420;
+  const vw = window.innerWidth, vh = window.innerHeight, gap = 14, pad = 8;
+  const inRow = !!el.closest(".hand-zone, .mulligan-hand");
+  let left, top;
+  if (inRow && rect.top - h - gap >= pad) {
+    left = rect.left + rect.width / 2 - w / 2;
+    top = rect.top - h - gap;
+  } else if (rect.right + gap + w <= vw - pad) {
+    left = rect.right + gap;
+    top = rect.top + rect.height / 2 - h / 2;
+  } else if (rect.left - gap - w >= pad) {
+    left = rect.left - gap - w;
+    top = rect.top + rect.height / 2 - h / 2;
+  } else {
+    left = rect.left + rect.width / 2 - w / 2;
+    top = rect.top - h - gap >= pad ? rect.top - h - gap : rect.bottom + gap;
+  }
+  left = Math.max(pad, Math.min(left, vw - w - pad));
+  top = Math.max(pad, Math.min(top, vh - h - pad));
+  previewEl.style.left = Math.round(left) + "px";
+  previewEl.style.top = Math.round(top) + "px";
 }
+
+function hidePreview(immediate) {
+  const previewEl = document.getElementById("cardPreview");
+  if (!previewEl) return;
+  if (_previewHideTimer !== null) { clearTimeout(_previewHideTimer); _previewHideTimer = null; }
+  const doHide = () => { _previewHideTimer = null; _previewEl = null; previewEl.classList.remove("visible"); };
+  if (immediate === true || typeof immediate === "undefined") { doHide(); return; }
+  _previewHideTimer = setTimeout(doHide, PREVIEW_HIDE_DELAY_MS);
+}
+
+// Delegated driver: mouseover/mouseout bubble, so one listener covers every
+// surface rendered now or later (battlefields, prompt tiles, trash…).
+(function wireHoverPreview() {
+  function over(e) {
+    const el = previewSurface(e.target);
+    if (!el) return;
+    if (el === _previewEl && document.getElementById("cardPreview")?.classList.contains("visible")) {
+      if (_previewHideTimer !== null) { clearTimeout(_previewHideTimer); _previewHideTimer = null; }
+      return;
+    }
+    showPreview(el);
+  }
+  function out(e) {
+    const el = previewSurface(e.target);
+    if (!el) return;
+    const to = e.relatedTarget;
+    if (to && el.contains(to)) return; // still inside the same card
+    hidePreview(previewSurface(to) ? false : true);
+  }
+  function go() {
+    if (document.body.dataset.cardPreviewWired === "1") return;
+    document.body.dataset.cardPreviewWired = "1";
+    document.addEventListener("mouseover", over);
+    document.addEventListener("mouseout", out);
+    // The element under a stationary cursor can be replaced by a re-render or
+    // scrolled away; drop the panel when its subject is gone.
+    document.addEventListener("scroll", () => hidePreview(true), true);
+    window.addEventListener("blur", () => hidePreview(true));
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", go, { once: true });
+  else go();
+})();
 
 function openZoom(cardId) {
   // A modal (chain / pending choice / play-cost) owns the screen; the zoom overlay
@@ -230,7 +349,7 @@ function openZoneViewer(zoneName, pid) {
     ? '<div style="color:#8a80a8; font-size:13px;">Empty</div>'
     : cards.map(c => {
         const defId = String(c.definitionId || "").replace(/^player-[12]-/, "");
-        return `<div class="zone-viewer-card" style="width:96px; text-align:center;">
+        return `<div class="zone-viewer-card" data-card-id="${esc(c.id || "")}" data-def-id="${esc(defId)}" data-zone="${esc(zoneName)}" style="width:96px; text-align:center;">
           <img src="/card-image/${esc(defId)}" alt="${esc(c.name || "")}" style="width:96px; border-radius:6px;">
           <div style="font-size:11px; color:#cfc6e8;">${esc(c.name || "")}</div>
         </div>`;

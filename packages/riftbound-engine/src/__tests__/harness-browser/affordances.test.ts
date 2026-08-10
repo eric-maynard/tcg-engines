@@ -116,7 +116,8 @@ describeLive("affordances — sidebar, runes, plays, abilities, movement (defaul
       const m = await ui.modal(page);
       expect(m).toMatchObject({ hasCancel: true, mode: "playCost", title: "Play Legion Rearguard", visible: true });
       expect(m.buttons.some((b) => /^Play to base\s*2 energy$/.test(b))).toBe(true);
-      expect(m.buttons.some((b) => /Accelerate/.test(b) && /1 energy \+ fury/.test(b) && /enters ready/.test(b))).toBe(true);
+      // The Accelerate row quotes the TOTAL actually paid (base 2 + Accelerate 1 energy + fury), not the increment.
+      expect(m.buttons.some((b) => /Accelerate/.test(b) && /3 energy \+ 1 fury total/.test(b) && /enters ready/.test(b))).toBe(true);
       expectHuman(m.buttons, "accelerate modal");
       const paid = accVariants.find((v) => v.params.paidAdditionalCost) as (typeof accVariants)[number];
       expect(await ui.capture(page, async () => void (await ui.clickModalButton(page, "Accelerate")))).toEqual([{ moveId: "playUnit", params: paid.params, playerId: P1 }]);
@@ -475,9 +476,14 @@ describeLive("affordances — legend ability, battlefield units, hidden, chain &
       let s = await game.settle();
       expect(s.reason).toBe("unanswered");
       let m = await ui.modal(page);
-      expect(m).toMatchObject({ mode: "pending", title: "Choose a card to draw", visible: true });
+      expect(m).toMatchObject({ mode: "pending", visible: true });
+      // The prompt says where the cards are and what happens to picked / unpicked ones; every tile carries its action.
+      expect(m.title).toBe("Stacked Deck — The top 3 cards of your Main Deck: pick 1 to draw, the rest go to the bottom");
       expect(m.cards.length).toBe(3);
-      expect(m.cards.every((c) => c.eligible && c.label.length > 0 && !RAW_ID.test(c.label))).toBe(true);
+      expect(m.cards.every((c) => c.eligible && / — Draw it$/.test(c.label) && !RAW_ID.test(c.label))).toBe(true);
+      expect(m.buttons.filter((b) => b === "Draw it")).toHaveLength(3);
+      expect(await page.evaluate<string>(`document.querySelector('#choiceOverlay [data-rp-instruction]').textContent`)).toContain("Cards you don't pick go to the bottom of your deck");
+      expect(await page.evaluate<string>(`document.querySelector('#choiceOverlay [data-rp-seen]').textContent`)).toContain("Looked at privately");
       expect(await page.evaluate<string>(`document.querySelector('#choiceOverlay .choice-modal-card[data-pick-idx]').getAttribute('role')`)).toBe("button");
       // Sidebar duplicates stay clickable through the dimmed backdrop (no dead controls, no raw ids).
       const pendBtns = await ui.actionButtons(page);
@@ -556,7 +562,7 @@ interface Synthetic {
 
 describeLive("affordances — every pendingChoice type renders a titled, labelled, working control (synthetic prompts)", () => {
   test(
-    "opt-in(+cost) · confirm · choose-target · choose-destination · choose-mode · reveal-and-pick(+Decline) · name-card · choose-player · combat-damage · weaponmaster · pay-x stepper · order sequence · order-cards · pick-many checkboxes · die-order/die-assign titles · trigger-order soft panel · zoom closes under a prompt",
+    "opt-in(+cost) · confirm · choose-target · choose-destination · choose-mode · reveal-and-pick × {recycle-from-hand, Vision, look-2 upTo, draw+rest, play, banish, discard×2 multi} · opt-in Burn · name-card · choose-player · combat-damage · weaponmaster · pay-x stepper · order sequence · order-cards · pick-many checkboxes · die-order/die-assign titles · trigger-order soft panel · zoom closes under a prompt",
     async () => {
       live = await launchTest(BASE_URL);
       const { backend, game } = live;
@@ -573,6 +579,11 @@ describeLive("affordances — every pendingChoice type renders a titled, labelle
       expect(foe).toBeDefined();
       const legend = game.p1.legend() as string;
       const hand = game.p1.hand();
+      const deck = (backend.currentFrame.snapshot.zones.mainDeck ?? []).filter((c) => c.owner === P1).map((c) => c.id);
+      expect(deck.length).toBeGreaterThanOrEqual(3);
+      const foeSeat = P2;
+      const foeHand = game.p2.hand();
+      expect(foeHand.length).toBeGreaterThanOrEqual(2);
       const bf = game.battlefields()[0] as string;
       const bfName = await page.evaluate<string>(`getBattlefieldName(${JSON.stringify(bf)})`);
       const nameOf = (id: string) => game.state(id).name;
@@ -629,15 +640,84 @@ describeLive("affordances — every pendingChoice type renders a titled, labelle
           title: "Arena Kingpin — choose one",
           variants: [{ pickedMode: 0 }, { pickedMode: 1 }],
         },
+        // ---- reveal-and-pick: every onPicked variant names its action on the card's own button ----
         {
-          act: `clickModalButton:Decline`,
-          buttons: ["Decline"],
+          act: `clickModalButton:Don't recycle`,
+          buttons: ["Recycle to bottom of your deck", "Don't recycle — leave the hand as it is"],
           cards: 2,
           expectParams: { accept: false },
-          name: "reveal-and-pick optional (recycle)",
+          name: "reveal-and-pick optional recycle from hand",
           pending: { onPicked: "recycle", optional: true, prompter: "$me", revealed: hand.slice(0, 2), revealer: "$me", type: "reveal-and-pick" },
-          title: "Recycle a card",
+          title: "Your hand (2 cards): you may recycle 1 to the bottom of your deck",
           variants: [{ pickedCardId: hand[0] }, { pickedCardId: hand[1] }, { accept: false }],
+        },
+        {
+          act: `clickModalButton:Recycle to bottom`,
+          buttons: ["Recycle to bottom", "Keep it on top"],
+          cards: 1,
+          expectParams: { pickedCardId: deck[0] },
+          name: "reveal-and-pick Vision (look at top card, may recycle; private)",
+          pending: { onPicked: "recycle", optional: true, private: true, prompter: "$me", revealed: [deck[0]], revealer: "$me", sourceCardId: b, type: "reveal-and-pick" },
+          title: "Arena Kingpin — Top card of your deck: keep it on top, or recycle it to the bottom?",
+          variants: [{ pickedCardId: deck[0] }, { accept: false }],
+        },
+        {
+          act: `clickModalButton:Keep all on top`,
+          buttons: ["Select: Recycle to bottom", "Select cards to recycle (up to 2)", "Keep all on top (choose their order next)"],
+          cards: 2,
+          expectParams: { accept: false },
+          name: "reveal-and-pick look at 2, recycle one or both (upTo → select + confirm)",
+          pending: { onDecline: { amount: 2, type: "order-top" }, onPicked: "recycle", optional: true, private: true, prompter: "$me", remaining: 2, revealed: deck.slice(0, 2), revealer: "$me", sourceCardId: b, type: "reveal-and-pick", upTo: true },
+          title: "Arena Kingpin — The top 2 cards of your Main Deck: recycle up to 2 to the bottom or keep them on top",
+          variants: [{ pickedCardId: deck[0] }, { pickedCardId: deck[1] }, { accept: false }],
+        },
+        {
+          act: `clickModalButton:Draw it`,
+          buttons: ["Draw it"],
+          cards: 3,
+          expectParams: { pickedCardId: deck[0] },
+          name: "reveal-and-pick look at 3, draw 1, recycle the rest (mandatory)",
+          pending: { onPicked: "draw", onRest: "recycle", private: true, prompter: "$me", revealed: deck.slice(0, 3), revealer: "$me", sourceCardId: b, type: "reveal-and-pick" },
+          title: "Arena Kingpin — The top 3 cards of your Main Deck: pick 1 to draw, the rest go to the bottom",
+          variants: deck.slice(0, 3).map((id) => ({ pickedCardId: id })),
+        },
+        {
+          act: `clickModalButton:Play it`,
+          buttons: ["Play it — no energy cost", "Don't play anything"],
+          expectParams: { pickedCardId: a },
+          name: "reveal-and-pick play from the board/trash (optional, ignoring energy)",
+          pending: { onPicked: "play", optional: true, playIgnoreEnergy: true, prompter: "$me", remaining: 1, revealed: [a], revealer: "$me", sourceCardId: b, type: "reveal-and-pick" },
+          title: /^Arena Kingpin — .*you may play one/,
+          variants: [{ pickedCardId: a }, { accept: false }],
+        },
+        {
+          act: `clickModalButton:Banish it`,
+          buttons: ["Banish it (returns when they hold)"],
+          expectParams: { pickedCardId: foeHand[0] },
+          name: "reveal-and-pick opponent reveals hand → banish (returnOnHold), one card filtered out",
+          // Only the first card is offered; the second is shown dimmed with the filter's reason.
+          pending: { filter: { excludeCardTypes: [game.state(foeHand[1] as string).cardType] }, onPicked: "banish", prompter: "$me", returnOnHold: true, revealed: foeHand.slice(0, 2), revealer: foeSeat, sourceCardId: b, type: "reveal-and-pick" },
+          title: /^Arena Kingpin — Goldfish's hand \(2 cards\): banish 1$/,
+          variants: [{ pickedCardId: foeHand[0] }],
+        },
+        {
+          act: `rpMulti:${hand[0]},${hand[1]}`,
+          buttons: ["Select: Discard it", "Select 2 to discard"],
+          cards: 3,
+          expectParams: { pickedCardIds: [hand[0], hand[1]] },
+          name: "reveal-and-pick discard 2 (multi: select then confirm)",
+          pending: { onPicked: "discard", prompter: "$me", remaining: 2, revealed: hand.slice(0, 3), revealer: "$me", sourceCardId: b, type: "reveal-and-pick" },
+          title: "Arena Kingpin — Your hand (3 cards): discard 2",
+          variants: hand.slice(0, 3).map((id) => ({ pickedCardId: id })),
+        },
+        {
+          act: `clickModalButton:Yes`,
+          buttons: ["Yes", "No"],
+          expectParams: { accept: true },
+          name: "opt-in with a Burn cost (rule 440.1) names the Burn and shows the asking card",
+          pending: { playerId: "$me", resolved: { optInCost: { burn: 1 } }, sourceCardId: b, type: "opt-in" },
+          title: "Use Arena Kingpin ability? (Burn 1)",
+          variants: [{ accept: true }, { accept: false }],
         },
         {
           act: `filterThenClick:Zap:Zap`,
@@ -741,6 +821,31 @@ describeLive("affordances — every pendingChoice type renders a titled, labelle
             failures.push(`[${c.name}] raw/placeholder label "${l}"`);
           }
         }
+        if (c.pending.type === "reveal-and-pick") {
+          // Never "click card = mystery action": each eligible tile has a button naming the action, each
+          // ineligible one says why + what happens to it, and there is a one-line instruction + visibility line.
+          const rp = await page.evaluate<{ tiles: number; btns: string[]; no: string[]; instruction: string; seen: string; bareName: boolean }>(
+            `(() => { const b = document.getElementById('choiceBox'); const names = Array.from(b.querySelectorAll('.rp-card-name')).map(e => e.textContent.trim()); const btns = Array.from(b.querySelectorAll('[data-rp-card]')).map(e => e.textContent.trim()); return { tiles: b.querySelectorAll('.rp-card[data-pick-idx]').length, btns, no: Array.from(b.querySelectorAll('[data-rp-ineligible]')).map(e => e.textContent.replace(/\s+/g, ' ').trim()), instruction: (b.querySelector('[data-rp-instruction]') || {}).textContent || '', seen: (b.querySelector('[data-rp-seen]') || {}).textContent || '', bareName: btns.some(t => names.includes(t)) }; })()`,
+          );
+          const verb = { banish: /Banish it/, discard: /Discard it/, draw: /Draw it/, play: /Play it/, recycle: /Recycle/ }[c.pending.onPicked as string] as RegExp;
+          if (rp.tiles !== rp.btns.length || rp.tiles === 0 || !rp.btns.every((t) => verb.test(t)) || rp.bareName) {
+            failures.push(`[${c.name}] card buttons ${JSON.stringify(rp)}`);
+          }
+          if (!/Click /.test(rp.instruction) || !rp.seen || (c.pending.private ? !/privately/.test(rp.seen) : c.pending.revealer === foeSeat ? !/Goldfish revealed/.test(rp.seen) : false)) {
+            failures.push(`[${c.name}] instruction/seen ${JSON.stringify(rp)}`);
+          }
+          if (c.pending.filter && (rp.no.length === 0 || !rp.no.every((t) => /^Can't pick — /.test(t)))) {
+            failures.push(`[${c.name}] ineligible captions ${JSON.stringify(rp.no)}`);
+          }
+        }
+        if (c.pending.type === "opt-in" && (c.pending.resolved as { optInCost?: { burn?: number } } | undefined)?.optInCost?.burn) {
+          const oi = await page.evaluate<{ source: string; cost: string; subtitle: string }>(
+            `({ source: (document.querySelector('#choiceOverlay [data-prompt-source] .prompt-source-name') || {}).textContent || '', cost: (document.querySelector('#choiceOverlay [data-optin-cost]') || {}).textContent || '', subtitle: (document.querySelector('#choiceOverlay .chain-subtitle') || {}).textContent || '' })`,
+          );
+          if (oi.source !== nameOf(b) || !/Burn 1 — put the top card of your deck into your trash/.test(oi.cost) || !/Burn 1/.test(oi.subtitle)) {
+            failures.push(`[${c.name}] burn cost ${JSON.stringify(oi)}`);
+          }
+        }
         // Sidebar mirrors the prompt title (and never leaks raw ids / "(N options)").
         const side = await ui.actionButtons(page);
         const sideTitle = await page.evaluate<string>(`(document.querySelector('#actionsList [data-pending-type]') || {}).textContent || ""`);
@@ -781,6 +886,19 @@ describeLive("affordances — every pendingChoice type renders a titled, labelle
             for (const step of arg.split(",")) {
               await page.evaluate(step === "confirm" ? `document.querySelector('#choiceOverlay [data-compose-confirm]').click()` : `document.querySelector('#choiceOverlay [data-check-key="${step}"]').click()`);
             }
+          } else if (kind === "rpMulti") {
+            // reveal-and-pick multi: each card's own button toggles it, the confirm names picked vs unpicked.
+            const want = arg.split(",");
+            for (const id of want) {
+              await page.evaluate(`document.querySelector('#choiceOverlay [data-rp-card="${id}"]').click()`);
+            }
+            const state = await page.evaluate<{ picked: string[]; confirm: string; disabled: boolean }>(
+              `({ picked: Array.from(document.querySelectorAll('#choiceOverlay .rp-card.rp-picked')).map(e => e.dataset.cardId), confirm: document.querySelector('#choiceOverlay [data-rp-confirm]').textContent.trim(), disabled: document.querySelector('#choiceOverlay [data-rp-confirm]').disabled })`,
+            );
+            if (state.picked.join("|") !== want.join("|") || state.disabled || !/^Discard 2 picked · 1 other stay/.test(state.confirm)) {
+              failures.push(`[${c.name}] selection ${JSON.stringify(state)}`);
+            }
+            await page.evaluate(`document.querySelector('#choiceOverlay [data-rp-confirm]').click()`);
           }
         });
         const sent = got[0];

@@ -240,8 +240,6 @@ function renderRuneCard(c, topOffset, zIndex, borderColor) {
          data-zone="runePool"
          style="${inlineStyle}"
          onpointerdown="onPointerDown(event, '${esc(c.id)}')"
-         onmouseenter="showPreview(event, this)"
-         onmouseleave="hidePreview()"
          ondblclick="openZoom('${esc(c.id)}')"
          title="${esc(cardName)} — click: exhaust (+1 energy) · right-click: recycle (taps first if ready)">
       <img class="card-img" src="${imgSrc}" alt="${esc(cardName)}" ${imgLoad.img}
@@ -276,10 +274,12 @@ function renderRuneStacks(runes, opts = {}) {
     const color = DOMAIN_COLORS[domain] || "#a09030";
     // Rule 133.5.a.1: every rune must be individually clickable to exhaust,
     // so render all cards (no STACK_MAX cap) — the count label still shows the total.
-    // [rule:ui-rune-exhausted-overlay] Ready runes first (bottom of pile), exhausted last
-    // (top, highest z-index) — a rotated exhausted rune lower in the pile is fully
-    // covered by the ready cards stacked over it and reads as missing.
-    const visibleCards = [...cards].sort((a, b) => (a.meta?.exhausted ? 1 : 0) - (b.meta?.exhausted ? 1 : 0));
+    // [rule:ui-rune-row-stable] Fan order = pool order, never re-sorted by
+    // exhausted state: tapping a rune must not move any OTHER rune (offsets and
+    // z-index depend only on the index). The tapped card rotates inside its own
+    // slot (gameplay.css anchors the rotation to the slot's top strip), so an
+    // exhausted rune mid-fan still shows its full-width strip and side wings.
+    const visibleCards = cards;
     // [rule:ui-rune-pool-fixed-footprint] The pool sits in the player hand row of a
     // fixed 1080px board; a 12×26px fan (476px) starves the base row to ~0 and its
     // units paint over the resource bar (hiding power/rune readouts). Cap the
@@ -301,19 +301,61 @@ function renderRuneStacks(runes, opts = {}) {
     // zone. With height alone the clamp applies when the row is squeezed.
     html += `<div class="rune-stack${compact ? " rune-stack--compact" : ""}" data-rune-domain="${esc(domain)}" style="height:${Math.round(stackHeight + LABEL_H)}px;">`;
     html += `<div class="rune-stack-label" style="color:${color};">${labelText}</div>`;
-    // [rule:ui-rune-ready-stays-clickable] Fan ORDER keeps ready first / exhausted
-    // last (so an exhausted rune is never buried), but STACKING puts every ready
-    // rune above every exhausted one: an exhausted rune is rotated 90° about its
-    // centre (gameplay.css .card--exhausted), so it covers the body of the ready
-    // card above it and swallowed the click that exhausts it (rule 133.5.a.1).
-    // Rotated exhausted cards still show their ~22px wings and lower edge.
+    // [rule:ui-rune-ready-stays-clickable] Stacking follows the fan (later =
+    // lower on screen = on top). A tapped rune's rotated footprint starts at its
+    // own top edge, so it can never cover the visible strip of the rune before
+    // it; hover raises the pointed-at rune above all (CSS z-index, no movement).
     visibleCards.forEach((c, i) => {
-      const zIndex = (c.meta?.exhausted ? 1 : 100) + i;
+      const zIndex = 10 + i;
       html += renderRuneCard(c, LABEL_H - 2 + Math.round(i * step), zIndex, color);
     });
     html += `</div>`;
   }
   return html;
+}
+
+// [rule:ui-rune-row-stable] Keyed, attribute-level DOM patch. Re-rendering the
+// pool with innerHTML on every state_update replaced the node under the cursor
+// (its :hover and running transition were lost, so the fan flickered). When
+// the new markup has the same shape (same tags + same data-card-id /
+// data-rune-domain keys in the same order) the EXISTING nodes are kept and
+// only their attributes/text are synced; any subtree whose shape differs is
+// replaced wholesale. Inline `style` on <img>/.card-fallback is left alone —
+// the image load/error handlers own it.
+function _patchNodeKey(n) {
+  if (n.nodeType !== 1) return "#" + n.nodeType;
+  return n.tagName + "#" + (n.getAttribute("data-card-id") || n.getAttribute("data-rune-domain") || n.id || "");
+}
+function _patchChildren(cur, next) {
+  const a = Array.from(cur.childNodes), b = Array.from(next.childNodes);
+  if (a.length !== b.length || a.some((n, i) => _patchNodeKey(n) !== _patchNodeKey(b[i]))) {
+    cur.replaceChildren(...b);
+    return;
+  }
+  for (let i = 0; i < a.length; i++) {
+    const x = a[i], y = b[i];
+    if (x.nodeType !== 1) {
+      if (x.nodeValue !== y.nodeValue) x.nodeValue = y.nodeValue;
+      continue;
+    }
+    const keepStyle = x.tagName === "IMG" || x.classList.contains("card-fallback");
+    for (const at of Array.from(y.attributes)) {
+      if (keepStyle && at.name === "style") continue;
+      if (x.getAttribute(at.name) !== at.value) x.setAttribute(at.name, at.value);
+    }
+    for (const at of Array.from(x.attributes)) {
+      if (keepStyle && at.name === "style") continue;
+      if (!y.hasAttribute(at.name)) x.removeAttribute(at.name);
+    }
+    _patchChildren(x, y);
+  }
+}
+/** Patch `container` to match `html`, reusing keyed nodes (see _patchChildren). */
+function patchInnerHTML(container, html) {
+  if (!container) return;
+  const tpl = document.createElement("template");
+  tpl.innerHTML = html;
+  _patchChildren(container, tpl.content);
 }
 
 /** Logical (pre-scale) inner height available to rune stacks inside a pool grid, or undefined before first layout. */

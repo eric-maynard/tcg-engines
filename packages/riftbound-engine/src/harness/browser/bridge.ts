@@ -170,7 +170,10 @@ class RemotePage implements PwPage {
   private closed = false;
   constructor(private readonly client: BridgeClient) {}
   readonly keyboard = { press: async (key: string) => void (await this.client.call("press", { key })) };
-  readonly mouse = { click: async (x: number, y: number) => void (await this.client.call("mouseClick", { x, y })) };
+  readonly mouse = {
+    click: async (x: number, y: number) => void (await this.client.call("mouseClick", { x, y })),
+    move: async (x: number, y: number, opts: { steps?: number } = {}) => void (await this.client.call("mouseMove", { steps: opts.steps, x, y })),
+  };
   async goto(url: string, opts: { waitUntil?: string; timeout?: number } = {}): Promise<unknown> {
     const timeout = opts.timeout ?? 20_000;
     await this.client.call("goto", { timeout, url, waitUntil: opts.waitUntil }, timeout);

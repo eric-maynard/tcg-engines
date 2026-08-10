@@ -38,16 +38,17 @@ export interface Captured {
 const norm = `((s) => String(s || "").replace(/\\s+/g, " ").trim())`;
 
 /**
- * Neutralise cosmetic :hover lifts (rune fan / hand cards) so a hit point
+ * Neutralise the cosmetic :hover lift of hand/board cards so a hit point
  * computed from layout geometry is still on the card once the mouse arrives.
- * Idempotent.
+ * Rune cards need nothing: their hover is a non-layout highlight
+ * ([rule:ui-rune-row-stable]). Idempotent.
  */
 export async function prepare(page: PwPage): Promise<void> {
   await page.evaluate(`(() => {
     if (document.getElementById("__rbAffordanceCss")) return;
     const st = document.createElement("style");
     st.id = "__rbAffordanceCss";
-    st.textContent = ".card:not(.exhausted):not(.card--exhausted):hover{transform:none!important} .rune-stack .card.exhausted:hover,.rune-stack .card.card--exhausted:hover{transform:rotate(90deg) scale(0.714)!important}";
+    st.textContent = ".card:not(.rune-card):not(.exhausted):not(.card--exhausted):hover{transform:none!important}";
     document.head.appendChild(st);
   })()`);
 }

@@ -279,8 +279,6 @@ function renderCardElement(card, isFacedown = false, zone = "") {
          data-def-id="${esc(defId)}"
          data-zone="${esc(zone)}"
          ${pointerAttr}
-         onmouseenter="showPreview(event, this)"
-         onmouseleave="hidePreview()"
          ondblclick="openZoom('${esc(card.id)}')"
          style="${isLegendZone && !isPlayable && !hasPrintedAbility ? "cursor:default;" : ""}">
       <img class="card-img" src="/card-image/${esc(imgId)}" alt="${esc(card.name)}" ${imgLoad.img}
@@ -331,8 +329,9 @@ function renderDeckStack(zoneCards, label, options = {}) {
 function renderTrashStack(zoneCards, pid, label = "Trash") {
   const count = zoneCards?.length ?? 0;
   const top = count > 0 ? zoneCards[count - 1] : null;
+  // Hovering the pile previews its top card (overlays.js delegated preview).
   const attrs = count > 0
-    ? ` onclick="if (typeof openZoneViewer === 'function') openZoneViewer('trash', '${esc(String(pid))}')" title="${esc(`Top: ${top?.name ?? ""} — click to view`)}"`
+    ? ` data-card-id="${esc(top?.id ?? "")}" data-def-id="${esc(top?.definitionId ?? "")}" data-zone="trash" onclick="if (typeof openZoneViewer === 'function') openZoneViewer('trash', '${esc(String(pid))}')" title="${esc(`Top: ${top?.name ?? ""} — click to view`)}"`
     : ' title="Trash (empty)"';
   const cls = count > 0 ? "deck-stack deck-stack--trash deck-stack--viewable" : "deck-stack deck-stack--trash";
   return `
