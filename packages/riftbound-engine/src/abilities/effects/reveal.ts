@@ -92,24 +92,64 @@ export function handle_reveal(effect: ExecutableEffect, ctx: EffectContext, _h: 
   // ignoring its cost. Then recycle the rest." The choice is made among the
   // revealed cards on resolution, so this names no play-time board target.
   if (revEff.from === "opponent-decks") {
+    // rule 354.3 (ogn-194-298 Nocturne) — on re-entry after an owner answered
+    // their "as you … reveal me" prompt, the reveal still ranges over exactly
+    // the cards it turned over; one that banished itself simply drops out and
+    // no fresh card pulled up behind it joins the reveal.
+    const carriedIds = (revEff as { revealedIds?: readonly string[] }).revealedIds;
+    const carriedOwners = (revEff as { revealedFromDeckOf?: Record<string, string> })
+      .revealedFromDeckOf;
     const revealed: string[] = [];
-    const revealedFromDeckOf: Record<string, string> = {};
-    for (const pid of Object.keys(ctx.draft.players)) {
-      if (pid === actor) continue;
-      const top = ctx.zones.getCardsInZone("mainDeck" as CoreZoneId, pid as CorePlayerId)[0];
-      if (top !== undefined) {
-        revealed.push(top as string);
-        revealedFromDeckOf[top as string] = pid;
+    const revealedFromDeckOf: Record<string, string> = { ...carriedOwners };
+    if (carriedIds !== undefined) {
+      for (const id of carriedIds) {
+        if (ctx.zones.getCardZone(id as CoreCardId) === "mainDeck") revealed.push(id);
+      }
+    } else {
+      for (const pid of Object.keys(ctx.draft.players)) {
+        if (pid === actor) continue;
+        const top = ctx.zones.getCardsInZone("mainDeck" as CoreZoneId, pid as CorePlayerId)[0];
+        if (top !== undefined) {
+          revealed.push(top as string);
+          revealedFromDeckOf[top as string] = pid;
+        }
+      }
+      if (revealed.length === 0) return;
+      recordPublicReveal(ctx, actor, revealed);
+      // rule 370.1.b.1 / 166.1 (sfd-175-221 Undertitan) — "As I'm revealed from
+      // YOUR deck" belongs to the player whose deck was turned over, not to the
+      // opponent who caused the reveal; the rider resolves on the spot into that
+      // player's pool (429.2), with no chain item and no priority.
+      for (const revealedId of revealed) {
+        fireMandatoryRevealAbilities([revealedId], revealedFromDeckOf[revealedId] ?? actor, ctx, _h);
       }
     }
     if (revealed.length === 0) return;
-    recordPublicReveal(ctx, actor, revealed);
-    // rule 370.1.b.1 / 166.1 (sfd-175-221 Undertitan) — "As I'm revealed from
-    // YOUR deck" belongs to the player whose deck was turned over, not to the
-    // opponent who caused the reveal; the rider resolves on the spot into that
-    // player's pool (429.2), with no chain item and no priority.
+    // rule 409 / 369.1 / 370.1 (ogn-025-298 Blind Fury × ogn-194-298 Nocturne) —
+    // a reveal shows the card to EVERY player, so its own optional "as you look
+    // at or reveal me from the top of your deck" replacement is offered to its
+    // OWNER (the player whose deck was turned over), whether or not the
+    // revealer ends up choosing it.
+    const offeredSoFar =
+      (revEff as { revealOffered?: readonly string[] }).revealOffered ?? [];
     for (const revealedId of revealed) {
-      fireMandatoryRevealAbilities([revealedId], revealedFromDeckOf[revealedId] ?? actor, ctx, _h);
+      if (offeredSoFar.includes(revealedId)) continue;
+      const owner = revealedFromDeckOf[revealedId] ?? actor;
+      const parked = offerAsYouRevealChoice(
+        ctx,
+        [revealedId],
+        owner,
+        (nowOffered) => ({
+          ...(effect as object),
+          asPlayer: actor,
+          revealedFromDeckOf,
+          revealedIds: revealed,
+          revealOffered: nowOffered,
+        }),
+        offeredSoFar,
+        ctx.sourceCardId,
+      );
+      if (parked) return;
     }
     ctx.draft.pendingChoice = {
       onPicked: "play",
