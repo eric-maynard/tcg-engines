@@ -269,17 +269,24 @@ export function optInIsPerformable(
   resolved: ChainItem,
   draft: RiftboundGameState,
   context: Parameters<typeof buildEffectContext>[3],
+  opts: { readonly atFinalization?: boolean } = {},
 ): boolean {
   {
     // rule-id: ogn-147-298 — "you may spend a buff to …": when no friendly
     // buff can be spent the cost is unpayable, so don't offer the opt-in
     // prompt at all — the trigger simply has no effect.
+    // rule 404 / 383.3.d (rule-id: ogn-282-298 Monastery of Hirana × ogn-164-298
+    // Sett, Brawler) — but the buff is spent as the instruction RESOLVES, not as
+    // the item is finalized: an item whose buff does not exist YET still goes on
+    // the Chain, so its controller may order a buff-granting trigger under it and
+    // spend that new buff. Only the resolution-time gate drops it for want of a buff.
     const optEffect = resolved.effect as ExecutableEffect | undefined;
     const leadEffect =
       optEffect?.type === "sequence"
         ? (optEffect as { effects?: ExecutableEffect[] }).effects?.[0]
         : optEffect;
     if (
+      opts.atFinalization !== true &&
       leadEffect?.type === "spend-buff" &&
       !findSpendableBuff(
         leadEffect,
@@ -1356,7 +1363,16 @@ export function executeResolvedItem(
     mistargeted &&
     typeof (effect as { splashOthers?: unknown }).splashOthers === "number" &&
     typeof (effect as { _splashZone?: unknown })._splashZone === "string";
-  if (splashRider) {
+  // rule 359.3.e.5 / 424.1 (rule-id: ogn-121-298 Teemo, Strategist) — the reveal
+  // an AMOUNT performs ("Deal 1 … for each card with [Hidden] among the top 5
+  // revealed this way, then recycle them") is its own instruction and does not
+  // depend on the damaged unit: losing the target ignores the Deal alone, the
+  // cards are still revealed and recycled.
+  const revealAmountRider =
+    mistargeted &&
+    effect.type === "damage" &&
+    typeof (effect.amount as { revealTop?: unknown } | undefined)?.revealTop === "number";
+  if (splashRider || revealAmountRider) {
     executeEffect({ ...(effect as object), _splashOnly: true } as ExecutableEffect, effectCtx);
   } else if (
     !mistargeted ||

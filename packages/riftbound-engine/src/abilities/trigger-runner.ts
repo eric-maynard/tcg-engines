@@ -239,6 +239,13 @@ function attachedEffectTextAbilities(
           ? {}
           : { condition: (a as { condition?: unknown }).condition }),
         effect: effect as never,
+        // rule 808.2 / 383.3.d — the conferred trigger is still the keyword's
+        // ("[Deathknell] — Draw 1"), so keep the keyword the parser named it
+        // after: "your [Deathknell] effects trigger an additional time" doubles
+        // an Equipment-granted Deathknell exactly like a printed one.
+        ...((a as { name?: string }).name === undefined
+          ? {}
+          : { name: (a as { name?: string }).name }),
         ...(a.optional === true ? { optional: true } : {}),
         trigger: { event: a.trigger.event, on: a.trigger.on ?? "self" },
         type: "triggered",
@@ -1492,6 +1499,13 @@ function keywordOfMatchedTrigger(
   cardId: string,
   ability: TriggerableAbility,
 ): string | undefined {
+  // rule 808.2 — a keyword trigger conferred by Effect Text ("[Deathknell] —
+  // Draw 1" on an Equipment) is a single ability named after its keyword; the
+  // bare `{type:"keyword"}` twin only exists on the printing card.
+  const named = (ability as { name?: string }).name;
+  if (named !== undefined && named in KEYWORD_SELF_TRIGGER_EVENTS) {
+    return named;
+  }
   const abilities = getGlobalCardRegistry().getAbilities(cardId) ?? [];
   const effectJson = JSON.stringify(ability.effect);
   for (const a of abilities as readonly { type?: string; keyword?: string; effect?: unknown }[]) {
@@ -1849,7 +1863,15 @@ export function fireTriggers(rawEvent: GameEvent, ctx: TriggerRunnerContext): nu
   // can never match a trigger itself.
   if (event.type === "die") {
     for (const dead of getLeavingBatch(ctx.draft)) {
-      if (!dead.triggerDoubler || boardCards.some((c) => c.id === dead.cardId)) {
+      // rule 428.1.a.1.b / 522 (rule-id: ogn-236-298 Karthus, Eternal) — this
+      // holds for the dying card's OWN Deathknell too: it was on the board as
+      // the trigger was noted, so it doubles its own. Its `die` entry above
+      // already sits in the trash and reads as off-board, hence a second,
+      // ability-less `dying` marker for the doubler scan.
+      if (
+        !dead.triggerDoubler ||
+        boardCards.some((c) => c.id === dead.cardId && c.zone === "dying")
+      ) {
         continue;
       }
       boardCards.push({ abilities: [], id: dead.cardId, owner: dead.controller, zone: "dying" });
