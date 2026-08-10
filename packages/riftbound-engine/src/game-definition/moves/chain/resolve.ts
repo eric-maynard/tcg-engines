@@ -1093,6 +1093,14 @@ export function executeResolvedItem(
       effect.type === "recycle" &&
       (target as { type?: unknown }).type === "rune" &&
       (target as { controller?: unknown }).controller === "friendly"
+    ) &&
+    // rule 355.5 / 356.3 (rule-id: unl-219-219 Vaults of Helia) — "your
+    // non-token units cost [1] more to play this turn" names no Game Object:
+    // a `scope:"play"` cost rider's `target` is a CLASS FILTER matched against
+    // FUTURE plays, so nothing on the board is chosen for it.
+    !(
+      (effect.type === "cost-increase" || effect.type === "cost-reduction") &&
+      (effect as { scope?: unknown }).scope === "play"
     )
   ) {
     // rule 402.2 / 355.13 / 355.14.b — an ability's variable-count set ("up to
