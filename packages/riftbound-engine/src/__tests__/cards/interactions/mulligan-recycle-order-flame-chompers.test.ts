@@ -62,7 +62,7 @@ async function mulliganChompersAndPoro(): Promise<Game> {
 }
 
 describe("Mulligan order of operations (117) × Flame Chompers / Mystic Poro / Jinx, Rebel", () => {
-  test.failing("BUG(harness): the mulligan move is setup-only (status==='setup'); the scenario builder cannot build a pregame state — (a) the two replacements are exactly D1 and D2 — drawn from the top BEFORE the set-aside cards return, so the shipped cards can never come back (117.2 before 117.3)", async () => {
+  test("(a) the two replacements are exactly D1 and D2 — drawn from the top BEFORE the set-aside cards return, so the shipped cards can never come back (117.2 before 117.3)", async () => {
     const game = await mulliganChompersAndPoro();
     const hand = game.p1.hand();
     expect(hand).toHaveLength(4);
@@ -71,7 +71,7 @@ describe("Mulligan order of operations (117) × Flame Chompers / Mystic Poro / J
     expect(hand).not.toContain("poro");
   });
 
-  test.failing("BUG(harness): the mulligan move is setup-only (status==='setup'); the scenario builder cannot build a pregame state — (b) Chompers and Poro are Recycled to the BOTTOM of the Main Deck; D3 is now on top and D3…D35 keep their exact order — no shuffle (117.3, 416.1.a)", async () => {
+  test("(b) Chompers and Poro are Recycled to the BOTTOM of the Main Deck; D3 is now on top and D3…D35 keep their exact order — no shuffle (117.3, 416.1.a)", async () => {
     const game = await mulliganChompersAndPoro();
     const deck = game.p1.deck();
     expect(deck).toHaveLength(35);
@@ -82,7 +82,7 @@ describe("Mulligan order of operations (117) × Flame Chompers / Mystic Poro / J
     expect(game.zoneOf("poro")).toBe("mainDeck");
   });
 
-  test.failing("BUG(harness): the mulligan move is setup-only (status==='setup'); the scenario builder cannot build a pregame state — (c) setting aside / recycling is not a discard (422.1): the trash stays empty, nothing goes on the chain, and NO 'pay [fury] to play me' prompt appears — P1 is simply back in an open state with the fury unspent", async () => {
+  test("(c) setting aside / recycling is not a discard (422.1): the trash stays empty, nothing goes on the chain, and NO 'pay [fury] to play me' prompt appears — P1 is simply back in an open state with the fury unspent", async () => {
     const game = await mulliganChompersAndPoro();
     expect(game.p1.trash()).toEqual([]);
     expect(game.chain()).toEqual([]);
@@ -96,7 +96,7 @@ describe("Mulligan order of operations (117) × Flame Chompers / Mystic Poro / J
     expect(game.zoneOf("chompers")).toBe("mainDeck");
   });
 
-  test.failing("BUG(harness): the mulligan move is setup-only (status==='setup'); the scenario builder cannot build a pregame state — (c) Jinx, Rebel does not react either — still in the Champion Zone, not readied/buffed, no +1 Might, no chain item from her", async () => {
+  test("(c) Jinx, Rebel does not react either — still in the Champion Zone, not readied/buffed, no +1 Might, no chain item from her", async () => {
     const game = await mulliganChompersAndPoro();
     expect(game.zoneOf("jinx")).toBe("championZone");
     const jinx = game.state("jinx");
@@ -105,7 +105,7 @@ describe("Mulligan order of operations (117) × Flame Chompers / Mystic Poro / J
     expect(game.chain().some((c) => c.cardId === "jinx")).toBe(false);
   });
 
-  test.failing("BUG(harness): the mulligan move is setup-only (status==='setup'); the scenario builder cannot build a pregame state — (d) counts afterwards: hand 4, Main Deck 35 (35 − 2 drawn + 2 recycled), trash 0, banishment 0; P2 untouched", async () => {
+  test("(d) counts afterwards: hand 4, Main Deck 35 (35 − 2 drawn + 2 recycled), trash 0, banishment 0; P2 untouched", async () => {
     const game = await board().build();
     const p2Hand = game.p2.hand().length;
     const p2Deck = game.p2.deck().length;

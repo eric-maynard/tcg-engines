@@ -353,15 +353,17 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
         equipBonus += registry.getMightBonus(equipId as string);
       }
       // rule 323.5 — combat reads a set base Might in place of the printed one.
-      const baseMight = Math.max(
-        0,
+      // rule 143.2.b.1 / 807.1.c — do NOT clamp at 0 here: Assault / Shield is
+      // part of the unit's current combat Might, so the floor must be applied
+      // to base + role bonus (combat-resolver does that), otherwise a heavily
+      // reduced attacker fights above its displayed Might.
+      const baseMight =
         (meta?.baseMightOverride ?? printedMight) +
-          (meta?.buffed ? 1 : 0) +
-          (meta?.extraBuffs ?? 0) +
-          (meta?.mightModifier ?? 0) +
-          (meta?.staticMightBonus ?? 0) +
-          equipBonus,
-      );
+        (meta?.buffed ? 1 : 0) +
+        (meta?.extraBuffs ?? 0) +
+        (meta?.mightModifier ?? 0) +
+        (meta?.staticMightBonus ?? 0) +
+        equipBonus;
 
       const currentDamage = meta?.damage ?? 0;
 

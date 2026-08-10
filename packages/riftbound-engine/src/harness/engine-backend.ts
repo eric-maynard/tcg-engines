@@ -23,7 +23,8 @@ import {
 } from "./decision";
 import type { DecisionContext, NarrowResult } from "./decision";
 import type { FullSnapshot, HarnessEngine } from "./internal";
-import { getInternalState, hashSnapshot, takeSnapshot } from "./internal";
+import { getInternalState, hashSnapshot, peekCurrentState, replaceCurrentState, takeSnapshot } from "./internal";
+import type { RiftboundGameState } from "../types/game-state";
 import type { Invariant } from "./invariants";
 import { DEFAULT_INVARIANTS, runInvariants } from "./invariants";
 import { observe, zoneCards } from "./observation";
@@ -49,6 +50,13 @@ import type {
   Violation,
 } from "./types";
 import { HarnessError } from "./types";
+
+/**
+ * rule 110–118 — moves that belong to the pregame setup sequence and are
+ * therefore refused once play has begun. `seat.do()` stages a setup window
+ * around them so a mid-game scenario can still exercise the real move.
+ */
+const SETUP_ONLY_MOVES = new Set<string>(["mulligan"]);
 
 export interface EngineBackendOptions {
   /** Seats in turn order (default: state.players key order). */
@@ -499,11 +507,48 @@ export class EngineBackend implements GameBackend {
     }
     this.parked = undefined;
     const d = this.decision();
-    return this.execute(
-      seat,
-      { id: d?.id ?? `d${this.seqNo}:${seat}:raw`, kind: "action" },
-      { args: { params }, key: `${moveId}:raw`, kind: "action" },
-      { moveId, params: { playerId: seat, ...params }, playerId: seat },
-    );
+    // rule 117 / 118 — the Mulligan is a step of the setup sequence, so its move
+    // is legal only while `status === "setup"`. Scenarios are materialised
+    // mid-game, so the escape hatch stages a pregame window around a setup-only
+    // move and restores the playing state afterwards; the move itself (draw
+    // replacements, then Recycle the set-aside cards) is the engine's own.
+    const restore = SETUP_ONLY_MOVES.has(moveId) ? this.enterPregameWindow(seat) : undefined;
+    try {
+      return this.execute(
+        seat,
+        { id: d?.id ?? `d${this.seqNo}:${seat}:raw`, kind: "action" },
+        { args: { params }, key: `${moveId}:raw`, kind: "action" },
+        { moveId, params: { playerId: seat, ...params }, playerId: seat },
+      );
+    } finally {
+      restore?.();
+    }
+  }
+
+  /**
+   * Temporarily present the game as being in the pregame setup sequence with
+   * `seat` next to act, and return a restorer that puts the previous
+   * status/setup record back (leaving everything the move changed in place).
+   */
+  private enterPregameWindow(seat: Seat): () => void {
+    const before = peekCurrentState(this.engine);
+    const setup = {
+      completedBy: [],
+      firstPlayer: seat,
+      mulliganedBy: [],
+      pendingMulligan: [],
+      rolls: {},
+      step: "mulligan",
+      ...(before.setup ?? {}),
+    } as unknown as RiftboundGameState["setup"];
+    replaceCurrentState(this.engine, { ...before, setup, status: "setup" } as RiftboundGameState);
+    return () => {
+      const after = peekCurrentState(this.engine);
+      replaceCurrentState(this.engine, {
+        ...after,
+        setup: before.setup,
+        status: before.status,
+      } as RiftboundGameState);
+    };
   }
 }
