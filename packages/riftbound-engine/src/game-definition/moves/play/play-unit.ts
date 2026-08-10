@@ -2108,11 +2108,21 @@ export const playUnit: Defs["playUnit"] = {
     // rule 356.4.d / 356.4.f — same story for the pip half: waivers the printed
     // (or alternate) pips did not use keep eating the optional additional cost
     // charged below. Read BEFORE `deductCost` consumes the one-shot discount.
+    // rule 356.4.f (rule-id: ogn-150-298 Kraken Hunter) — a per-object pip
+    // discount ("Reduce my cost by [D] for each buff you spend" / "for each
+    // killed this way") is measured against the TOTAL cost, an elected
+    // Accelerate pip included, so the waivers the printed pips did not use must
+    // be visible here; otherwise the optional additional cost is charged in
+    // full and, when unpayable, silently dropped (356.4.f.1 / 805.6).
     const pipOverflow = getPlayPowerDiscountOverflow(
       draft,
       playerId,
       cardId,
-      { board, ...(altCostSpec ? { altCost: altCostSpec } : {}) },
+      {
+        board,
+        ...(altCostSpec ? { altCost: altCostSpec } : {}),
+        ...(waivePower ? { waivePower } : {}),
+      },
       createMetaAccessor(context.cards),
     );
     // rule 356.2 (ven-157-166): the destination battlefield's optional
