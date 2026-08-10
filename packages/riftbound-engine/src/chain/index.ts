@@ -20,6 +20,7 @@ export {
   passFocus,
   passPriority,
   removeChainItem,
+  reseatPriorityAfterResolution,
   resetShowdownPasses,
   resolveTopItem,
   startShowdown,
@@ -27,6 +28,7 @@ export {
 
 export type {
   ChainItem,
+  ChainTargetSlot,
   ChainState,
   ShowdownState,
   TimingClass,

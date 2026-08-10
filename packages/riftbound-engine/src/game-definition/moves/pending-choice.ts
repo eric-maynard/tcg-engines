@@ -30,10 +30,16 @@ import { contestBattlefieldOnArrival } from "./movement/contest-arrival";
 import { openPendingContestedShowdown } from "./chain/showdown";
 import { hasTrashToBanishReplacement } from "../../abilities/replacement-effects";
 import { resolveTarget } from "../../abilities/target-resolver";
+import { bindTargetSlot } from "../../abilities/target-slots";
 import * as triggerRunner from "../../abilities/trigger-runner";
 import { fireTriggers } from "../../abilities/trigger-runner";
 import { continueRevealSlotLock } from "./play/reveal-target-lock";
-import { addToChain, createInteractionState, removeChainItem } from "../../chain";
+import {
+  addToChain,
+  createInteractionState,
+  removeChainItem,
+  reseatPriorityAfterResolution,
+} from "../../chain";
 import { cleanupAndFireDeaths } from "../../cleanup/post-move-cleanup";
 import type { PostMoveCleanupContext } from "../../cleanup/post-move-cleanup";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
@@ -54,6 +60,7 @@ import {
   flushDeferredSpellSettle,
   minDeflectSurchargeForItem,
   payAnyDomainPower,
+  totalPooledPower,
 } from "./chain/resolve";
 import { equipCostForTarget } from "./equip-cost";
 import { completeSuspendedPlay } from "./play/play-unit";
@@ -240,10 +247,20 @@ function combatAssignmentPlan(choice: {
  * `total` targets are named, and the amounts sum to exactly `total` (or no
  * target is named at all — "any number of" includes zero).
  */
+/**
+ * rule 355.14.e–h — the bucket rules of a split whose TARGETS were locked at
+ * finalization: `minPer`/`maxPer` per named target and exactly `exactTargets`
+ * of the options receiving damage (all of them while damage ≥ targets,
+ * otherwise as many as there is damage — 355.14.h.1). Undefined bounds = the
+ * legacy free-form shape.
+ */
+type SplitBounds = { readonly minPer?: number; readonly maxPer?: number; readonly exactTargets?: number };
+
 function isLegalSplitAllocation(
   options: readonly string[],
   total: number,
   allocation: unknown,
+  bounds: SplitBounds = {},
 ): allocation is Record<string, number> {
   if (!allocation || typeof allocation !== "object") return false;
   const entries = Object.entries(allocation as Record<string, unknown>).filter(
@@ -253,7 +270,14 @@ function isLegalSplitAllocation(
   for (const [id, v] of entries) {
     if (!options.includes(id)) return false;
     if (typeof v !== "number" || !Number.isInteger(v) || v < 1) return false;
+    if (bounds.minPer !== undefined && v < bounds.minPer) return false;
+    if (bounds.maxPer !== undefined && v > bounds.maxPer) return false;
     sum += v;
+  }
+  // rule 355.14.f/g/h — locked targets: every still-legal one (or as many as
+  // the damage allows) receives valid damage; nothing may be left over.
+  if (bounds.exactTargets !== undefined) {
+    return entries.length === bounds.exactTargets && sum === total;
   }
   if (entries.length === 0) return true;
   return entries.length <= total && sum === total;
@@ -264,18 +288,21 @@ function enumerateSplitAllocations(
   options: readonly string[],
   total: number,
   cap = 500,
+  bounds: SplitBounds = {},
 ): Record<string, number>[] {
   const out: Record<string, number>[] = [];
+  const lo = Math.max(1, bounds.minPer ?? 1);
   const walk = (idx: number, remaining: number, acc: Record<string, number>): void => {
     if (out.length >= cap) return;
     if (idx === options.length) {
-      if (remaining === 0) out.push({ ...acc });
+      if (remaining === 0 && isLegalSplitAllocation(options, total, acc, bounds)) out.push({ ...acc });
       return;
     }
     const id = options[idx] as string;
     // skip this option
     walk(idx + 1, remaining, acc);
-    for (let k = 1; k <= remaining; k++) {
+    const hi = Math.min(remaining, bounds.maxPer ?? remaining);
+    for (let k = lo; k <= hi; k++) {
       acc[id] = k;
       walk(idx + 1, remaining - k, acc);
       delete acc[id];
@@ -284,8 +311,14 @@ function enumerateSplitAllocations(
   walk(0, total, {});
   // most-concentrated splits first so a lone target taking everything leads
   out.sort((a, b) => Object.keys(a).length - Object.keys(b).length);
-  out.push({});
+  if (bounds.exactTargets === undefined) {
+    out.push({});
+  }
   return out;
+}
+
+function splitBoundsOf(choice: { minPer?: number; maxPer?: number; exactTargets?: number }): SplitBounds {
+  return { exactTargets: choice.exactTargets, maxPer: choice.maxPer, minPer: choice.minPer };
 }
 
 /**
@@ -347,6 +380,12 @@ function postChoiceCleanup(draft: RiftboundGameState, context: unknown): void {
       draft,
       ctx as unknown as Parameters<typeof openPendingContestedShowdown>[1],
     );
+  }
+  // rule 340.4 (rule-id: ven-152-166 Rebuttal) — a prompt answered as part of a
+  // resolution can hand an item on the Chain to someone else (gain control of a
+  // spell); Priority then belongs to the newest item's CURRENT controller.
+  if (!draft.pendingChoice && draft.interaction) {
+    draft.interaction = reseatPriorityAfterResolution(draft.interaction);
   }
 }
 
@@ -876,11 +915,50 @@ export function isValidOrderAnswer(choice: OrderChoice, orderedKeys: unknown): b
 }
 
 /** A legal `pickedKeys` answer: `min ≤ n ≤ max` distinct option keys meeting the prompt's constraint. */
+/**
+ * rule 753 / 753.1 — order a multi-slot re-choice's cards onto their slots:
+ * returns one card per slot (positional, as chain-item targets are stored) or
+ * undefined when no one-to-one assignment exists.
+ */
+export function assignToSlots(
+  slotOptions: readonly (readonly string[])[],
+  ids: readonly string[],
+): string[] | undefined {
+  if (ids.length !== slotOptions.length) {
+    return undefined;
+  }
+  const out: string[] = [];
+  const used = new Set<number>();
+  const walk = (slot: number): boolean => {
+    if (slot === slotOptions.length) {
+      return true;
+    }
+    for (let i = 0; i < ids.length; i++) {
+      const id = ids[i] as string;
+      if (used.has(i) || !slotOptions[slot]?.includes(id)) continue;
+      used.add(i);
+      out[slot] = id;
+      if (walk(slot + 1)) return true;
+      used.delete(i);
+    }
+    return false;
+  };
+  return walk(0) ? out : undefined;
+}
+
+function hasSlotAssignment(
+  slotOptions: readonly (readonly string[])[],
+  ids: readonly string[],
+): boolean {
+  return assignToSlots(slotOptions, ids) !== undefined;
+}
+
 export function isValidPickManyAnswer(
   choice: PickManyChoice,
   pickedKeys: unknown,
   mightOf?: (cardId: string) => number,
   zoneOf?: (cardId: string) => string | undefined,
+  affordable?: (cardIds: readonly string[]) => boolean,
 ): boolean {
   const picked = pickedKeys === undefined ? [] : pickedKeys;
   if (!Array.isArray(picked)) {
@@ -918,7 +996,45 @@ export function isValidPickManyAnswer(
       return false;
     }
   }
+  // rule 753 / 753.1 — a multi-slot re-choice must fill EVERY slot with a card
+  // that slot could legally hold; a group that cannot be matched one-to-one
+  // onto the slots is not a legal set of new choices.
+  const slotOptions = choice.slotOptions;
+  if (slotOptions && (picked as string[]).length > 0) {
+    const ids = (picked as string[]).map(
+      (key) => choice.options.find((o) => o.key === key)?.cardId ?? key,
+    );
+    if (ids.length !== slotOptions.length || !hasSlotAssignment(slotOptions, ids)) {
+      return false;
+    }
+  }
+  // rule 809.1.d / 356.2.a.2 — the set's total [Deflect] surcharge must be
+  // payable now; a set the chooser cannot afford is not a legal choice.
+  if (choice.constraint?.deflectAffordable === true && affordable && (picked as string[]).length > 0) {
+    const ids = (picked as string[]).map((key) => choice.options.find((o) => o.key === key)?.cardId ?? key);
+    if (!affordable(ids)) {
+      return false;
+    }
+  }
   return true;
+}
+
+/** rule 809.1.d — the affordability probe `isValidPickManyAnswer` needs, from a move context. */
+function deflectAffordableFor(
+  state: RiftboundGameState,
+  choice: PickManyChoice,
+  // biome-ignore lint/suspicious/noExplicitAny: engine move context is framework-typed
+  context: any,
+): (cardIds: readonly string[]) => boolean {
+  return (cardIds) =>
+    getDeflectSurcharge(
+      state,
+      choice.playerId,
+      [...cardIds],
+      context.cards as Parameters<typeof getDeflectSurcharge>[3],
+      choice.sourceCardId as string | undefined,
+      context.zones as Parameters<typeof getDeflectSurcharge>[5],
+    ) <= totalPooledPower(state, choice.playerId);
 }
 
 /** All subsets of `keys` (bounded producer lists only). */
@@ -1001,6 +1117,109 @@ function resumePending(
         (k) => (choice.type === "pick-many" ? choice.options.find((o) => o.key === k)?.cardId : undefined) ?? k,
       );
       triggerRunner.payTriggerObjectCost(draft, context, resume.itemId, picked);
+      if (!draft.pendingChoice) {
+        postChoiceCleanup(draft, context);
+      }
+      return;
+    }
+    // rule 402.2 / 355.13 / 355.14.b — a variable-count target set named while
+    // the item is finalized: charge [Deflect] for every chosen object (809.1.c —
+    // kept even if the object later drops out, 355.14.i), bind the set onto the
+    // item / effect node, fire "when you choose me" for each (355.14.d / 359.2).
+    // The wrapper's finalization pass then continues with the next slot.
+    case "target-slot": {
+      const picked = (answer.pickedKeys ?? []).map(
+        (k) => (choice.type === "pick-many" ? choice.options.find((o) => o.key === k)?.cardId : undefined) ?? k,
+      );
+      const item = draft.interaction?.chain?.items.find((it) => it.id === resume.itemId);
+      if (!item) {
+        return;
+      }
+      if (picked.length > 0) {
+        const owed = getDeflectSurcharge(
+          draft,
+          item.controller,
+          [...picked],
+          context.cards as Parameters<typeof getDeflectSurcharge>[3],
+          item.cardId,
+          context.zones as Parameters<typeof getDeflectSurcharge>[5],
+        );
+        payAnyDomainPower(draft, item.controller, owed);
+      }
+      bindTargetSlot(draft, resume.itemId, resume.slot, picked);
+      const trigCtx = { cards: context.cards, counters: context.counters, draft, zones: context.zones };
+      for (const cardId of picked) {
+        if (draft.battlefields?.[cardId] !== undefined) {
+          continue;
+        }
+        fireTriggers(
+          { cardId, chooserId: item.controller, sourceCardId: item.cardId, sourceType: "ability", type: "choose" },
+          trigCtx,
+        );
+      }
+      return;
+    }
+    // rule 752.1 / 355.14.b — the re-chosen split-damage recipient set of a
+    // stolen chain item, bound behind the source already re-named in slot 0.
+    // rule 754: an object newly named this way is freshly targeted, so its
+    // Targeting Effects trigger. rule 755: the costs those new choices incur
+    // (a [Deflect] surcharge) are IGNORED — nothing is charged here.
+    case "retarget-split": {
+      const picked = (answer.pickedKeys ?? []).map(
+        (k) => (choice.type === "pick-many" ? choice.options.find((o) => o.key === k)?.cardId : undefined) ?? k,
+      );
+      const item = draft.interaction?.chain?.items.find((it) => it.id === resume.itemId);
+      if (!item) {
+        return;
+      }
+      const prior = item.targets ?? [];
+      const before = new Set(prior);
+      const source = prior[0];
+      (item as { targets?: readonly string[] }).targets =
+        source !== undefined ? [source, ...picked] : [...picked];
+      const trigCtx = { cards: context.cards, counters: context.counters, draft, zones: context.zones };
+      for (const cardId of picked) {
+        if (before.has(cardId) || draft.battlefields?.[cardId] !== undefined) {
+          continue;
+        }
+        fireTriggers(
+          { cardId, chooserId: item.controller, sourceCardId: item.cardId, sourceType: "spell", type: "choose" },
+          trigCtx,
+        );
+      }
+      if (!draft.pendingChoice) {
+        postChoiceCleanup(draft, context);
+      }
+      return;
+    }
+    // rule 752.1 / 753 — the re-chosen target GROUP of a stolen multi-slot
+    // spell. rule 754: cards newly named this way are freshly targeted, so
+    // their Targeting Effects trigger; rule 755: the costs those new choices
+    // incur (a [Deflect] surcharge) are IGNORED — nothing is charged here.
+    case "retarget-slots": {
+      const picked = (answer.pickedKeys ?? []).map(
+        (k) => (choice.type === "pick-many" ? choice.options.find((o) => o.key === k)?.cardId : undefined) ?? k,
+      );
+      const item = draft.interaction?.chain?.items.find((it) => it.id === resume.itemId);
+      const slotOptions = choice.type === "pick-many" ? choice.slotOptions : undefined;
+      // An empty answer is "I keep my choices" (the offer is a "you may").
+      if (item && slotOptions && picked.length > 0) {
+        const ordered = assignToSlots(slotOptions, picked);
+        if (ordered) {
+          const before = new Set(item.targets ?? []);
+          (item as { targets?: readonly string[] }).targets = ordered;
+          const trigCtx = { cards: context.cards, counters: context.counters, draft, zones: context.zones };
+          for (const cardId of ordered) {
+            if (before.has(cardId) || draft.battlefields?.[cardId] !== undefined) {
+              continue;
+            }
+            fireTriggers(
+              { cardId, chooserId: item.controller, sourceCardId: item.cardId, sourceType: "spell", type: "choose" },
+              trigCtx,
+            );
+          }
+        }
+      }
       if (!draft.pendingChoice) {
         postChoiceCleanup(draft, context);
       }
@@ -1295,6 +1514,7 @@ export const pendingChoiceMoves: Partial<
             context.params.pickedKeys,
             (id) => getCardEffectiveMight(id, (m) => context.cards.getCardMeta(m as CoreCardId)),
             (id) => context.zones.getCardZone(id as CoreCardId),
+            deflectAffordableFor(state, choice, context),
           )
         );
       }
@@ -1433,7 +1653,7 @@ export const pendingChoiceMoves: Partial<
         }
         // rule 355.14.e (ogn-041-298): fixed-total split is answered with one allocation.
         if (choice.assign && typeof choice.total === "number") {
-          return isLegalSplitAllocation(choice.options, choice.total, context.params.allocation);
+          return isLegalSplitAllocation(choice.options, choice.total, context.params.allocation, splitBoundsOf(choice));
         }
         return choice.options.includes(context.params.pickedCardId as string);
       }
@@ -1546,10 +1766,15 @@ export const pendingChoiceMoves: Partial<
           const opt = choice.options.find((o) => o.key === key);
           return opt?.label ?? (opt?.cardId ? (getGlobalCardRegistry().get(opt.cardId)?.name ?? opt.cardId) : key);
         };
+        const affordable = deflectAffordableFor(state, choice, context);
         return candidates
           .filter((pickedKeys) =>
-            isValidPickManyAnswer(choice, pickedKeys, mightOf, (id) =>
-              context.zones.getCardZone(id as CoreCardId),
+            isValidPickManyAnswer(
+              choice,
+              pickedKeys,
+              mightOf,
+              (id) => context.zones.getCardZone(id as CoreCardId),
+              affordable,
             ),
           )
           .map((pickedKeys) => ({
@@ -1649,7 +1874,7 @@ export const pendingChoiceMoves: Partial<
         }
         // rule 355.14.e (ogn-041-298): fixed-total split → one move per legal allocation.
         if (choice.assign && typeof choice.total === "number") {
-          return enumerateSplitAllocations(choice.options, choice.total).map((allocation) => ({
+          return enumerateSplitAllocations(choice.options, choice.total, 500, splitBoundsOf(choice)).map((allocation) => ({
             allocation,
             playerId: context.playerId as string,
           }));
@@ -1748,6 +1973,7 @@ export const pendingChoiceMoves: Partial<
             pickedKeys,
             (id) => getCardEffectiveMight(id, (m) => context.cards.getCardMeta(m as CoreCardId)),
             (id) => context.zones.getCardZone(id as CoreCardId),
+            deflectAffordableFor(draft, choice, context),
           )
         ) {
           return;
@@ -2540,6 +2766,49 @@ export const pendingChoiceMoves: Partial<
           if (item) {
             (item as { targets?: readonly string[] }).targets = [picked];
           }
+          // rule 355.14.b/c + 752.1 (ogn-080-298 × unl-192-219) — the stolen
+          // spell splits its source's Might among a chosen SET: ask that set
+          // now, capped by the damage the NEWLY named source has available
+          // (355.14.c) and drawn from the new controller's seat ("enemy"
+          // flips with the item's controller). rule 355.14.e: only the
+          // recipients are named here — the amounts wait for resolution.
+          const splitDesc = (choice as { retargetSplitTarget?: unknown }).retargetSplitTarget;
+          if (item && splitDesc !== undefined) {
+            const pool = resolveTarget({ ...(splitDesc as never), quantity: "all" }, {
+              cards: context.cards,
+              choosing: true,
+              draft,
+              playerId: item.controller,
+              sourceCardId: item.cardId,
+              sourceZone: context.zones.getCardZone(item.cardId as CoreCardId),
+              zones: context.zones,
+            } as Parameters<typeof resolveTarget>[1]) as string[];
+            const cap = getCardEffectiveMight(picked, (c) =>
+              context.cards.getCardMeta?.(c) as Partial<RiftboundCardMeta> | undefined,
+            );
+            const max = Math.min(cap, pool.length);
+            if (max > 0) {
+              const nameOf = (id: string): string =>
+                (context.cards.getCardName?.(id as CoreCardId) as string | undefined) ??
+                (getGlobalCardRegistry().get(id) as { name?: string } | undefined)?.name ??
+                id;
+              draft.pendingChoice = {
+                max,
+                // rule 355.5 / 753.1 — legal recipients exist, so the set may
+                // not be left empty: a re-choice that names none is illegal.
+                min: 1,
+                options: pool.map((id) => ({ cardId: id, key: id, label: nameOf(id) })),
+                playerId: item.controller,
+                prompt: `Choose the targets to split ${nameOf(item.cardId)}'s damage among (up to ${max}; amounts are decided when it resolves)`,
+                resume: { itemId: item.id, kind: "retarget-split" },
+                semantics: "target",
+                slotSemantics: "split",
+                sourceCardId: item.cardId,
+                type: "pick-many",
+              } as RiftboundGameState["pendingChoice"];
+              return;
+            }
+          }
           draft.pendingChoice = undefined;
           postChoiceCleanup(draft, context);
           return;
@@ -2702,7 +2971,7 @@ export const pendingChoiceMoves: Partial<
         // allocated unit is a target (355.14.a → "when you choose me" fires).
         if (choice.assign && typeof choice.total === "number") {
           const allocation = context.params.allocation;
-          if (!isLegalSplitAllocation(choice.options, choice.total, allocation)) {
+          if (!isLegalSplitAllocation(choice.options, choice.total, allocation, splitBoundsOf(choice))) {
             return;
           }
           draft.pendingChoice = undefined;
@@ -2711,24 +2980,42 @@ export const pendingChoiceMoves: Partial<
             for (let i = 0; i < n; i++) encoded.push(id);
           }
           if (encoded.length > 0) {
-            chargePromptedDeflectTax(draft, choice, [...new Set(encoded)], context.cards);
-            const trigCtx = { cards: context.cards, counters: context.counters, draft, zones: context.zones };
-            const sourceType =
-              getGlobalCardRegistry().get(choice.sourceCardId as string)?.cardType === "spell"
-                ? "spell"
-                : "ability";
-            for (const id of new Set(encoded)) {
-              fireTriggers(
-              { cardId: id, chooserId: choice.playerId, sourceCardId: choice.sourceCardId as string, sourceType, type: "choose" },
-              trigCtx,
-            );
+            // rule 355.14.b / 359.2 — targets locked at finalization were chosen
+            // (surcharge paid, "when you choose me" fired) THEN; this answer only
+            // divides the damage among them.
+            if (choice.targetsPreChosen !== true) {
+              chargePromptedDeflectTax(draft, choice, [...new Set(encoded)], context.cards);
+              const trigCtx = { cards: context.cards, counters: context.counters, draft, zones: context.zones };
+              const sourceType =
+                getGlobalCardRegistry().get(choice.sourceCardId as string)?.cardType === "spell"
+                  ? "spell"
+                  : "ability";
+              for (const id of new Set(encoded)) {
+                fireTriggers(
+                  { cardId: id, chooserId: choice.playerId, sourceCardId: choice.sourceCardId as string, sourceType, type: "choose" },
+                  trigCtx,
+                );
+              }
             }
+            const carriedZone = (choice as { sourceZone?: string }).sourceZone;
             executeEffect(choice.effect as ExecutableEffect, {
               ...buildEffectContext(draft, choice.playerId, choice.sourceCardId, context),
+              ...(typeof carriedZone === "string" ? { sourceZone: carriedZone } : {}),
               boundTargets: encoded,
             });
           }
-          postChoiceCleanup(draft, context);
+          // rule 355.13 / 359.3.e — a split raised mid-sequence parks the rest of
+          // the sequence on `then`; it runs once the damage has been dealt.
+          const splitRest = (choice as { then?: unknown }).then;
+          if (splitRest !== undefined && !draft.pendingChoice) {
+            executeEffect(
+              splitRest as ExecutableEffect,
+              buildEffectContext(draft, choice.playerId, choice.sourceCardId, context),
+            );
+          }
+          if (!draft.pendingChoice) {
+            postChoiceCleanup(draft, context);
+          }
           return;
         }
         if (!choice.options.includes(picked)) {
@@ -3162,16 +3449,24 @@ export const pendingChoiceMoves: Partial<
         // the top card"); resume the suspended sequence remainder.
         // rule 386.2 (unl-062-219) — a declined Predict still puts the cards
         // that stayed on top back "in any order".
+        // rule 359.3.d (ven-056-166 Clairvoyance) — the spell's resolution is
+        // NOT over while the sequence remainder ("[Predict 5]. Draw 2.") still
+        // has to run, so the deferred spell settle must not fire between the
+        // two: a spell already sitting in the trash is recycled into the deck
+        // by a Burn Out the remainder causes and gets drawn.
+        const hasSequenceRest =
+          (choice as { thenIsSequenceRest?: boolean }).thenIsSequenceRest === true &&
+          choice.then !== undefined;
         if (choice.onDecline) {
           executeEffect(
             choice.onDecline as ExecutableEffect,
             buildEffectContext(draft, choice.prompter, choice.sourceCardId ?? "", context),
           );
-          if (!draft.pendingChoice) {
+          if (!draft.pendingChoice && !hasSequenceRest) {
             postChoiceCleanup(draft, context);
           }
         }
-        if ((choice as { thenIsSequenceRest?: boolean }).thenIsSequenceRest && choice.then) {
+        if (hasSequenceRest && choice.then) {
           executeEffect(
             choice.then as ExecutableEffect,
             buildEffectContext(draft, choice.prompter, choice.sourceCardId ?? "", context),

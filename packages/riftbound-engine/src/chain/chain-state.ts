@@ -26,6 +26,21 @@
  */
 
 /**
+ * rule 355.12–355.14 / 402.2 — one variable-count caster choice of a chain
+ * item ("split among any number of …", "up to N …", "any number of …"), bound
+ * when the item is finalized. `slot` is the dotted path of the effect node it
+ * belongs to; `ids` is undefined until the choice has been made (an EMPTY list
+ * is a made choice — rule 355.13). See `abilities/target-slots.ts`.
+ */
+export interface ChainTargetSlot {
+  readonly slot: string;
+  readonly semantics: "split" | "upTo";
+  readonly min: number;
+  readonly max: number;
+  readonly ids?: readonly string[];
+}
+
+/**
  * An item on the chain (spell or ability).
  */
 export interface ChainItem {
@@ -41,6 +56,14 @@ export interface ChainItem {
   readonly effect?: unknown;
   /** Targets chosen at play time (rule 355.8) — bound before resolution */
   readonly targets?: readonly string[];
+  /**
+   * rule 355.12–355.14 / 402.2 — the item's variable-count target sets, one per
+   * effect node that names one. Their ids are ALSO appended to `targets` (so
+   * everything counting "what this item chose" sees them) and stamped on the
+   * effect node as `_bound`; `executeResolvedItem` strips them off the
+   * positional `boundTargets` again.
+   */
+  readonly targetSlots?: readonly ChainTargetSlot[];
   /** Whether this is a triggered ability (auto-added, not player-initiated) */
   readonly triggered?: boolean;
   /**
@@ -540,6 +563,32 @@ export function passPriority(state: TurnInteractionState): TurnInteractionState 
       passedPlayers: newPassed,
     },
   };
+}
+
+/**
+ * rule 340.4 (rule-id: ven-152-166 Rebuttal) — once an item has finished
+ * resolving, the controller of the NEWEST item still on the Chain receives
+ * Priority. `resolveTopItem` seats that BEFORE the effect runs, so an item
+ * whose CONTROL changed during the resolution just finished (a stolen spell)
+ * would otherwise leave Priority with its former controller. Re-seat after the
+ * effect has run; a pass already recorded since then is left alone.
+ */
+export function reseatPriorityAfterResolution(
+  state: TurnInteractionState,
+): TurnInteractionState {
+  const chain = state.chain;
+  if (!chain || chain.items.length === 0 || chain.passedPlayers.length > 0) {
+    return state;
+  }
+  const newest = chain.items[chain.items.length - 1];
+  if (
+    !newest ||
+    newest.controller === chain.activePlayer ||
+    !chain.relevantPlayers.includes(newest.controller)
+  ) {
+    return state;
+  }
+  return { ...state, chain: { ...chain, activePlayer: newest.controller } };
 }
 
 /**
