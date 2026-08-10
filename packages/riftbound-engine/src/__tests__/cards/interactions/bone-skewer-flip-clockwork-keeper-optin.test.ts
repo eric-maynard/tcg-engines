@@ -269,9 +269,8 @@ describe("(e) the draw lands AFTER Bone Skewer finished — the drawn card is ne
 });
 
 describe("(f) no-side — P2's hand holds no unit", () => {
-  // BUG: with no unit in the opponent's hand the engine skips the reveal altogether (no public-reveal entry, P1 never
-  // sees S/T). Expected (424.1 / 424.3.a): "An opponent reveals their hand" is unconditional — S and T are presented to
-  // all players and recorded as revealed by P2; only the "you may choose a unit" part has nothing to choose.
+  // 424.1 / 424.3.a: "An opponent reveals their hand" is unconditional — S and T are presented to all players and
+  // recorded as revealed by P2; only the "you may choose a unit" part has nothing to choose.
   test("the hand {S, T} is still revealed to all players and recorded on the public-reveal record attributed to P2 (424.1, 424.3.a)", async () => {
     const game = await board("noUnit").build();
     await game.p1.reveal("bs");
