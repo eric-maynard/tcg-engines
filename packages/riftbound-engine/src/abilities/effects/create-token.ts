@@ -352,12 +352,55 @@ export function handle_createToken(effect: ExecutableEffect, ctx: EffectContext,
   // token may enter at base or any battlefield its controller controls. The
   // tokens are minted in base; when a controlled battlefield exists the
   // controller is prompted per token via a `created` choose-destination.
+  // rule 355.13 / unl-086-219 (Zilean): "you may play that token and an
+  // additional copy of it instead" — the extra copy is OPTIONAL, so its
+  // controller is asked instead of it being applied silently. Accepting
+  // re-enters this handler for the one extra token (and only then spends the
+  // once-each-turn use); declining leaves the use available.
+  // rule 373 — the offer belongs to the play-token EVENT, so it must still be
+  // made when the tokens additionally park a choose-destination prompt: it then
+  // rides behind those prompts as the destination choice's `thenChoice`.
+  const buildTokenReplacementOffer = (): typeof ctx.draft.pendingChoice | undefined => {
+    if (
+      tokenReplacement.skipTokenReplacement ||
+      tokenDef.type === "gear" ||
+      count <= 0 ||
+      createdIds.length === 0
+    ) {
+      return undefined;
+    }
+    const key = findPlayTokenReplacement(ctx);
+    if (key === undefined) {
+      return undefined;
+    }
+    return {
+      effect: {
+        ...effect,
+        amount: 1,
+        replacementKey: key,
+        skipTokenReplacement: true,
+        then: undefined,
+      },
+      playerId: ctx.playerId,
+      prompt: "Play an additional copy of the token?",
+      sourceCardId: ctx.sourceCardId,
+      type: "confirm",
+      // rule 375 — the replacing event inherits the generating effect's
+      // modifications and its linked follow-ups: "It becomes a copy of that
+      // unit" names the SAME chosen unit for the additional token, so the
+      // copy-source binding must ride along into the re-entry.
+      ...(ctx.boundTargets && ctx.boundTargets.length > 0
+        ? { boundTargets: [...ctx.boundTargets] }
+        : {}),
+    } as typeof ctx.draft.pendingChoice;
+  };
   if (!effect.location && !hiddenUnitZone && tokenDef.type !== "gear" && !ctx.draft.pendingChoice) {
     const controlled = Object.entries(ctx.draft.battlefields ?? {})
       .filter(([, bf]) => bf.controller === ctx.playerId)
       .map(([bfId]) => `battlefield-${bfId}`);
     const [first, ...rest] = createdIds;
     if (controlled.length > 0 && first !== undefined) {
+      const offer = buildTokenReplacementOffer();
       ctx.draft.pendingChoice = {
         cardId: first,
         created: true,
@@ -365,7 +408,8 @@ export function handle_createToken(effect: ExecutableEffect, ctx: EffectContext,
         playerId: ctx.playerId,
         queue: rest,
         type: "choose-destination",
-      };
+        ...(offer ? { thenChoice: offer } : {}),
+      } as typeof ctx.draft.pendingChoice;
     }
   }
   // rule 354.2 (sfd-154-221) — the tokens this step minted are the sequence's
@@ -384,40 +428,10 @@ export function handle_createToken(effect: ExecutableEffect, ctx: EffectContext,
     // names the ids this effect just minted, so bind them for the rider.
     h.executeEffect(then, createdIds.length > 0 ? { ...ctx, boundTargets: createdIds } : ctx);
   }
-  // rule 355.13 / unl-086-219 (Zilean): "you may play that token and an
-  // additional copy of it instead" — the extra copy is OPTIONAL, so its
-  // controller is asked instead of it being applied silently. Accepting
-  // re-enters this handler for the one extra token (and only then spends the
-  // once-each-turn use); declining leaves the use available.
-  if (
-    !tokenReplacement.skipTokenReplacement &&
-    tokenDef.type !== "gear" &&
-    count > 0 &&
-    createdIds.length > 0 &&
-    !ctx.draft.pendingChoice
-  ) {
-    const key = findPlayTokenReplacement(ctx);
-    if (key !== undefined) {
-      ctx.draft.pendingChoice = {
-        effect: {
-          ...effect,
-          amount: 1,
-          replacementKey: key,
-          skipTokenReplacement: true,
-          then: undefined,
-        },
-        playerId: ctx.playerId,
-        prompt: "Play an additional copy of the token?",
-        sourceCardId: ctx.sourceCardId,
-        type: "confirm",
-        // rule 375 — the replacing event inherits the generating effect's
-        // modifications and its linked follow-ups: "It becomes a copy of that
-        // unit" names the SAME chosen unit for the additional token, so the
-        // copy-source binding must ride along into the re-entry.
-        ...(ctx.boundTargets && ctx.boundTargets.length > 0
-          ? { boundTargets: [...ctx.boundTargets] }
-          : {}),
-      } as typeof ctx.draft.pendingChoice;
+  if (!ctx.draft.pendingChoice) {
+    const offer = buildTokenReplacementOffer();
+    if (offer) {
+      ctx.draft.pendingChoice = offer;
     }
   }
 }

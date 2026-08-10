@@ -1470,6 +1470,15 @@ export interface RiftboundGameState {
   readonly spellPlayOrdinals?: Record<string, number>;
 
   /**
+   * rule 412 (ruling 5807cc9df8627167) — the `spellPlayOrdinals` of plays that
+   * were COUNTERED this turn. Such a play still counts for non-triggered
+   * bookkeeping (419.4.b — Legion, "played another spell this turn"), but a
+   * "when you play your Nth card in a turn" trigger skips its ordinal, so the
+   * next card played is that turn's Nth. Cleared at the start of each turn.
+   */
+  readonly counteredPlayOrdinalsThisTurn?: Record<string, readonly number[]>;
+
+  /**
    * rule-id: unl-089-219 — the largest Energy amount this player has spent to
    * play a single spell this turn. Written when a spell's cost is paid
    * (`deductCost`) and reset at the start of each turn; read by alternate

@@ -25,6 +25,18 @@ import { hasEffectiveTag } from "./card-tags";
 import type { RiftboundCardMeta, RiftboundGameState } from "../types";
 
 /**
+ * rule 150 / 150.5 / 208.3 — "Equipment" is a Gear TAG: cards typed `equipment`
+ * plus gear printing the [Equip] ability (VEN gears are typed "gear" in the set
+ * JSON). Mirrors `effects/_attachment.isEquipmentCard` without importing it
+ * (that module pulls in the static-ability layer).
+ */
+function isEquipmentCardId(cardId: string): boolean {
+  const registry = getGlobalCardRegistry();
+  const type = registry.getCardType(cardId);
+  return type === "equipment" || (type === "gear" && registry.hasKeyword(cardId, "Equip"));
+}
+
+/**
  * Simplified target descriptor (from parser output).
  */
 export interface TargetDescriptor {
@@ -287,6 +299,7 @@ export function resolveTarget(
       if (!ct) return false;
       if (want.has(ct)) return true;
       if (ct === "equipment" && want.has("gear")) return true;
+      if (ct === "gear" && want.has("equipment") && isEquipmentCardId(id)) return true;
       return false;
     });
   } else if (target.type === "unit") {
@@ -294,11 +307,16 @@ export function resolveTarget(
       const def = registry.get(id);
       return def?.cardType === "unit";
     });
-  } else if (target.type === "gear" || target.type === "equipment") {
+  } else if (target.type === "gear") {
     filtered = filtered.filter((id) => {
       const def = registry.get(id);
       return def?.cardType === "gear" || def?.cardType === "equipment";
     });
+  } else if (target.type === "equipment") {
+    // rule 150 / 150.5 / 208.3 — Equipment is a TAG carried by the subset of
+    // Gear with the printed [Equip] ability; a plain Gear is not Equipment, so
+    // "for each Equipment you control" must not count it.
+    filtered = filtered.filter((id) => isEquipmentCardId(id));
   } else if (target.type === "spell" && zoneLocation) {
     // rule 355.8 (rule-id: ogs-010-024) — "a spell from your trash" names a card
     // TYPE: units/gear/runes in the same zone are never legal choices. Only a
