@@ -29,6 +29,7 @@ import { getBattlefieldZoneId, getFacedownZoneId } from "../../../zones/zone-con
 import {
   getCardEffectiveMight,
   getGrantedAcceleratePlayCost,
+  getOptionalPlayCost,
   spendablePowerPool,
 } from "./cost";
 import { enterPlayedPermanent } from "./play-pipeline";
@@ -36,8 +37,10 @@ import { beginRevealPairLock, beginRevealSlotLock, isSinglePickSlot } from "./re
 import {
   collectSequenceTargetSlots,
   enumerateSubsetsUpTo,
+  enumerateTargetPairs,
   findSequenceLeadTarget,
   hiddenChoiceIsPulledIn,
+  pairEffectRoles,
   spellEffectHasLegalTargets,
 } from "./targeting";
 import type { SpellEffectTargetShape } from "./targeting";
@@ -272,6 +275,39 @@ function grantedAccelerateForReveal(
     return undefined;
   }
   return cost;
+}
+
+/**
+ * rule 356.2 / 811.1.b (rule-id: unl-028-219) — playing a card from Hidden
+ * ignores its BASE cost only; the card's own optional additional cost ("You may
+ * pay [fury] as an additional cost to play me") is still offered and still paid
+ * from the pool. Returns the resource cost when the player can afford it.
+ */
+function ownOptionalPayCostForReveal(
+  state: RiftboundGameState,
+  playerId: string,
+  cardId: string,
+): { energy: number; power: string[] } | undefined {
+  const optional = getOptionalPlayCost(cardId);
+  if (!optional || optional.kind !== "pay" || optional.mandatory) {
+    return undefined;
+  }
+  const raw = optional.cost as
+    | { energy?: number; power?: readonly string[]; xp?: number }
+    | undefined;
+  // XP and other non-pool costs are out of scope for the flip path.
+  if (!raw || (raw.xp ?? 0) > 0) {
+    return undefined;
+  }
+  const cost = { energy: raw.energy ?? 0, power: [...(raw.power ?? [])] };
+  if (cost.energy === 0 && cost.power.length === 0) {
+    return undefined;
+  }
+  const pool = state.runePools[playerId];
+  if (!pool || pool.energy < cost.energy) {
+    return undefined;
+  }
+  return planPipPayment(powerTally(pool), cost.power) === undefined ? undefined : cost;
 }
 
 /** Deduct a granted Accelerate cost from the player's pool (rule 805.1.a). */
@@ -601,6 +637,56 @@ function pairEffectSlots(effect: unknown): readonly unknown[] | undefined {
   return [target1, target2];
 }
 
+/**
+ * rule 811.1.d.2 (rule-id: unl-083-219) — a card played from Hidden chooses its
+ * objects at the battlefield it was facedown at, but a pair that must stand at
+ * DIFFERENT locations ("Choose a unit you control and another unit you control
+ * at a different location") could never meet that for both members. The
+ * exception applies: exactly one of the two must be at the facedown
+ * battlefield and the other is chosen freely. Returns the legal pairs, each
+ * with the unit at the facedown battlefield first, or undefined for every other
+ * effect shape.
+ */
+function hiddenDifferentLocationPairs(
+  state: RiftboundGameState,
+  cardId: string,
+  playerId: string,
+  battlefieldId: string | undefined,
+  context: HiddenTargetContext,
+): string[][] | undefined {
+  if (battlefieldId === undefined) {
+    return undefined;
+  }
+  const registry = getGlobalCardRegistry();
+  const effect = (registry.getAbilities(cardId) ?? []).find((a) => a.type === "spell")?.effect as
+    | SpellEffectTargetShape
+    | undefined;
+  if (!pairEffectRoles(effect)?.differentZones) {
+    return undefined;
+  }
+  const bfZone = getBattlefieldZoneId(battlefieldId);
+  const pairs =
+    enumerateTargetPairs(effect, {
+      cards: context.cards,
+      choosing: true,
+      draft: state,
+      playerId,
+      sourceCardId: cardId,
+      sourceZone: bfZone,
+      zones: context.zones,
+    } as Parameters<typeof enumerateTargetPairs>[1]) ?? [];
+  const out: string[][] = [];
+  for (const [a, b] of pairs) {
+    const aHere = context.zones.getCardZone(a as CoreCardId) === bfZone;
+    const bHere = context.zones.getCardZone(b as CoreCardId) === bfZone;
+    if (!aHere && !bHere) {
+      continue;
+    }
+    out.push(aHere ? [a, b] : [b, a]);
+  }
+  return out;
+}
+
 /** Card/zone accessors every hidden-play helper needs. */
 type HiddenTargetContext = {
   cards: {
@@ -707,6 +793,14 @@ function suppliedHiddenTargetsAreLegal(
   supplied: readonly string[],
   context: HiddenTargetContext,
 ): boolean {
+  // rule 811.1.d.2 (unl-083-219) — a "different location" pair is named as one
+  // set of two; accept exactly the pairs the play offers.
+  const pairs = hiddenDifferentLocationPairs(state, cardId, playerId, battlefieldId, context);
+  if (pairs) {
+    return pairs.some(
+      (p) => p.length === supplied.length && p.every((id) => supplied.includes(id)),
+    );
+  }
   const multi = hiddenMultiPickChoice(state, cardId, playerId, battlefieldId, context);
   if (!multi) {
     return false;
@@ -764,6 +858,18 @@ function hiddenSpellHasLegalTargets(
     return true;
   }
   const bfZone = getBattlefieldZoneId(battlefieldId);
+  // rule 811.1.d.2 (rule-id: unl-083-219) — a pair that must stand at DIFFERENT
+  // locations only needs ONE member at the facedown battlefield.
+  const crossLocationPairs = hiddenDifferentLocationPairs(
+    state,
+    cardId,
+    playerId,
+    battlefieldId,
+    context,
+  );
+  if (crossLocationPairs) {
+    return crossLocationPairs.length > 0;
+  }
   // rule-id: sfd-145-221 — rule 811.1.d: a two-target effect ("Swap the Might of
   // TWO units at the same battlefield") needs two DISTINCT candidates at the
   // facedown battlefield; each descriptor being individually satisfiable is not
@@ -940,7 +1046,9 @@ function expandRevealCosts<P extends { costs?: { paid?: Readonly<Record<string, 
     return params;
   }
   const paid = params.costs.paid ?? {};
-  return paid["accelerate-granted"] !== undefined || paid.accelerate !== undefined
+  return paid["accelerate-granted"] !== undefined ||
+    paid.accelerate !== undefined ||
+    paid.pay !== undefined
     ? { ...params, paidAdditionalCost: true }
     : params;
 }
@@ -1052,6 +1160,8 @@ export const revealHidden: Defs["revealHidden"] = {
     }
     // rule-id: sfd-029-221 (rule 805.1.a) — the optional Accelerate cost is only
     // payable when a static licenses it and the pool covers it.
+    // rule 356.2 (rule-id: unl-028-219) — or the card's OWN optional additional
+    // cost, which a flip still offers and still pays.
     if (
       context.params.paidAdditionalCost === true &&
       !grantedAccelerateForReveal(
@@ -1059,6 +1169,11 @@ export const revealHidden: Defs["revealHidden"] = {
         context.params.playerId as string,
         context.params.cardId as string,
         context,
+      ) &&
+      !ownOptionalPayCostForReveal(
+        state,
+        context.params.playerId as string,
+        context.params.cardId as string,
       )
     ) {
       return false;
@@ -1120,6 +1235,21 @@ export const revealHidden: Defs["revealHidden"] = {
         // offer one variant per legal set (the empty set included) instead of
         // deferring the whole choice to a resolution-time pick. Candidates are
         // restricted to the facedown battlefield (811.1.d.2).
+        // rule 811.1.d.2 (rule-id: unl-083-219) — a "different location" pair is
+        // named as the card is played; offer one variant per legal pair.
+        const crossPairs = hiddenDifferentLocationPairs(
+          state,
+          hid as string,
+          playerId,
+          meta.hiddenAt,
+          context,
+        );
+        if (crossPairs) {
+          for (const pair of crossPairs) {
+            results.push({ cardId: hid as string, playerId, targets: [...pair] });
+          }
+          continue;
+        }
         const multi = hiddenMultiPickChoice(state, hid as string, playerId, meta.hiddenAt, context);
         if (multi) {
           for (const subset of enumerateSubsetsUpTo(multi.choosable, multi.maxSize)) {
@@ -1143,6 +1273,16 @@ export const revealHidden: Defs["revealHidden"] = {
           results.push({
             cardId: hid as string,
             costs: { alternativeId: "hidden", paid: { "accelerate-granted": true } },
+            paidAdditionalCost: true,
+            playerId,
+          } as (typeof results)[number]);
+        }
+        // rule 356.2 (rule-id: unl-028-219) — the card's own "You may pay … as an
+        // additional cost to play me" is offered on the flip as well.
+        if (ownOptionalPayCostForReveal(state, playerId, hid as string)) {
+          results.push({
+            cardId: hid as string,
+            costs: { alternativeId: "hidden", paid: { pay: true } },
             paidAdditionalCost: true,
             playerId,
           } as (typeof results)[number]);
@@ -1276,11 +1416,22 @@ export const revealHidden: Defs["revealHidden"] = {
     // targets stay at that battlefield — 811.1.d.2) and counts the play.
     if (cardType === "unit" || cardType === "gear" || cardType === "equipment") {
       let paidAccelerate = false;
+      let paidOwnOptional = false;
       if (cardType === "unit" && context.params.paidAdditionalCost === true) {
         const cost = grantedAccelerateForReveal(draft, playerId, cardId, { cards, zones });
         if (cost) {
           payGrantedAccelerate(draft, playerId, cost);
           paidAccelerate = true;
+        }
+      }
+      // rule 356.2 (rule-id: unl-028-219) — the card's own optional additional
+      // cost is paid from the pool as the flip plays it, so its
+      // "if you paid the additional cost" trigger sees the payment.
+      if (!paidAccelerate && context.params.paidAdditionalCost === true) {
+        const own = ownOptionalPayCostForReveal(draft, playerId, cardId);
+        if (own) {
+          payGrantedAccelerate(draft, playerId, own);
+          paidOwnOptional = true;
         }
       }
       enterPlayedPermanent(
@@ -1292,8 +1443,8 @@ export const revealHidden: Defs["revealHidden"] = {
             ? (getBattlefieldZoneId(battlefieldId) as string)
             : ((zones.getCardZone(cardId as CoreCardId) as string | undefined) ?? "base"),
           from: battlefieldId ? `facedown-${battlefieldId}` : "facedown",
-          paidAdditionalCost: paidAccelerate,
-          paidIds: paidAccelerate ? ["accelerate-granted"] : [],
+          paidAdditionalCost: paidAccelerate || paidOwnOptional,
+          paidIds: paidAccelerate ? ["accelerate-granted"] : paidOwnOptional ? ["pay"] : [],
           playerId,
           via: "hidden",
           ...(battlefieldId ? { fromHiddenAt: battlefieldId } : {}),
