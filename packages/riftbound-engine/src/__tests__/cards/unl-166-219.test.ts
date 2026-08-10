@@ -110,12 +110,15 @@ describe("Stalking Wolf (unl-166-219)", () => {
     expect(noPower.p1.can("play", "wolf")).toBe(false);
   });
 
+  // ruling 57b3e2849ef0109a / 822.3: the cost may not be the only friendly unit at the destination, so
+  // the payable pet here is a Bird waiting in base.
   test("[Ambush] on defence: P2 raids bf1 where my Poro stands; in P2's neutral open state I cannot act, but once Focus passes I react with the Wolf TO bf1 — it arrives, defends at 6 and the 3-Might raider dies", async () => {
     const game = await scenario()
       .active(P2)
       .resources(P1, COST)
       .battlefield("bf1", { controller: P1 })
       .unit(P1, "bf1", SINISTER_PORO, "poro")
+      .unit(P1, "base", BIRD_TOKEN, "bird")
       .unit(P2, "base", { might: 3, name: "Raider" }, "raider")
       .hand(P1, CARD, "wolf")
       .build();
@@ -127,7 +130,7 @@ describe("Stalking Wolf (unl-166-219)", () => {
     // Reaction speed is tied to "a battlefield where you have units": base is not on the menu now.
     expect(playLocations(game)).not.toContain("base");
     expect((await game.p1.try((p) => p.play("wolf", { to: "base" }))).ok).toBe(false);
-    await game.p1.play("wolf", { to: "bf1", ...(sacrificeMenu(game).length ? { sacrifice: "poro" } : {}) });
+    await game.p1.play("wolf", { to: "bf1", ...(sacrificeMenu(game).length ? { sacrifice: "bird" } : {}) });
     expect(game.p1.resources()).toEqual({ energy: 0, power: { order: 0 } });
     await game.settle();
     expect(game.locationOf("wolf")).toBe("bf1");
@@ -142,6 +145,7 @@ describe("Stalking Wolf (unl-166-219)", () => {
       .battlefield("bf1", { controller: P1 })
       .battlefield("bf2", { controller: null })
       .unit(P1, "bf1", SINISTER_PORO, "poro")
+      .unit(P1, "base", BIRD_TOKEN, "bird")
       .unit(P2, "base", { might: 3, name: "Raider" }, "raider")
       .hand(P1, CARD, "wolf")
       .build();
@@ -154,12 +158,12 @@ describe("Stalking Wolf (unl-166-219)", () => {
     expect(game.zoneOf("wolf")).toBe("hand");
   });
 
-  // Expected (the signature line, 822 + this card's "its battlefield" clause + 357.2): my lone Poro
-  // attacks P2's bf1; holding Focus I Ambush the Wolf to bf1 as a Reaction, killing THAT Poro as the
-  // cost; the Wolf still enters bf1 ("even if you don't have other units there"), becomes the attacker
-  // and its 6 Might kills the 4-Might Guard → P1 conquers. Actual: no sacrifice exists, the Poro
-  // survives, so the assertion on the Poro's death fails (the Wolf itself does arrive and win).
-  test("Ambush + kill my attacking Poro as the cost + 'play me to ITS battlefield even with no other units there' — the Wolf takes over the attack and conquers bf1", async () => {
+  // ruling 57b3e2849ef0109a: "It is not legal on the battlefield you are attacking. It is legal if
+  // Stalking Wolf is played to a different battlefield than the one where the Poro is." Killing the lone
+  // attacking Poro empties bf1 before Finalization completes, so Ambush's granted [Reaction] is void at
+  // Check Legality (822.1.b / 822.3 / 813.4.b / 358.4) — the card's own "its battlefield" clause keeps
+  // the LOCATION valid but grants no timing.
+  test("Ambush + killing my lone ATTACKING Poro to play the Wolf to that same battlefield is illegal at Reaction speed (ruling 57b3e2849ef0109a)", async () => {
     const game = await scenario()
       .resources(P1, { energy: 5, power: { order: 1 } })
       .battlefield("bf1", { controller: P2 })
@@ -188,14 +192,10 @@ describe("Stalking Wolf (unl-166-219)", () => {
       }
     }
     expect(game.actingSeat()).toBe(P1);
-    expect(game.p1.can("play", "wolf")).toBe(true);
-    await game.p1.play("wolf", { sacrifice: "poro", to: "bf1" });
-    await game.settle();
-    expect(game.zoneOf("poro")).toBe("trash");
-    expect(game.locationOf("wolf")).toBe("bf1");
-    expect(game.zoneOf("guard")).toBe("trash");
-    expect(game.gameState.battlefields.bf1?.controller).toBe(P1);
-    expect(game.p1.points()).toBe(1);
+    expect((await game.p1.try((p) => p.play("wolf", { sacrifice: "poro", to: "bf1" }))).ok).toBe(false);
+    expect(game.zoneOf("poro")).toBe("battlefield-bf1");
+    expect(game.zoneOf("wolf")).toBe("hand");
+    expect(game.p1.resources()).toEqual({ energy: 5, power: { order: 1 } });
   });
 
   test("on my own turn in the open state the Wolf plays at normal speed to base or to a battlefield I control (Ambush adds options, removes none) and is a 6-Might body with the Ambush keyword", async () => {

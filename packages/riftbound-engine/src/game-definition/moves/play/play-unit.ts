@@ -392,6 +392,28 @@ type BoardZones = {
 };
 
 /**
+ * rule 822.1.c / 822.4 / 813.4 — while an [Ambush] unit is being played to a
+ * battlefield where its controller has units it HAS [Reaction], so cost
+ * audiences that read "cards with [Reaction]" (Mystic Vortex's showdown
+ * surcharge, rule 356.3) must see that granted characteristic. Playing the same
+ * unit to base grants nothing.
+ */
+function ambushGrantsReaction(
+  zones: BoardZones,
+  playerId: string,
+  cardId: string,
+  location: string | undefined,
+): boolean {
+  if (location === undefined || !isBattlefieldZone(location)) {
+    return false;
+  }
+  if (!getGlobalCardRegistry().hasKeyword(cardId, "Ambush")) {
+    return false;
+  }
+  return zones.getCardsInZone(location as CoreZoneId, playerId as CorePlayerId).length > 0;
+}
+
+/**
  * rule-id: ogn-150-298 (rule 702.2.b) — friendly units on the board whose buff
  * could be spent as an additional cost, in board order (base first).
  */
@@ -625,6 +647,14 @@ export const playUnit: Defs["playUnit"] = {
     const targetIsBattlefield = Boolean(location) && isBattlefieldZone(location);
     const registry = getGlobalCardRegistry();
     const hasAmbush = registry.hasKeyword(context.params.cardId, "Ambush");
+    // rule 822.4 — the Ambush-granted [Reaction] is a real characteristic of
+    // this play, and cost audiences must price it (356.3).
+    const grantedReaction = ambushGrantsReaction(
+      context.zones,
+      context.params.playerId as string,
+      context.params.cardId as string,
+      location,
+    );
 
     const targetBfId = targetIsBattlefield ? extractBattlefieldId(location ?? "") : null;
     const targetBf = targetBfId ? state.battlefields?.[targetBfId] : undefined;
@@ -789,7 +819,16 @@ export const playUnit: Defs["playUnit"] = {
         bfZoneId as CoreZoneId,
         context.params.playerId as CorePlayerId,
       );
-      const hasFriendlyUnits = unitsAtBattlefield.length > 0;
+      // rule 822.3 / 813.4.b: a unit killed to pay this play's additional cost
+      // is gone before Finalization completes, so it cannot be the friendly unit
+      // that keeps Ambush's granted [Reaction] alive (822.1.b, 358.4).
+      const paidVictims = new Set<string>([
+        ...(typeof context.params.sacrificeId === "string"
+          ? [context.params.sacrificeId as string]
+          : []),
+        ...((context.params.sacrificeIds as string[] | undefined) ?? []),
+      ]);
+      const hasFriendlyUnits = unitsAtBattlefield.some((id) => !paidVictims.has(id as string));
       // rule 813.1.c.1 / 310.1.a: Ambush grants [Reaction] TIMING, not a
       // permission to act when this player may not act at all. Reaction
       // windows are Closed states (priority holder) and Showdowns (Focus
@@ -1046,10 +1085,16 @@ export const playUnit: Defs["playUnit"] = {
         context.params.playerId,
         context.params.cardId,
         payable
-          ? { additionalCost: { energy: payable.energy, power: payable.power }, board, ...(altCost ? { altCost } : {}) }
+          ? {
+              additionalCost: { energy: payable.energy, power: payable.power },
+              board,
+              ...(altCost ? { altCost } : {}),
+              ...(grantedReaction ? { grantedReaction: true } : {}),
+            }
           : {
               board,
               ...(altCost ? { altCost } : {}),
+              ...(grantedReaction ? { grantedReaction: true } : {}),
               ...(killDiscount
                 ? { additionalCost: { energy: -killDiscount.energy }, waivePower: killDiscount.power }
                 : {}),
@@ -1150,6 +1195,31 @@ export const playUnit: Defs["playUnit"] = {
     // cost is a cost of PLAYING the card, so it applies on every path that
     // enumerated a destination (including the Ambush reaction window), and a
     // mandatory one leaves no unpaid variant behind.
+    // rule 822.3 / 813.4.b — an Ambush play whose additional cost kills the only
+    // friendly unit at the destination empties it before Finalization completes,
+    // so the granted [Reaction] is void at Check Legality: never offer that line.
+    const ambushCostWouldEmptyBattlefield = (
+      cardIdArg: string,
+      location: string,
+      victimId: string,
+    ): boolean => {
+      if (standardTiming || !isBattlefieldZone(location)) {
+        return false;
+      }
+      if (!registry.hasKeyword(cardIdArg, "Ambush")) {
+        return false;
+      }
+      // rule 822.1.d (unl-120-219): a card that may Ambush into enemy-held
+      // battlefields does not need a friendly unit there at all.
+      if (canPlayToEnemyOccupiedBattlefield(cardIdArg)) {
+        return false;
+      }
+      const friendly = context.zones.getCardsInZone(
+        location as CoreZoneId,
+        context.playerId as CorePlayerId,
+      );
+      return friendly.includes(victimId as CoreCardId) && friendly.length === 1;
+    };
     const expandPaidCostVariants = (
       cardIdArg: string,
       optional: ReturnType<typeof getOptionalPlayCost>,
@@ -1188,6 +1258,9 @@ export const playUnit: Defs["playUnit"] = {
       }
       for (const sacrificeId of victims) {
         for (const location of locations) {
+          if (ambushCostWouldEmptyBattlefield(cardIdArg, location, sacrificeId)) {
+            continue;
+          }
           results.push({
             cardId: cardIdArg,
             location,
@@ -1505,6 +1578,22 @@ export const playUnit: Defs["playUnit"] = {
               context.playerId as string,
             );
           if (friendly.length > 0 || enemyBfOk) {
+            // rule 356.3 / 358.4 (rule 822.4) — the Ambush-granted [Reaction]
+            // can attract a surcharge (Mystic Vortex) the base-cost gate above
+            // never saw; an unpayable total is not a legal play.
+            if (
+              friendly.length > 0 &&
+              !canAffordCard(
+                state,
+                context.playerId as string,
+                cardId as string,
+                { board, grantedReaction: true },
+                metaForAfford,
+                potential,
+              )
+            ) {
+              continue;
+            }
             results.push({
               cardId: cardId as string,
               location: bfZoneId as string,
@@ -2003,6 +2092,11 @@ export const playUnit: Defs["playUnit"] = {
       cardId,
       {
         board,
+        // rule 822.4 / 356.3 — price the Ambush-granted [Reaction] exactly as
+        // the condition gated it.
+        ...(ambushGrantsReaction(context.zones, playerId as string, cardId as string, location as string | undefined)
+          ? { grantedReaction: true }
+          : {}),
         ...(altCostSpec ? { altCost: altCostSpec } : {}),
         ...(energyDiscount > 0 || redirectPips
           ? {
