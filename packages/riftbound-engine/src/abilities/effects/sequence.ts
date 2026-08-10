@@ -391,6 +391,16 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
     if (seqSlots !== undefined && seqSlots.bound.length < seqSlots.slots.length) {
       const remaining = [...seqSlots.bound];
       const aligned = seqSlots.slots.map((slot, slotIdx) => {
+        // rule 355.13 / 359.3.e.5 (ruling ce58ba980937bea3, sfd-023-221 Piercing
+        // Light) — an "up to N" / "any number" slot is its OWN set choice and an
+        // empty one stays empty: a pick made for another slot never migrates
+        // into it, so "deal 2 to a unit at a battlefield, then deal 2 to up to
+        // one other unit" deals nothing once the chosen unit retreats to base.
+        const q = (slot as { quantity?: unknown }).quantity;
+        if (q === "any" || q === "all" || (typeof q === "object" && q !== null)) {
+          vacatedSlots.add(slotIdx);
+          return undefined;
+        }
         const pool = resolveTarget({ ...(slot as TargetDescriptor), quantity: "all" }, {
           ...resolverCtx,
           choosing: true,
@@ -884,9 +894,13 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
       // is asked which of the simultaneous deaths it saves. Only a unit this
       // step may have killed and a LATER damage step names again forces the
       // early Cleanup; an unresolvable step keeps the old behaviour.
+      // rule 820 / 428 (ruling 87d4521ad1764eb1) — the executions of a [Repeat]ed
+      // spell are ONE spell, not successive printed instructions: no Cleanup runs
+      // between them, so a die replacement is consulted once, after the spell.
       if (
         sub.type === "damage" &&
         seq.effects[i + 1]?.type === "damage" &&
+        (seq as { _repeatExecutions?: boolean })._repeatExecutions !== true &&
         ctx.draft.pendingChoice === undefined &&
         ctx.cards !== undefined &&
         ctx.counters !== undefined &&

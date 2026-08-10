@@ -45,6 +45,31 @@ function dieWouldBeReplaced(cardId: string, ctx: EffectContext): boolean {
   return matches.some((m) => (m.condition as { type?: string } | undefined)?.type !== "pay-cost");
 }
 
+/** On the board = in a base or at a battlefield (trash/banished/hand are not). */
+function unitIsOnBoard(cardId: string, ctx: EffectContext): boolean {
+  const zone = ctx.zones.getCardZone(cardId as CoreCardId) ?? "";
+  return zone === "base" || zone.startsWith("battlefield-");
+}
+
+/**
+ * rule 520 / rule-id: ogn-005-298 — the bound targets the just-resolved damage
+ * step left with lethal damage, i.e. the units this effect is about to kill.
+ * A death a CERTAIN replacement will replace never happens (370.1.a.1), so
+ * those are excluded here; an optional ("you may pay …") one is only known
+ * once it has been answered, which is why the reflexive item re-checks.
+ */
+export function lethallyDamagedBoundIds(ctx: EffectContext): readonly string[] {
+  return (ctx.boundTargets ?? []).filter((id) => {
+    if (!unitIsOnBoard(id, ctx)) return false;
+    const might = getEffectiveMight(id, ctx);
+    if (might <= 0) return false;
+    const dmg =
+      (ctx.cards.getCardMeta?.(id as CoreCardId) as Partial<RiftboundCardMeta> | undefined)
+        ?.damage ?? 0;
+    return dmg >= might && !dieWouldBeReplaced(id, ctx);
+  });
+}
+
 /**
  * rule 424.1 — a reveal presents the card to ALL players. The recorder lives in
  * `operations/public-reveal` so zone-change code (rule 421.4) can write the same
@@ -113,6 +138,13 @@ function filterBoundByLocation(bound: string[], tgt: unknown, ctx: EffectContext
       const zone = ctx.zones.getCardZone(id as CoreCardId);
       return zone === undefined || namedZones.includes(zone);
     });
+  }
+  // rule 359.3.e.5 (ruling c6e237431d023952 — Star-Crossed × Leona, Determined)
+  // — "here" is read off the SOURCE when the item resolves: a source that left
+  // the board is nowhere, so nothing is "here" and its bound target is illegal.
+  if (location === "here") {
+    const OFF_BOARD: readonly string[] = ["hand", "mainDeck", "trash", "banishment"];
+    return typeof ctx.sourceZone === "string" && OFF_BOARD.includes(ctx.sourceZone) ? [] : bound;
   }
   if (location !== "battlefield" && location !== "base") {
     // rule 359.3.e.2 (unl-134-219 Existential Dread × [Repeat]) — an object
@@ -969,23 +1001,19 @@ export function evaluateEffectCondition(
       return true;
     }
     case "this-kills-target": {
+      // rule 370.1.a.1 / 372 — the re-check stamped on the queued reflexive
+      // item (`ids`): by the time that item resolves the rule 520 death has
+      // been processed, so a unit an OPTIONAL replacement actually saved (The
+      // Boss) stands on the board again and was never killed.
+      const stamped = (condition as { ids?: readonly string[] }).ids;
+      if (stamped !== undefined) {
+        return stamped.some((id) => !unitIsOnBoard(id, ctx));
+      }
       // rule-id: ogn-005-298 — "If this kills it": rule 520 death is a
       // state-based check that runs after the whole effect resolves, so the
       // bound target is still on board here; it was killed iff the preceding
       // damage step left it with lethal damage.
-      const bound = ctx.boundTargets ?? [];
-      if (bound.length === 0) return false;
-      return bound.some((id) => {
-        const zone = ctx.zones.getCardZone(id as CoreCardId) ?? "";
-        if (zone !== "base" && !zone.startsWith("battlefield-")) return false;
-        const might = getEffectiveMight(id, ctx);
-        if (might <= 0) return false;
-        const dmg =
-          (ctx.cards.getCardMeta?.(id as CoreCardId) as Partial<RiftboundCardMeta> | undefined)
-            ?.damage ?? 0;
-        // rule 370.1.a.1 — a replaced death is not a kill.
-        return dmg >= might && !dieWouldBeReplaced(id, ctx);
-      });
+      return lethallyDamagedBoundIds(ctx).length > 0;
     }
     // rule 355.10 (unl-051-219 Ivern) — "Then if you revealed a Bird, Cat,
     // Dog, or Poro, do this: …": the linked follow-up reads the TAGS of the
