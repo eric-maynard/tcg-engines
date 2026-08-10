@@ -208,6 +208,14 @@ export interface RiftboundCardMeta {
   namedTag?: string;
 
   /**
+   * rule 135.2: TAGs conferred by a continuous effect ("I am a Mech."). Held
+   * separately from `grantedTags` (tags gained as the card was played, which
+   * stay for as long as it is on the board) because these are stripped and
+   * re-granted on every static recalculation.
+   */
+  staticTags?: string[];
+
+  /**
    * Rule 355.8 (unl-182-219): mode indexes already picked from a "choose one
    * you haven't already chosen" effect on this card. Read by the `choice`
    * executor to hide already-taken options on subsequent Repeat casts.
@@ -621,6 +629,14 @@ export interface RevealAndPickChoice {
    * `revealed` to any other seat, nor name the pick in the shared match log.
    */
   readonly private?: boolean;
+
+  /**
+   * rule 424.1 (unl-064-219 Fate Weaver) — "You may REVEAL a spell … from
+   * among them and draw it": the LOOK stays private, but the card actually
+   * picked is shown to every player, so it is recorded as a public reveal and
+   * may be named in the shared match log.
+   */
+  readonly revealPick?: boolean;
 
   /**
    * Optional filter on which revealed card may be picked.

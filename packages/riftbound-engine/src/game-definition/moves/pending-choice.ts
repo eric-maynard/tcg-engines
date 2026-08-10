@@ -44,6 +44,7 @@ import { cleanupAndFireDeaths } from "../../cleanup/post-move-cleanup";
 import type { PostMoveCleanupContext } from "../../cleanup/post-move-cleanup";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import { matchesRevealPickFilter } from "../../operations/reveal-pick-filter";
+import { recordPublicReveal } from "../../operations/public-reveal";
 import { leaveBoard, snapshotLKI } from "../../operations/leave-board";
 import type {
   OrderChoice,
@@ -3524,6 +3525,12 @@ export const pendingChoiceMoves: Partial<
         deductAbilityCost(draft, choice.prompter, pickCost, context.zones, context.counters);
       }
       const pickedCardId = picks[picks.length - 1] as string;
+      // rule 424.1 (unl-064-219 Fate Weaver) — "You may REVEAL a spell … and
+      // draw it": the look was private, but the card taken is shown to every
+      // player, so it goes on the shared public-reveal record.
+      if ((choice as { revealPick?: boolean }).revealPick) {
+        recordPublicReveal({ draft }, choice.prompter as string, picks);
+      }
       // Set when the pick's `then` follow-up rides the Chain as its own item
       // instead of running inline (rule-id: ven-089-166-look-then-empower).
       let followUpOnChain = false;
