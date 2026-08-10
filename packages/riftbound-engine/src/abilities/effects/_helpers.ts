@@ -964,18 +964,24 @@ export function evaluateEffectCondition(
 export function tokenEntersReadyFromStaticGrant(
   ctx: EffectContext,
   tokenType: string,
+  tokenController?: string,
 ): boolean {
   // rule 365.1: only a permanent ON THE BOARD has an active passive — an
   // unplayed champion sitting in the champion zone grants nothing.
+  // rule 184.1 / 740.1.a (sfd-171-221 × unl-130-219): "YOUR tokens enter ready"
+  // is friendly to the token's CONTROLLER, not to the controller of the effect
+  // that created it — "choose an opponent, THEY play a token" hands the token to
+  // that opponent, so only their own statics can override the 185.2.d default.
+  const grantee = (tokenController ?? ctx.playerId) as typeof ctx.playerId;
   const registry = getGlobalCardRegistry();
   const tokenKind = tokenType === "gear" ? "gear" : "unit";
   const boardIds: string[] = [
-    ...ctx.zones.getCardsInZone("base" as CoreZoneId, ctx.playerId as CorePlayerId),
-    ...ctx.zones.getCardsInZone("legendZone" as CoreZoneId, ctx.playerId as CorePlayerId),
+    ...ctx.zones.getCardsInZone("base" as CoreZoneId, grantee as CorePlayerId),
+    ...ctx.zones.getCardsInZone("legendZone" as CoreZoneId, grantee as CorePlayerId),
   ] as string[];
   for (const bfId of Object.keys(ctx.draft.battlefields)) {
     for (const id of ctx.zones.getCardsInZone(`battlefield-${bfId}` as CoreZoneId)) {
-      if (ctx.cards.getCardOwner(id) === ctx.playerId) {
+      if (ctx.cards.getCardOwner(id) === grantee) {
         boardIds.push(id as string);
       }
     }

@@ -13,9 +13,10 @@ const abilities: Ability[] = [
   { keyword: "Deflect", type: "keyword", value: 1 },
   {
     effect: {
-      location: "base",
       // rule 182–185: "choose an opponent. THEY play …" — the chosen opponent
       // performs the play, so the token is owned/controlled by that opponent.
+      // No fixed `location`: rule 185.2.a → 349 lets that opponent pick their
+      // base or a battlefield THEY control, so the destination prompt fires.
       player: "opponent",
       token: {
         keywords: ["Deflect"],

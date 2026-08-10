@@ -215,12 +215,13 @@ export function handle_createToken(effect: ExecutableEffect, ctx: EffectContext,
       tags: tokenTags(tokenDef),
     });
   }
-  // Rule sfd-171-221: a static EntersReady grant on a friendly board card
-  // overrides rule 143.4 for every token this effect creates.
+  // Rule sfd-171-221: a static EntersReady grant on a board card friendly to
+  // the token's CONTROLLER (`ownerId`, which is not the effect's controller
+  // when an opponent plays the token) overrides rule 143.4 for it.
   // rule 184.1: "Play a ready … unit token" — the effect may state the
   // token's state, overriding the rule 143.4 default.
   const tokenEntersReady =
-    effect.ready === true || tokenEntersReadyFromStaticGrant(ctx, tokenDef.type);
+    effect.ready === true || tokenEntersReadyFromStaticGrant(ctx, tokenDef.type, ownerId);
   // Rule unl-081-219 (Keeper of Masks): "They become copies of me." A token
   // spec carrying the `CopyOnPlay` marker registers each instance with the
   // source card's definition (name, Might, keywords, abilities) instead of
@@ -395,8 +396,12 @@ export function handle_createToken(effect: ExecutableEffect, ctx: EffectContext,
     } as typeof ctx.draft.pendingChoice;
   };
   if (!effect.location && !hiddenUnitZone && tokenDef.type !== "gear" && !ctx.draft.pendingChoice) {
+    // rule 185.2.a → 349: a token is played by the player PLAYING it, so that
+    // player picks the destination among their own base / battlefields they
+    // control — with "choose an opponent, they play a token" that is `ownerId`,
+    // not the controller of the creating effect.
     const controlled = Object.entries(ctx.draft.battlefields ?? {})
-      .filter(([, bf]) => bf.controller === ctx.playerId)
+      .filter(([, bf]) => bf.controller === ownerId)
       .map(([bfId]) => `battlefield-${bfId}`);
     const [first, ...rest] = createdIds;
     if (controlled.length > 0 && first !== undefined) {
@@ -405,7 +410,7 @@ export function handle_createToken(effect: ExecutableEffect, ctx: EffectContext,
         cardId: first,
         created: true,
         options: ["base", ...controlled],
-        playerId: ctx.playerId,
+        playerId: ownerId,
         queue: rest,
         type: "choose-destination",
         ...(offer ? { thenChoice: offer } : {}),
