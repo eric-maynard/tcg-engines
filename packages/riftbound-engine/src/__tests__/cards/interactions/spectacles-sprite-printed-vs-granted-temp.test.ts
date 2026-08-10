@@ -113,7 +113,7 @@ describe("premise — the three sheets before any Spectacles", () => {
 
   // Expected (187.2): "a domainless unit token with 3 Might, the FAE tag, and the Temporary keyword".
   // Actual: the minted Sprite token definition carries the tag "Sprite" instead of "Fae".
-  test.failing("BUG: the Sprite token has the Fae tag (187.2)", async () => {
+  test("the Sprite token has the Fae tag (187.2)", async () => {
     const { s } = await withTokens();
     expect(tagsOf(s)).toContain("Fae");
   });

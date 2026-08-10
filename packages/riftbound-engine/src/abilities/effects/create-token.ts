@@ -56,11 +56,26 @@ const NAMED_TOKEN_ABILITIES: Record<string, readonly unknown[]> = {
 };
 
 /**
+ * rule 187: a rules-defined token whose tag is NOT its own name — the tag is
+ * fixed by the rules, not by the card that plays it. Keyed by token slug.
+ * rule 187.2 Sprite → Fae. (Sand Soldier / Tentacle keep their name as tag:
+ * cards printed as "Your Sand Soldiers …" address them by that tag.)
+ */
+const NAMED_TOKEN_TAGS: Record<string, readonly string[]> = {
+  sprite: ["Fae"],
+};
+
+/**
  * rule 187.1: a unit token carries its name as a tag (a Recruit token has the
- * Recruit tag), so "non-Recruit unit" filters can exclude it.
+ * Recruit tag), so "non-Recruit unit" filters can exclude it — unless rule 187
+ * fixes a different tag for that named token.
  */
 function tokenTags(tokenDef: { name: string; tags?: readonly string[] }): string[] {
-  return tokenDef.tags ? [...tokenDef.tags] : [tokenDef.name];
+  if (tokenDef.tags) {
+    return [...tokenDef.tags];
+  }
+  const named = NAMED_TOKEN_TAGS[tokenDef.name.toLowerCase().replace(/\s+/g, "-")];
+  return named ? [...named] : [tokenDef.name];
 }
 
 /**
