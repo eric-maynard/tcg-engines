@@ -309,10 +309,12 @@ describe("Rule 570.1: Statics in non-board zones are context-scoped", () => {
     expect(getCardMeta(engine, "legend")?.staticMightBonus ?? 0).toBe(1);
   });
 
-  it("a static on a champion in championZone DOES apply (championZone scanned by static layer)", () => {
-    // Wave 2B noted championZone filtering as a potential issue for triggers,
-    // But static-abilities.ts explicitly scans championZone. This test
-    // Documents the current engine behavior.
+  // rule 365.1 — a permanent's passive is active only while it is on the Board.
+  // The Champion Zone is Public (355.10.a.1) but off-board, so a champion
+  // waiting there is not a static source; only a cost-altering passive that
+  // names the zone (366.1 / 366.2.a) works from there, and those are read in
+  // the cost path, not by this layer.
+  it("a static on a champion in championZone does NOT apply (365.1)", () => {
     const engine = createMinimalGameState({ phase: "main" });
     createCard(engine, "champ", {
       abilities: [SELF_MIGHT_PLUS(2)],
@@ -322,7 +324,7 @@ describe("Rule 570.1: Statics in non-board zones are context-scoped", () => {
       zone: "championZone",
     });
     recalculateStatics(engine);
-    expect(getCardMeta(engine, "champ")?.staticMightBonus ?? 0).toBe(2);
+    expect(getCardMeta(engine, "champ")?.staticMightBonus ?? 0).toBe(0);
   });
 });
 

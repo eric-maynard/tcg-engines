@@ -433,7 +433,10 @@ describe("Bug 2: Zone scanning includes battlefieldRow and championZone", () => 
     expect(typeof result).toBe("boolean");
   });
 
-  test("static-abilities scans championZone", () => {
+  // rule 365.1 — the Champion Zone is Public but off-board, so a champion
+  // waiting there registers no static (the zone is still walked; the card is
+  // just not a source).
+  test("static-abilities does not apply statics from championZone", () => {
     // Register a champion with a static ability
     registry.register("champion-static", {
       abilities: [
@@ -462,9 +465,9 @@ describe("Bug 2: Zone scanning includes battlefieldRow and championZone", () => 
       zones: context.zones,
     });
 
-    // The static effect should have applied to the champion
+    // The static effect must NOT have applied to the off-board champion
     const meta = metaStore.get("champion-static");
-    expect(meta?.staticMightBonus).toBe(1);
+    expect(meta?.staticMightBonus ?? 0).toBe(0);
   });
 });
 

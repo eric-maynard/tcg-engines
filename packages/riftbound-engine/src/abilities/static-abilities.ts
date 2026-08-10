@@ -1399,6 +1399,14 @@ export function recalculateStaticEffects(ctx: StaticAbilityContext): boolean {
     opts?: { onlyMightDependent?: boolean; mightPhase?: MightPhase },
   ): void => {
     for (const card of boardCards) {
+      // rule 365.1 — a permanent's passive is active only while it is on the
+      // Board. The Champion Zone is Public (355.10.a.1) but off-board, and
+      // 366.1 would require the text to name that zone itself, so a card
+      // waiting there registers no static at all. Off-board cost-altering
+      // passives (366.2.a) are read in `moves/play/cost.ts`, not here.
+      if (!isBoardZone(card.zone)) {
+        continue;
+      }
       const abilities = registry.getAbilities(card.id) ?? [];
 
       for (const [abilityIndex, ability] of abilities.entries()) {
