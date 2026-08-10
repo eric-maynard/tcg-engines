@@ -114,19 +114,21 @@ describe("Ruling 20fd1da3df6a9d19 — Arcane Shift's 3 damage lands before Fizz'
     expect(game.violations()).toEqual([]);
   });
 
-  // Expected (ruling steps 2→3→5): "Play Fizz" — including choosing where he is played — completes BEFORE the
-  // "Deal 3" instruction. Actual: when P1 is asked for Fizz's destination (Fizz still in banishment), Wall already
-  // carries the 3 damage and Arcane Shift has already banished itself; the engine defers the replay's placement
-  // past the spell's later instructions.
-  test.failing("BUG: ruling 20fd1da3df6a9d19 — Fizz's replay (destination choice) should complete before the 3 damage is dealt (engine deals the damage and self-banishes first)", async () => {
+  // RULING-CONFLICT: riftjudge 20fd1da3df6a9d19's step-by-step walkthrough has "play Fizz" — including his destination
+  // choice — finish before the "Deal 3" instruction; CR 354.3 says a play begun while another effect is resolving
+  // pauses ("continue resolving it before proceeding with any further steps of this process"), so Arcane Shift runs
+  // ALL of its own instructions first and the replay's placement is asked afterwards — engine follows CR. The ruling's
+  // headline answer (the damage lands before Fizz's "when you play me" trigger resolves) is unaffected and is
+  // asserted by the tests above.
+  // rule 354.3: playing a card mid-resolution waits for the resolving effect to finish.
+  test("ruling 20fd1da3df6a9d19 (CR-corrected) — Arcane Shift finishes its own instructions first: at Fizz's destination prompt the 3 damage is already dealt and Arcane Shift has self-banished (354.3)", async () => {
     const game = await board().build();
     await game.p1.cast("shift", { targets: ["fizz", "wall"] });
     await game.p1.passPriority();
     await game.p2.passPriority();
-    const d = game.decision();
-    expect(d).toMatchObject({ kind: "pick", seat: P1, semantics: "destination" });
+    expect(game.decision()).toMatchObject({ kind: "pick", seat: P1, semantics: "destination" });
     expect(game.zoneOf("fizz")).toBe("banishment");
-    expect(game.state("wall").damage).toBe(0);
-    expect(game.zoneOf("shift")).not.toBe("banishment");
+    expect(game.state("wall").damage).toBe(3);
+    expect(game.zoneOf("shift")).toBe("banishment");
   });
 });
