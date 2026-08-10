@@ -8,7 +8,16 @@ const abilities: Ability[] = [
   { keyword: "Ganking", type: "keyword" },
   {
     effect: {
-      target: { excludeSelf: true, filter: "exhausted", location: "anywhere", type: "unit" },
+      // rule 355.9.a.4 / 355.10.a / 174.5 — "something else" is any exhausted
+      // game object in a public zone, not just a unit: gear, runes and either
+      // legend (Legend Zones are public, legends can be targeted) qualify.
+      target: {
+        excludeSelf: true,
+        filter: "exhausted",
+        location: "anywhere",
+        type: "unit",
+        types: ["unit", "gear", "equipment", "rune", "legend"],
+      },
       type: "ready",
     },
     // rule 383.3.a — the leading "you may" is decided at FINALIZATION, before
