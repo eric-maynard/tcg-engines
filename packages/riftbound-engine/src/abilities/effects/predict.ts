@@ -2,6 +2,7 @@
 import type { PlayerId as CorePlayerId, ZoneId as CoreZoneId } from "@tcg/core";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import { type EffectHelpers, resolveAmount } from "./_helpers";
+import { asYouLookAbility } from "./look";
 
 export function handle_predict(effect: ExecutableEffect, ctx: EffectContext, _h: EffectHelpers): void {
   // rule-id: unl-131-219-predict-look-optional-recycle — "Look at the top
@@ -28,8 +29,49 @@ export function handle_predict(effect: ExecutableEffect, ctx: EffectContext, _h:
     "mainDeck" as CoreZoneId,
     ctx.playerId as CorePlayerId,
   );
-  const topN = deckCards.slice(0, Math.max(0, predictCount)).map((c) => c as string);
+  const deck = deckCards.map((c) => c as string);
+  // rule 354.3 / 370.1 (ogn-062-298 × ogn-194-298) — once a looked-at card has
+  // removed itself with its own "as you look at me" replacement, the Predict
+  // still ranges over the cards it looked at that are still there: it never
+  // pulls a fresh card up behind the one that left.
+  const carriedLookedAt = (effect as { lookedAtIds?: readonly string[] }).lookedAtIds;
+  const topN = carriedLookedAt
+    ? carriedLookedAt.filter((id) => deck.includes(id))
+    : deck.slice(0, Math.max(0, predictCount));
   if (topN.length === 0) {
+    return;
+  }
+  // rule 436.1 / 369.1 / 370.1 (ogn-194-298 Nocturne) — [Predict] LOOKS at the
+  // top cards, so a card's own "as you look at or reveal me from the top of
+  // your deck, you may …" replacement is offered before the recycle choice,
+  // while the card is still in the deck. Cards already offered for this Predict
+  // are remembered so a decline is not re-offered forever.
+  const offered = ((effect as { revealOffered?: readonly string[] }).revealOffered ??
+    []) as readonly string[];
+  for (const lookedAtId of topN) {
+    if (offered.includes(lookedAtId)) {
+      continue;
+    }
+    const asYouLook = asYouLookAbility(lookedAtId);
+    if (!asYouLook) {
+      continue;
+    }
+    ctx.draft.pendingChoice = {
+      boundTargets: [lookedAtId],
+      effect: asYouLook,
+      playerId: ctx.playerId,
+      sourceCardId: lookedAtId,
+      // The Predict itself resumes after the answer either way — under its own
+      // source, not the card that answered.
+      then: {
+        ...(effect as object),
+        lookedAtIds: topN,
+        revealOffered: [...offered, lookedAtId],
+      },
+      thenSourceCardId: ctx.sourceCardId,
+      type: "confirm",
+      // biome-ignore lint/suspicious/noExplicitAny: branded id types
+    } as any;
     return;
   }
   const remaining = topN.length - 1;
@@ -50,7 +92,11 @@ export function handle_predict(effect: ExecutableEffect, ctx: EffectContext, _h:
     revealed: topN,
     revealer: ctx.playerId,
     sourceCardId: ctx.sourceCardId,
-    ...(remaining > 0 ? { then: { amount: remaining, type: "predict" } } : {}),
+    // The already-offered look replacements ride along so the chained Predict
+    // over the rest does not ask about the same card again.
+    ...(remaining > 0
+      ? { then: { amount: remaining, revealOffered: offered, type: "predict" } }
+      : {}),
     type: "reveal-and-pick",
   };
 }

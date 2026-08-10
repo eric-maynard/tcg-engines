@@ -948,6 +948,19 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
         const rest = seq.effects.slice(i + 1);
         if (rest.length > 0) {
           const restSeq = { effects: rest, independentExecution: true, type: "sequence" };
+          // A `confirm`'s `then` is the REST OF THIS STEP (the look/Predict
+          // resuming). It has to run before the sequence remainder, and the
+          // answer may itself open a prompt chain that parks its own deferred
+          // work first — so chain the remainder behind that `then` instead of
+          // queueing it independently, where it could overtake the step.
+          if (parked.type === "confirm") {
+            ctx.draft.pendingChoice = {
+              ...(parked as NonNullable<typeof ctx.draft.pendingChoice>),
+              then: { effects: [parked.then, restSeq], type: "sequence" },
+            } as NonNullable<typeof ctx.draft.pendingChoice>;
+            carryBattlefieldZone();
+            return;
+          }
           ctx.draft.deferredSequenceRest = [
             ...(ctx.draft.deferredSequenceRest ?? []),
             {
