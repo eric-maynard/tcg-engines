@@ -2,6 +2,7 @@
 import type { CardId as CoreCardId } from "@tcg/core";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
+import type { RiftboundGameState } from "../../types";
 import {
   consumeEntersReadyReplacement,
   getGrantedAcceleratePlayCost,
@@ -12,7 +13,18 @@ import { battlefieldForbidsUnitPlays } from "../play-restrictions";
 import { buildConsumedKey, findAllReplacements } from "../replacement-effects";
 import { type EffectHelpers, resolveAmount, tokenEntersReadyFromStaticGrant } from "./_helpers";
 
-let tokenSeq = 0;
+/**
+ * The next token id for this GAME (rule 186.1): the counter lives on the game
+ * state, so undo → re-issue of the same move and a seeded replay mint exactly
+ * the same token ids. A wall clock or a process-wide sequence would not.
+ */
+function nextTokenId(draft: RiftboundGameState | undefined, slug: string): string {
+  const n = (draft?.tokensCreated ?? 0) + 1;
+  if (draft) {
+    draft.tokensCreated = n;
+  }
+  return `token-${slug}-${n}`;
+}
 
 /**
  * rule 187.5: named tokens are defined by the rules, not by the card that plays
@@ -389,9 +401,7 @@ export function handle_createToken(effect: ExecutableEffect, ctx: EffectContext,
   const grantedTokenKeywords = (tokenDef.keywords ?? []).filter((k) => k !== "CopyOnPlay");
   const createdIds: string[] = [];
   for (let i = 0; i < count; i++) {
-    // A process-wide sequence keeps ids unique when two create-token effects
-    // resolve within the same millisecond (e.g. a [Repeat]ed spell).
-    const tokenId = `token-${tokenSlug}-${Date.now()}-${tokenSeq++}`;
+    const tokenId = nextTokenId(ctx.draft, tokenSlug);
     ctx.createCardInZone(tokenId, targetZone, ownerId);
     createdIds.push(tokenId);
     // Rule 143.4 / 185.2.d: token units enter play exhausted; gear tokens

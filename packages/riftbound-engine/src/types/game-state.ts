@@ -1774,6 +1774,13 @@ export interface RiftboundGameState {
   cannotPlayCardsThisTurn?: Record<string, true>;
 
   /**
+   * Monotonic counter behind the id of every token this game creates (rule 186).
+   * Lives in state so undo → re-issue and seeded replays mint the SAME ids: a
+   * wall-clock or process-wide sequence would not.
+   */
+  tokensCreated?: number;
+
+  /**
    * rule-id: sfd-078-221 (rules 206, 820.3) — per player, how many pending
    * "next spell you play this turn has [Repeat] equal to its cost" grants are
    * waiting. Consumed by the next spell they play; cleared at end of turn.

@@ -14,8 +14,10 @@ import { P1, scenario } from "../../harness";
 const CARD = "ogn-099-298";
 const FILLER = "ogn-175-298";
 
-function withTrash(n: number, energy = 1, exhausted = false) {
-  const b = scenario().resources(P1, { energy }).gear(P1, CARD, "gg", exhausted ? { exhausted: true } : undefined);
+function withTrash(n: number, energy = 1, exhausted = false, seed?: string) {
+  const b = (seed === undefined ? scenario() : scenario({ seed }))
+    .resources(P1, { energy })
+    .gear(P1, CARD, "gg", exhausted ? { exhausted: true } : undefined);
   for (let i = 1; i <= n; i++) {
     b.trash(P1, FILLER, `t${i}`);
   }
@@ -60,8 +62,11 @@ describe("Garbage Grabber (ogn-099-298)", () => {
 
   test("rule 416.5: the 3 simultaneously recycled cards hit the deck bottom in a RANDOM order, not trash order", async () => {
     const seen = new Set<string>();
+    // The order comes from the game's SEEDED rng, so one seed always yields the
+    // same bottom (that is what makes a transcript replayable): the randomness
+    // shows up ACROSS games, not across repeats of one.
     for (let i = 0; i < 30; i++) {
-      const game = await withTrash(3).build();
+      const game = await withTrash(3, 1, false, `gg-416-5-${i}`).build();
       await game.p1.activate("gg");
       const bottom = game.p1.deck().slice(-3);
       expect(bottom.slice().sort()).toEqual(["t1", "t2", "t3"]);

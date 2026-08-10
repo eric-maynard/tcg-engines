@@ -2651,14 +2651,11 @@ export const activateAbility: Defs["activateAbility"] = {
         // rule 416.5: cards recycled simultaneously go to the bottom in a
         // RANDOM order — the payer must not be able to stack the deck bottom
         // by choosing (or by relying on) the trash order.
-        const ordered = [...toRecycle];
-        for (let i = ordered.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          const a = ordered[i] as string;
-          const b = ordered[j] as string;
-          ordered[i] = b;
-          ordered[j] = a;
-        }
+        // The game's SEEDED rng draws the order, so a transcript replays
+        // identically (same seed + same answers ⇒ same deck bottom).
+        const rng = (context as { rng?: { shuffle: <T>(array: readonly T[]) => T[] } }).rng;
+        const ordered =
+          toRecycle.length < 2 || rng === undefined ? [...toRecycle] : rng.shuffle(toRecycle);
         for (const id of ordered) {
           context.zones.moveCard({
             cardId: id as CoreCardId,

@@ -225,11 +225,51 @@ describe("PROPERTY — every action of a seeded random game is exactly rewindabl
 
 const STACKED_DECK = "ogn-183-298"; // Look at top 3, put 1 in hand, recycle the rest (random bottom order, rule 416.5)
 const VANILLA = "ogn-175-298";
+const DESERTS_CALL = "sfd-031-221"; // "Play a 2 [Might] Sand Soldier unit token." (rule 186 — a token per execution)
 
 function deckOf(game: Game, seat: string): string[] {
   const internal = getInternalState(game.engine);
   return (internal.zones.mainDeck?.cardIds ?? []).filter((id) => internal.cards[id]?.owner === seat);
 }
+
+describe("DETERMINISM — undo then RE-ISSUE the same move reproduces the position exactly", () => {
+  // rule 186 — a created token is a new game object; its id must come from the
+  // GAME (a state counter), never from the wall clock or a process-wide
+  // sequence, or an undo → re-issue (and a seeded replay) mints different ids
+  // and the position hash drifts even though the game is identical.
+  test("a token-creating spell: cast ⇒ h1; undo to the start ⇒ h0; cast the SAME move again ⇒ h1 again (identical token ids)", async () => {
+    const build = () =>
+      scenario({ seed: "token-determinism" })
+        .resources(P1, { energy: 4 })
+        .hand(P1, DESERTS_CALL, "call")
+        .build();
+    const game = await build();
+    const h0 = game.snapshotHash();
+
+    await game.p1.cast("call");
+    await game.settle({ policy: "first" });
+    const h1 = game.snapshotHash();
+    const tokens = game.p1.base().filter((id) => id.startsWith("token-"));
+    expect(tokens.length).toBeGreaterThan(0);
+
+    while (game.snapshotHash() !== h0 && game.undo()) {
+      // rewind the whole action
+    }
+    expect(game.snapshotHash()).toBe(h0);
+
+    await game.p1.cast("call");
+    await game.settle({ policy: "first" });
+    expect(game.p1.base().filter((id) => id.startsWith("token-"))).toEqual(tokens);
+    expect(game.snapshotHash()).toBe(h1);
+
+    // A fresh engine on the same seed agrees: the ids are a function of the game.
+    const twin = await build();
+    await twin.p1.cast("call");
+    await twin.settle({ policy: "first" });
+    expect(twin.p1.base().filter((id) => id.startsWith("token-"))).toEqual(tokens);
+    expect(twin.snapshotHash()).toBe(h1);
+  });
+});
 
 describe("RNG — the generator cursor is part of the checkpoint", () => {
   test("Stacked Deck's random recycle order: undo ⇒ pre-hash; redo ⇒ SAME deck; undo + re-cast with the same answers ⇒ SAME deck and same position hash", async () => {
