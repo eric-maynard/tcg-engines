@@ -266,6 +266,36 @@ export function resolveTarget(
     return all;
   }
 
+  // rule 355.8 / 355.9.c (rule-id: ogn-045-298 Defy, ogn-080-298 Mystic
+  // Reversal) — a locationless "a spell" names an item ON THE CHAIN, never a
+  // board object: scanning the board would offer units as choices and would
+  // make an already-chosen chain target read as illegal on resolution
+  // (359.3.e.2). The choosing spell itself is never a legal choice.
+  if (target.type === "spell" && !offBoardZoneFor(target.location)) {
+    const items = ctx.draft.interaction?.chain?.items ?? [];
+    const pool = items
+      .filter(
+        (item) =>
+          item !== undefined &&
+          item.type === "spell" &&
+          item.countered !== true &&
+          item.cardId !== ctx.sourceCardId &&
+          (target.controller === undefined ||
+            target.controller === "any" ||
+            (target.controller === "friendly"
+              ? item.controller === ctx.playerId
+              : item.controller !== ctx.playerId)),
+      )
+      .map((item) => item.cardId as string);
+    if (pool.length > 0) {
+      if (target.quantity === "all") {
+        return pool;
+      }
+      const count = typeof target.quantity === "number" ? target.quantity : 1;
+      return pool.slice(0, count);
+    }
+  }
+
   // Collect candidate cards. rule 355.8 / rule-id: ogn-170-298 — "a unit from
   // your trash" names an OFF-BOARD zone, so the candidate pool is that zone
   // (per player), not the board. Absent an explicit controller, an off-board

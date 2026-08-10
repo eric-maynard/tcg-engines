@@ -662,15 +662,18 @@ export function markScored(
   battlefieldId: string,
   method: "hold" | "conquer",
 ): { wasAlreadyScoredThisTurn: boolean } {
+  // rule 348.2.a.1 — re-establishing control is a Conquer only when this player
+  // has not already scored that battlefield this turn, so the conquer ledger is
+  // written only alongside a real Score.
+  const scored = (draft.scoredThisTurn[playerId] ??= []);
+  if (scored.includes(battlefieldId as never)) {
+    return { wasAlreadyScoredThisTurn: true };
+  }
   if (method === "conquer") {
     const conquered = (draft.conqueredThisTurn[playerId] ??= []);
     if (!conquered.includes(battlefieldId as never)) {
       conquered.push(battlefieldId as never);
     }
-  }
-  const scored = (draft.scoredThisTurn[playerId] ??= []);
-  if (scored.includes(battlefieldId as never)) {
-    return { wasAlreadyScoredThisTurn: true };
   }
   scored.push(battlefieldId as never);
   return { wasAlreadyScoredThisTurn: false };
