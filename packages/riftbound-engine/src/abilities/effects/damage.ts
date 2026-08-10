@@ -526,11 +526,19 @@ export function handle_damage(effect: ExecutableEffect, ctx: EffectContext, h: E
     return;
   }
   // rule 417 / 715.4 (rule-id: unl-020-219) — a rider hanging off the Deal
-  // action ("Deal 2 to a unit. ITS controller may …") runs once the damage has
-  // actually been dealt, with the damaged units bound as its referent. Damage
-  // that was fully prevented never happened, so the rider never runs.
+  // action ("Deal 2 to a unit. ITS controller may …") refers to the unit the
+  // Deal was aimed at, with the damaged units bound as its referent. rule 437.4
+  // / 417.1.e.1: fully preventing the damage means none was dealt, but the
+  // chosen unit is still the referent, so the rider still runs.
   const then = (effect as { then?: ExecutableEffect }).then;
-  if (then !== undefined && dealtTo.length > 0 && !ctx.draft.pendingChoice) {
-    executeEffect(then, { ...ctx, boundTargets: dealtTo });
+  const riderTargets = dealtTo.length > 0 ? dealtTo : hits.map((h) => h.targetId);
+  if (then !== undefined && riderTargets.length > 0 && !ctx.draft.pendingChoice) {
+    // rule 715.1 / 317.2.c — an escalating rider counts the times the spell has
+    // actually DEALT damage, so a fully prevented instance adds no pip.
+    const riderEffect =
+      dealtTo.length === 0 && (then as { escalate?: boolean }).escalate === true
+        ? ({ ...then, escalate: false } as ExecutableEffect)
+        : then;
+    executeEffect(riderEffect, { ...ctx, boundTargets: riderTargets });
   }
 }
