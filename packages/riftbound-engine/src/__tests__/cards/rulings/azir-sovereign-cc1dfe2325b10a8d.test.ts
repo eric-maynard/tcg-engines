@@ -82,7 +82,8 @@ describe("Ruling cc1dfe2325b10a8d — Azir's 'this battlefield' is read on resol
     await game.p1.move("azir", "bf1");
     expect(game.state("azir").combatRole).toBe("attacker");
     expect(game.chain()).toEqual([expect.objectContaining({ cardId: "azir", controller: P1, triggered: true })]);
-    await game.p1.yes(); // rule 402 (finalization): the "you may" is answered before priority
+    await game.p1.yes(); // rule 402 (finalization): the "you may" is answered before priority …
+    await game.p1.pick(SOLDIER); // … and so is the "any number of your token units" set (402.2 / 355.13)
     await game.p1.passPriority();
     expect(game.p2.can("reveal", "blade")).toBe(true);
     await game.p2.reveal("blade");
@@ -104,6 +105,7 @@ describe("Ruling cc1dfe2325b10a8d — Azir's 'this battlefield' is read on resol
     const game = await bladeBoard().build();
     await game.p1.move("azir", "bf1");
     await game.p1.yes(); // rule 402 (finalization)
+    await game.p1.pick(SOLDIER);
     await game.p1.passPriority();
     await game.p2.reveal("blade");
     await game.p2.pick("azir");
@@ -140,8 +142,9 @@ describe("Ruling cc1dfe2325b10a8d — Azir's 'this battlefield' is read on resol
       ["azir", P1, true],
       ["fan", P2, true],
     ]);
-    // rule 402 (finalization): both "you may"s are answered before priority
+    // rule 402 (finalization): both "you may"s (and Azir's token set) are answered before priority
     await game.p1.yes();
+    await game.p1.pick(SOLDIER);
     expect(game.decision()).toMatchObject({ kind: "yes-no", seat: P2 });
     await game.p2.yes();
     const d = game.decision();
@@ -161,6 +164,7 @@ describe("Ruling cc1dfe2325b10a8d — Azir's 'this battlefield' is read on resol
     const game = await fanBoard().build();
     await game.p1.move("azir", "bf1");
     await game.p1.yes(); // rule 402 (finalization)
+    await game.p1.pick(SOLDIER);
     await game.p2.yes();
     const d = game.decision();
     if (d?.kind === "pick" && d.seat === P2 && d.options.some((o) => (o.card ?? o.key) === "azir")) {

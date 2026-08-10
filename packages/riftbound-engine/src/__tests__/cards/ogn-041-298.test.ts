@@ -64,7 +64,7 @@ describe("Volibear, Furious (ogn-041-298)", () => {
     expect(game.state("voli").keywords).toContain("Assault");
   });
 
-  test("When I attack: moving into an enemy-held battlefield puts the trigger on the chain; only enemy units HERE are offered", async () => {
+  test("When I attack: moving into an enemy-held battlefield puts the trigger on the chain; only enemy units HERE are offered as the split's targets, at finalization (355.14.b)", async () => {
     const game = await scenario()
       .battlefield("bf1", { controller: P2 })
       .unit(P1, "base", VOLIBEAR, "voli")
@@ -75,10 +75,9 @@ describe("Volibear, Furious (ogn-041-298)", () => {
       .build();
     await game.p1.move("voli", "bf1");
     expect(game.chain()).toEqual([expect.objectContaining({ cardId: "voli", triggered: true })]);
-    await game.p1.passPriority();
-    await game.p2.passPriority();
     const d = game.decision();
-    const offered = d?.kind === "pick" ? d.options.map((o) => o.card) : d?.kind === "distribute" ? d.buckets.map((b) => b.card) : [];
+    expect(d).toMatchObject({ kind: "pick", seat: P1, timing: "FIN" });
+    const offered = d?.kind === "pick" ? d.options.map((o) => o.card) : [];
     expect(new Set(offered)).toEqual(new Set(["a", "b"]));
   });
 
@@ -94,8 +93,8 @@ describe("Volibear, Furious (ogn-041-298)", () => {
   });
 
   test("5 damage may be split among several enemy units here (2 to a 2-Might unit, 3 to a 7-Might unit) — rule 355.14", async () => {
-    // Expected: a distribute prompt totalling 5 over the enemy units here; a dies, b has 3 damage
-    // before combat. Actual: the engine asks for a single target, then "Assign 1 damage".
+    // Targets named at finalization (355.14.b); a distribute prompt totalling 5 over them at
+    // resolution (355.14.e); a dies, b has 3 damage before combat.
     const game = await scenario()
       .battlefield("bf1", { controller: P2 })
       .unit(P1, "base", VOLIBEAR, "voli")
@@ -103,11 +102,9 @@ describe("Volibear, Furious (ogn-041-298)", () => {
       .unit(P2, "bf1", { might: 2 }, "a")
       .build();
     await game.p1.move("voli", "bf1");
+    await game.p1.pick("a", "b");
     await game.p1.passPriority();
     await game.p2.passPriority();
-    if (game.decision()?.kind === "pick") {
-      await game.p1.pick("a", "b");
-    }
     expect(game.decision()).toMatchObject({ kind: "distribute", total: 5 });
     await game.p1.distribute({ a: 2, b: 3 });
     expect(game.zoneOf("a")).toBe("trash");
@@ -123,11 +120,10 @@ describe("Volibear, Furious (ogn-041-298)", () => {
       .unit(P2, "bf1", { might: 7 }, "b")
       .build();
     await game.p1.move("voli", "bf1");
+    await game.p1.pick("b");
     await game.p1.passPriority();
-    await game.p2.passPriority();
-    if (game.decision()?.kind === "distribute") {
-      await game.p1.distribute({ b: 5 });
-    }
+    await game.p2.passPriority(); // a lone target takes the whole 5 — no distribute prompt
+    expect(game.decision()?.kind).not.toBe("distribute");
     expect(game.decision()?.kind).toBe("action");
     expect(game.zoneOf("b")).toBe("battlefield-bf1");
     expect(game.state("b").damage).toBe(5);

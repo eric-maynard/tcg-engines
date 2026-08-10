@@ -20,6 +20,7 @@ import type { ExecutableEffect } from "../../../abilities/effect-executor";
 import { executeEffect } from "../../../abilities/effect-executor";
 import type { TargetDescriptor } from "../../../abilities/target-resolver";
 import { resolveTarget } from "../../../abilities/target-resolver";
+import { collectMultiPickSlots } from "../../../abilities/target-slots";
 import { recalculateStaticEffects } from "../../../abilities/static-abilities";
 import { fireTriggers } from "../../../abilities/trigger-runner";
 import { evaluateLegionCondition } from "../../../abilities/legion-conditions";
@@ -2723,6 +2724,11 @@ export const activateAbility: Defs["activateAbility"] = {
               }
             : ability.effect,
         ...(targets && targets.length > 0 ? { targets } : {}),
+        // rule 402.2 / 355.13 / 355.14.b — an activation naming a VARIABLE-count
+        // set ("up to two units", "split among any number of …") finishes its
+        // choices in the finalization dialog (`trigger-finalization.ts` Step
+        // 2b) before anyone receives Priority, exactly like a triggered ability.
+        ...(collectMultiPickSlots(ability.effect).length > 0 ? { status: "pending" as const } : {}),
         type: "ability",
       },
       turnOrder,

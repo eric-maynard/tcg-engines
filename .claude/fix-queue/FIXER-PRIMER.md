@@ -71,9 +71,31 @@ Recipe: 1) dump enriched abilities. 2) JSON wrong → explicit `abilities` in th
   is auto-bound) — and they are killed/recycled/bounced AT ONCE (`trigger-finalization.ts settleObjectCost /
   payTriggerObjectCost`; Deathknells they set off are newer pending items finalized in the same sweep, above);
   the paid objects ride on the item as `paidObjects[{id,lki}]` (359.3.e.13 look-back, e.g. Rumble's discount reads
-  `ctx.paidObjects[0].lki.might`). Still at RESOLUTION: up-to-N/any-number picks (and their destinations), split
-  damage, reveal-and-pick/look, destinations of cards an effect PLAYS / movers chosen at resolution, later "you may"
-  / "then you may pay" (383.3.a.3).
+  `ctx.paidObjects[0].lki.might`). MULTI-TARGET SETS too (rules 355.12–355.14 / 402.2, `E/abilities/target-slots.ts`,
+  dialog Step 2b `trigger-finalization.ts finalizeTargetSlots`; activated abilities with such a set are added
+  `status:"pending"` and take the same step): every effect node of an ABILITY item (root / sequence step /
+  conditional branch / optional body) that is a SPLIT (`damage split:true`, no Might reference) or an "up to N" /
+  "any number" pick of board units/gear (NOT runes, NOT private zones, NOT spend-buff/play/look, NOT `delayed`
+  items) is a SLOT: ONE `pick-many` (min 0, max = N / candidates / split damage available incl. Bonus Damage —
+  355.14.c; per-option `deflect` surcharge shown, individually unaffordable candidates dropped, the SET's total
+  Deflect validated + charged on the answer via resume `target-slot`, "choose" events fired; 0 candidates ⇒ bound
+  `[]` silently, item stays — 355.13). Bound ids land in `item.targetSlots[{slot(path), ids, min, max,
+  semantics:"split"|"upTo"}]`, are APPENDED to flat `item.targets` (Repulse counting / 359.3.e.2 reborn tracking)
+  and stamped on the effect node as `_bound` (deep-copied effect). Resolution: `resolve.ts` strips slot ids off the
+  positional `boundTargets` (`stripSlotIds`) and drops reborn objects from `_bound` (`mapBoundNodes`); handlers read
+  the node: `_helpers.getTargetIds` returns `legalBoundIds` (= `_bound` ∩ descriptor-with-choosing NOW; illegal
+  dropped, never re-aimed, 359.3.e.5/355.15); `effects/damage.ts resolveBoundSplit` = legal recipients, pool
+  recomputed now (+bonus once, 715.3), 0 legal ⇒ nothing (359.3.e.7), 1 ⇒ all of it, ≥2 ⇒ `choose-target
+  {assign,total,minPer,maxPer,exactTargets,targetsPreChosen}` = harness `distribute` (buckets min 1 / max
+  total−(n−1); more recipients than damage ⇒ 0..1 each, exactly `total` nonzero — 355.14.h). The old resolve.ts
+  planning never prompts/auto-binds a multi-pick node of an ability (`isMultiPickNode` guard). Still at RESOLUTION:
+  rune picks ("ready up to 2 runes"), spend-buff sets, `delayed` items' picks (legacy accumulate prompt),
+  reveal-and-pick/look, destinations of cards an effect PLAYS / multi-mover destinations / movers chosen at
+  resolution, later "you may" / "then you may pay" (383.3.a.3).
+  Harness: the FIN set pick is `kind:"pick", semantics:"target", targeting:"split-targets"|"up-to", min 0, max,
+  options[].deflect`; answer ONCE with `pick(a,b)` / `decline()` (= none) right after the triggering verb — a
+  trailing `decline()` after a completed set pick is tolerated as a no-op; `settle()` (passive) hands the set pick
+  back UNANSWERED (it does not auto-decline it); the split's `distribute` comes at RES with bucket min/max.
   Harness: these prompts have `timing:"FIN"`; answer them right after the triggering verb (or `{answers:[…]}` — e.g.
   `cast("charm",{targets:"foe",answers:["bf2"]})`), THEN settle.
 Recipe — add a filter (non-token, in-base, at-a-battlefield, other, stunned…):
@@ -662,3 +684,4 @@ prompt — reuse the `opt-in` pattern (`die-replacement-batch.ts offerOptionalSh
 - **383.3.d same-controller trigger order**: SOFT prompt (stack popup); tests must not require settle() to stop on it.
 - **Bo1 battlefield**: random in duel mode, manual in sandbox.
 - **Ruling vs Core Rules conflicts** (riftjudge data is community-sourced; some entries are self-flagged unverified): when a ruling test contradicts an explicit Core Rule AND an existing green core-rules/ruling test, do NOT flip the engine back and forth — cite both, keep the Core Rule behaviour, rewrite the ruling test's facet to the rule with `// RULING-CONFLICT: riftjudge <id> says X; CR <rule> says Y — engine follows CR`, and note it in your resolution. If two riftjudge rulings disagree with each other, same treatment. Only when the ruling clarifies something the CR leaves open does the ruling win.
+- **File-level embargo**: `.claude/fix-queue/embargo-files.txt` lines `owner<TAB>regex`; `land-patch.sh` refuses patches touching matching files unless your land LABEL starts with `owner` (you'll see `embargoed_file=…` `committed=false`). If you hit it: DROP that file from your land list and land the rest (or mark the item failed with note "embargoed files (owner package)"). NEVER `git checkout -- <file>` / `git restore` / `git stash` ANY file in the shared working tree — other lanes' and package owners' uncommitted work lives there; reverting a shared file destroys it. The only sanctioned way to 'undo' your own hunk is to edit it back by hand.

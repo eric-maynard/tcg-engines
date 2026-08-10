@@ -105,26 +105,30 @@ describe("Janna, Savior (sfd-053-221)", () => {
     expect(game.locationOf("a1")).toBe("bf1");
   });
 
-  test("When you play me — the play effect goes on the chain; heals your units HERE only, then offers only the enemy units HERE", async () => {
-    // Expected: a triggered item from janna; after both pass, hurt 2→0 damage (homehurt in base keeps
-    // its 1), then a pick among a1/a2 (not far). Actual: the ability is parsed inside a `spell`
-    // wrapper, so no trigger is ever created.
+  test("When you play me — the play effect goes on the chain and offers only the enemy units HERE as it is finalized (402.2 / 355.13); on resolution it heals your units HERE only, then moves the pick", async () => {
+    // A triggered item from janna whose "up to one enemy unit here" is named at finalization (timing
+    // FIN, a1/a2 offered — not far); after both pass: hurt 2→0 damage (homehurt in base keeps its 1).
     const game = await defence().build();
     await flashIn(game);
     expect(game.chain()).toEqual([expect.objectContaining({ cardId: "janna", controller: P1, triggered: true })]);
-    await game.settle(); // both pass → resolves: heal, then the move prompt
+    const d = game.decision();
+    expect(d).toMatchObject({ kind: "pick", max: 1, min: 0, seat: P1, timing: "FIN" });
+    expect(d?.kind === "pick" ? d.options.map((o) => o.card).sort() : []).toEqual(["a1", "a2"]);
+    await game.p1.pick("a2");
+    expect(game.state("hurt").damage).toBe(2); // nothing resolves before both pass
+    await game.p1.passPriority();
+    await game.p2.passPriority(); // both pass → resolves: heal, then the move
     expect(game.state("hurt").damage).toBe(0);
     expect(game.state("homehurt").damage).toBe(1);
-    const d = game.decision();
-    expect(d).toMatchObject({ kind: "pick", seat: P1 });
-    expect(d?.kind === "pick" ? d.options.map((o) => o.card).sort() : []).toEqual(["a1", "a2"]);
+    expect(game.zoneOf("a2")).toBe("base");
   });
 
   test("moving one attacker to ITS base — the other still fights: A2 (2) dies to 7, Hurt + Janna keep bf1", async () => {
     const game = await defence(2).build();
     await flashIn(game);
-    await game.settle();
     await game.p1.pick("a1");
+    await game.p1.passPriority();
+    await game.p2.passPriority(); // the trigger resolves
     expect(game.zoneOf("a1")).toBe("base");
     expect(game.p2.base()).toContain("a1");
     expect(game.locationOf("a2")).toBe("bf1");
@@ -139,7 +143,6 @@ describe("Janna, Savior (sfd-053-221)", () => {
   test("'up to one' — declining moves nobody; both 2-Might attackers fight and die, defenders hold", async () => {
     const game = await defence(2).build();
     await flashIn(game);
-    await game.settle();
     expect(game.decision()).toMatchObject({ kind: "pick", seat: P1 });
     await game.p1.decline();
     expect(game.locationOf("a1")).toBe("bf1");

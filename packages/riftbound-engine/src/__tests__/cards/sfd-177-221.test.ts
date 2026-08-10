@@ -56,7 +56,7 @@ function board() {
     .unit(P2, "bf1", { might: 5, name: "Wall" }, "wall", { stunned: true }); // stunned: deals no combat damage
 }
 
-/** After Azir's move: accept the "you may", pass priority around, and return the target prompt (or whatever comes next). */
+/** After Azir's move: accept the "you may" and return the (finalize-time) target prompt — or, past it, pass priority around and return whatever comes next. */
 async function toTargetPrompt(game: Game, accept = true): Promise<Decision | null> {
   for (let i = 0; i < 8; i++) {
     const d = game.decision();
@@ -98,38 +98,26 @@ describe("Azir, Sovereign (sfd-177-221)", () => {
     expect(short.zoneOf("azir")).toBe("hand");
   });
 
-  test("attacking puts the optional trigger on the chain; the controller is asked 'you may' and the opponent gets priority before it resolves", async () => {
+  test("attacking puts the optional trigger on the chain; the controller is asked 'you may' and names the tokens as it is finalized (402.1–402.2), and the opponent gets priority before it resolves", async () => {
     const game = await board().build();
     await game.p1.move("azir", "bf1");
     expect(game.state("azir").combatRole).toBe("attacker");
     expect(game.chain()).toEqual([expect.objectContaining({ cardId: "azir", controller: P1, triggered: true })]);
-    // The "you may" is P1's call (asked either as it goes on the chain or as it resolves); P2 must
-    // hold priority with the trigger still on the chain before anything moves.
-    let p1Asked = false;
-    let p2HadPriority = false;
-    for (let i = 0; i < 8; i++) {
-      const d = game.decision();
-      if (!d || d.kind === "pick") {
-        break;
-      }
-      if (d.kind === "yes-no") {
-        expect(d.seat).toBe(P1);
-        p1Asked = true;
-        await game.p1.yes();
-      } else if (d.kind === "action" && d.context === "chain") {
-        if (d.seat === P2) {
-          p2HadPriority = true;
-          expect(game.chain()).toHaveLength(1);
-          expect(game.locationOf("token-s1")).toBe("base");
-        }
-        await game.seat(d.seat).pass();
-      } else {
-        break;
-      }
-    }
-    expect(p1Asked).toBe(true);
-    expect(p2HadPriority).toBe(true);
-    expect(game.decision()).toMatchObject({ kind: "pick", seat: P1 });
+    // The "you may" and the "any number of your token units" set are P1's calls while the trigger is
+    // FINALIZED; P2 must then hold priority with the trigger still on the chain before anything moves.
+    expect(game.decision()).toMatchObject({ kind: "yes-no", seat: P1, timing: "FIN" });
+    await game.p1.yes();
+    expect(game.decision()).toMatchObject({ kind: "pick", seat: P1, timing: "FIN" });
+    await game.p1.pick("token-s1", "token-s2");
+    expect(game.chain()).toEqual([expect.objectContaining({ cardId: "azir", targets: ["token-s1", "token-s2"] })]);
+    expect(game.decision()).toMatchObject({ context: "chain", kind: "action", seat: P1 });
+    await game.p1.pass();
+    expect(game.decision()).toMatchObject({ context: "chain", kind: "action", seat: P2 });
+    expect(game.chain()).toHaveLength(1);
+    expect(game.locationOf("token-s1")).toBe("base");
+    await game.p2.pass();
+    expect(game.decision()?.kind).not.toBe("pick"); // nothing is asked again on resolution
+    expect(game.locationOf("token-s1")).toBe("bf1");
   });
 
   test("only TOKEN units are offered — the printed ally and Azir himself are not legal choices", async () => {
@@ -222,10 +210,11 @@ describe("Azir, Sovereign (sfd-177-221)", () => {
     await game.p1.move("azir", "bf1");
     expect(game.chain()).toHaveLength(1);
     await game.p1.yes();
+    await game.p1.pick("token-s1", "token-s2"); // the set is named at finalization (402.2) …
     await game.p1.cast("snipe", { targets: "azir" });
     await game.settle();
     expect(game.zoneOf("azir")).toBe("trash");
-    expect(game.decision()?.kind).not.toBe("pick");
+    expect(game.decision()?.kind).not.toBe("pick"); // … and nothing is asked on resolution
     expect(game.locationOf("token-s1")).toBe("base");
     expect(game.locationOf("token-s2")).toBe("bf2");
   });
@@ -236,6 +225,7 @@ describe("Azir, Sovereign (sfd-177-221)", () => {
     await game.p1.move("azir", "bf1");
     expect(game.chain()).toHaveLength(1);
     await game.p1.yes();
+    await game.p1.pick("token-s1", "token-s2");
     await game.p1.cast("flash", { targets: "azir" });
     await game.settle();
     expect(game.locationOf("azir")).toBe("base");

@@ -121,6 +121,13 @@ function itemChoosesMatching(
   }
   const matches = locked.filter((id) => {
     if (!wanted.includes(registry.getCardType(id) ?? "")) return false;
+    // rule 359.3.e.9.a — counting what a finalized item chooses includes its
+    // mistargeted choices still on the board, but NOT a target that has changed
+    // to a non-board zone (killed / bounced since it was chosen).
+    if (ctx?.zoneOf !== undefined && registry.getCardType(id) === "unit") {
+      const zone = ctx.zoneOf(id) ?? "";
+      if (zone !== "base" && !zone.startsWith("battlefield-")) return false;
+    }
     if (chooses.controller === undefined) return true;
     const owner = ctx?.controllerOf(id);
     if (owner === undefined || ctx?.playerId === undefined) return false;

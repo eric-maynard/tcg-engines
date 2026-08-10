@@ -27,7 +27,7 @@
  */
 
 import type { CardId as CoreCardId } from "@tcg/core";
-import type { ChainItem } from "../chain/chain-state";
+import type { ChainItem, ChainTargetSlot } from "../chain/chain-state";
 import { removeChainItem } from "../chain/chain-state";
 import type { PostMoveCleanupContext } from "../cleanup/post-move-cleanup";
 import { cleanupAndFireDeaths } from "../cleanup/post-move-cleanup";
@@ -52,12 +52,16 @@ import {
   findSequenceLeadTarget,
   type SpellEffectTargetShape,
 } from "../game-definition/moves/play/targeting";
+import { getDeflectSurcharge } from "../game-definition/moves/play/cost";
 import { getGlobalCardRegistry } from "../operations/card-lookup";
 import { type LeaveBoardContext, type LKISnapshot, snapshotLKI } from "../operations/leave-board";
 import type { RiftboundGameState } from "../types";
-import { executeEffect, type ExecutableEffect } from "./effect-executor";
+import { getBonusDamage } from "./bonus-damage";
+import { executeEffect, type EffectContext, type ExecutableEffect } from "./effect-executor";
+import { resolveAmount } from "./effects/_helpers";
 import type { TargetDescriptor } from "./target-resolver";
 import { resolveTarget } from "./target-resolver";
+import { bindTargetSlot, collectMultiPickSlots, slotCandidates } from "./target-slots";
 import { fireTriggers } from "./trigger-runner";
 
 /** The slice of a move / flow context the dialog needs. */
@@ -619,6 +623,148 @@ function finalizeMultiTargetSlots(
 }
 
 /**
+ * The EffectContext an ability item's choices are planned from while it is
+ * finalized: its controller and source, with "here" read the way resolution
+ * will read it — where a dying source died (428.1.a.1.b), or the battlefield a
+ * conquer/hold event names for a source that is not at one (469.1 / 469.2).
+ */
+function itemPlanningContext(
+  draft: RiftboundGameState,
+  item: ChainItem,
+  context: Parameters<typeof buildEffectContext>[3],
+): EffectContext {
+  const base = buildEffectContext(draft, item.controller as string, item.cardId as string, context);
+  const trigEvt = item.triggerEvent as
+    | { cardId?: string; diedAt?: string; type?: string; battlefieldId?: string }
+    | undefined;
+  let sourceZone = base.sourceZone;
+  if (typeof trigEvt?.diedAt === "string" && trigEvt.cardId === item.cardId) {
+    sourceZone = trigEvt.diedAt;
+  } else if (
+    (trigEvt?.type === "conquer" || trigEvt?.type === "hold") &&
+    typeof trigEvt.battlefieldId === "string" &&
+    sourceZone?.startsWith("battlefield-") !== true
+  ) {
+    sourceZone = `battlefield-${trigEvt.battlefieldId}`;
+  }
+  return {
+    ...base,
+    ...(sourceZone !== undefined ? { sourceZone } : {}),
+    ...(typeof trigEvt?.cardId === "string" ? { triggerSourceId: trigEvt.cardId } : {}),
+  } as EffectContext;
+}
+
+/** Pooled Power of any Domain (rule 809.1.c.1 — a Deflect surcharge takes any). */
+function pooledPower(draft: RiftboundGameState, playerId: string): number {
+  return Object.values((draft.runePools?.[playerId]?.power ?? {}) as Partial<Record<string, number>>).reduce(
+    (a: number, b) => a + (b ?? 0),
+    0,
+  );
+}
+
+/**
+ * rule 355.14.c — the damage a split has available "when the spell is played":
+ * the instruction's amount plus Bonus Damage, which joins the pool once (715.3 —
+ * the CR's own Volibear + Annie "6 damage split among up to 6 units").
+ */
+function splitDamageAvailable(node: Record<string, unknown>, ctx: EffectContext): number {
+  const base = resolveAmount((node.amount ?? 0) as Parameters<typeof resolveAmount>[0], ctx);
+  return base > 0 ? base + getBonusDamage(ctx) : 0;
+}
+
+/**
+ * Step 2b — rule 402.2 / 355.13 / 355.14.b: the item's variable-count target
+ * SETS ("split among any number of enemy units here", "up to two other friendly
+ * units", "any number of your token units") are chosen now, one slot at a time
+ * in execution order, and bound onto the item (`target-slots.ts`). Each slot is
+ * ONE `pick-many` (min 0 — choosing none is legal and the item stays, 355.13;
+ * max = the printed cap / the damage available for a split, 355.14.c) over the
+ * objects legal right now; a candidate whose [Deflect] surcharge the controller
+ * cannot cover is not offered (809.1.d) and the chosen set's total surcharge is
+ * validated and charged on the answer (`pending-choice.ts` resume
+ * `target-slot`). No candidate at all binds the empty set without asking.
+ * Nothing about the AMOUNTS of a split is asked here (355.14.e).
+ */
+function finalizeTargetSlots(
+  draft: RiftboundGameState,
+  ctx: FinalizationContext,
+  itemId: string,
+  context: Parameters<typeof buildEffectContext>[3],
+): "prompted" | "continue" | "done" {
+  const item = chainItems(draft)?.find((it) => it.id === itemId);
+  if (!item || item.effect === undefined || item.countered === true) {
+    return "done";
+  }
+  const discovered = collectMultiPickSlots(item.effect);
+  if (discovered.length === 0) {
+    return "done";
+  }
+  const slots: ChainTargetSlot[] = item.targetSlots
+    ? [...item.targetSlots]
+    : discovered.map((d) => ({ max: 0, min: 0, semantics: d.semantics, slot: d.path }));
+  const nextIdx = slots.findIndex((s) => s.ids === undefined);
+  if (nextIdx < 0) {
+    if (item.targetSlots === undefined) {
+      patchItem(draft, item.id, { targetSlots: slots });
+    }
+    return "done";
+  }
+  const entry = slots[nextIdx] as ChainTargetSlot;
+  const found = discovered.find((d) => d.path === entry.slot);
+  if (!found) {
+    // The stored effect changed shape (paid cost steps sliced off): nothing to name.
+    slots[nextIdx] = { ...entry, ids: [] };
+    patchItem(draft, item.id, { targetSlots: slots });
+    return "continue";
+  }
+  const effCtx = itemPlanningContext(draft, item, context);
+  const surchargeOf = (ids: readonly string[]): number =>
+    getDeflectSurcharge(draft, item.controller, [...ids], ctx.cards as never, item.cardId, ctx.zones as never);
+  const budget = pooledPower(draft, item.controller);
+  // rule 809.1.d — an object whose own surcharge is out of reach can never be chosen.
+  const candidates = slotCandidates(found, effCtx).filter((id) => surchargeOf([id]) <= budget);
+  let max = candidates.length;
+  if (found.cap !== undefined) {
+    max = Math.min(max, found.cap);
+  }
+  if (found.semantics === "split") {
+    max = Math.min(max, splitDamageAvailable(found.node, effCtx));
+  }
+  slots[nextIdx] = { ...entry, max: Math.max(0, max), min: 0 };
+  patchItem(draft, item.id, { targetSlots: slots });
+  if (candidates.length === 0 || max <= 0) {
+    bindTargetSlot(draft, item.id, entry.slot, []);
+    return "continue";
+  }
+  const nameOf = (cardId: string): string =>
+    (ctx.cards.getCardName?.(cardId as CoreCardId) as string | undefined) ??
+    (getGlobalCardRegistry().get(cardId) as { name?: string } | undefined)?.name ??
+    cardId;
+  const taxed = candidates.some((id) => surchargeOf([id]) > 0);
+  const capText = found.cap === undefined && max >= candidates.length ? "any number of" : `up to ${max}`;
+  draft.pendingChoice = {
+    ...(taxed ? { constraint: { deflectAffordable: true } } : {}),
+    max,
+    min: 0,
+    options: candidates.map((id) => {
+      const deflect = surchargeOf([id]);
+      return { cardId: id, key: id, label: nameOf(id), ...(deflect > 0 ? { deflect } : {}) };
+    }),
+    playerId: item.controller,
+    prompt:
+      found.semantics === "split"
+        ? `Choose the targets to split ${nameOf(item.cardId)}'s damage among (${capText}; the amounts are decided when it resolves)`
+        : `Choose ${capText} target${capText === "up to 1" ? "" : "s"} for ${nameOf(item.cardId)}'s ability (none is allowed)`,
+    resume: { itemId: item.id, kind: "target-slot", slot: entry.slot },
+    semantics: "target",
+    slotSemantics: found.semantics,
+    sourceCardId: item.cardId,
+    type: "pick-many",
+  } as RiftboundGameState["pendingChoice"];
+  return "prompted";
+}
+
+/**
  * rule 383.3.d — "if more than one Triggered Ability is Triggered
  * simultaneously, the player that controls them selects the order to place them
  * on the Chain". Once a batch is finalized, the triggered items it added that
@@ -961,6 +1107,19 @@ export function finalizePendingItems(draftLike: unknown, ctx: FinalizationContex
         )
       ) {
         return;
+      }
+      // Step 2b — rule 402.2 / 355.13 / 355.14.b: variable-count target sets
+      // ("split among any number of …", "up to N …") are chosen now as well.
+      // (A DELAYED ability — rule 392, "… at the end of this turn" — keeps the
+      // legacy accumulate prompt of `executeResolvedItem` for its picks.)
+      if (item.type === "ability" && item.delayed !== true) {
+        const r = finalizeTargetSlots(draft, ctx, item.id, context);
+        if (r === "prompted") {
+          return;
+        }
+        if (r === "continue") {
+          continue;
+        }
       }
     }
 

@@ -25,16 +25,16 @@ describe("Corrupted Dragon (ven-091-166)", () => {
       .build();
 
     await game.p1.move("dragon", "bf1");
-    await game.p1.yes(); // rule 402 (finalization): the opt-in is asked before priority
-    await game.acting().passPriority();
-    await game.acting().passPriority();
+    await game.p1.yes(); // rule 402 (finalization): the opt-in is asked before priority …
     const d = game.decision();
-    expect(d?.timing).toBe("RES");
+    expect(d?.timing).toBe("FIN"); // … and so is the "any number of enemy units" set (402.2 / 355.13)
     expect(d?.kind).toBe("pick");
     const keys = (d as { options?: { key: string }[] } | undefined)?.options?.map((o) => o.key) ?? [];
     expect(keys).toContain("small");
     expect(keys).not.toContain("big");
     await game.p1.pick("small");
+    await game.acting().passPriority();
+    await game.acting().passPriority();
 
     expect(game.zoneOf("small")).toBe("base");
     expect(game.locationOf("big")).toBe("bf1");
@@ -51,9 +51,9 @@ describe("Corrupted Dragon (ven-091-166)", () => {
 
     await game.p1.move("dragon", "bf1");
     await game.p1.yes(); // rule 402 (finalization)
-    await game.acting().passPriority();
-    await game.acting().passPriority();
     await game.p1.decline();
+    await game.acting().passPriority();
+    await game.acting().passPriority();
 
     expect(game.locationOf("small")).toBe("bf1");
     expect(game.locationOf("dragon")).toBe("bf1");

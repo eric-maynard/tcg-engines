@@ -12,6 +12,7 @@ import {
 } from "../../operations/deal-damage";
 import { getBonusDamage } from "../bonus-damage";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
+import { legalBoundIds } from "../target-slots";
 import { type EffectHelpers, getTargetIds, getEffectiveMight, resolveAmount } from "./_helpers";
 
 /**
@@ -185,8 +186,93 @@ function raiseSameLocationSubsetRepick(
   return true;
 }
 
+/**
+ * rule 355.14.e–h — a split whose TARGETS were locked when the ability was
+ * finalized (`_bound` on the node, 355.14.b — see `target-slots.ts`). At
+ * resolution: recipients = the bound targets still legal (359.3.e.5 — a unit no
+ * longer "here", or protected again, is unaffected; nobody is added, 355.15);
+ * none left ⇒ the instruction does nothing (359.3.e.7); the amount is the pool
+ * available NOW (a Might pumped in response, Bonus Damage once — 715.3); one
+ * recipient takes it all; otherwise the controller divides it in ONE
+ * `distribute` answer — each recipient ≥ 1 (355.14.f/g), or, with more
+ * recipients than damage, exactly `n` of them 1 each (355.14.h.1). The answer
+ * re-enters here as `boundTargets` = one occurrence per point of damage.
+ * Returns true when the split was handled (dealt, parked, or nothing to do).
+ */
+function resolveBoundSplit(effect: ExecutableEffect, ctx: EffectContext): boolean {
+  const legal = legalBoundIds(effect, ctx);
+  if (legal === undefined) {
+    return false;
+  }
+  const base = Math.max(0, resolveAmount(effect.amount ?? 0, ctx));
+  const n = base > 0 ? base + getBonusDamage(ctx) : 0;
+  if (n <= 0 || legal.length === 0) {
+    return true;
+  }
+  const exactTargets = Math.min(legal.length, n);
+  // Every recipient ≥ 1 while the damage covers them all; with more recipients
+  // than damage (355.14.h) `n` of them take exactly 1 and the rest take none.
+  const minPer = legal.length <= n ? 1 : 0;
+  const maxPer = legal.length <= n ? n - (legal.length - 1) : 1;
+  // Re-entry with the controller's division (or a forced single line).
+  const answered = ctx.boundTargets;
+  if (answered !== undefined && answered.length > 0 && answered.every((id) => legal.includes(id))) {
+    const assigned: Record<string, number> = {};
+    for (const id of answered) {
+      assigned[id] = (assigned[id] ?? 0) + 1;
+    }
+    const ids = Object.keys(assigned);
+    const total = Object.values(assigned).reduce((a, b) => a + b, 0);
+    const valid =
+      total === n &&
+      ids.length === exactTargets &&
+      ids.every((id) => (assigned[id] as number) >= Math.max(1, minPer) && (assigned[id] as number) <= maxPer);
+    if (valid) {
+      dealHits(
+        effect,
+        ctx,
+        ids.map((targetId) => ({ amount: assigned[targetId] as number, targetId })),
+        answered,
+        { noSourceBonus: true },
+      );
+      return true;
+    }
+  }
+  if (legal.length === 1) {
+    dealHits(effect, ctx, [{ amount: n, targetId: legal[0] as string }], [legal[0] as string], {
+      noSourceBonus: true,
+    });
+    return true;
+  }
+  if (ctx.draft.pendingChoice !== undefined) {
+    return true;
+  }
+  ctx.draft.pendingChoice = {
+    assign: true,
+    effect,
+    exactTargets,
+    maxPer,
+    minPer,
+    options: legal,
+    playerId: ctx.playerId,
+    remaining: n,
+    sourceCardId: ctx.sourceCardId,
+    // rule 359.3.f — "here" as this resolution reads it must survive the prompt.
+    ...(typeof ctx.sourceZone === "string" ? { sourceZone: ctx.sourceZone } : {}),
+    targetsPreChosen: true,
+    total: n,
+    type: "choose-target",
+  } as RiftboundGameState["pendingChoice"];
+  return true;
+}
+
 export function handle_damage(effect: ExecutableEffect, ctx: EffectContext, h: EffectHelpers): void {
   const executeEffect = h.executeEffect;
+  // rule 355.14.b/e — split targets locked at finalization: only the division
+  // among the still-legal ones happens now.
+  if ((effect as { split?: boolean }).split === true && resolveBoundSplit(effect, ctx)) {
+    return;
+  }
   // rule 417 / 437 / 715 / 372 — every hit below is dealt through the damage
   // choke point (`operations/deal-damage.ts`): Bonus Damage, the global
   // "prevent all spell and ability damage", Double / Prevent shields and their

@@ -288,6 +288,9 @@ export function collectSequenceTargetSlots(
       // rule 355.10.f (rule-id: ven-140-166) — resolution-chosen steps claim no
       // play-time target slot.
       if ((sub as { chooseAtResolution?: boolean })?.chooseAtResolution === true) continue;
+      // rule 355.13 / 402.2 — a variable-count set bound at finalization rides on
+      // its own node (`target-slots.ts`), never in the positional list.
+      if (Array.isArray((sub as { _bound?: unknown })?._bound)) continue;
       const t = sub?.target;
       if (t === undefined) continue;
       if (typeof t === "string") {

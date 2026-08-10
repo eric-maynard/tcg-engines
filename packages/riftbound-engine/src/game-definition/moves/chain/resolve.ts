@@ -26,6 +26,7 @@ import {
   isUntargetable,
   resolveTarget,
 } from "../../../abilities/target-resolver";
+import { isMultiPickNode, isSlotBound, mapBoundNodes, stripSlotIds } from "../../../abilities/target-slots";
 import { fireTriggers } from "../../../abilities/trigger-runner";
 import { withChainItemResolution } from "../../../chain/resolution-guard";
 import { cleanupAndFireDeaths } from "../../../cleanup/post-move-cleanup";
@@ -200,6 +201,11 @@ export function minDeflectSurchargeForItem(
   const lead =
     eff?.type === "sequence" ? (eff as { effects?: ExecutableEffect[] }).effects?.[0] : eff;
   if (!lead || lead.type === "play" || (lead as { from?: unknown }).from !== undefined) {
+    return 0;
+  }
+  // rule 355.13 / 355.14 — "any number" / split sets may name nothing at all,
+  // so no surcharge is unavoidable (the set is priced when it is chosen).
+  if (lead.type === "damage" && (lead as { split?: unknown }).split === true) {
     return 0;
   }
   const tgt = (lead as { target?: TargetDescriptor }).target;
@@ -421,11 +427,23 @@ function stepOwningTarget(effect: unknown, target: unknown): unknown {
   if (!effect || typeof effect !== "object") {
     return undefined;
   }
-  const node = effect as { target?: unknown; defender?: unknown; effects?: unknown[] };
-  if (node.target === target || node.defender === target) {
+  const node = effect as {
+    target?: unknown;
+    defender?: unknown;
+    partner?: unknown;
+    effects?: unknown[];
+    then?: unknown;
+    else?: unknown;
+    effect?: unknown;
+  };
+  if (node.target === target || node.defender === target || node.partner === target) {
     return node;
   }
-  for (const sub of Array.isArray(node.effects) ? node.effects : []) {
+  const nested = [
+    ...(Array.isArray(node.effects) ? node.effects : []),
+    ...[node.then, node.else, node.effect].filter((x) => x !== undefined && typeof x === "object"),
+  ];
+  for (const sub of nested) {
     const hit = stepOwningTarget(sub, target);
     if (hit !== undefined) {
       return hit;
@@ -691,7 +709,19 @@ export function executeResolvedItem(
   // were not bound at chain-placement time and more than one legal option
   // exists, pause and ask via a `choose-target` pending choice; the effect
   // runs from `resolvePendingChoice` once the pick is made.
-  let boundTargets = resolved.targets;
+  // rule 355.13 / 355.14.b / 402.2 — variable-count sets bound at
+  // finalization ride on their own effect nodes (`_bound`, target-slots.ts):
+  // strip them off the positional list so each single-descriptor slot still
+  // lines up, and drop from every set the objects that left the board since
+  // and are therefore NEW objects (359.3.e.2 / 359.3.e.4) — the rest of their
+  // legality is re-read by the node's own handler as it executes (359.3.e.5).
+  let boundTargets = stripSlotIds(resolved.targets, resolved.targetSlots);
+  if (!finalizeOnly && (resolved.targetSlots?.length ?? 0) > 0) {
+    const reborn = newObjectTargetsFor(draft, resolved.id);
+    if (reborn.length > 0) {
+      effect = mapBoundNodes(effect, (ids) => ids.filter((id) => !reborn.includes(id)));
+    }
+  }
   // rule 758.1 / 758.2.a (unl-057-219 × ogn-172-298): a target that became
   // untargetable for this controller AFTER being chosen is an illegal target on
   // resolution. Drop it; if nothing legal is left the item still resolves but
@@ -944,6 +974,8 @@ export function executeResolvedItem(
     // ogn-122-298: bare-string target ("self" / instanceId) is already fully
     // specified — never route through the choose-target prompt.
     typeof target !== "string" &&
+    // rule 402.2 / 355.13 — a set already named at finalization is never re-asked.
+    !isSlotBound(stepOwningTarget(effect, target) ?? effect) &&
     target.type !== "self" &&
     // rule-id: unl-133-219 — "it" (trigger-source) is a fixed referent, not a choice.
     target.type !== "trigger-source" &&
@@ -1001,6 +1033,19 @@ export function executeResolvedItem(
       (target as { controller?: unknown }).controller === "friendly"
     )
   ) {
+    // rule 402.2 / 355.13 / 355.14.b — an ability's variable-count set ("up to
+    // N", "any number of", split recipients) is named by the finalization
+    // dialog's slot step (`trigger-finalization.ts` Step 2b), never auto-bound
+    // or prompted here — not even when a single candidate exists (zero stays a
+    // legal choice, 355.13).
+    if (
+      finalizeOnly &&
+      resolved.type !== "spell" &&
+      (resolved as { delayed?: boolean }).delayed !== true &&
+      isMultiPickNode(stepOwningTarget(effect, target) ?? effect)
+    ) {
+      return {};
+    }
     let options = resolveTarget(
       { ...target, quantity: "all" },
       {
@@ -1093,6 +1138,13 @@ export function executeResolvedItem(
     // rule 809.1.c.1 — this also covers a SPELL that reached the chain without
     // declared targets: it only gets here when nothing was bound at play time,
     // so no surcharge was paid then and the resolution-time choice owes it.
+    // rule-id: ogn-256-298 (rule 355.13) — "any number of <units>": the
+    // controller picks 0..n (declining is legal even with one candidate), so
+    // prompt whenever any candidate exists; candidates that alone breach the
+    // descriptor's aggregate cap (`totalMight`) are never legal.
+    const quantity = (target as { quantity?: unknown }).quantity;
+    const anyNumber = quantity === "any";
+    const multiQuantity = anyNumber || (typeof quantity === "object" && quantity !== null);
     let deflectTax = false;
     if (options.length > 0) {
       const surchargeOf = (id: string): number =>
@@ -1101,18 +1153,14 @@ export function executeResolvedItem(
       deflectTax = options.some((id) => surchargeOf(id) > 0);
       if (deflectTax) {
         const payable = options.filter((id) => surchargeOf(id) <= available);
-        if (payable.length === 0) {
+        // rule 404.2 — a MANDATORY single choice with nothing affordable removes
+        // the item; an "up to N"/"any number" set may simply name nothing (355.13).
+        if (payable.length === 0 && !multiQuantity) {
           return finalizeOnly ? { remove: true } : undefined;
         }
         options = payable;
       }
     }
-    // rule-id: ogn-256-298 (rule 355.13) — "any number of <units>": the
-    // controller picks 0..n (declining is legal even with one candidate), so
-    // prompt whenever any candidate exists; candidates that alone breach the
-    // descriptor's aggregate cap (`totalMight`) are never legal.
-    const quantity = (target as { quantity?: unknown }).quantity;
-    const anyNumber = quantity === "any";
     // rule 355.13 (ogn-073-298): "up to N <things>" — the controller picks
     // 0..N distinct targets; picks accumulate like "any number" capped at N.
     const upTo =
@@ -1210,6 +1258,12 @@ export function executeResolvedItem(
         remaining: 1,
         // rule 402.2 — while finalizing, the pick is bound onto the item.
         ...bindTag,
+        // rule 402.1 / 355.13 (ven-114-166 Kharox) — a "you may" instruction
+        // named at finalization keeps its decline: the pick is the whole of the
+        // optional instruction, so refusing it is a legal answer.
+        ...(finalizeOnly && (effect as { optional?: boolean }).optional === true
+          ? { optional: true as const }
+          : {}),
         // rule 359.3.f.3 (unl-112-219) — "move an enemy unit to THAT
         // battlefield": the destination is fixed by the triggering move, so it
         // must survive the target prompt.
@@ -1243,7 +1297,16 @@ export function executeResolvedItem(
           owner?.type !== "play" &&
           owner?.from === undefined &&
           owner?.player === undefined;
-        return boardChoice ? { remove: true } : {};
+        // rule 402.4 / 355.10.a (ven-114-166 Kharox) — "play a unit from their
+        // trash" names its card in a PUBLIC pile as the item is finalized, so
+        // an empty pile is a choice with no legal option: the item is removed
+        // now rather than left on the Chain to resolve into nothing.
+        const namesPublicPile =
+          owner?.type === "play" &&
+          typeof loc === "string" &&
+          ["trash", "banishment"].includes(loc) &&
+          owner?.from === loc;
+        return boardChoice || namesPublicPile ? { remove: true } : {};
       }
       boundTargets = options;
       if (deflectTax && boundTargets.length > 0) {

@@ -169,9 +169,14 @@ describe("Arise! (sfd-198-221)", () => {
     expect(d.kind).toBe("pick");
     expect(d.options.map((o) => o.key).sort()).toEqual(["base", "battlefield-bf1"]);
     await game.p1.pick("battlefield-bf1");
-    await game.settle(); // single-option ready prompt is taken
+    await game.settle();
     const made = soldiers(game);
     expect(made).toHaveLength(1);
+    // rule 355.13 — "up to two of them" is a real choice even with one token (none stays legal):
+    // name it when the reflexive item is finalized, then let it resolve.
+    expect(game.decision()).toMatchObject({ kind: "pick", min: 0, seat: P1, timing: "FIN" });
+    await game.p1.pick(made[0] as string);
+    await game.settle();
     expect(game.zoneOf(made[0] as string)).toBe("battlefield-bf1");
     expect(game.state(made[0] as string).isReady).toBe(true);
   });

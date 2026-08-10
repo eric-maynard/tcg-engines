@@ -42,13 +42,31 @@ function board(opts: { annie: boolean } = { annie: true }) {
   return opts.annie ? s.unit(P1, "base", ANNIE, "annie") : s;
 }
 
-/** Attack bf1 with Volibear and pass priority round so his attack trigger resolves into its split prompt. */
-async function volibearAttacks(game: Game): Promise<DistributeDecision> {
-  await game.p1.move("voli", "bf1");
-  expect(game.chain()).toMatchObject([{ cardId: "voli", controller: P1, triggered: true, type: "ability" }]);
-  await game.settle(); // both pass → the trigger resolves and asks for the split
+/** The enemy units Volibear's finalize-time target-set pick offers (355.14.b), read right after the move. */
+function offeredSplitTargets(game: Game): string[] {
   const d = game.decision();
-  expect(d).toMatchObject({ kind: "distribute", seat: P1, source: { cardId: "voli" } });
+  expect(d).toMatchObject({ kind: "pick", seat: P1, source: { cardId: "voli" }, timing: "FIN" });
+  return d?.kind === "pick" ? d.options.map((o) => o.card ?? o.key).sort() : [];
+}
+
+/**
+ * Attack bf1 with Volibear, name `targets` for the split as the trigger is finalized (355.14.b), then pass
+ * priority round so it resolves — into its `distribute` prompt when two or more targets are still legal; a
+ * single target takes the whole pool without one (returns undefined then).
+ */
+async function volibearAttacks(game: Game, targets: readonly string[] = ["poroA", "poroB", "sarge"]): Promise<DistributeDecision> {
+  await game.p1.move("voli", "bf1");
+  offeredSplitTargets(game);
+  await game.p1.pick(...targets);
+  expect(game.chain()).toMatchObject([{ cardId: "voli", controller: P1, triggered: true, type: "ability" }]);
+  await game.p1.passPriority();
+  await game.p2.passPriority(); // both pass → the trigger resolves and asks for the split
+  const d = game.decision();
+  if (targets.length >= 2) {
+    expect(d).toMatchObject({ kind: "distribute", seat: P1, source: { cardId: "voli" } });
+  } else {
+    expect(d?.kind).not.toBe("distribute");
+  }
   return d as DistributeDecision;
 }
 
@@ -56,18 +74,21 @@ describe("Annie, Fiery bonus damage × Volibear split vs Anivia 'each'", () => {
   test("Case A: Volibear's attack trigger splits among ENEMY units HERE only — the two Poros and the Sergeant (not Annie/Anivia in base, not Volibear)", async () => {
     const game = await board().build();
     expect(game.state("annie").keywords).toContain("BonusDamage");
-    const d = await volibearAttacks(game);
-    expect(d.buckets.map((b) => b.card).sort()).toEqual(["poroA", "poroB", "sarge"]);
+    await game.p1.move("voli", "bf1");
+    expect(offeredSplitTargets(game)).toEqual(["poroA", "poroB", "sarge"]);
   });
 
   // Expected (715.3, the CR's own Volibear + Annie example): the amount being split becomes 5+1 = 6,
   // so the prompt distributes 6 and up to 6 units could be chosen. Actual: the engine still splits 5
   // (Annie's bonus is not applied to the pool at all — it is instead added per target, see below).
-  test("Case A — with Annie the split POOL is 6, not 5 (715.3)", async () => {
+  test("Case A — with Annie the split POOL is 6, not 5 (715.3): two locked targets divide 6 (each ≥ 1, so at most 5 on one)", async () => {
     const game = await board().build();
-    const d = await volibearAttacks(game);
+    const d = await volibearAttacks(game, ["poroA", "sarge"]);
     expect(d.total).toBe(6);
-    expect(Math.max(...d.buckets.map((b) => b.max))).toBe(6);
+    expect(d.buckets.map((b) => [b.card, b.min, b.max])).toEqual([
+      ["poroA", 1, 5],
+      ["sarge", 1, 5],
+    ]);
   });
 
   // Expected: 2/2/2 is a legal division of the 6 (each target ≥ 1, 355.14.f) → both Poros die and the
@@ -88,7 +109,7 @@ describe("Annie, Fiery bonus damage × Volibear split vs Anivia 'each'", () => {
   // target separately (1 assigned → 2 marked), i.e. the "5 + 1 per target" reading the CR rejects.
   test("Case A — the bonus is not added per chosen target: assigning 1 of the split to the Sergeant marks exactly 1 damage on it (715, 715.3)", async () => {
     const game = await board().build();
-    const d = await volibearAttacks(game);
+    const d = await volibearAttacks(game, ["poroA", "sarge"]);
     await game.p1.distribute({ poroA: d.total - 1, sarge: 1 });
     expect(game.zoneOf("poroA")).toBe("trash");
     expect(game.zoneOf("poroB")).toBe("battlefield-bf1");
@@ -116,8 +137,7 @@ describe("Annie, Fiery bonus damage × Volibear split vs Anivia 'each'", () => {
 
   test("Case A: on the question's board the whole sequence ends with all three defenders dead and Volibear conquering bf1 (trigger, then 9 combat damage onto whatever is left)", async () => {
     const game = await board().build();
-    const d = await volibearAttacks(game);
-    await game.p1.distribute({ sarge: d.total }); // dump the whole split on the Sergeant (5+ ≥ 4 → dead)
+    await volibearAttacks(game, ["sarge"]); // the Sergeant alone: the whole split lands on it (5+ ≥ 4 → dead)
     expect(game.zoneOf("sarge")).toBe("trash");
     expect(game.zoneOf("poroA")).toBe("battlefield-bf1");
     await game.settle(); // showdown closes → combat damage: 9 from Volibear vs 2+2 from the Poros
@@ -137,10 +157,11 @@ describe("Annie, Fiery bonus damage × Volibear split vs Anivia 'each'", () => {
       .unit(P1, "base", VOLIBEAR, "voli")
       .unit(P1, "base", ANNIE, "annie")
       .build();
-    const d = await volibearAttacks(game);
-    expect(d.buckets.map((b) => b.card)).toEqual(["wall"]);
-    await game.p1.distribute({ wall: d.total });
-    // Whether the engine splits 6 (correct) or splits 5 and adds +1 per target (bug), the wall has 6 now.
+    await game.p1.move("voli", "bf1");
+    expect(offeredSplitTargets(game)).toEqual(["wall"]);
+    await game.p1.pick("wall");
+    await game.p1.passPriority();
+    await game.p2.passPriority(); // the lone target takes the whole 6 without a split prompt
     expect(game.state("wall").damage).toBe(6);
     await game.settle(); // combat: Volibear assigns his 9 to the wall; the wall assigns 16 to Volibear
     expect(game.zoneOf("voli")).toBe("trash"); // 16 ≥ 9

@@ -93,7 +93,7 @@ describe("Janna, Savior — the play and its trigger", () => {
   // ability, chosen when the trigger is finalized — P1 is asked right after the play (timing FIN), before
   // anyone holds priority, and the chain item then names the Poro. Actual: nothing is asked until the
   // trigger resolves (timing RES, chain already empty).
-  test.failing("BUG: the enemy unit is chosen at FINALIZATION — P1 is prompted before priority and the chain item shows the target (355.5.b, 355.7)", async () => {
+  test("the enemy unit is chosen at FINALIZATION — P1 is prompted before priority and the chain item shows the target (355.5.b, 355.7)", async () => {
     const game = await board({ enemy: "pouty", spare: 1 }).build();
     await game.p1.play("janna", { to: "bf1" });
     const d = game.decision();
