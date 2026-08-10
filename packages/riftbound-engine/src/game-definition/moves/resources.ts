@@ -112,6 +112,12 @@ function runeAddAllowedDuringChoice(state: RiftboundGameState, playerId: string)
   ) {
     return true;
   }
+  // rule 809.1.c.1 / 429.3.a (ruling cb0c9c7b9d025ad8) — the [Deflect] surcharge
+  // a trigger's own choice owes is Power paid at this prompt, so it opens the
+  // same rune window: the payer may recycle a rune to fund it.
+  if (((p.deflectSurcharge as number) ?? 0) > 0) {
+    return true;
+  }
   const optInCost = (p.resolved as { optInCost?: Record<string, unknown> } | undefined)?.optInCost;
   if (!optInCost || typeof optInCost !== "object") {
     return false;

@@ -9,7 +9,10 @@ export function handle_stun(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
   const stunned = targets.length === 0 ? [ctx.sourceCardId] : targets;
   // rule 423.1: selecting one or more Units is ONE stun action, so the events it
   // fires form one batch — "one or more" triggers match only batchIndex 0.
-  let batchIndex = 0;
+  // rule 820.1.d (ogn-261-298 × sfd-040-221): a [Repeat]ed spell is the SAME
+  // chain item executed again, so its executions share one batch — continue the
+  // count carried on ctx.eventBatch instead of restarting it per execution.
+  let batchIndex = ctx.eventBatch?.stun ?? 0;
   for (const targetId of stunned) {
     // rule 423.1.a.1 (ogn-059-298): a stunned unit can't be stunned again —
     // choosing it is legal but no stun happens, so no stun event fires.
@@ -52,5 +55,8 @@ export function handle_stun(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
         ? { battlefieldId: zone.replace(/^battlefield-/, "") }
         : {}),
     });
+    if (ctx.eventBatch !== undefined) {
+      ctx.eventBatch.stun = batchIndex;
+    }
   }
 }

@@ -81,6 +81,14 @@ export interface EffectContext {
    * silently retarget the effect.
    */
   readonly boundTargets?: readonly string[];
+  /**
+   * rule 359.3.e.5 / 355.8 (ogn-029-298) — POSITIONAL slot indices whose
+   * play-time pick was dropped from `boundTargets` as illegal. Repeated
+   * instructions ("Deal 3 to a unit. Deal 3 to a unit.") line up with their
+   * slots by index, so the step owning a vacated slot does nothing instead of
+   * inheriting the next slot's pick and leaving the last one to re-choose.
+   */
+  readonly vacatedTargetSlots?: readonly number[];
   /** rule-id: ogn-220-298 — prior target's zone for `location: "same"`. */
   readonly sameZone?: string;
   /**
@@ -125,6 +133,14 @@ export interface EffectContext {
    * the effect.
    */
   readonly triggerFrom?: string;
+  /**
+   * rule 820.1.d / 423.1 (ogn-261-298) — mutable batch counters shared by the
+   * executions of ONE [Repeat]ed chain item. A repeated spell is the same
+   * effect executed again, not a second effect, so "when you stun one or more"
+   * triggers must see all its events as ONE batch: handlers that number their
+   * events continue counting here instead of restarting at 0 per execution.
+   */
+  readonly eventBatch?: { stun?: number };
   readonly zones: {
     moveCard: (params: {
       cardId: CoreCardId;

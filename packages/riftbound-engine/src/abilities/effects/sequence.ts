@@ -427,6 +427,13 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
     let prevPerformed: boolean | undefined;
     /** Descriptor slot the current step consumed, so a suspended remainder keeps the later slots' picks. */
     let stepSlotIdx = -1;
+    // rule 820.1.d (ogn-261-298 × sfd-040-221) — the executions of a [Repeat]ed
+    // chain item are ONE effect, so the events they fire form ONE batch: share a
+    // mutable counter across them, and "one or more" triggers fire only once.
+    const repeatBatch: { stun?: number } | undefined =
+      (seq as { _repeatExecutions?: boolean })._repeatExecutions === true
+        ? (ctx.eventBatch ?? {})
+        : ctx.eventBatch;
     for (let i = 0; i < seq.effects.length; i++) {
       stepSlotIdx = -1;
       const sub = seq.effects[i];
@@ -872,7 +879,11 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
           : undefined;
       executeEffect(
         sub,
-        { ...subCtx, pendingSequenceValue: pending } as EffectContext,
+        {
+          ...subCtx,
+          ...(repeatBatch !== undefined ? { eventBatch: repeatBatch } : {}),
+          pendingSequenceValue: pending,
+        } as EffectContext,
       );
       carryBattlefieldZone();
       if (playedSink !== undefined && playedSink.ids.length > 0) {

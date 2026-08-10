@@ -464,6 +464,17 @@ export function putPlayedSpellOnChain(
     },
     Object.keys(draft.players),
   );
+  // rule-id: sfd-140-221 (rules 370.2 / 372) — remember the "recycle it after
+  // you play it" rider while the spell sits on the chain: it replaces where the
+  // card goes as it leaves the chain, including a self-banish step run by the
+  // spell's own resolution ("Banish this.").
+  const riderState = draft as { recycleRiderCardIds?: Record<string, boolean> };
+  riderState.recycleRiderCardIds ??= {};
+  if (spec.resolveTo === "mainDeck") {
+    riderState.recycleRiderCardIds[spec.cardId] = true;
+  } else {
+    delete riderState.recycleRiderCardIds[spec.cardId];
+  }
   if (draft.cardsPlayedThisTurn) {
     draft.cardsPlayedThisTurn[spec.playerId] = (draft.cardsPlayedThisTurn[spec.playerId] ?? 0) + 1;
   }
@@ -837,12 +848,55 @@ export function canPerformEffectPlay(io: PlayIO, spec: EffectPlaySpec): boolean 
     return true;
   }
   const meta = typeof io.cards?.getCardMeta === "function" ? createMetaAccessor(io.cards) : undefined;
-  return canPayResourceCost(
-    draft,
-    spec.playerId,
-    spec.cardId,
-    computePlayResourceCost(draft, spec.playerId, spec.cardId, extras, meta, false),
-  );
+  const cost = computePlayResourceCost(draft, spec.playerId, spec.cardId, extras, meta, false);
+  if (canPayResourceCost(draft, spec.playerId, spec.cardId, cost)) {
+    return true;
+  }
+  // rule 429.3.a / 444.2.c (ruling cac9ff02562631c6, ogn-194-298 Nocturne) — a
+  // DECLINABLE instructed play opens a confirm prompt that is itself the play's
+  // Pay step, and rune [Add] abilities stay usable inside it
+  // (`resources.ts runeAddAllowedDuringChoice`): a rune the performer could
+  // recycle right then is Power they can bring, so it must not be pre-judged
+  // unaffordable and skipped unasked. Mandatory instructed plays have no such
+  // window and stay pool-only.
+  return spec.declinable === true && canPayResourceCost(withRecyclableRunes(io, spec.playerId), spec.playerId, spec.cardId, cost);
+}
+
+/** The Power half of a play cost as opt-in pips (named Domains first, then any-Domain). */
+function powerPipsOf(cost: ReturnType<typeof computePlayResourceCost>): string[] {
+  const pips: string[] = [];
+  for (const [domain, n] of Object.entries(cost.named)) {
+    for (let i = 0; i < (n ?? 0); i++) {
+      pips.push(domain);
+    }
+  }
+  for (let i = 0; i < cost.any + (cost.hybrid?.n ?? 0); i++) {
+    pips.push("rainbow");
+  }
+  return pips;
+}
+
+/**
+ * rule 164.2.b (rule 594) — the Power the performer's Rune Pool could still
+ * Add: every rune there (ready or exhausted) recycles for 1 Power of its own
+ * Domain. Returns a projected state used only for affordability questions.
+ */
+function withRecyclableRunes(io: PlayIO, playerId: string): RiftboundGameState {
+  const { draft } = io;
+  const pool = draft.runePools[playerId];
+  if (!pool || typeof io.zones?.getCardsInZone !== "function") {
+    return draft;
+  }
+  const registry = getGlobalCardRegistry();
+  const power: Record<string, number> = { ...(pool.power as Record<string, number>) };
+  for (const runeId of io.zones.getCardsInZone("runePool" as CoreZoneId, playerId as CorePlayerId)) {
+    const domain = registry.get(runeId as string)?.domain;
+    const d = Array.isArray(domain) ? domain[0] : domain;
+    if (d) {
+      power[d] = (power[d] ?? 0) + 1;
+    }
+  }
+  return { ...draft, runePools: { ...draft.runePools, [playerId]: { ...pool, power } } } as RiftboundGameState;
 }
 
 /** rule 356.2.a.1 — the card's MANDATORY additional cost (kill / return-to-hand), if any. */
@@ -1305,6 +1359,31 @@ export function continueEffectPlay(io: PlayIO, item: PendingPlayItem): "prompted
   if (!free && draft.runePools[spec.playerId] !== undefined) {
     const cost = computePlayResourceCost(draft, spec.playerId, spec.cardId, extras, meta, false);
     if (!canPayResourceCost(draft, spec.playerId, spec.cardId, cost)) {
+      // rule 357.1.a / 429.3.a (ruling cac9ff02562631c6, ogn-194-298 Nocturne) —
+      // the Pay step of an instructed play is a window for the performer's rune
+      // [Add] abilities: an empty pool with a rune still recyclable is not
+      // "unaffordable", it is unpaid. Ask (the prompt keeps the rune moves
+      // legal, `resources.ts runeAddAllowedDuringChoice`) instead of silently
+      // undoing the play; accept is offered only once the pool covers it.
+      if (
+        progress.confirmed !== true &&
+        canPayResourceCost(withRecyclableRunes(io, spec.playerId), spec.playerId, spec.cardId, cost)
+      ) {
+        draft.pendingChoice = {
+          playConfirm: true,
+          playItemId: item.id,
+          playerId: spec.playerId,
+          resolved: {
+            cardId: spec.cardId,
+            controller: spec.playerId,
+            optInCost: { energy: cost.energy, power: powerPipsOf(cost) },
+            type: "ability",
+          },
+          sourceCardId: spec.sourceCardId ?? spec.cardId,
+          type: "opt-in",
+        } as unknown as RiftboundGameState["pendingChoice"];
+        return "prompted";
+      }
       // rule 419.2.a / 358.5 — no longer affordable: the play is undone.
       abortEffectPlay(io, item);
       return "done";
