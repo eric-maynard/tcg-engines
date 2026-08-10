@@ -206,13 +206,17 @@ describe("Here to Help flipped at Mystic Vortex → untaxed Vanguard Sergeant mi
     expect(game.zoneOf("hthHidden")).not.toBe("chain");
   });
 
-  // The Vortex surcharge is now applied to the flip (811.6), but this expectation itself looks wrong:
-  // the surcharge is [A], and 135.2.e.5.a says [A] "can be paid by Power of any Domain" — the lone [body]
-  // pays it, so the flip stays legal. Left failing pending a spec ruling on the intended cost symbol.
-  test.failing("BUG: (d) with 0 [rainbow] the facedown flip at the Vortex is unaffordable during the showdown → seat.can false (356.1.b.3, 811.6)", async () => {
+  // RULING-CONFLICT: the doc facet asked for "with 0 [rainbow] the flip is unaffordable", but the Vortex surcharge is
+  // the [A] symbol (rule 135.2.e.5, "Power of any Domain") and rule 135.2.e.5.a says "[A] can be paid by Power of any
+  // Domain" — so the lone [body] pip pays it and the flip stays legal. The engine applies the surcharge (811.6 +
+  // 356.1.b.3) and settles it from whatever Power the seat holds; that is the behaviour asserted here.
+  test("(d) with only [body] the facedown flip at the Vortex is still legal — the [A] surcharge is payable by Power of any Domain (135.2.e.5.a, 356.1.b.3, 811.6)", async () => {
     const game = await closedState({ body: 1 });
     expect(game.p1.can("cast", "hthHand")).toBe(false); // still timing-illegal regardless
-    expect(game.p1.can("reveal", "hthHidden")).toBe(false);
+    expect(game.p1.can("reveal", "hthHidden")).toBe(true);
+    await game.p1.reveal("hthHidden");
+    expect(game.chain().map((c) => c.cardId)).toEqual(["cleave", "hthHidden"]);
+    expect(game.p1.resources()).toEqual({ energy: 3, power: { body: 0 } });
   });
 
   test("(d) control — at any OTHER battlefield the same flip with 0 [rainbow] is legal and free (811.1.b)", async () => {
