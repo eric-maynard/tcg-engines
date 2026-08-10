@@ -45,6 +45,7 @@ function attackBoard(wallMight = 6) {
     .battlefield("other", { controller: P2 })
     .unit(P2, "enemy", { might: wallMight, name: "Wall" }, "wall")
     .unit(P2, "other", { might: 1, name: "Bystander" }, "bystander")
+    .unit(P1, "mine", { might: 1, name: "Holder" }, "holder") // rule 190.4.a — control rests on a unit
     .unit(P1, "base", { might: 2, name: "Scout" }, "scout")
     .hand(P1, CARD, "rengar");
 }

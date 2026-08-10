@@ -192,6 +192,10 @@ describe("Unforgiven (ogn-259-298)", () => {
       .legend(P1, CARD, "lg")
       .battlefield("bf1", { controller: P1 })
       .battlefield("bf2", { controller: P1 })
+      // rule 190.4.a / 323.6 — control rests on units: a P1 holder on each battlefield keeps them
+      // P1's while Yasuo comes and goes (empty seeded control would lapse and his arrival would conquer).
+      .unit(P1, "bf1", { might: 1, name: "Holder A" }, "ha")
+      .unit(P1, "bf2", { might: 1, name: "Holder B" }, "hb")
       .unit(P1, "base", WINDRIDER, "yas")
       .hand(P1, PERFECT_EXECUTION, "pe")
       .build();

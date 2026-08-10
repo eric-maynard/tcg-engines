@@ -39,6 +39,10 @@ function board() {
     .unit(P1, "base", VOLIBEAR_FURIOUS, "voli")
     .unit(P2, "bf1", SHIPYARD_SKULKER, "x")
     .unit(P2, "bf1", VANGUARD_SERGEANT, "y")
+    // rule 190.4.a / 107.3.c — a facedown card only sits at a battlefield its controller CONTROLS, and
+    // control rests on a unit there: Anchor holds bf2 for P2 (it is at Tideturner's OWN location, so
+    // "a unit you control at another location" still offers exactly X and Y).
+    .unit(P2, "bf2", { might: 1, name: "Anchor" }, "z")
     .facedown(P2, "bf2", TIDETURNER, "tt");
 }
 

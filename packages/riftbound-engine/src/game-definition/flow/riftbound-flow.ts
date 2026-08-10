@@ -104,6 +104,13 @@ function endingPhaseIsIdle(state: RiftboundGameState): boolean {
 
 /** Scoring Step of the Beginning Phase (rule 315.2.b / 515.2.b). */
 function runHoldScoringStep(context: FlowStepContext): void {
+        // rule 323.1 / 431.3.c.1 — a win reached earlier in the Beginning Phase
+        // (an opponent's Burn Out point during the Beginning Step) ends the game
+        // at once: the Scoring Step never runs, so nothing Holds and no Hold
+        // trigger is queued onto the chain of a finished game.
+        if (gameHasEnded(context.state)) {
+          return;
+        }
         const playerId = context.getCurrentPlayer();
         const triggerCtx = buildFlowTriggerContext(context);
 
@@ -321,18 +328,6 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
                 phase: "awaken",
               };
 
-              // rule 323.6 / 190.4.c — every turn re-checks Battlefield occupancy: arm the
-              // vacancy check on all controlled Battlefields so control with none of the
-              // controller's Units there lapses in this turn's first Cleanup, even if no
-              // Unit was ever seen holding it (state-based-checks step 6).
-              for (const bf of Object.values(
-                (context.state as RiftboundGameState).battlefields ?? {},
-              )) {
-                if (bf.controller) {
-                  bf.controllerOccupied = true;
-                }
-              }
-
               // Ready ALL game objects controlled by the turn player (rule 515.1).
               // Exhausted is written via counters.setFlag → cardMeta.__flags.exhausted at
               // Runtime, but test helpers seed the top-level meta.exhausted; treat either
@@ -424,9 +419,6 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
                   battlefieldOfCard.set(cardId as string, bfId);
                 }
               }
-              // Battlefields a Temporary permanent left during this step.
-              const vacatedBattlefields = new Set<string>();
-
               const tempRegistry = getGlobalCardRegistry();
 
               // rule 816.1 — "Your [Temporary] effects at my battlefield don't
@@ -482,9 +474,6 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
                   if (fromBattlefield && suppressedBattlefields.has(fromBattlefield)) {
                     continue;
                   }
-                  if (fromBattlefield) {
-                    vacatedBattlefields.add(fromBattlefield);
-                  }
                   temporaryIds.push(cardId as string);
                 }
               }
@@ -539,29 +528,11 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
                 }
               }
 
-              // rule 323.6: control of a Battlefield is lost as soon as the
-              // controller has no Unit there. The Temporary kill (and any
-              // replacement that moves the unit off the Battlefield instead)
-              // happens before the scoring step, so re-check control now —
-              // otherwise a Hold would be scored for a Battlefield that is no
-              // longer controlled (rule 469.2).
-              for (const bfId of vacatedBattlefields) {
-                const bf = context.state.battlefields[bfId];
-                if (!bf?.controller) {
-                  continue;
-                }
-                const unitsAtBf = context.zones.getCardsInZone(
-                  `battlefield-${bfId}` as CoreZoneId,
-                );
-                const stillHolds = unitsAtBf.some(
-                  (id) =>
-                    context.cards.getCardOwner?.(id) === bf.controller &&
-                    getGlobalCardRegistry().getCardType(id as string) === "unit",
-                );
-                if (!stillHolds) {
-                  bf.controller = null;
-                }
-              }
+              // rule 323.6 / 190.4.c: the [Temporary] kills above are chain items;
+              // the Cleanup after they resolve (state-based-checks step 6 →
+              // operations/battlefield-control.ts) drops control of a Battlefield
+              // left without a unit of its controller BEFORE the deferred scoring
+              // step runs, so no Hold is scored for it (469.2).
 
               // Beginning step (rule 515.2.a): "At the start of your Beginning
               // Phase" / "At the start of your turn" triggers fire before the

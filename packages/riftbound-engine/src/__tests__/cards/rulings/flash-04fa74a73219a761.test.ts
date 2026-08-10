@@ -113,15 +113,19 @@ describe("Ruling 04fa74a73219a761 — Flash out, Ride the Wind back in, win: the
     expect(game.decision()).toMatchObject({ kind: "action", context: "main", seat: P2 });
   });
 
-  // Expected per ruling: P1 lost control when it Flashed out and GAINS it back at the end of combat → that is a
-  // Conquer → P1 scores 1 point (it has not scored at bf1 this turn). Actual: control never left P1, so the end
-  // of combat is treated as a plain defence — P1 stays at 0 points.
-  test.failing("BUG: ruling 04fa74a73219a761 — winning after Flash-out + Ride-back is a CONQUER: P1 scores 1 (engine: no point, control never lost)", async () => {
+  // RULING-CONFLICT: riftjudge 04fa74a73219a761 says P1 lost control when it Flashed out and so GAINS it back at the
+  // end of combat (a Conquer, +1). CR 190.4.b / 190.4.c / 323.6 ("…unless there is a Combat or Showdown ongoing there")
+  // and the large majority of rulings on the identical line (0763e2fd879f27ba, 144a43c3a845800b "the pre-October
+  // answers were based on old rules", 3e4999ac60026bdb, 4c23871af3d48982, a0658bc35ab1df0b, c964c32b608fbc82,
+  // cd9356416a0b87e4) say control never left P1 during the combat, so surviving it is a plain defence: NO point.
+  // Engine follows CR — battlefield control timing model, operations/battlefield-control.ts.
+  test("ruling 04fa74a73219a761 (rewritten to CR 190.4.b) — winning after Flash-out + Ride-back in the SAME combat is a defence, not a Conquer: P1 keeps bf1 and scores nothing", async () => {
     const game = await rodeBackIn();
     await game.settle();
     expect(game.zoneOf("raider")).toBe("trash");
     expect(bf1(game)?.controller).toBe(P1);
-    expect(game.p1.points()).toBe(1);
-    expect(game.gameState.scoredThisTurn?.[P1] ?? []).toContain("bf1");
+    expect(game.p1.points()).toBe(0);
+    expect(game.gameState.scoredThisTurn?.[P1] ?? []).not.toContain("bf1");
+    expect(game.gameState.conqueredThisTurn?.[P1] ?? []).toEqual([]);
   });
 });

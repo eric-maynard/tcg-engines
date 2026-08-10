@@ -6,10 +6,11 @@
  *     played there).
  *
  * Q: If Baited Hook kills my ONLY unit at a battlefield I control, can I play the Hooked unit to that same battlefield?
- * A: No. By the time you play the unit you no longer control that battlefield (your only unit there is dead), so it is not
- *    a legal destination — just like Cruel Patron.
- * Rules: 188 / 323.6 (control of a battlefield requires your units there), 341.2 (units are played to your base or a
- *        battlefield you control), CR example on Cruel Patron.
+ * A (riftjudge): No — you no longer control that battlefield. RULING-CONFLICT: the current CR (190.4.c / 323.6: control
+ *    lapses only in an OPEN-State Cleanup) and the official Unleashed clarification (ruling 9a32c2cc829f221a, which uses
+ *    Baited Hook AND Cruel Patron as its examples) say YES; the 2025 Cruel Patron CR example this ruling cites was removed.
+ *    The facets below are written to the CR model.
+ * Rules: 190.4.c / 323.6 / 309.1 (Closed while the ability resolves / the play is pending), 355.2.a.
  */
 import { describe, expect, test } from "bun:test";
 import type { Decision, Game } from "../../../harness";
@@ -56,39 +57,44 @@ async function hookBaitTakeFour(game: Game): Promise<Decision | null> {
   return game.decision();
 }
 
-describe("Ruling 41251a7db1c8d7f0 — Hooking away your only unit at a battlefield forfeits it as the play destination", () => {
-  test("Bait was P1's ONLY unit at bf1: after the kill, bf1 is not offered for Four — it can only land in base — and P1 no longer controls bf1", async () => {
+// RULING-CONFLICT: riftjudge 41251a7db1c8d7f0 (and d1e31cb5c7f480a0 / aa969395f8d0b7e9 / 382c535e1d2ee445) says the
+// Hooked unit cannot be played to the battlefield the killed Bait held alone. CR 190.4.c / 323.6 (control only lapses
+// in an OPEN-State Cleanup) and the OFFICIAL Unleashed clarification (ruling 9a32c2cc829f221a: "When Baited Hook's
+// activated ability resolves, the outstanding cleanup initiates, but I can't lose control of the battlefield because
+// the played unit is on the chain pending"; same for Cruel Patron / Arcane Shift / Glasc Mixologist; also
+// 73bea4deea8e8273 / 2abf29f1844c262f) say the opposite: the ability is resolving / the play is pending, the turn is
+// Closed, P1 still controls bf1 and MAY play the unit there. Engine follows CR — battlefield control timing model,
+// operations/battlefield-control.ts. Control lapses only once everything has resolved and bf1 is still empty.
+describe("Ruling 41251a7db1c8d7f0 (rewritten to CR 323.6 / official 9a32c2cc829f221a) — Hooking away your only unit at a battlefield does NOT forfeit it as the play destination mid-resolution", () => {
+  test("Bait was P1's ONLY unit at bf1: while Hook resolves the state is Closed, so bf1 is STILL P1's and IS offered for Four alongside base; choosing base leaves bf1 empty and it lapses to uncontrolled at the next Open Cleanup", async () => {
     const game = await board(false).build();
     const d = await hookBaitTakeFour(game);
-    if (d?.kind === "pick" && d.source?.pendingChoiceType === "choose-destination") {
-      expect(d.seat).toBe(P1);
-      const dests = d.options.map((o) => o.key);
-      expect(dests).not.toContain("battlefield-bf1");
-      expect(dests).toContain("base");
-      await game.p1.pick("base");
-    }
+    expect(d).toMatchObject({ kind: "pick", seat: P1 });
+    const dests = d?.kind === "pick" ? d.options.map((o) => o.key).sort() : [];
+    expect(dests).toEqual(["base", "battlefield-bf1"]);
+    expect(game.gameState.battlefields.bf1?.controller).toBe(P1); // rule 309.1 / 323.6 — Closed: control kept
+    await game.p1.pick("base");
     await game.settle();
     expect(game.state("four")).toMatchObject({ controller: P1, zone: "base" });
     expect(game.p1.units("bf1")).toEqual([]);
-    expect(game.gameState.battlefields.bf1?.controller ?? null).not.toBe(P1);
+    expect(game.gameState.battlefields.bf1?.controller ?? null).toBeNull(); // rule 323.6 — lapsed once Open and empty
     expect(game.p1.resources()).toEqual({ energy: 0, power: { order: 0 } }); // Four was free
     expect(game.p1.deck()[0]).toBe("below"); // the other four looked-at cards were recycled
     expect(game.violations()).toEqual([]);
   });
 
-  test("a forced attempt to put Four onto bf1 anyway is rejected; Four ends in base", async () => {
+  test("choosing bf1 is legal: Four lands on bf1 and P1 keeps the battlefield — control never lapsed (no conquer, no point)", async () => {
     const game = await board(false).build();
     const d = await hookBaitTakeFour(game);
-    if (d?.kind === "pick" && d.source?.pendingChoiceType === "choose-destination") {
-      const r = await game.p1.try((p) => p.pick("battlefield-bf1"));
-      expect(r.ok).toBe(false);
-      if (game.decision()?.kind === "pick") {
-        await game.p1.pick("base");
-      }
-    }
+    expect(d).toMatchObject({ kind: "pick", seat: P1 });
+    const r = await game.p1.try((p) => p.pick("battlefield-bf1"));
+    expect(r.ok).toBe(true);
     await game.settle();
-    expect(game.zoneOf("four")).toBe("base");
-    expect(game.p1.units("bf1")).toEqual([]);
+    expect(game.state("four")).toMatchObject({ controller: P1, zone: "battlefield-bf1" });
+    expect(game.gameState.battlefields.bf1?.controller).toBe(P1);
+    expect(game.p1.points()).toBe(0);
+    expect(game.gameState.conqueredThisTurn?.[P1] ?? []).toEqual([]);
+    expect(game.violations()).toEqual([]);
   });
 
   test("contrast: with a Companion still holding bf1, P1 keeps control and bf1 IS a legal destination — Four can be played there", async () => {

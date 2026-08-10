@@ -371,20 +371,11 @@ export interface BattlefieldState {
   contestedBy?: PlayerId;
 
   /**
-   * rule 190.4.a / 323.6 — set once a Cleanup has seen the current controller's
-   * own Units here. The vacancy check (lose control of a Battlefield with none
-   * of your Units in an Open State) only applies to control a Unit actually
-   * held, so control that never rested on a Unit is not wiped by it.
-   */
-  controllerOccupied?: boolean;
-
-  /**
    * rule 190.4.b / 464–466 — who controlled this battlefield when its current
-   * Showdown began. The 323.6 vacancy check may strip control mid-Showdown
-   * (the last defender Flashes home), but the contest itself does not convert
-   * the battlefield: the conquer that ends it must still report the
-   * pre-Showdown controller so "conquer a battlefield that was uncontrolled"
-   * (sfd-116-221 Yone) reads the control the battlefield actually had.
+   * Showdown began (control is frozen for the whole Showdown / Combat, so this
+   * equals `controller` until 348.2.a / 466.5 run; kept as the reported
+   * "previous controller" for "conquer a battlefield that was uncontrolled",
+   * sfd-116-221 Yone).
    */
   controllerAtShowdownStart?: PlayerId | null;
 

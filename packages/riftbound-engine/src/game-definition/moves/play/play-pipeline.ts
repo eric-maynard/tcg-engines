@@ -30,6 +30,7 @@ import { getGlobalCardRegistry } from "../../../operations/card-lookup";
 import { resolveTarget } from "../../../abilities/target-resolver";
 import { resetObjectState } from "../../../operations/leave-board";
 import { noteArrival } from "../../../operations/arrive-at-battlefield";
+import { controlsBattlefield } from "../../../operations/battlefield-control";
 import { notePlayThisTurn } from "../../../operations/plays-this-turn";
 import { battlefieldForbidsUnitPlays } from "../../../abilities/play-restrictions";
 import { attachEquipment } from "../../../abilities/effects/_attachment";
@@ -40,7 +41,6 @@ import {
 } from "../../../cleanup/post-move-cleanup";
 import {
   extractBattlefieldId,
-  getBattlefieldZoneId,
   isBattlefieldZone,
 } from "../../../zones/zone-configs";
 import {
@@ -76,6 +76,7 @@ import {
   hasStaticEffect,
   optionalPlayCostOffered,
   payResourceCost,
+  playOnlyToConqueredBattlefield,
   staticEnterReadyApplies,
 } from "./cost";
 import { collectBoardCards, recordAdditionalCostsPaid } from "./cost-model";
@@ -365,54 +366,6 @@ export function enterPlayedPermanent(io: PlayIO, spec: EnterPlayedPermanentSpec)
 }
 
 /**
- * rule 323.6 / 190.4.c (ruling 41251a7db1c8d7f0 — Baited Hook, and the CR's
- * Cruel Patron example) — control of a battlefield rests on having a unit
- * there. An effect that kills a player's LAST unit at a battlefield and then
- * plays a card costs them that battlefield as a destination straight away,
- * even though the recorded `controller` is only cleared by the next Open State
- * (`state-based-checks.ts` step 6). Control that never rested on a unit here
- * (`controllerOccupied` false — a seeded board, or control handed over by an
- * effect) has nothing to vacate and survives, exactly as in that check.
- */
-function stillHoldsBattlefield(
-  draft: RiftboundGameState,
-  io: PlayIO | undefined,
-  playerId: string,
-  bfId: string,
-  sourceCardId?: string,
-): boolean {
-  if (draft.battlefields?.[bfId]?.controllerOccupied !== true) {
-    return true;
-  }
-  // rule 808 / 734.1.d.2 (ruling 6b62dd3994a5ac1f) — a [Deathknell] plays FROM
-  // the dead unit itself, so the battlefield it just vacated is still a legal
-  // destination even though nothing of its controller's is left there.
-  if (sourceCardId !== undefined && sourceCardId === draft.lastKilledUnitId) {
-    return true;
-  }
-  // rule 309.1 / 323.6 — outside an Open State the recorded control normally
-  // stands (a Deathknell whose unit was just killed by an opponent's spell
-  // still plays to "its" battlefield). The ruling's exception is narrower: the
-  // ability doing the playing is the one that KILLED the player's unit, so by
-  // the time it plays the card it has already given the battlefield up.
-  if (draft.lastKilledUnitId === undefined || draft.lastKilledUnitController !== playerId) {
-    return true;
-  }
-  const zones = io?.zones;
-  if (typeof zones?.getCardsInZone !== "function") {
-    return true; // no zone reader (unit-test stubs) — keep the recorded control
-  }
-  const registry = getGlobalCardRegistry();
-  const here = zones.getCardsInZone(getBattlefieldZoneId(bfId as CoreCardId)) as readonly CoreCardId[];
-  return here.some((id) => {
-    if (registry.getCardType(id as string) !== "unit") {
-      return false;
-    }
-    return (io?.cards?.getCardController?.(id) ?? io?.cards?.getCardOwner?.(id)) === playerId;
-  });
-}
-
-/**
  * rule 355.2 / 355.4 / 462.2.a — where `playerId` may put a permanent they are
  * playing: their base or a battlefield they control (never one that forbids
  * unit plays — sfd-216-221), plus any location an effect explicitly grants
@@ -426,16 +379,32 @@ export function playDestinationOptions(
   spec?: {
     readonly only?: readonly string[];
     readonly extra?: readonly string[];
-    /** Supplied by `locationOptionsFor`; enables the 323.6 vacancy check above. */
     readonly io?: PlayIO;
-    /** The instructing card, for the Deathknell exception in the same check. */
     readonly sourceCardId?: string;
   },
 ): string[] {
   const type = getGlobalCardRegistry().getCardType(cardId);
   const isUnit = type !== "gear" && type !== "equipment";
-  const legal = (zone: string): boolean =>
-    !isUnit || !zone.startsWith("battlefield-") || !battlefieldForbidsUnitPlays(extractBattlefieldId(zone) ?? "");
+  // rule 054.1 / 054.2 (sfd-015-221 Perched Grimwyrm) — "play me ONLY to a
+  // battlefield you conquered this turn" is a property of the CARD, so it
+  // narrows an effect-instructed play too. When the instruction names a fixed
+  // destination the card forbids (base), nothing is legal → 055 / 358.3.a.
+  const conqueredOnly = isUnit && playOnlyToConqueredBattlefield(cardId);
+  const conquered = draft.conqueredThisTurn?.[playerId] ?? [];
+  const legal = (zone: string): boolean => {
+    if (
+      isUnit &&
+      zone.startsWith("battlefield-") &&
+      battlefieldForbidsUnitPlays(extractBattlefieldId(zone) ?? "")
+    ) {
+      return false;
+    }
+    if (conqueredOnly) {
+      const bfId = extractBattlefieldId(zone);
+      return bfId !== undefined && conquered.includes(bfId);
+    }
+    return true;
+  };
   if (spec?.only) {
     return spec.only.filter(legal);
   }
@@ -445,12 +414,13 @@ export function playDestinationOptions(
   }
   const out = [
     "base",
+    // rule 355.2.a / 190.4.c / 323.6 (official clarification 9a32c2cc829f221a — Cruel
+    // Patron, Baited Hook, Arcane Shift, Glasc Mixologist): "a battlefield you
+    // control" is the RECORDED controller. Control lapses only in an Open-State
+    // Cleanup, so a battlefield this very effect (or its cost) just emptied is
+    // still a legal destination while the play is pending — operations/battlefield-control.ts.
     ...Object.entries(draft.battlefields ?? {})
-      .filter(
-        ([bfId, bf]) =>
-          bf.controller === playerId &&
-          stillHoldsBattlefield(draft, spec?.io, playerId, bfId, spec?.sourceCardId),
-      )
+      .filter(([bfId]) => controlsBattlefield(draft, bfId, playerId))
       .map(([bfId]) => `battlefield-${bfId}`),
   ];
   for (const zone of spec?.extra ?? []) {

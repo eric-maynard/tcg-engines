@@ -256,18 +256,10 @@ export function buildScenarioEngine(spec: ScenarioSpec, pool: CardPool): BuiltSc
     bfs[bf.id] = {
       contested: bf.contested ?? false,
       contestedBy: bf.contestedBy,
+      // rule 190.4 / 323.6 — seeded control is real control: with no unit of the
+      // controller standing here it lapses at the first Open-State Cleanup exactly like
+      // control a unit walked away from (operations/battlefield-control.ts).
       controller: bf.controller,
-      // rule 190.4.a / 323.6 — a seeded battlefield whose controller already has a card
-      // standing on it holds it the way a conquered one does, so vacating it later loses
-      // control at the next cleanup. Control seeded with nobody there never rested on a
-      // unit, so the cleanup's vacancy check leaves it alone (state-based-checks step 6).
-      controllerOccupied:
-        bf.controller !== null &&
-        spec.cards.some(
-          (c) =>
-            resolveZone(spec, c.zone) === `battlefield-${bf.id}` &&
-            (c.controller ?? c.owner) === bf.controller,
-        ),
       id: bf.id,
     };
   }
@@ -383,6 +375,13 @@ export interface CardPlacement {
 
 export interface BattlefieldOptions {
   readonly def?: DefSpec;
+  /**
+   * Seeded control (rule 190.4). It places NOTHING: control rests on the
+   * controller's units, so with no unit of `controller` standing here it lapses
+   * at the first Open-State Cleanup (323.6 — typically the test's first move)
+   * exactly like control a unit walked away from. Tests that need durable
+   * control must also put a unit / token of the controller on the battlefield.
+   */
   readonly controller?: Seat | null;
   readonly owner?: Seat;
   readonly inert?: boolean;

@@ -473,7 +473,47 @@ Recipe — wrong total: assert `computeTotalCost(...).resources` in a unit test 
 - Hold scoring: flow `runHoldScoringStep` (after start-of-turn triggers resolve — deferred to `beginning.onEnd` when they open a
   chain; `scoreBattlefield(…,"hold")`, `hold`+`score` events, `checkVictory`, static recalc). Manual/sandbox: `moves/combat/score-point.ts`
   (never enumerated), `conquer-battlefield.ts`. `win-conditions/victory.ts` = read-only predicates delegating to points.ts.
-- Battlefield control loss / combat staging: `performCleanup` step 6 (controller cleared in open state with no unit).
+- BATTLEFIELD CONTROL TIMING — ONE model, ONE module `E/operations/battlefield-control.ts` (rules 190.4 / 323.6 / 348.2.a /
+  466.5 / 469; adjudicated against the CR text + ~100 train rulings incl. the official clarification 9a32c2cc829f221a; matrix
+  test `core-rules/battlefield-control-timing.test.ts`). DO NOT re-litigate per ruling — rewrite the contradicting FACET:
+  - LOST (`applyControlCleanupStep`, called by `state-based-checks.ts performCleanup` = Cleanup step 4): the controller has NO
+    unit of theirs there AND the Cleanup runs in an OPEN State (`cleanupStateKind`: no active chain, no Pending item, no
+    unanswered prompt, no `suspendedPlay`, not mid-resolution, no unit reaped in this very pass whose `die` trigger is not yet
+    queued) AND no Showdown/Combat is ONGOING AT THAT battlefield (`isShowdownOrCombatOngoingAt`: on the showdown stack, or
+    `contested && showdownComplete` / `combatDamageDone` = combat awaiting damage/resolution). Showdown Open (a showdown
+    ELSEWHERE) is an Open State (310.3) ⇒ other empty battlefields DO lapse during it. The cause never matters (move, gank,
+    recall, bounce, banish, death, control steal). Facedown cards follow in the same Cleanup (step 4/323.7: trashed +
+    revealed once `bf.controller ≠ hider`), no window.
+  - KEPT: any Closed State — a Deathknell / "when a unit dies" / pending replay / the resolving spell or ability itself
+    (808.1.d.2 + 401.1). ⇒ Cruel Patron cost-kill, Baited Hook, Arcane Shift, Glasc Mixologist, Thrill of the Hunt: the
+    just-emptied battlefield IS still "a battlefield you control" / a legal play destination (`playDestinationOptions` reads
+    `controlsBattlefield` = recorded controller only); a lone Deathknell unit dying OUTSIDE a showdown keeps the hidden card
+    playable in response to the trigger (it saves nothing). Control lapses at the first Open Cleanup after the chain empties.
+  - FROZEN while a Showdown/Combat is ongoing THERE (190.4.b): the defender Flashed/Rebuked/Gusted/killed to zero units
+    keeps control (hidden card playable, may play units "to a battlefield you control" there); coming back in the SAME
+    combat and winning = defence, NO conquer/point; attacker wins ⇒ Conquer; nobody left ⇒ Uncontrolled (466.5.b, also the
+    `unitIds.length === 0` early exit of `resolveFullCombat`); 466.5.c trashes the loser's facedown card at resolution.
+    A showdown merely STAGED in the same Cleanup is NOT ongoing (step 4 runs before step 9): "spell kills/moves the lone
+    defender AND a unit arrives in the same resolution" ⇒ control lapses first, the showdown runs at an UNCONTROLLED
+    battlefield, whoever solely remains/wins establishes control = Conquer (rulings f69a1bb8709cf037 / 88f862ece2edcd29).
+  - GAINED only via `establishControl` / `settleControlByRemainingUnits`: 348.2.a non-combat close (`chain/showdown.ts`),
+    466.5 combat resolution (`resolve-full-combat.ts`), the directed `conquerBattlefield` move, and the DESIGN presence
+    shortcut (Neutral Open, uncontested, controller has no unit, exactly one other player has units ⇒ that player conquers
+    at once; in Showdown-Open the controller lapses and the occupant applies Contested instead). `recorded === player` ⇒
+    nothing (no re-conquer); else Conquer, scored iff not in `scoredThisTurn` (also on the opponent's turn). During a
+    showdown at an UNCONTROLLED battlefield nobody controls it (`battlefieldYou` null ⇒ "when you defend here" fires for no
+    one; no "battlefield you control" plays there) until its close.
+  - HARNESS: `.battlefield("bf1",{controller:P1})` places nothing — unit-less seeded control is real and LAPSES at the first
+    Open Cleanup (usually the test's first move). Durable control needs a unit/token of the controller there. A facedown
+    card seeded at a battlefield with no unit of its controller is trashed by that same Cleanup.
+  - RULINGS that contradict this (riftjudge 04fa74a73219a761 Flash, 792f2571b4fd68f3 Rebuke, b056874d8c1e6ec9, c37012557b4ba27f,
+    d039a38c7976af6b — "control lost mid-combat"; 41251a7db1c8d7f0 / d1e31cb5c7f480a0 / aa969395f8d0b7e9 / 382c535e1d2ee445
+    Baited Hook, 81bdefc55681da4a Cruel Patron, 213de1e6a8cd73e7 / 581ad300c36bb43c Arcane Shift, 6f7d86e367ff1647 Emperor's
+    Dais, 86f899a5f45e47f8 / 90f742d56433d8b2 / 3365413873f90883 / 5cd0777c2b847b3c "lost mid-chain"; 8470eb7c4a1c301d /
+    070fc7a3b21bd0b1 / 678069c72cf4193e / b43c764cfdfe5b69 "lone Deathknell unit outside a showdown loses the hidden card before
+    the trigger window"; 2c079c2e8ab0b3ed as ASKED — Stormbringer empties + arrives before any showdown) are the pre-"1.1"
+    minority: rewrite the facet to the model with `// RULING-CONFLICT: riftjudge <id> says X; CR 190.4/323.6 (+ official
+    9a32cc…) says Y — engine follows CR`, never flip the engine.
 - Deaths happen ONLY in `performCleanup` (damage ≥ might) and `effects/kill.ts`. End of turn = TURN STRUCTURE below
   (`flow/expiration-step.ts`: 3c heal → 3d expire stun/`mightModifier`/turn keywords/`activeReplacements` (turn/next)/… →
   3e pools). [Temporary] kills are chain items queued in `beginning.onBegin` (816, `temporary-kill` effect → leave-board choke).
@@ -508,8 +548,10 @@ Recipe — wrong total: assert `computeTotalCost(...).resources` in a unit test 
   runPhaseHook(engine,"ending")` still runs EOT triggers + pass 1 inline when the chain is idle.
 Recipe — unit should/shouldn't die: which Might did the lethal check use (SBA: printed+buff+mightModifier+static+equip;
 resolver adds Shield for defenders / Assault for attackers via `lethalThreshold`)? Was `meta.damage` written?
-Recipe — conquer after killing the last defender mid-showdown: `resolveFullCombat` empty-defender branch must treat
-remaining attackers as winners (today it recalls them); control flip otherwise via `passShowdownFocus` close.
+Recipe — conquer after killing the last defender mid-showdown: `resolveFullCombat` skips the damage step and 466.5
+(`settleControlByRemainingUnits`) hands the sole remaining player the battlefield; non-combat closes via `passShowdownFocus`.
+Recipe — "control lost/kept at the wrong time": read the BATTLEFIELD CONTROL TIMING block above first; the answer is almost
+always "the test facet asserts the minority ruling / relies on unit-less seeded control" → rewrite the facet, add a holder unit.
 Recipe — stun: `effects/stun.ts` sets flag + `stun` event; zero its combat damage in `resolve-full-combat.ts`; cleared at end of turn.
 
 ## 9. Replacement effects
@@ -721,5 +763,10 @@ prompt — reuse the `opt-in` pattern (`die-replacement-batch.ts offerOptionalSh
 - **Unpayable optional trigger cost** (rule 404.2 says remove silently): DESIGN.md §Paying costs = manual pay → the yes/no IS shown with `canAccept:false` + reason so the player can tap runes and then accept; harness passivePolicy auto-declines it. Tests asserting "no prompt when the cost can't currently be paid" must be rewritten to: prompt offered, canAccept false, 'no'/settle removes the item with nothing paid. EXCEPTION: when a mandatory TARGET/OBJECT set is empty (nothing to kill/return/choose) the item IS removed silently (402.4) — that is not a payment question.
 - **383.3.d same-controller trigger order**: SOFT prompt (stack popup); tests must not require settle() to stop on it.
 - **Bo1 battlefield**: random in duel mode, manual in sandbox.
+- **Battlefield control presence shortcut** (DESIGN.md § Battlefield control): in a Neutral Open Cleanup, an uncontested
+  battlefield whose recorded controller has no unit there and where exactly one OTHER player has units is conquered by that
+  player at once (no staged showdown) — the state only comes from seeded boards / simultaneous swaps.
 - **Ruling vs Core Rules conflicts** (riftjudge data is community-sourced; some entries are self-flagged unverified): when a ruling test contradicts an explicit Core Rule AND an existing green core-rules/ruling test, do NOT flip the engine back and forth — cite both, keep the Core Rule behaviour, rewrite the ruling test's facet to the rule with `// RULING-CONFLICT: riftjudge <id> says X; CR <rule> says Y — engine follows CR`, and note it in your resolution. If two riftjudge rulings disagree with each other, same treatment. Only when the ruling clarifies something the CR leaves open does the ruling win.
 - **File-level embargo**: `.claude/fix-queue/embargo-files.txt` lines `owner<TAB>regex`; `land-patch.sh` refuses patches touching matching files unless your land LABEL starts with `owner` (you'll see `embargoed_file=…` `committed=false`). If you hit it: DROP that file from your land list and land the rest (or mark the item failed with note "embargoed files (owner package)"). NEVER `git checkout -- <file>` / `git restore` / `git stash` ANY file in the shared working tree — other lanes' and package owners' uncommitted work lives there; reverting a shared file destroys it. The only sanctioned way to 'undo' your own hunk is to edit it back by hand.
+- **Multi-execution / multi-instance damage vs replacements (rulings 87d4521a, 501859c8, 3afdd260, 6482271b):** DAMAGE-time replacements and prevention (The Boss 'would be dealt lethal damage', Counter Strike/'next time … prevent', Shield-style) apply PER damage instance/execution as it happens. DEATH ('if this would die' — Zhonya's Hourglass, Guardian Angel, Soraka) is a Cleanup event: no death check runs between [Repeat] executions or between instances of one resolving spell; lethal-damaged units die (and would-die replacements are consulted ONCE) in the single Cleanup after the item leaves the chain. Costs paid mid-resolution that make a unit lethal likewise wait for that Cleanup — EXCEPT where a rule inserts a Cleanup (319.x). Don't 'fix' one ruling by breaking the other class.
+- **Land lock etiquette**: call `land-patch.sh` ONCE and let its own `flock -w 1800` wait; on `reason=lock_timeout` call it once more. Do NOT write polling loops / background scripts that repeatedly try the lock — they starve fair waiters. Package lands may be given priority via `.claude/fix-queue/.land.priority` (coordinator-managed); your call will simply wait a bit longer.

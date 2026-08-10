@@ -27,6 +27,7 @@ import type {
 import { checkBecomesMighty, getEffectiveMight } from "../../abilities/effects/_helpers";
 import { recalculateStaticEffects } from "../../abilities/static-abilities";
 import { finalizePendingItems, withinMoveReducer } from "../../abilities/trigger-finalization";
+import { cleanupStateKind, loseControlIfUnoccupied } from "../../operations/battlefield-control";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import { clearDamage, getDamage } from "../../operations/damage-store";
 import { orderBatchTriggersByTurnOrder } from "../../operations/leave-board";
@@ -402,21 +403,20 @@ function expireControlEffects(
       getCardZone: (id) => context.zones.getCardZone?.(id) as string | undefined,
       moveCard: (args) => context.zones.moveCard(args),
     });
-    // rule 323.6 / 190.4.c — a battlefield left without a unit its controller
-    // controls is lost immediately; a gear left behind never keeps it (190.3).
+    // rule 323.6 / 190.4.c — this Expiration pass IS the end-of-turn Cleanup
+    // (317.2): a battlefield left without a unit of its controller is lost (a
+    // gear left behind never keeps it, 190.3). One model:
+    // operations/battlefield-control.ts.
     if (from?.startsWith("battlefield-")) {
-      const bf = context.state.battlefields[from.slice("battlefield-".length)];
-      const stillThere = context.zones
-        .getCardsInZone(from as CoreZoneId)
-        .some(
-          (id) =>
-            getGlobalCardRegistry().getCardType(id as string) === "unit" &&
-            (context.cards.getCardController?.(id) ?? context.cards.getCardOwner?.(id)) ===
-              bf?.controller,
-        );
-      if (bf?.controller && !stillThere) {
-        bf.controller = null;
-      }
+      loseControlIfUnoccupied(
+        {
+          cards: { ...context.cards, getCardOwner: (id) => context.cards.getCardOwner?.(id) },
+          draft: context.state,
+          zones: context.zones,
+        },
+        from,
+        cleanupStateKind(context.state),
+      );
     }
   }
 }

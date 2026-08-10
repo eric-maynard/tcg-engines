@@ -38,7 +38,7 @@ import type {
   RiftboundGameState,
   RiftboundMoves,
 } from "../../../types";
-import { scoreBattlefield, scoreEvents } from "../../../operations/points";
+import { settleControlByRemainingUnits } from "../../../operations/battlefield-control";
 
 type Defs = GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>;
 
@@ -49,10 +49,9 @@ type Defs = GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCar
  * Gathers units at the battlefield, partitions by owner, builds CombatUnit arrays,
  * calls resolveCombat(), then applies damage, kills, and outcome.
  *
- * Outcome handling:
- * - Attacker wins: Conquer battlefield, award VP, surviving attackers stay
- * - Defender wins: Recall surviving attackers to base, defenders keep battlefield
- * - Tie: All dead, clear contested, no control change
+ * Outcome handling (rule 466): Defenders still present ⇒ Attackers recalled
+ * (466.1.a.2); then 466.5 — the sole player with units remaining establishes
+ * control (a Conquer if they did not already control it), nobody ⇒ Uncontrolled.
  */
 /** rule 708 / 710 — a unit is Mighty while its current Might is 5 or more. */
 const MIGHTY_THRESHOLD = 5;
@@ -189,14 +188,11 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
       return;
     }
 
-    // rule 188 / 469.1: who held the battlefield as combat began — combat
-    // deaths can empty it and state-based checks clear control (466.5.b)
-    // before the outcome is applied, so "a battlefield that was uncontrolled"
-    // must read the controller from before the damage step, not after.
-    // rule 190.4.b — a defender that left mid-Showdown (Flashed home) may have
-    // already tripped the 323.6 vacancy check, but the battlefield was still
-    // controlled all through the contest: fall back to the controller recorded
-    // when this Showdown opened.
+    // rule 188 / 190.4.b / 469.1: who holds the battlefield as its Resolution
+    // Step runs. Control is frozen for the whole Combat (the 323.6 vacancy check
+    // skips a battlefield with a Combat ongoing — operations/battlefield-control.ts),
+    // so this is the pre-combat controller; "conquer a battlefield that was
+    // uncontrolled" (sfd-116-221 Yone) reads it off the `conquer` event.
     const controllerBeforeCombat =
       battlefield.controller ?? battlefield.controllerAtShowdownStart ?? null;
 
@@ -221,8 +217,18 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
     const unitIds = zones.getCardsInZone(battlefieldZoneId);
 
     if (unitIds.length === 0) {
-      battlefield.contested = false;
-      battlefield.contestedBy = undefined;
+      // rule 466.3.d / 466.5.b — nobody is left here (both sides died to combat
+      // damage whose triggers deferred this step, or left during the showdown):
+      // No Result; the battlefield stops being Contested and becomes
+      // Uncontrolled. Control was frozen for the whole combat (190.4.b), so this
+      // is where the emptied battlefield is given up — operations/battlefield-control.ts.
+      settleControlByRemainingUnits({ cards, counters, draft, zones }, battlefieldId, "combat");
+      battlefield.combatDamageDone = undefined;
+      battlefield.combatExcessDamage = undefined;
+      battlefield.combatNoDefendersAtCleanup = undefined;
+      battlefield.combatCleanupSuspended = undefined;
+      battlefield.combatWinTriggersFired = undefined;
+      cleanupAndFireDeaths(draft, context as unknown as PostMoveCleanupContext);
       return;
     }
 
@@ -841,44 +847,10 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
     // Units recalled to base by this resolution (rule 466.1.a.2).
     const recalledUnits: CoreCardId[] = [];
 
-    // Apply outcome based on winner
-    if (winner === "attacker") {
-      // Attacker conquers the battlefield
-      battlefield.controller = attackingPlayer;
-
-      // rule 469.1 / 471: establishing control is a Conquer (a Score, worth up
-      // to one point) unless this player already scored here this turn or a
-      // battlefield static forbids scoring here. The point itself goes through
-      // the awardPoints gates (denial, skips, Final Point → draw instead); the
-      // victory check waits for the Cleanup below (rule 472).
-      const { isScore } = scoreBattlefield(
-        draft,
-        attackingPlayer,
-        battlefieldId,
-        "conquer",
-        { cards, zones },
-        { previousController: controllerBeforeCombat },
-      );
-
-      // Emit "conquer" event so triggered abilities fire
-      // rule-id: ogn-034-298 — this conquer happened after an attack, so it
-      // carries the excess damage the attackers assigned (rule 626.1.d.2).
-      // rule 471.2.c: Conquer abilities only trigger when the battlefield is
-      // actually Scored, so re-taking one this player already scored this turn
-      // establishes control without firing them. rule 471.2.a: the
-      // draw-instead Final Point case (471.1.b.1) still Conquered, so its
-      // triggers do fire.
-      if (isScore) {
-        for (const event of scoreEvents(attackingPlayer, battlefieldId, "conquer", {
-          afterAttack: true,
-          excessDamage,
-          previousController: controllerBeforeCombat,
-        })) {
-          fireTriggers(event, { cards, counters, draft, zones });
-        }
-      }
-
-    } else if (attackersRecalled) {
+    // Apply outcome based on winner. rule 466.1.a.2 — with Defenders still
+    // present the Attackers are recalled; control is then settled by 466.5
+    // below for every outcome alike.
+    if (winner !== "attacker" && attackersRecalled) {
       // rule 740.3.a — units of BOTH players still here in step 3d of the
       // Combat Cleanup is a tie. rule-id: ogn-227-298 (Symbol of the Solari):
       // a `combat-tie` replacement owned by the attacker replaces the
@@ -935,62 +907,23 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
       ]),
     ];
 
-    // Rule 466.5.b (Vendetta): if there are no Units remaining here
-    // controlled by any player, the Battlefield becomes Uncontrolled.
-    // Without this a mutual-kill leaves the previous controller set and
-    // grants illegal Hold scores on an empty battlefield.
-    const anyUnitRemaining = remainingUnits.some((id) => {
-      const registry = getGlobalCardRegistry();
-      return registry.getCardType(id as string) === "unit";
+    // rule 466.5 — Establish Control, ONE model (operations/battlefield-control.ts):
+    // the sole player with units remaining here establishes control if they did
+    // not already control it — the winning Attacker, or a surviving / surprise
+    // DEFENDER at an uncontrolled or enemy battlefield (466.5.e: not necessarily
+    // the Contested applier; a tie recalls the attackers first, 466.1.a.2, and
+    // leaves the defenders alone here). Taking control not already held is a
+    // Conquer (466.5.d / 469.1: scored unless already scored here this turn,
+    // 471.2.c; the `conquer` event carries the excess damage, 626.1.d.2).
+    // Keeping control never lost — the defender came back mid-combat, or simply
+    // held — is nothing. Nobody remaining ⇒ Uncontrolled (466.5.b, Vendetta:
+    // no Hold on an emptied battlefield). 466.5.a clears Contested either way.
+    settleControlByRemainingUnits({ cards, counters, draft, zones }, battlefieldId, "combat", {
+      afterAttack: true,
+      excessDamage,
+      fire: { cards, counters, draft, zones },
+      previousController: controllerBeforeCombat,
     });
-    if (!anyUnitRemaining) {
-      battlefield.controller = null;
-    }
-
-    // rule 466.5 / 466.5.e: the sole player with units left here establishes
-    // control — a surviving DEFENDER takes an uncontrolled (or enemy)
-    // battlefield even though the other player applied Contested. Taking
-    // control they did not already hold is a Conquer (466.5.d, 469.1).
-    // rule 466.5.e — the holder is read off who still has units HERE once the
-    // recalls are done, not off who "won": a tie recalls the attackers
-    // (466.1.a.2) and leaves the defenders alone here, so they take control too.
-    const holdersHere = remainingUnits.filter(
-      (id) => getGlobalCardRegistry().getCardType(id as string) === "unit",
-    );
-    const holdingPlayers = new Set(
-      holdersHere.map(
-        (id) =>
-          (cards.getCardController?.(id as CoreCardId) as string | undefined) ??
-          (cards.getCardOwner(id as CoreCardId) as string | undefined),
-      ),
-    );
-    if (holdingPlayers.size === 1) {
-      const defendingPlayer = [...holdingPlayers][0];
-      if (defendingPlayer !== undefined && battlefield.controller !== defendingPlayer) {
-        battlefield.controller = defendingPlayer;
-        const { isScore } = scoreBattlefield(
-          draft,
-          defendingPlayer,
-          battlefieldId,
-          "conquer",
-          { cards, zones },
-          { previousController: controllerBeforeCombat },
-        );
-        if (isScore) {
-          for (const event of scoreEvents(defendingPlayer, battlefieldId, "conquer", {
-            afterAttack: true,
-            excessDamage,
-            previousController: controllerBeforeCombat,
-          })) {
-            fireTriggers(event, { cards, counters, draft, zones });
-          }
-        }
-      }
-    }
-
-    // Clear contested status
-    battlefield.contested = false;
-    battlefield.contestedBy = undefined;
 
     // rule 466.7.b: the combat ENDS here, as the last step of the Resolution
     // Step — after damage, kills, recalls and control are settled. Every unit

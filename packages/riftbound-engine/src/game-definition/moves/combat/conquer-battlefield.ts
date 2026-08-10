@@ -3,10 +3,10 @@
  */
 
 import type { ZoneId as CoreZoneId, GameMoveDefinitions } from "@tcg/core";
-import { fireTriggers } from "../../../abilities/trigger-runner";
 import { createInteractionState, getActiveShowdown, getTurnState } from "../../../chain";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../../types";
-import { checkVictory, scoreBattlefield, scoreEvents } from "../../../operations/points";
+import { establishControl } from "../../../operations/battlefield-control";
+import { checkVictory } from "../../../operations/points";
 
 type Defs = GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>;
 
@@ -125,35 +125,14 @@ export const conquerBattlefield: Defs["conquerBattlefield"] = {
   reducer: (draft, context) => {
     const { playerId, battlefieldId } = context.params;
 
-    const battlefield = draft.battlefields[battlefieldId];
-    // rule 188: pre-conquer controller — `null` means Uncontrolled.
-    const previousController = battlefield?.controller ?? null;
-    if (battlefield) {
-      battlefield.controller = playerId;
-      battlefield.contested = false;
-      battlefield.contestedBy = undefined;
-    }
-
-    // rule 469.1 / 471: a Conquer worth up to one point — awardPoints applies
-    // denial (054.1), method-scoped skips (443.1.a) and the Final Point
-    // restriction (471.1.b: draw instead; the battlefield still Scored).
-    const { isScore } = scoreBattlefield(draft, playerId, battlefieldId, "conquer", context, {
-      previousController,
+    // rule 469.1 / 471 — ONE model (operations/battlefield-control.ts): taking
+    // control not already held is a Conquer worth up to one point (denial 054.1,
+    // method-scoped skips 443.1.a, Final Point 471.1.b applied by awardPoints);
+    // its Conquer / Score triggers fire only when the battlefield actually
+    // Scored (471.2.c).
+    establishControl({ cards: context.cards, counters: context.counters, draft, zones: context.zones }, battlefieldId, playerId, {
+      fire: { cards: context.cards, counters: context.counters, draft, zones: context.zones },
     });
-
-    // Emit "conquer" event so triggered abilities fire
-    // (e.g. Blade Dancer's "When you conquer, pay 1 to ready me").
-    // rule 471.2.c: only when the battlefield actually Scored.
-    if (isScore) {
-      for (const event of scoreEvents(playerId, battlefieldId, "conquer", { previousController })) {
-        fireTriggers(event, {
-          cards: context.cards,
-          counters: context.counters,
-          draft,
-          zones: context.zones,
-        });
-      }
-    }
 
     // rule 472 / 319.1 — the Cleanup after this action checks victory.
     checkVictory(draft, { io: context });

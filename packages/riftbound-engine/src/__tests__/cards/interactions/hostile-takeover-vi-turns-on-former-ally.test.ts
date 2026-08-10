@@ -216,7 +216,9 @@ describe("Hostile Takeover × Vi, Peacekeeper — the stolen unit attacks her fo
     await game.p1.move("vi", "bfA");
     expect(game.decision()).toMatchObject({ context: "showdown", kind: "action", seat: P1 });
     expect(game.chain()).toEqual([]);
-    expect(game.gameState.battlefields.bfA).toMatchObject({ contested: true, contestedBy: P1, controller: P2 });
+    // rule 323.6 / 190.4.c — P2's unit-less (seeded) control lapses in the Cleanup after the move, before the
+    // showdown begins (it is only staged then): the showdown runs at an uncontrolled, P1-contested bfA.
+    expect(game.gameState.battlefields.bfA).toMatchObject({ contested: true, contestedBy: P1, controller: null });
     expect(game.p1.points()).toBe(0);
     await game.p1.passFocus();
     await game.p2.passFocus();

@@ -21,7 +21,7 @@ import { fireTriggers } from "../../../abilities/trigger-runner";
 import { cleanupAndFireDeaths, type PostMoveCleanupContext } from "../../../cleanup/post-move-cleanup";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../../types";
 import type { GameEvent } from "../../../abilities/game-events";
-import { scoreBattlefield, scoreEvents } from "../../../operations/points";
+import { settleControlByRemainingUnits } from "../../../operations/battlefield-control";
 
 type Defs = GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>;
 
@@ -154,60 +154,19 @@ export const passShowdownFocus: Defs["passShowdownFocus"] = {
           // the battlefield's showdown complete so startShowdown does not
           // re-stage the same battlefield this turn.
           bf.showdownComplete = true;
-          // Rule 348.2 / 181.4: a Non-Combat Showdown closing means no combat
-          // is pending here — the battlefield is no longer Contested. Leaving
-          // it set blocks endTurn and lets resolveFullCombat recall the
-          // mover's own units.
-          bf.contested = false;
-          bf.contestedBy = undefined;
-          // Rule 348.2.a: Non-Combat Showdown close — if only one player's
-          // units remain and they don't already control it, they establish
-          // Control. 348.2.a.1: this is a Conquer if not yet scored.
-          const bfZone = `battlefield-${before!.battlefieldId}` as CoreZoneId;
-          // rule 469.1 / 477.1.a: Control of a battlefield is established (and the
-          // point scored) by the CONTROLLER of the units left there — a borrowed
-          // unit conquers for the player controlling it, never for its owner.
-          // rule 190.3 / 323.6: only UNITS establish control — an Equipment the
-          // opponent controls, worn by the sole unit here (718.5.e), is not a
-          // second side and must not deny the conquer.
-          const owners = new Set<string>();
-          for (const cid of context.zones.getCardsInZone(bfZone)) {
-            if (!isPresenceUnit(cid as string)) {
-              continue;
-            }
-            const o = context.cards.getCardController?.(cid as never) ?? context.cards.getCardOwner(cid);
-            if (o) owners.add(o as string);
-          }
-          if (owners.size === 1) {
-            const solo = [...owners][0];
-            if (bf.controller !== solo) {
-              // rule 188: pre-conquer controller — `null` means Uncontrolled.
-              const previousController = bf.controller ?? null;
-              bf.controller = solo;
-              // rule 469.1 / 471: a Conquer worth up to one point (denial,
-              // skips and the Final Point restriction applied by awardPoints);
-              // the victory check waits for the next Cleanup (rule 472).
-              // rule 471.2.c: Conquer abilities trigger only when the
-              // Battlefield SCORES — re-taking a battlefield this player
-              // already scored this turn is not a Conquer, so no event.
-              const { isScore } = scoreBattlefield(
-                draft,
-                solo,
-                before!.battlefieldId,
-                "conquer",
-                context,
-                { previousController },
-              );
-              if (isScore) {
-                // Rule 348.2.a.1: this is a Conquer — emit the "conquer" event
-                // (as conquerBattlefield / resolveFullCombat do) so [Hunt] and
-                // "When you conquer" triggers fire.
-                conquerEvents = scoreEvents(solo, before!.battlefieldId, "conquer", {
-                  previousController,
-                });
-              }
-            }
-          }
+          // Rule 348.2 / 348.2.a / 348.2.a.1: Non-Combat Showdown close — the
+          // battlefield stops being Contested and, if only ONE player's units
+          // remain and they don't already control it, they establish Control
+          // (a Conquer, scored unless already scored here this turn — 471.2.c).
+          // Nobody / both remaining ⇒ nothing is established (the next Open
+          // Cleanup's 323.6 then applies). One model:
+          // operations/battlefield-control.ts (units = presence, 190.3; the
+          // CONTROLLER of a borrowed unit conquers, 469.1).
+          conquerEvents = settleControlByRemainingUnits(
+            { cards: context.cards, draft, zones: context.zones } as never,
+            before!.battlefieldId,
+            "showdown",
+          ).events;
         }
       }
       draft.interaction = endShowdownState(draft.interaction);

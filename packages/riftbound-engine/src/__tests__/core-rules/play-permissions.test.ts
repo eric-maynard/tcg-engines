@@ -62,6 +62,7 @@ async function exiled(grant: Record<string, unknown> = {}, energy = 2) {
   const game = await scenario()
     .resources(P1, { energy })
     .battlefield("bf1", { controller: P1 })
+    .unit(P1, "bf1", { might: 1, name: "Holder" }, "holder") // rule 190.4.a — bf1 is P1's only while a P1 unit holds it
     .unit(P1, "base", UNIT2, "u", { damage: 1 })
     .hand(P1, exileSpell(grant), "exile")
     .build();

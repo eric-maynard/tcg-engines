@@ -44,7 +44,7 @@ never `test.skip`. When the engine is fixed the `test.failing` starts failing an
 | `.turn(n) .phase("main") .active(P2)` | position; `active` is whose turn it is |
 | `.resources(P1, { energy, power: { fury: 1, rainbow: 1 } })` | rune pool. A `[rainbow]` cost pip is paid from `power.rainbow` (engine quirk) |
 | `.points(P1, 7) .xp(P1, 3) .victoryScore(8)` | scoring state |
-| `.battlefield("bf1", { controller: P2 \| null, def?: "ogn-294-298", inert?: true })` | declare a battlefield (inert = abilities stripped, default). Must precede placing units there |
+| `.battlefield("bf1", { controller: P2 \| null, def?: "ogn-294-298", inert?: true })` | declare a battlefield (inert = abilities stripped, default). Must precede placing units there. `controller` seeds control but places nothing: with no unit of that player on it, control LAPSES at the first Open-State Cleanup (rule 323.6 — usually your first move); put a unit/token there for durable control |
 | `.hand(P1, defOrInline, alias?)` `.base(…)` `.trash(…)` `.banishment(…)` `.deckTop(…)` | put a card in that zone |
 | `.unit(P2, "bf1" \| "base", "ogn-175-298" \| { might: 3, keywords: ["Tank"], name? }, alias?, meta?)` | a unit on the board; inline defs default to `cardType: "unit"` |
 | `.gear(P1, def, alias?)` `.legend(P1, def, alias?)` `.champion(P1, def, alias?)` | other permanents / zones |

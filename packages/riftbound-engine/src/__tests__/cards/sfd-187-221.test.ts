@@ -113,7 +113,9 @@ describe("Void Burrower (sfd-187-221)", () => {
     const game = await walkIn().build();
     await game.p1.move("walker", "bf1");
     expect(game.decision()).toMatchObject({ context: "showdown", kind: "action", seat: P1 }); // 344: non-combat showdown first
-    expect(game.gameState.battlefields.bf1?.controller).toBe(P2);
+    // rule 323.6 / 190.4.c — P2's unit-less (seeded) control lapsed in the Cleanup after the move,
+    // BEFORE the showdown began (it was only staged then); P1 conquers the now-uncontrolled bf1 at its close.
+    expect(game.gameState.battlefields.bf1?.controller).toBeNull();
     await game.settle();
     expect(game.gameState.battlefields.bf1?.controller).toBe(P1);
     expect(game.p1.points()).toBe(1);

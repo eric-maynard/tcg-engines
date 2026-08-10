@@ -42,8 +42,9 @@ import {
   snapshotBatch,
   snapshotLKI,
 } from "../operations/leave-board";
-import { checkVictory, scoreBattlefield, scoreEvents } from "../operations/points";
-import type { PlayerId, RiftboundCardMeta, RiftboundGameState } from "../types";
+import { applyControlCleanupStep } from "../operations/battlefield-control";
+import { checkVictory } from "../operations/points";
+import type { RiftboundCardMeta, RiftboundGameState } from "../types";
 
 // The die choke point owns replacement application; kept importable from here.
 export { applyDieReplacement } from "../operations/leave-board";
@@ -602,81 +603,17 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
     }
   }
 
-  // Step 6: Battlefield control + combat staging (rules 323.6, 323.13)
+  // Step 6: Battlefield control (rule 323.6 — the ONE model lives in
+  // `operations/battlefield-control.ts`: control lapses in an Open-State Cleanup
+  // when the controller has no unit here and no Showdown / Combat is ongoing
+  // HERE; a Closed State — chain item, pending trigger, the `die` triggers of
+  // units reaped in this very pass — keeps it) + combat staging (323.13).
+  if (applyControlCleanupStep(ctx, { killedThisPass: killed.length })) {
+    stateChanged = true;
+  }
   for (const [bfId, bf] of Object.entries(ctx.draft.battlefields)) {
     const bfZoneId = `battlefield-${bfId}` as CoreZoneId;
     const unitsAtBf = ctx.zones.getCardsInZone(bfZoneId);
-
-    // Rule 323.6: a player loses control of a Battlefield they control if
-    // they no longer have a Unit at that Battlefield — but only during an
-    // Open State (no chain, no showdown; rule 190.4.c). Pending items keep
-    // the chain closed so a unit banished-then-replayed by a spell keeps its
-    // battlefield controlled through the sequence.
-    // rule-id: ogn-276-298-arcane-shift-replay-keeps-control — an outstanding
-    // pendingChoice (e.g. the replayed unit's choose-destination) means the
-    // last chain item has not finished resolving, so the state is still
-    // Closed even though the chain itself has emptied.
-    // rule 309.1 / 190.4.c — units reaped in THIS pass have not had their `die`
-    // event dispatched yet, so the Deathknell / dies-triggers they generate are
-    // not on the chain when step 6 runs. Those pending items keep the turn in a
-    // Closed State, so defer the 323.6 check to the next maintenance pass (the
-    // runner always makes one after a pass that killed something).
-    // rule-id: sfd-165-221 (Glasc Mixologist) — his Deathknell may play a unit
-    // back to the battlefield he just died at, which requires that battlefield
-    // to still be controlled by his controller.
-    const chainQuiet =
-      !ctx.draft.interaction?.chain?.active && !ctx.draft.pendingChoice && killed.length === 0;
-    const isOpenState =
-      chainQuiet && (ctx.draft.interaction?.showdownStack?.length ?? 0) === 0;
-    // rule 310.3 / 323.6 — "Showdown Open" is an Open State too: with the chain empty, a
-    // battlefield with no Showdown or Combat ongoing THERE still loses control, even while a
-    // combat runs elsewhere. rule 190.4.b keeps the fighting battlefield's own control frozen.
-    const isOpenHere =
-      chainQuiet &&
-      !(ctx.draft.interaction?.showdownStack ?? []).some((sd) => sd.battlefieldId === bfId);
-    if (bf.controller) {
-      // rule 323.6 / 127.1: "have a Unit there" follows CONTROL, not ownership — a unit
-      // stolen by e.g. Hostile Takeover holds the battlefield for its new controller.
-      const controllerOf = (id: CoreCardId) =>
-        ctx.cards.getCardController?.(id) ?? ctx.cards.getCardOwner(id);
-      const unitControllers = new Set<string>();
-      for (const id of unitsAtBf) {
-        if (registry.getCardType(id as string) !== "unit") {
-          continue;
-        }
-        const c = controllerOf(id);
-        if (c) {
-          unitControllers.add(c);
-        }
-      }
-      if (unitControllers.has(bf.controller)) {
-        // rule 190.4.a — control rests on the controller's units being here. Recorded in
-        // every state (not just Open ones) so a unit that arrives and leaves inside one
-        // closed window still arms the 323.6 vacancy check below.
-        bf.controllerOccupied = true;
-        // rule 190.3.a: a unit that "otherwise becomes present" (a control change, no move)
-        // at a battlefield its controller doesn't control contests it. With no other enemy
-        // units there the showdown is non-combat and settles straight into a conquer.
-      } else if (isOpenState && unitControllers.size === 1 && !bf.contested) {
-        const conqueror = [...unitControllers][0] as string;
-        conquerByPresence(ctx, bfId, conqueror);
-        stateChanged = true;
-      } else {
-        // A deserted battlefield vacates in any Open State; one still holding enemy units
-        // waits for a fully Open turn so the 190.3.a conquer above gets first refusal.
-        const openForVacancy = isOpenState || (isOpenHere && unitControllers.size === 0);
-        if (openForVacancy && bf.controllerOccupied) {
-          // rule 323.6 / 190.4.c — control is lost in cleanup once the controller's
-          // units are gone. Control that never rested on a unit here (a seeded board
-          // state, or control handed over by an effect) has nothing to vacate, so it
-          // survives until a unit of the controller occupies and then leaves it —
-          // otherwise the first cleanup after any action silently wiped it.
-          bf.controller = null;
-          bf.controllerOccupied = false;
-          stateChanged = true;
-        }
-      }
-    }
 
     if (unitsAtBf.length < 2) {
       continue;
@@ -712,57 +649,6 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
   return { combatPending, deaths, hiddenRemoved, killed, stateChanged };
 }
 
-/**
- * rule 190.3.a / 630.1 — the sole player with units at a battlefield they don't control takes
- * it and scores, exactly as a non-combat showdown close would.
- */
-function conquerByPresence(ctx: CleanupContext, bfId: string, playerId: string): void {
-  const draft = ctx.draft;
-  const bf = draft.battlefields[bfId];
-  if (!bf) {
-    return;
-  }
-  const previousController = bf.controller;
-  bf.controller = playerId;
-  bf.contested = false;
-  bf.contestedBy = undefined;
-  const zonesAny = ctx.zones as unknown as Partial<TriggerRunnerContext["zones"]>;
-  const countersAny = ctx.counters as unknown as Partial<TriggerRunnerContext["counters"]>;
-  const noop = () => {};
-  const zones = {
-    drawCards: zonesAny.drawCards ?? noop,
-    getCardZone: zonesAny.getCardZone,
-    getCardsInZone: ctx.zones.getCardsInZone,
-    moveCard: ctx.zones.moveCard,
-  };
-  const { isScore } = scoreBattlefield(
-    draft,
-    playerId as PlayerId,
-    bfId,
-    "conquer",
-    { cards: ctx.cards, zones },
-    { previousController },
-  );
-  // rule 471.2.a — it is a Conquer like any other, so its Conquer / "when an
-  // opponent scores" abilities trigger (real contexts carry the counter ops;
-  // stripped test stubs fall back to no-ops).
-  if (isScore) {
-    const triggerCtx: TriggerRunnerContext = {
-      cards: ctx.cards,
-      counters: {
-        addCounter: countersAny.addCounter ?? noop,
-        clearCounter: ctx.counters.clearCounter,
-        removeCounter: countersAny.removeCounter,
-        setFlag: ctx.counters.setFlag,
-      },
-      draft,
-      zones,
-    };
-    for (const event of scoreEvents(playerId as PlayerId, bfId, "conquer", { previousController })) {
-      fireTriggers(event, triggerCtx);
-    }
-  }
-}
 
 /**
  * Run cleanup repeatedly until no more state changes occur.

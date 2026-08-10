@@ -58,7 +58,7 @@ const SECOND_WIND = {
 };
 
 /**
- * P1's turn 2, Neutral Open. bfA is P1's (empty), bfB is P2's with the Investigator on it.
+ * P1's turn 2, Neutral Open. bfA is P1's (a 1-Might Holder keeps it), bfB is P2's with the Investigator on it.
  * P1: MF + Skulker ready in base, pool = 0 energy / `body` Body power.
  */
 function board(body: number) {
@@ -66,6 +66,7 @@ function board(body: number) {
     .resources(P1, { energy: 0, power: { body } })
     .battlefield("bfA", { controller: P1 })
     .battlefield("bfB", { controller: P2 })
+    .unit(P1, "bfA", { might: 1, name: "Holder" }, "holder") // rule 190.4.a — bfA is P1's only while a P1 unit holds it
     .unit(P2, "bfB", INVESTIGATOR, "msi")
     .unit(P1, "base", MISS_FORTUNE, "mf")
     .unit(P1, "base", SKULKER, "sk");
@@ -131,7 +132,7 @@ describe("(a) one Standard Move of MF + Skulker onto the Investigator: 1 [rainbo
     const game = await board(0).build();
     expect(moveSetsOffered(game, "bfA")).toContainEqual(["mf", "sk"]);
     await game.p1.move(["mf", "sk"], "bfA");
-    expect(game.p1.units("bfA").sort()).toEqual(["mf", "sk"]);
+    expect(game.p1.units("bfA").sort()).toEqual(["holder", "mf", "sk"]);
     expect(game.p1.resources()).toEqual({ energy: 0, power: { body: 0 } });
   });
 });

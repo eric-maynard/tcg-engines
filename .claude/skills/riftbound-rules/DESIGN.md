@@ -71,3 +71,19 @@ Rule 383.3.d ("the controller selects the order to place simultaneous triggers o
 
 ## Performance
 - All deck card images preloaded at first sync — no blank cards after t+1s
+
+## Battlefield control
+The timing of losing / gaining control follows the Core Rules text exactly (190.4, 323.6 = Cleanup step 4 in an OPEN
+State with nothing ongoing there, 348.2.a, 466.5 — `packages/riftbound-engine/src/operations/battlefield-control.ts`,
+FIXER-PRIMER § BATTLEFIELD CONTROL TIMING). Two deliberate points:
+- **Presence shortcut (deviation)**: in a NEUTRAL Open Cleanup, a battlefield that is not Contested, has no showdown,
+  whose recorded controller has no unit there and where exactly ONE other player has units is taken by that player
+  immediately (a Conquer, scored if not yet scored this turn) instead of that player applying Contested and a
+  Non-Combat Showdown being staged (190.3.a / 323.11.a / 344.2). Real arrivals always apply Contested via `noteArrival`
+  and DO get their showdown; the shortcut only fires for states real play does not produce (seeded test boards,
+  simultaneous swaps). In a Showdown-Open Cleanup the controller lapses normally and the occupant applies Contested.
+- **Seeded control** (harness / sandbox): `controller` on a battlefield with no unit of that player is real control and
+  lapses at the first Open-State Cleanup like any other; durable control needs a unit or token there.
+- Community rulings that predate the "1.1"/Unleashed control rules (control lost mid-combat, or mid-chain for Baited
+  Hook / Cruel Patron / Arcane Shift, or "hidden card lost before a lone Deathknell resolves") are NOT followed; their
+  test facets carry `// RULING-CONFLICT` and assert the CR behaviour.

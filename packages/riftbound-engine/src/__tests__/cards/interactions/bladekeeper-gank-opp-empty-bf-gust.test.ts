@@ -104,11 +104,11 @@ describe("Laurent Bladekeeper ganks onto an opponent's EMPTY 'controlled' battle
     expect(game.p2.legal()).toEqual([]);
   });
 
-  // Expected (190.4.c / 323.6): the cleanup after the move runs in an Open State with no Showdown yet ONGOING
-  // at bfB (it is only staged, and begins at step 9), so P2 — with no units at bfB — loses control of it right
-  // there, exactly as P1 loses bfA. Actual: the engine grandfathers control that "never rested on a unit"
-  // (battlefield.controllerOccupied stays false for the seeded, unit-less control) and keeps bfB as P2's.
-  test.failing("BUG: P2's unit-less control of bfB should lapse in the cleanup after the move, before the showdown begins (190.4.c, 323.6)", async () => {
+  // rule 190.4.c / 323.6: the cleanup after the move runs in an Open State with no Showdown yet ONGOING at bfB
+  // (it is only staged, and begins at step 9), so P2 — with no units at bfB — loses control of it right there,
+  // exactly as P1 loses bfA. Seeded unit-less control is real control and lapses the same way
+  // (battlefield control timing model, operations/battlefield-control.ts).
+  test("P2's unit-less control of bfB lapses in the cleanup after the move, before the showdown begins (190.4.c, 323.6)", async () => {
     const game = await ganked();
     expect(game.gameState.battlefields.bfB?.controller).toBeNull();
     expect(game.p2.battlefields({ controlled: true })).toEqual([]);
@@ -162,19 +162,16 @@ describe("Laurent Bladekeeper ganks onto an opponent's EMPTY 'controlled' battle
     expect(game.violations()).toEqual([]);
   });
 
-  // RULING-CONFLICT: this facet asserted that P2's unit-less control of bfB lapses (190.4.a / 323.6 / 348.2.a); the
-  // engine's control-lapse cleanup only vacates control that once rested on a unit (battlefield.controllerOccupied),
-  // so a harness-SEEDED unit-less control is grandfathered and survives. Vacating it flips ~15 landed core-rules and
-  // interaction tests that seed an empty enemy-controlled battlefield and rely on it persisting — engine behaviour
-  // kept. Nothing here is scored: 348.2.a still lets no one establish control or Conquer, and Contested is removed.
-  // rule 348.2.a: with no player's units remaining, nobody establishes control and nobody Conquers.
-  test("after the Gust line closes out nobody gains bfB — P2 does not establish control or Conquer; its seeded control record simply persists (348.2.a)", async () => {
+  // rule 348.2.a / 323.6: with no player's units remaining nobody establishes control and nobody Conquers; P2's
+  // seeded unit-less control had already lapsed in the cleanup after the gank, so bfB ends UNCONTROLLED.
+  test("after the Gust line closes out nobody holds bfB — P2 lost its unit-less control before the showdown and does not get it back; P1 establishes nothing (348.2.a)", async () => {
     const game = await gusted();
     await game.p1.passFocus();
     await game.p2.passFocus();
     expect(game.gameState.battlefields.bfB?.contested).toBe(false);
-    expect(game.gameState.battlefields.bfB?.controller).toBe(P2); // seeded, never rested on a unit
+    expect(game.gameState.battlefields.bfB?.controller).toBeNull();
     expect(game.p1.battlefields({ controlled: true })).toEqual([]);
+    expect(game.p2.battlefields({ controlled: true })).toEqual([]);
     expect(game.p1.points()).toBe(0);
     expect(game.p2.points()).toBe(0);
   });

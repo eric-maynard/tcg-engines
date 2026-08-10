@@ -48,6 +48,7 @@ function board() {
     .resources(P2, { energy: 1, power: { fury: 1 } })
     .battlefield("bfA", { controller: P1 })
     .battlefield("bfB", { controller: P2 })
+    .unit(P1, "bfA", { might: 1, name: "Holder" }, "holder") // rule 190.4.a — bfA stays P1's own only with a P1 unit on it
     .unit(P1, "base", KAYN, "kayn")
     .unit(P1, "base", VANGUARD_SERGEANT, "sarge")
     .unit(P2, "bfB", PLAYFUL_PHANTOM, "phantom")

@@ -164,19 +164,20 @@ describe("Yone, Blademaster (sfd-116-221)", () => {
     expect(game.state("sturdy").damage).toBe(0);
   });
 
-  test("'that was uncontrolled' — walking onto an EMPTY battlefield the opponent controlled must not trigger either", async () => {
-    // Expected: control passes P2 → P1 (a conquer), but the battlefield was not uncontrolled → no damage.
-    // Actual: Sturdy takes 5.
+  test("'that was uncontrolled' — walking onto an EMPTY battlefield the opponent's control had been seeded on: that unit-less control lapses in the Cleanup after the move (323.6 / 190.4.c — the showdown is only staged then, rulings f69a1bb8709cf037 / 88f862ece2edcd29), so Yone DOES conquer an uncontrolled battlefield and the trigger fires", async () => {
+    // Battlefield control timing model (operations/battlefield-control.ts): control with none of the
+    // controller's units lapses at the first Open-State Cleanup unless a showdown/combat is ONGOING there.
     const game = await scenario()
       .battlefield("bf1", { controller: P2 })
       .unit(P1, "base", CARD, "yone")
       .unit(P2, "base", { might: 6, name: "Sturdy" }, "sturdy")
       .build();
     await game.p1.move("yone", "bf1");
+    expect(game.gameState.battlefields.bf1?.controller).toBeNull();
     await game.settle();
     expect(game.gameState.battlefields.bf1?.controller).toBe(P1);
     expect(game.p1.points()).toBe(1);
-    expect(game.state("sturdy").damage).toBe(0);
+    expect(game.state("sturdy").damage).toBe(5);
   });
 
   test("'when I conquer': another friendly unit conquering a neutral battlefield while Yone stays home does nothing", async () => {
