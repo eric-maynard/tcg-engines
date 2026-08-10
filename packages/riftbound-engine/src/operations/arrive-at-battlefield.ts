@@ -86,6 +86,36 @@ function setRole(
   } as never);
 }
 
+/**
+ * rule 464.2.a / 383.4.e (ven-112a-166 Zed, Without a Sound) — a combat designation belongs
+ * to the battlefield where it was assigned. A unit relocated away from that battlefield has
+ * left the combat, so it stops being an Attacker/Defender the moment it lands elsewhere.
+ */
+export function clearCombatRoleAfterRelocation(
+  io: {
+    cards: {
+      getCardMeta?: (cardId: CoreCardId) => unknown;
+      updateCardMeta?: (cardId: CoreCardId, meta: never) => void;
+    };
+  },
+  cardId: string,
+  newZoneId: string,
+): void {
+  const meta = io.cards.getCardMeta?.(cardId as CoreCardId) as
+    | (Partial<RiftboundCardMeta> & { combatRoleAt?: string })
+    | undefined;
+  if (meta?.combatRole === undefined || meta.combatRole === null) {
+    return;
+  }
+  if (meta.combatRoleAt !== undefined && meta.combatRoleAt === toBattlefieldId(newZoneId)) {
+    return;
+  }
+  io.cards.updateCardMeta?.(cardId as CoreCardId, {
+    combatRole: null,
+    combatRoleAt: undefined,
+  } as never);
+}
+
 export function toBattlefieldId(zoneOrBattlefieldId: string): string | undefined {
   if (zoneOrBattlefieldId.startsWith("battlefield-")) {
     return zoneOrBattlefieldId.slice("battlefield-".length);

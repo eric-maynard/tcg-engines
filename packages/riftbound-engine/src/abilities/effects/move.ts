@@ -6,7 +6,12 @@ import { resolveTarget } from "../target-resolver";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import { type EffectHelpers, getTargetIds, getEffectiveMight } from "./_helpers";
 import { isBlockedByTwoOtherPlayers } from "../../game-definition/moves/movement/helpers";
-import { noteArrival, stageContested, toBattlefieldId } from "../../operations/arrive-at-battlefield";
+import {
+  clearCombatRoleAfterRelocation,
+  noteArrival,
+  stageContested,
+  toBattlefieldId,
+} from "../../operations/arrive-at-battlefield";
 import { moveDestinationOptions } from "../move-destinations";
 
 /**
@@ -134,10 +139,13 @@ export function moveCardWithEvent(
   ) {
     if (from !== "base") {
       ctx.zones.moveCard({ cardId: cardId as CoreCardId, targetZoneId: "base" as CoreZoneId });
+      clearCombatRoleAfterRelocation(ctx, cardId, "base");
     }
     return "base";
   }
   ctx.zones.moveCard({ cardId: cardId as CoreCardId, targetZoneId: targetZoneId as CoreZoneId });
+  // rule 464.2.a — leaving the combat's battlefield ends the unit's Attacker/Defender role.
+  clearCombatRoleAfterRelocation(ctx, cardId, targetZoneId);
   const onBoard = (z: string) => z === "base" || z.startsWith("battlefield-");
   if (from === targetZoneId || !onBoard(from) || !onBoard(targetZoneId)) {
     return targetZoneId;

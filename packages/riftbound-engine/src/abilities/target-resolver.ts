@@ -824,8 +824,10 @@ function matchesFilter(cardId: string, filter: TargetFilter, ctx: TargetResolver
       // is never in a showdown.
       case "in-showdown":
         return isAtShowdownBattlefield(cardId, ctx);
+      // rule 807.1.c / 710 (unl-173-219 × ogn-037-298) — Assault/Shield is real Might while
+      // the role is stamped, so an attacking [Assault 2] 3-Might unit IS [Mighty].
       case "mighty":
-        return effectiveMight(def, meta) >= MIGHTY_THRESHOLD;
+        return effectiveMight(def, meta) + combatRoleMightBonus(cardId, meta) >= MIGHTY_THRESHOLD;
       case "damaged":
         return (meta?.damage ?? 0) > 0;
       case "stunned":

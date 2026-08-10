@@ -130,6 +130,18 @@ export function getTargetIds(effect: ExecutableEffect, ctx: EffectContext): stri
 export const MIGHTY_THRESHOLD = 5;
 
 /**
+ * rule 718.3 (sfd-059-221 Svellsongur) — an attached card's Effect Text abilities
+ * are appended to the Rules Text of the TOP-MOST card, so "I"/"my" inside them names
+ * the wearer, not the attachment. Unattached sources always mean themselves.
+ */
+export function selfReferenceCardId(cardId: string, ctx: EffectContext): string {
+  const meta = ctx.cards.getCardMeta?.(cardId as CoreCardId) as
+    | { attachedTo?: string }
+    | undefined;
+  return meta?.attachedTo ?? cardId;
+}
+
+/**
  * Calculate a unit's effective Might from its definition and metadata.
  */
 export function getEffectiveMight(cardId: string, ctx: EffectContext): number {
@@ -273,7 +285,7 @@ export function resolveAmount(
   if ("might" in amount) {
     const mightRef = amount.might;
     if (mightRef === "self") {
-      return getEffectiveMight(ctx.sourceCardId, ctx);
+      return getEffectiveMight(selfReferenceCardId(ctx.sourceCardId, ctx), ctx);
     }
     // rule-id: ogn-260-298 (rule 355.14.a) — "Ready a friendly unit. It deals
     // damage equal to ITS Might": "its" names the unit an EARLIER sequence step
@@ -414,13 +426,20 @@ export function resolveAmount(
     const n = (amount.revealTop as number) ?? 0;
     const keyword = amount.withKeyword as string;
     const registry = getGlobalCardRegistry();
-    const topN = ctx.zones
+    const deck = ctx.zones
       .getCardsInZone("mainDeck" as CoreZoneId, ctx.playerId as CorePlayerId)
-      .slice(0, n)
       .map((c) => c as string);
-    // rule 424.1 — this IS a reveal, not a private look: present the cards to
-    // every player BEFORE they are recycled, or nobody can verify the count.
-    recordPublicReveal(ctx, ctx.playerId as string, topN);
+    // rule 354.3 / 370.1 (ogn-194-298 Nocturne) — the cards this reveal turned
+    // over are frozen on the effect by `offerRevealTopChoices`, which already
+    // presented them and ran their on-reveal abilities: one that removed itself
+    // drops out, and no fresh card pulled up behind it joins the count.
+    const carried = amount.revealedIds as readonly string[] | undefined;
+    const topN = carried ? carried.filter((id) => deck.includes(id)) : deck.slice(0, n);
+    if (carried === undefined) {
+      // rule 424.1 — this IS a reveal, not a private look: present the cards to
+      // every player BEFORE they are recycled, or nobody can verify the count.
+      recordPublicReveal(ctx, ctx.playerId as string, topN);
+    }
     const hits = topN.filter((id) => registry.hasKeyword(id, keyword)).length;
     if ((amount.then ?? "recycle") === "recycle") {
       for (const id of topN) {
