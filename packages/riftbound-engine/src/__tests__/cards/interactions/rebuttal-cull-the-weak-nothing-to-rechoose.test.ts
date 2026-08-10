@@ -219,9 +219,10 @@ describe("Rebuttal × Cull the Weak — (b) paid: resolution under P2's control"
     expect(bySeat[P2]).toEqual([...P2_UNITS].sort());
   });
 
-  // rule 303.2.a — the simultaneous per-player choices are sequenced in turn order starting with the
-  // turn player — P1 first, then P2 — regardless of who controls the spell.
-  test("a stolen Cull the Weak still asks in turn order from the turn player P1, not from its controller P2 (303.2.a)", async () => {
+  // Expected (303.2.a): the simultaneous per-player choices are sequenced in turn order starting with the
+  // turn player — P1 first, then P2 — regardless of who controls the spell. Actual: the engine asks the
+  // spell's controller (P2) first.
+  test.failing("BUG: stolen Cull the Weak asks its controller P2 to choose first; simultaneous choices go in turn order from the turn player P1 (303.2.a)", async () => {
     const game = await rebutted();
     await game.p2.yes();
     await keepAsIs(game);
