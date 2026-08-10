@@ -6,6 +6,18 @@ Product decisions the visual observer agents must check FOR (not just "is it bro
 - 4 mode cards: Host Lobby, Join Lobby, Goldfish, VS AI (disabled)
 - Goldfish/VS AI skip the lobby entirely — deck picker → Play → mulligan (no code, no d20)
 - Solo picker offers Bo1/Bo3; Bo3 shows battlefield selection in pregame
+- Solo modes — the bot's deck: under the Opponent (Goldfish / Claude model) selector the picker has an
+  **Opponent's deck** dropdown (same rich deck picker as the player's: name, "Legend · Champion" chip, domain
+  pips) with, in order: *Same as mine (mirror)* (chip follows the player's pick), *Random from my decks* (only
+  when the user has saved decks), **Your Saved Decks**, **Public Decks**, **Default starter**. The choice is
+  remembered in `localStorage` (`rb-opponent-deck`). It travels as `opponent.deck = {mode: mirror|random-mine|
+  deck|default, deckId?}` on `POST /api/lobby/create`; the server accepts only the requester's own decks,
+  public decks or the starter (ownership from the session cookie, never the body), validates the deck like a
+  human's, and seats player-2 with it BEFORE the game is created — so battlefield options / the Bo1 random
+  pick, sideboarding and the mulligan all use it, for Goldfish and Claude seats alike (Claude's system prompt
+  lists ITS deck). A rejected deck leaves no lobby behind and the reason shows in the picker's status line.
+  The hosted lobby's **Single Player** mode shows the same dropdown to the host (WS `select_opponent_deck`),
+  and the Goldfish card reads "Solo Opponent · <deck>".
 
 ## Board layout
 - Rune-stack cards ≈ hand-card size (~110×154px minimum)

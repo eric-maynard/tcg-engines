@@ -6,7 +6,9 @@ import type { ServerWebSocket } from "bun";
 import { loadDeckConfig } from "./decks";
 import { json } from "./http";
 import { gameLogger } from "./log";
+import { maySelectDeck, parseOpponentDeck, syncOpponentSeatDeck } from "./opponent-deck";
 import { createGameFromDecks } from "./pregame";
+import { getUserIdFromRequest } from "./routes-auth";
 import { type RouteCtx, type RouteResult, type WsData, broadcastLobby, gameSessions, lobbies } from "./state";
 
 // GET /ws/lobby/:id?role=host|guest — upgrade to lobby WebSocket
@@ -26,8 +28,10 @@ export async function handleLobbyUpgrade(req: Request, url: URL, ctx: RouteCtx):
     if (!lobby) {console.log(`[WS] lobby ${lobbyId} not found (have ${lobbies.size})`); return json({ error: "Lobby not found" }, 404);}
 
     const connId = crypto.randomUUID();
+    // The session cookie rides on the upgrade request: remember WHO this socket
+    // is so deck picks can be checked against ownership (never trust a deck id alone).
     const upgraded = server.upgrade<WsData>(req, {
-      data: { connId, gameId: "", lobbyId, lobbyRole: role, playerId: "" },
+      data: { connId, gameId: "", lobbyId, lobbyRole: role, playerId: "", userId: getUserIdFromRequest(req) },
     });
     if (!upgraded) {
       return new Response("WebSocket upgrade failed", { status: 500 });
@@ -54,8 +58,37 @@ export function lobbyWsMessage(ws: ServerWebSocket<WsData>, msg: Record<string, 
   const player = role === "host" ? lobby.host : lobby.guest;
 
   if (msg.type === "select_deck" && player) {
-    player.deckId = msg.deckId as string;
-    player.ready = Boolean(msg.deckId);
+    const deckId = typeof msg.deckId === "string" ? msg.deckId : "";
+    // Own decks, public decks or the starter only — same rule as the practice seat's deck.
+    if (deckId && !maySelectDeck(deckId, ws.data.userId)) {
+      player.deckId = null;
+      player.ready = false;
+      sendLobbyError(ws, "Deck not found — pick one of your saved decks, a public deck, or the starter deck");
+      broadcastLobby(lobby);
+      return;
+    }
+    player.deckId = deckId || null;
+    player.ready = Boolean(deckId);
+    // "mirror" follows the host's pick.
+    if (role === "host") {syncOpponentSeatDeck(lobby);}
+    broadcastLobby(lobby);
+  }
+
+  // Host picks the practice seat's deck from the lobby room (Single Player /
+  // hot-seat sandbox): same modes + ownership rule as `opponent.deck` on create.
+  if (msg.type === "select_opponent_deck" && role === "host" && lobby.status === "waiting") {
+    if (!lobby.sandbox) {
+      sendLobbyError(ws, "The opponent's deck can only be chosen in Single Player mode");
+      return;
+    }
+    const parsed = parseOpponentDeck(msg.deck, ws.data.userId);
+    if (!parsed.ok) {
+      sendLobbyError(ws, parsed.error);
+      broadcastLobby(lobby);
+      return;
+    }
+    lobby.opponentDeck = parsed.spec;
+    syncOpponentSeatDeck(lobby);
     broadcastLobby(lobby);
   }
 
@@ -85,6 +118,7 @@ export function lobbyWsMessage(ws: ServerWebSocket<WsData>, msg: Record<string, 
           ws: null,
         };
       }
+      syncOpponentSeatDeck(lobby);
     } else {
       // Demote back to a regular lobby: clear sandbox and drop
       // The auto-filled Goldfish guest if it's still there.
@@ -132,7 +166,10 @@ export function lobbyWsMessage(ws: ServerWebSocket<WsData>, msg: Record<string, 
       : (role === "host" ? "player-1" : "player-2");
     lobby.coinFlip = { ...lobby.coinFlip, firstPlayer: chosen };
 
-    // NOW start the game with the chosen first player
+    // NOW start the game with the chosen first player. The practice seat's
+    // deck was validated at create/select time; re-sync so "mirror" reflects
+    // the host's final pick.
+    syncOpponentSeatDeck(lobby);
     const deck1 = loadDeckConfig(lobby.host.deckId);
     const deck2 = loadDeckConfig(lobby.guest.deckId);
 
@@ -165,6 +202,7 @@ export function lobbyWsMessage(ws: ServerWebSocket<WsData>, msg: Record<string, 
       hostDeckId: lobby.host.deckId,
       lobbyCode: lobby.code,
       opponent: session.opponent ? `claude:${session.opponent.info.model ?? "?"}` : "goldfish",
+      ...(lobby.sandbox ? { opponentDeckMode: lobby.opponentDeck?.mode ?? "default" } : {}),
       sandbox: lobby.sandbox,
       source: "lobby",
     });
@@ -176,6 +214,10 @@ export function lobbyWsMessage(ws: ServerWebSocket<WsData>, msg: Record<string, 
   if (msg.type === "ping") {
     ws.send(JSON.stringify({ type: "pong" }));
   }
+}
+
+function sendLobbyError(ws: ServerWebSocket<WsData>, error: string): void {
+  try { ws.send(JSON.stringify({ error, type: "lobby_error" })); } catch { /* disconnected */ }
 }
 
 export function lobbyWsOpen(ws: ServerWebSocket<WsData>): void {

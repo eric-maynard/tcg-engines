@@ -7,6 +7,7 @@ import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "@tcg
 import type { RuleEngine } from "@tcg/core";
 import type { Server, ServerWebSocket } from "bun";
 import type { LogEntry } from "../src/narrator";
+import type { OpponentDeckSpec } from "./opponent-deck";
 
 export type Engine = RuleEngine<RiftboundGameState, RiftboundMoves, unknown, RiftboundCardMeta>;
 
@@ -50,6 +51,12 @@ export interface Lobby {
   createdAt: number;
   /** Solo opponent for sandbox lobbies (Goldfish or a Claude seat). In-memory only; never broadcast. */
   opponent?: OpponentHandle;
+  /**
+   * Which deck the auto-joined practice seat plays (server/opponent-deck.ts):
+   * validated against the host's ownership at create / select time; "mirror"
+   * follows the host's own pick. Absent ⇒ starter deck.
+   */
+  opponentDeck?: OpponentDeckSpec;
 }
 
 /** Public description of the solo opponent — safe to ship in snapshots (no key material). */
@@ -99,6 +106,7 @@ export function broadcastLobby(lobby: Lobby) {
       guest: lobby.guest ? { hasDeck: Boolean(lobby.guest.deckId), name: lobby.guest.name, ready: lobby.guest.ready } : null,
       host: { hasDeck: Boolean(lobby.host.deckId), name: lobby.host.name, ready: lobby.host.ready },
       id: lobby.id,
+      ...(lobby.sandbox ? { opponentDeck: { deckId: lobby.opponentDeck?.deckId, deckName: lobby.opponentDeck?.deckName, mode: lobby.opponentDeck?.mode ?? "default" } } : {}),
       sandbox: lobby.sandbox,
       status: lobby.status,
     },
@@ -213,6 +221,8 @@ export interface GameSession {
    * be created from these so game 2 starts from the game-1 configuration.
    */
   postSideboardDecks?: Record<string, DeckConfig>;
+  /** Each seat's registered deck (as passed to createGameFromDecks) — lets the AI seat describe ITS list. */
+  decks?: Record<string, DeckConfig>;
 }
 
 /** Data attached to each WebSocket connection */
@@ -223,6 +233,8 @@ export interface WsData {
   /** If this is a lobby connection rather than a game connection */
   lobbyId?: string;
   lobbyRole?: "host" | "guest";
+  /** Authenticated user behind a lobby socket (from the upgrade request's session), for deck ownership checks. */
+  userId?: string | null;
 }
 
 /** Deck configuration for creating a game */

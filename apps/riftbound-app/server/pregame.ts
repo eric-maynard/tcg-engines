@@ -340,7 +340,7 @@ export function createGameFromDecks(
   );
 
   const names = options?.names ?? { [P1]: "Player 1", [P2]: "Player 2" };
-  const session: GameSession = { clients: new Map(), engine, log, playerNames: names, players: [P1, P2], pregame, sandbox: isSandbox, seq: 0 };
+  const session: GameSession = { clients: new Map(), decks: { [P1]: deck1, [P2]: deck2 }, engine, log, playerNames: names, players: [P1, P2], pregame, sandbox: isSandbox, seq: 0 };
   // Duel: legends, champions and the random battlefields are all known now —
   // sideboard (if anyone can) before the mulligan. Match waits for battlefield_select.
   if (gameMode === "duel") {advancePastReveal(session);}

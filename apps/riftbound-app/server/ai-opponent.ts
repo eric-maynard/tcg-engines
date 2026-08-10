@@ -45,7 +45,8 @@ import { registry } from "./cards";
 import { APP_DIR } from "./config";
 import { gameLogger } from "./log";
 import { anchorKeyAfterLastMove, buildAvailableMoves, buildGameSnapshot, handPlayCost } from "./snapshot";
-import { type GameSession, type OpponentHandle, type OpponentInfo, broadcast, getInternalSnapshot } from "./state";
+import { type DeckConfig, type GameSession, type OpponentHandle, type OpponentInfo, broadcast, getInternalSnapshot } from "./state";
+import { rewindEpoch } from "./rewind";
 import { applySessionMove, sandboxAutoPlay } from "./turn";
 
 // ---------------------------------------------------------------------------
@@ -691,6 +692,51 @@ function rulesNote(max: number): (c: CardState) => string | undefined {
   };
 }
 
+/** "3× Name" list of definition ids grouped by card name (registration order). */
+function groupedNames(defIds: readonly string[]): string {
+  const counts = new Map<string, number>();
+  for (const id of defIds) {
+    const name = defName(id) ?? id;
+    counts.set(name, (counts.get(name) ?? 0) + 1);
+  }
+  return [...counts.entries()].map(([name, n]) => `${n}× ${name}`).join(", ");
+}
+
+/**
+ * The AI seat's OWN registered deck (post-sideboarding when that ran) as a
+ * short list for the system prompt — a player knows their list, not the draw
+ * order. Undefined when the session carries no deck configs.
+ */
+export function describeDeckForSeat(session: GameSession, seat: string): string | undefined {
+  const deck: DeckConfig | undefined = session.postSideboardDecks?.[seat] ?? session.decks?.[seat];
+  if (!deck) {
+    return undefined;
+  }
+  const legend = deck.legendId ? registry.get(deck.legendId) : undefined;
+  const champion = deck.championId ? registry.get(deck.championId) : undefined;
+  const d = legend?.domain;
+  const domains = typeof d === "string" ? [d] : Array.isArray(d) ? [...d] : [];
+  const lines: string[] = ["YOUR DECK (the list you registered — draw order is unknown; the opponent's list is unknown)"];
+  lines.push(`Legend: ${legend?.name ?? "none"} · Chosen champion: ${champion?.name ?? "none"}${domains.length ? ` · Domains: ${domains.join("/")}` : ""}`);
+  lines.push(`Main deck (${deck.mainDeckCardIds.length}${deck.championId ? " + champion" : ""}): ${groupedNames(deck.mainDeckCardIds)}`);
+  if (deck.runeDeckCardIds.length) {
+    lines.push(`Runes: ${groupedNames(deck.runeDeckCardIds)}`);
+  }
+  if (deck.battlefieldIds.length) {
+    lines.push(`Battlefields registered: ${groupedNames(deck.battlefieldIds)}`);
+  }
+  if (deck.sideboardCardIds?.length) {
+    lines.push(`Sideboard (not in play): ${groupedNames(deck.sideboardCardIds)}`);
+  }
+  return lines.join("\n");
+}
+
+/** System prompt for `seat`: primer + identity + the seat's own deck list. */
+export function systemPromptFor(session: GameSession, seat: string, modelLabel: string): string {
+  const deck = describeDeckForSeat(session, seat);
+  return `${SYSTEM_PRIMER}\n\nYou are ${modelLabel}, seat ${seat}.${deck ? `\n\n${deck}` : ""}`;
+}
+
 /** State text from the AI seat's perspective only (harness redaction: opponent hand = count, facedown = count). */
 export function describeForSeat(session: GameSession, seat: string): string {
   const obs = observe(session.engine, seat, session.seq, null);
@@ -786,7 +832,7 @@ export function buildPrompt(session: GameSession, seat: string, memory: readonly
     }
     parts.push("");
     parts.push("Call the `answer` tool now.");
-    return { decision: d, keyAliases: aliases, system: `${SYSTEM_PRIMER}\n\nYou are ${modelLabel}, seat ${seat}.`, toolName: "answer", user: parts.join("\n") };
+    return { decision: d, keyAliases: aliases, system: systemPromptFor(session, seat, modelLabel), toolName: "answer", user: parts.join("\n") };
   }
   const { items } = buildSeatMenu(session, seat);
   parts.push("");
@@ -800,7 +846,7 @@ export function buildPrompt(session: GameSession, seat: string, memory: readonly
   }
   parts.push("");
   parts.push("Call the `choose` tool now.");
-  return { menu: items, system: `${SYSTEM_PRIMER}\n\nYou are ${modelLabel}, seat ${seat}.`, toolName: "choose", user: parts.join("\n") };
+  return { menu: items, system: systemPromptFor(session, seat, modelLabel), toolName: "choose", user: parts.join("\n") };
 }
 
 // ---------------------------------------------------------------------------
@@ -1164,6 +1210,14 @@ export class ClaudeOpponent implements OpponentHandle {
   readonly #lookupTools: LookupTool[];
   readonly #opts: Required<Pick<ClaudeOpponentOptions, "pacingMs" | "timeoutMs" | "backoffMs" | "maxActionsPerSegment">>;
   gameId: string | undefined;
+  /**
+   * Rewind debounce: while `Date.now() < holdUntil` the seat does not act (a
+   * `scheduleOpponent` timer re-arms it). Lets several Rewind clicks land
+   * before the AI answers the rewound position.
+   */
+  holdUntil = 0;
+  /** Decisions thrown away because a rewind changed the position while the model was thinking. */
+  staleDiscards = 0;
   #memory: string[] = [];
   #memoryTurn = -1;
   #rerun = false;
@@ -1557,8 +1611,9 @@ export class ClaudeOpponent implements OpponentHandle {
   async #segment(session: GameSession): Promise<void> {
     let actions = 0;
     let stuck = 0;
-    while (aiSeatMustAct(session, this.seat)) {
+    while (aiSeatMustAct(session, this.seat) && Date.now() >= this.holdUntil) {
       const state = session.engine.getState();
+      const epoch = rewindEpoch(session);
       if (state.turn.number !== this.#memoryTurn) {
         this.#memoryTurn = state.turn.number;
         this.#memory = [];
@@ -1573,6 +1628,17 @@ export class ClaudeOpponent implements OpponentHandle {
         choice = fb ? { fallback: true, label: fb.label, moves: [{ moveId: fb.moveId, params: fb.params, playerId: fb.playerId }], rationale: "action cap reached" } : null;
       } else {
         choice = await this.#decide(session);
+      }
+      // A Rewind/Redo landed while the model was thinking: the choice was made
+      // for a position that no longer exists — drop it (never re-validate it
+      // against the rewound state) and let the debounce timer re-arm the seat.
+      if (rewindEpoch(session) !== epoch || Date.now() < this.holdUntil) {
+        this.staleDiscards++;
+        console.log(`[ai] discarded a stale decision after a rewind (epoch ${epoch} → ${rewindEpoch(session)})`);
+        if (Date.now() < this.holdUntil) {
+          break;
+        }
+        continue;
       }
       if (!choice) {
         this.#log(session, `🤖 ${this.shortName} has no legal action — waiting.`);
@@ -1694,13 +1760,22 @@ export function runOpponent(session: GameSession, opts: { humanSeat?: string; ga
 
 const pendingTimers = new WeakMap<GameSession, ReturnType<typeof setTimeout>>();
 
+/** Debounce before the Claude seat answers a rewound position (ms). */
+export const REWIND_REARM_MS = 3000;
+
 /**
  * Debounced re-arm for the Claude seat only (undo/redo can hand it the cursor
  * back). The Goldfish keeps its historical behaviour of acting on moves only.
  */
-export function scheduleOpponent(session: GameSession, opts: { humanSeat?: string; gameId?: string } = {}, delayMs = 3000): void {
-  if (session.opponent?.info.kind !== "claude") {
+export function scheduleOpponent(session: GameSession, opts: { humanSeat?: string; gameId?: string } = {}, delayMs = REWIND_REARM_MS): void {
+  const ai = session.opponent;
+  if (ai?.info.kind !== "claude") {
     return;
+  }
+  // Hold the seat for the debounce window even if its loop is mid-flight: a
+  // decision that comes back inside the window is discarded, not applied.
+  if (ai instanceof ClaudeOpponent) {
+    ai.holdUntil = Date.now() + delayMs;
   }
   const prev = pendingTimers.get(session);
   if (prev) {
@@ -1710,10 +1785,14 @@ export function scheduleOpponent(session: GameSession, opts: { humanSeat?: strin
     session,
     setTimeout(() => {
       pendingTimers.delete(session);
+      if (ai instanceof ClaudeOpponent) {
+        ai.holdUntil = 0;
+      }
       runOpponent(session, opts);
     }, delayMs),
   );
 }
+
 
 /** Install the driver for `spec` on a freshly created session (Goldfish → nothing to install). */
 export function attachOpponent(session: GameSession, spec: OpponentSpec | undefined, opts: ClaudeOpponentOptions = {}): void {

@@ -115,6 +115,11 @@ function connectLobbyWs(onOpen) {
     let msg;
     try { msg = JSON.parse(e.data); } catch { return; }
 
+    if (msg.type === "lobby_error") {
+      _surfaceLobbyError(msg.error || "Lobby error");
+      return;
+    }
+
     if (msg.type === "lobby_update") {
       // Solo direct-play: never surface the lobby room or the d20 overlay.
       if (!_soloAutoStart) renderLobbyRoom(msg.lobby);
@@ -224,8 +229,10 @@ function renderLobbyRoom(lobby) {
 
   // Guest card
   if (lobby.guest) {
-    // In Single Player mode, label the opponent as "Solo Opponent" per Rift Atlas.
-    const descriptor = isSandbox ? "Solo Opponent" : (lobby.guest.hasDeck ? "Ready" : "Choosing deck...");
+    // In Single Player mode, label the opponent as "Solo Opponent" per Rift Atlas, with its deck.
+    const od = lobby.opponentDeck;
+    const oppDeckLabel = !od ? "" : od.mode === "mirror" ? "Same deck as you" : od.mode === "default" ? "Starter deck" : (od.deckName || "Saved deck");
+    const descriptor = isSandbox ? "Solo Opponent" + (oppDeckLabel ? " · " + oppDeckLabel : "") : (lobby.guest.hasDeck ? "Ready" : "Choosing deck...");
     const readyClass = isSandbox || lobby.guest.hasDeck ? "ready" : "";
     document.getElementById("lobbyGuest").innerHTML = `
       <div class="lpc-name">${esc(lobby.guest.name)}</div>
@@ -239,6 +246,10 @@ function renderLobbyRoom(lobby) {
     `;
     document.getElementById("lobbyGuest").classList.add("empty");
   }
+
+  // Single Player: the host also picks the practice seat's deck (same picker as the solo dialog).
+  const oppRow = document.getElementById("lobbyOppDeckRow");
+  if (oppRow) oppRow.style.display = isSandbox && lobbyRole === "host" ? "" : "none";
 
   // Start button — always visible; enabled only for the host when both sides are ready.
   const canStart = lobbyRole === "host" && lobby.host.hasDeck && lobby.guest?.hasDeck;
@@ -282,6 +293,7 @@ function setGameMode(mode) {
     // SANDBOX_ENABLED env gate — this is a first-class lobby mode.
     setSandboxGame(true);
     lobbyWs.send(JSON.stringify({ type: "set_single_player", enabled: true }));
+    sendLobbyOppDeck();
   } else {
     // Demote single-player if the host re-picks Duel/Match, then
     // broadcast the underlying Bo1/Bo3 mode.
@@ -331,11 +343,13 @@ function appendDeckGroup(select, label, decks) {
  * layers the rich picker over it.
  */
 async function loadSavedDecksInto(select, statusEl, opts = {}) {
-  if (!select) return;
+  const out = { mine: [], publicDecks: [] };
+  if (!select) return out;
   select.querySelectorAll("optgroup").forEach(g => g.remove());
   try {
     const decks = await api("/api/saved-decks");
     if (Array.isArray(decks) && decks.length > 0) {
+      out.mine = decks;
       appendDeckGroup(select, "Your Saved Decks", decks);
       if (statusEl) statusEl.textContent = decks.length + " saved deck" + (decks.length === 1 ? "" : "s");
     } else if (statusEl) {
@@ -345,17 +359,164 @@ async function loadSavedDecksInto(select, statusEl, opts = {}) {
   } catch {
     if (statusEl) statusEl.textContent = "";
   }
-  if (opts.includePublic) {
+  if (opts.includePublic || opts.fetchPublic) {
     try {
       const publicDecks = await api("/api/saved-decks/public");
-      if (Array.isArray(publicDecks) && publicDecks.length > 0) appendDeckGroup(select, "Public Decks", publicDecks);
+      if (Array.isArray(publicDecks) && publicDecks.length > 0) {
+        out.publicDecks = publicDecks;
+        if (opts.includePublic) appendDeckGroup(select, "Public Decks", publicDecks);
+      }
     } catch { /* no public decks */ }
   }
   renderDeckDropdown(select);
+  return out;
 }
 
 async function loadSavedDecks() {
-  await loadSavedDecksInto(document.getElementById("deckSelect"), document.getElementById("deckLoadStatus"), { includePublic: true });
+  const lists = await loadSavedDecksInto(document.getElementById("deckSelect"), document.getElementById("deckLoadStatus"), { includePublic: true });
+  mountLobbyOppDeckRow();
+  fillOppDeckSelect(document.getElementById("lobbyOppDeckSelect"), document.getElementById("deckSelect"), lists);
+}
+
+// ---------------------------------------------------------------------------
+// Opponent's deck (practice seat: Goldfish / Claude). Same rich picker as the
+// player's; the server validates ownership (own decks, public decks, starter).
+// Value encoding of the <select>: "mirror" | "random-mine" | "default" | <saved deck id>.
+// ---------------------------------------------------------------------------
+
+const OPP_DECK_STORAGE = "rb-opponent-deck";
+
+function getStoredOppDeck() {
+  try { return localStorage.getItem(OPP_DECK_STORAGE) || "mirror"; } catch { return "mirror"; }
+}
+function setStoredOppDeck(v) {
+  try { localStorage.setItem(OPP_DECK_STORAGE, v); } catch { /* storage unavailable */ }
+}
+
+/** `opponent.deck` for /api/lobby/create (and the lobby-room WS message) from a picker value. */
+function oppDeckSpecFromValue(value) {
+  if (!value || value === "default") return { mode: "default" };
+  if (value === "mirror" || value === "random-mine") return { mode: value };
+  return { mode: "deck", deckId: value };
+}
+
+function soloOpponentDeckSpec() {
+  const sel = document.getElementById("soloOppDeckSelect");
+  return oppDeckSpecFromValue(sel ? sel.value : getStoredOppDeck());
+}
+
+/**
+ * Fill an opponent-deck <select>: "Same as mine (mirror)", "Random from my decks"
+ * (only with saved decks), Your Saved Decks, Public Decks (minus mine), Default
+ * starter. Restores the remembered choice; mirrors the player's chip.
+ */
+function fillOppDeckSelect(select, playerSelect, lists) {
+  if (!select) return;
+  const mine = (lists && lists.mine) || [];
+  const mineIds = new Set(mine.map(d => d.id));
+  const publicDecks = ((lists && lists.publicDecks) || []).filter(d => !mineIds.has(d.id));
+  select.textContent = "";
+  const mk = (value, text, sub) => {
+    const o = document.createElement("option");
+    o.value = value;
+    o.textContent = text;
+    if (sub) o.dataset.sub = sub;
+    return o;
+  };
+  select.appendChild(mk("mirror", "Same as mine (mirror)", "A copy of whatever deck you pick"));
+  if (mine.length > 0) {
+    select.appendChild(mk("random-mine", "Random from my decks", `One of your ${mine.length} saved deck${mine.length === 1 ? "" : "s"}, drawn when the game is created`));
+  }
+  if (mine.length > 0) appendDeckGroup(select, "Your Saved Decks", mine);
+  if (publicDecks.length > 0) appendDeckGroup(select, "Public Decks", publicDecks);
+  const starter = document.createElement("optgroup");
+  starter.label = "Default starter";
+  starter.appendChild(mk("default", "Fury/Chaos Starter Deck"));
+  select.appendChild(starter);
+  const want = getStoredOppDeck();
+  select.value = [...select.options].some(o => o.value === want) ? want : "mirror";
+  syncMirrorOption(select, playerSelect);
+  renderDeckDropdown(select);
+}
+
+/** The "mirror" entry shows the player's current pick (legend · champion chip + pips). */
+function syncMirrorOption(select, playerSelect) {
+  const mirror = select && [...select.options].find(o => o.value === "mirror");
+  if (!mirror) return;
+  const src = playerSelect && playerSelect.options[playerSelect.selectedIndex];
+  const has = src && src.value;
+  mirror.dataset.legend = has ? (src.dataset.legend || "") : "";
+  mirror.dataset.champion = has ? (src.dataset.champion || "") : "";
+  mirror.dataset.domains = has ? (src.dataset.domains || "") : "";
+  const who = has ? [src.dataset.legend, src.dataset.champion].filter(Boolean).join(" · ") : "";
+  mirror.dataset.sub = has ? `→ ${src.textContent}${who ? " — " + who : src.value === "default" ? " — Starter deck" : ""}` : "A copy of whatever deck you pick";
+}
+
+/** Wire an opponent-deck select: remember the choice, mirror the player's pick, notify `onPick`. */
+function wireOppDeckSelect(select, playerSelect, onPick) {
+  if (!select || select.dataset.wired) return;
+  select.dataset.wired = "1";
+  select.addEventListener("change", () => {
+    setStoredOppDeck(select.value);
+    if (onPick) onPick(oppDeckSpecFromValue(select.value));
+  });
+  if (playerSelect) {
+    playerSelect.addEventListener("change", () => { syncMirrorOption(select, playerSelect); renderDeckDropdown(select); });
+  }
+}
+
+function _oppDeckRow(id, selectId) {
+  const row = document.createElement("div");
+  row.id = id;
+  row.className = "opp-deck-row";
+  row.style.cssText = "margin-top:12px;text-align:left;";
+  const label = document.createElement("label");
+  label.setAttribute("for", selectId);
+  label.style.cssText = "color:#8a82a6;font-size:11px;text-transform:uppercase;letter-spacing:1px;";
+  label.textContent = "Opponent's deck";
+  const sel = document.createElement("select");
+  sel.id = selectId;
+  sel.style.cssText = "display:block;width:100%;margin-top:4px;padding:8px 12px;background:#1e1b30;border:2px solid #3a3560;border-radius:6px;color:#e0dced;font-size:13px;";
+  sel.appendChild(Object.assign(document.createElement("option"), { textContent: "Same as mine (mirror)", value: "mirror" }));
+  row.appendChild(label);
+  row.appendChild(sel);
+  return row;
+}
+
+/** Solo dialog: "Opponent's deck" directly under the Opponent (Goldfish/Claude) selector. */
+function mountSoloOppDeckRow() {
+  if (document.getElementById("soloOppDeckRow")) return;
+  const picker = document.getElementById("soloDeckPicker");
+  if (!picker) return;
+  const row = _oppDeckRow("soloOppDeckRow", "soloOppDeckSelect");
+  // ai-opponent.js inserts its Opponent row + hint right after #soloDeckStatus,
+  // so anchoring after the hint (or the status line before it exists) keeps
+  // the order: your deck → Opponent → Opponent's deck.
+  const anchor = document.getElementById("soloOpponentHint") || document.getElementById("soloDeckStatus");
+  if (anchor && anchor.parentElement === picker) anchor.insertAdjacentElement("afterend", row); else picker.appendChild(row);
+  wireOppDeckSelect(row.querySelector("select"), document.getElementById("soloDeckSelect"));
+  renderDeckDropdown(row.querySelector("select"));
+}
+
+/** Lobby room (Single Player / hot-seat): host picks the practice seat's deck; sent over the lobby socket. */
+function mountLobbyOppDeckRow() {
+  if (document.getElementById("lobbyOppDeckRow")) return;
+  const status = document.getElementById("deckLoadStatus");
+  const host = status && status.parentElement;
+  if (!host) return;
+  const row = _oppDeckRow("lobbyOppDeckRow", "lobbyOppDeckSelect");
+  row.style.display = isSandboxGame && lobbyRole === "host" ? "" : "none";
+  host.insertAdjacentElement("afterend", row);
+  wireOppDeckSelect(row.querySelector("select"), document.getElementById("deckSelect"), (deck) => {
+    if (lobbyWs && lobbyWs.readyState === WebSocket.OPEN) lobbyWs.send(JSON.stringify({ deck, type: "select_opponent_deck" }));
+  });
+}
+
+/** Push the lobby-room opponent-deck choice once the socket is up (Single Player lobbies). */
+function sendLobbyOppDeck() {
+  const sel = document.getElementById("lobbyOppDeckSelect");
+  if (!sel || !isSandboxGame || lobbyRole !== "host") return;
+  if (lobbyWs && lobbyWs.readyState === WebSocket.OPEN) lobbyWs.send(JSON.stringify({ deck: oppDeckSpecFromValue(sel.value), type: "select_opponent_deck" }));
 }
 
 const DECK_DD_DOMAIN_LABELS = { fury: "F", calm: "C", mind: "M", body: "B", chaos: "X", order: "O" };
@@ -363,6 +524,7 @@ const DECK_DD_DOMAIN_LABELS = { fury: "F", calm: "C", mind: "M", body: "B", chao
 /** Secondary line for a deck option: "Legend · Champion — Updated 2 hours ago". */
 function deckOptionSubtitle(opt) {
   if (!opt || !opt.value) return "";
+  if (opt.dataset && opt.dataset.sub) return opt.dataset.sub;
   if (opt.value === "default") return "Starter deck";
   const who = [opt.dataset.legend, opt.dataset.champion].filter(Boolean).join(" · ");
   const when = timeAgo(opt.dataset.updated);
@@ -475,7 +637,9 @@ async function showSoloDeckPicker(mode) {
   document.getElementById("soloDeckPicker").classList.remove("hidden");
   // Opponent row (Goldfish · Claude Haiku/Sonnet/Opus) — ai-opponent.js.
   if (typeof aiPreparePicker === "function") aiPreparePicker(mode);
-  await loadSavedDecksInto(document.getElementById("soloDeckSelect"), document.getElementById("soloDeckStatus"));
+  mountSoloOppDeckRow();
+  const lists = await loadSavedDecksInto(document.getElementById("soloDeckSelect"), document.getElementById("soloDeckStatus"), { fetchPublic: true });
+  fillOppDeckSelect(document.getElementById("soloOppDeckSelect"), document.getElementById("soloDeckSelect"), lists);
 }
 
 async function startSoloGame() {
@@ -483,8 +647,11 @@ async function startSoloGame() {
   const gameMode = document.querySelector('input[name="soloMode"]:checked')?.value || "duel";
   // The API key (if any) travels only in this request body; the server keeps it in memory for the game.
   const opponent = typeof buildOpponentRequest === "function" ? buildOpponentRequest() : { kind: "goldfish" };
+  // Which deck the bot plays (mirror / random of mine / a saved or public deck / starter) — validated server-side.
+  opponent.deck = soloOpponentDeckSpec();
   const data = await api("/api/lobby/create", "POST", { gameMode, name: currentUsername || "Player 1", opponent, sandbox: true });
   if (data.error) {
+    // Nothing was created server-side; stay on the picker with the reason.
     const st = document.getElementById("soloDeckStatus");
     st.textContent = data.error;
     st.style.color = "#d04040";
@@ -538,7 +705,7 @@ async function hostSandbox() {
   if (shareP) shareP.style.display = "none";
   await loadSavedDecks();
 
-  connectLobbyWs();
+  connectLobbyWs(sendLobbyOppDeck);
 }
 
 // Check if sandbox is enabled on load

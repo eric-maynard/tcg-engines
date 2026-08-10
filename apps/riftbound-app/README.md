@@ -11,8 +11,19 @@ bun test server/__tests__/                  # server unit tests
 
 ## Playing vs Claude
 
-Play → **VS Claude** → pick a deck and an opponent (**Claude Haiku 4.5 · Claude Sonnet 5 · Claude Opus 5**) → Play.
-Claude takes the `player-2` seat with the starter deck; you always win the initiative roll.
+Play → **VS Claude** → pick a deck, an opponent (**Claude Haiku 4.5 · Claude Sonnet 5 · Claude Opus 5**) and the
+**Opponent's deck** → Play. Claude takes the `player-2` seat; you always win the initiative roll.
+
+**The bot's deck (Goldfish and Claude alike).** The *Opponent's deck* dropdown under the Opponent selector offers
+*Same as mine (mirror)*, *Random from my decks*, any of **Your Saved Decks**, **Public Decks**, or the **Default
+starter**; the choice is remembered in this browser. The server only accepts decks you own or public decks
+(ownership comes from your session, never from the request body — someone else's private deck id answers
+"Opponent deck not found" and no lobby is created), validates the list exactly like yours (legend + chosen
+champion + 40-card main deck within the copy limit + runes; an illegal sideboard is dropped), and seats player-2
+with it before the game exists, so its battlefields (Bo3 picker / Bo1 random pick), sideboarding and mulligan all
+come from that deck. Claude's system prompt includes a short "YOUR DECK" list of its own registered deck. A hosted
+lobby switched to **Single Player** shows the same dropdown to the host (`{type:"select_opponent_deck", deck}` on
+the lobby socket); `select_deck` on that socket follows the same ownership rule.
 
 **API key.** The server needs an Anthropic API key for Claude seats, in this order of precedence:
 
@@ -54,6 +65,10 @@ index 0 / first option), which is also what `server/__tests__/ai-opponent.test.t
 
 REST clients can pass the same field to `POST /api/game/create` / `POST /api/lobby/create`:
 `opponent: {kind:"goldfish"} | {kind:"claude", model:"haiku"|"sonnet"|"opus", apiKey?}` (unknown models → 400).
+On `/api/lobby/create` (sandbox lobbies) `opponent.deck` picks the practice seat's deck:
+`{mode:"default"}` (starter, also when absent) | `{mode:"mirror"}` (the host's pick) | `{mode:"random-mine"}` (one of
+the caller's legal saved decks; 401 anonymous / 400 none) | `{mode:"deck", deckId}` (own or public deck; 404
+otherwise, 400 if not legal). `/api/game/create` takes full `deck1` / `deck2` configs instead.
 
 ## Sideboarding
 
