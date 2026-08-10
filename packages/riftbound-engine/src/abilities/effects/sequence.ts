@@ -131,6 +131,37 @@ function sourceIsExhausted(ctx: EffectContext): boolean {
   return meta?.__flags?.exhausted === true || meta?.exhausted === true;
 }
 
+/**
+ * rule 820.1.d.1 / 356.2 (ruling e2e43318d1e95c3b) — an effect tree as it reads
+ * on a REPEATED execution: an additional cost is paid once, while the spell is
+ * played, so every "if you paid the additional cost" branch collapses to its
+ * `else` (to nothing, when the card names none).
+ */
+function withUnpaidAdditionalCost(effect: unknown): unknown {
+  if (typeof effect !== "object" || effect === null) {
+    return effect;
+  }
+  const node = effect as Record<string, unknown>;
+  if (
+    node.type === "conditional" &&
+    (node.condition as { type?: string } | undefined)?.type === "paid-additional-cost"
+  ) {
+    return node.else === undefined
+      ? { effects: [], type: "sequence" }
+      : withUnpaidAdditionalCost(node.else);
+  }
+  const rewritten: Record<string, unknown> = { ...node };
+  for (const key of ["then", "else", "effect"]) {
+    if (rewritten[key] !== undefined) {
+      rewritten[key] = withUnpaidAdditionalCost(rewritten[key]);
+    }
+  }
+  if (Array.isArray(node.effects)) {
+    rewritten.effects = node.effects.map((step) => withUnpaidAdditionalCost(step));
+  }
+  return rewritten;
+}
+
 const isLeadTarget = (t: SubTarget): boolean =>
   typeof t === "object" && t.type !== "pending-value" && t.location !== "same";
 
@@ -469,7 +500,14 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
         : ctx.eventBatch;
     for (let i = 0; i < seq.effects.length; i++) {
       stepSlotIdx = -1;
-      const sub = seq.effects[i];
+      // rule 820.1.d.1 / 356.2 (ruling e2e43318d1e95c3b) — [Repeat] executes the
+      // spell's INSTRUCTIONS one more time; its additional costs were paid ONCE,
+      // while the spell was played. So "if you paid the additional cost" reads
+      // false on every repeated execution (Meditation: draw 2, then draw 1).
+      const sub =
+        i > 0 && (seq as { _repeatExecutions?: boolean })._repeatExecutions === true
+          ? (withUnpaidAdditionalCost(seq.effects[i]) as (typeof seq.effects)[number])
+          : seq.effects[i];
       // rule-id: ogn-147-298 — "spend a buff to buff me and ready me": the
       // spend-buff cost gates every remaining step, not just its own `then`.
       // rule 355.13 (ogn-153-298): an OPTIONAL spend-buff is not a cost, so it
