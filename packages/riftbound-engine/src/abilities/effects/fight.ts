@@ -4,7 +4,7 @@ import { dealDamageBatch } from "../../operations/deal-damage";
 import type { TargetDescriptor } from "../target-resolver";
 import { resolveTarget } from "../target-resolver";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
-import { type EffectHelpers, getEffectiveMight } from "./_helpers";
+import { type EffectHelpers, getEffectiveMightInRole } from "./_helpers";
 
 export function handle_fight(effect: ExecutableEffect, ctx: EffectContext, h: EffectHelpers): void {
   const executeEffect = h.executeEffect;
@@ -52,8 +52,11 @@ export function handle_fight(effect: ExecutableEffect, ctx: EffectContext, h: Ef
       }
       // "Damage equal to their Mights" is current (effective) Might, so
       // turn buffs like Rampage's +2 count.
-      const aMight = getEffectiveMight(attackerId, ctx);
-      const dMight = getEffectiveMight(defenderId, ctx);
+      // rule 807.1.c / 814.1.c — a unit that is ALREADY an attacker/defender in
+      // a combat carries its Assault/Shield bonus in that current Might, even
+      // though this spell is not itself combat (ruling 6a9e16e0194e907a).
+      const aMight = getEffectiveMightInRole(attackerId, ctx);
+      const dMight = getEffectiveMightInRole(defenderId, ctx);
       // rule-id: ven-083-166 (Rampage) / rule 417.6.b.3 — each unit is the
       // SOURCE of the damage it deals (not the spell), its controller the
       // responsible player (417.6.b.4); both land as one simultaneous batch

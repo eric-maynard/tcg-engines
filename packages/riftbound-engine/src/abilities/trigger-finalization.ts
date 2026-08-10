@@ -31,6 +31,7 @@ import type { ChainItem, ChainTargetSlot } from "../chain/chain-state";
 import { removeChainItem } from "../chain/chain-state";
 import type { PostMoveCleanupContext } from "../cleanup/post-move-cleanup";
 import { cleanupAndFireDeaths } from "../cleanup/post-move-cleanup";
+import { recalculateStaticEffects } from "./static-abilities";
 import { continueEffectPlay, isPendingPlayItem } from "../game-definition/moves/play/play-pipeline";
 import { buildEffectContext } from "../game-definition/moves/chain/effect-context";
 import {
@@ -587,6 +588,12 @@ function payFinalizationCostStepsInner(
         : { ...((latest?.effect ?? effect) as object), effects: remaining }) as never,
       targets: remainingTargets.length > 0 ? remainingTargets : undefined,
     });
+    // rule 824.1.d (rule-id: unl-119-219 × unl-191-219) — a cost paid at
+    // FINALIZATION can flip a resource-dependent static Inactive at once
+    // ("spend 3 XP" drops the controller below a [Level 6] threshold), so the
+    // board must be re-derived before anything reads Might again — the payoff
+    // still waiting on the Chain resolves against the NEW value.
+    recalculateStaticEffects({ cards: ctx.cards, draft, zones: ctx.zones });
   }
   return false;
 }
