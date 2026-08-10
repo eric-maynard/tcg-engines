@@ -61,15 +61,16 @@ export function refreshAfterShowdownBegan(draft: RiftboundGameState, context: Sh
 
 /**
  * rule 323.13 / 460 / 461.1 — only ONE Combat begins at a time and the TURN
- * PLAYER decides which. With two or more Combats staged for them (and no
- * Showdown-only battlefield, which 323.12 begins first) the Cleanup begins
- * none: the choice is made with their `startShowdown` step.
+ * PLAYER decides which. With two or more Combats staged — by either player;
+ * an off-turn Reaction stages one just the same — and no Showdown-only
+ * battlefield (which 323.12 begins first) the Cleanup begins none: the choice
+ * is made with the Turn Player's `startShowdown` step. Exactly one staged
+ * Combat leaves nothing to choose, so the Cleanup opens it.
  */
 export function turnPlayerMustChooseStagedCombat(
   draft: RiftboundGameState,
   context: ShowdownStagingContext,
 ): boolean {
-  const turnPlayer = draft.turn.activePlayer;
   let combats = 0;
   for (const [battlefieldId, bf] of Object.entries(draft.battlefields ?? {})) {
     if (!bf?.contested || bf.showdownComplete === true || !bf.contestedBy) {
@@ -87,9 +88,7 @@ export function turnPlayerMustChooseStagedCombat(
     if (!controllers.some((c) => c !== undefined && c !== attacker)) {
       return false; // a staged Showdown-only battlefield goes first (323.12)
     }
-    if (attacker === turnPlayer || bf.stagedBy === turnPlayer) {
-      combats += 1;
-    }
+    combats += 1;
   }
   return combats > 1;
 }

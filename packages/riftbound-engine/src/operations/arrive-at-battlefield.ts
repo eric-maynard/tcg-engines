@@ -503,9 +503,11 @@ function releaseUncontestedBattlefields(io: ArrivalIO): void {
  *    no Showdown / Combat ongoing) stops being Contested; another player's units
  *    still standing where they don't control re-apply it (323.11.a);
  *  - 323.12 — a staged Showdown-only battlefield begins first;
- *  - 323.13 — otherwise a staged Combat begins. A Combat neither applied nor
- *    staged by the Turn Player (an off-turn Reaction move) is left for the Turn
- *    Player's own `startShowdown` step.
+ *  - 323.13 — otherwise a staged Combat begins. The step is mandatory whoever
+ *    staged it (an off-turn Reaction move stages a Combat that this Cleanup
+ *    still begins); the Turn Player only picks WHICH when two or more are
+ *    staged (`turnPlayerMustChooseStagedCombat` defers those to their
+ *    `startShowdown` step).
  */
 export function beginStagedShowdowns(io: ArrivalIO): boolean {
   const draft = io.draft;
@@ -558,9 +560,14 @@ export function beginStagedShowdowns(io: ArrivalIO): boolean {
     });
   }
   const turnPlayer = draft.turn.activePlayer;
+  // rule 323.13 — the Cleanup BEGINS the staged Combat by itself; the Turn
+  // Player never gets a discretionary window first. Their own staging is
+  // preferred only as a tiebreak; a Combat staged by the opponent off-turn
+  // still opens here.
   const next =
     staged.find((s) => !s.isCombat) ??
-    staged.find((s) => s.attacker === turnPlayer || s.stagedBy === turnPlayer);
+    staged.find((s) => s.attacker === turnPlayer || s.stagedBy === turnPlayer) ??
+    staged.find((s) => s.isCombat);
   if (!next) {
     return false;
   }

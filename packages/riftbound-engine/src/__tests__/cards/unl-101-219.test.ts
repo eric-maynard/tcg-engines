@@ -52,7 +52,12 @@ describe("Call to Battle (unl-101-219)", () => {
     // so answer the prompt(s) its resolution is still waiting on.
     await game.settle({ policy: "first" });
     expect(game.zoneOf("ctb")).toBe("trash");
-    expect(game.locationOf("guard")).toBe("bf2");
+    // Guard reached bf2, then the answering Brute (4) contested it — rule 323.13: the Cleanup that
+    // finds a Neutral Open State BEGINS that staged Combat by itself, so `settle` fights it through
+    // and the 3-Might Guard dies to the 4-Might attacker, who takes bf2.
+    expect(game.zoneOf("guard")).toBe("trash");
+    expect(game.locationOf("brute")).toBe("bf2");
+    expect(game.gameState.battlefields.bf2?.controller).toBe(P2);
     const short = await board({ energy: 2, power: { body: 3, rainbow: 3 } }).build();
     expect(short.p1.can("cast", "ctb")).toBe(false);
   });
@@ -215,8 +220,12 @@ describe("Call to Battle (unl-101-219)", () => {
     expect(cards).toEqual(["brute", "sentry"]);
     await game.p2.pick("sentry");
     await game.settle();
-    expect(game.locationOf("sentry")).toBe("bf2");
+    // rule 323.13 — Sentry's arrival stages a Combat at bf2 that the very next Cleanup begins; the
+    // 1-Might attacker dies to the 2-Might Scout, so bf2 stays P1's and Brute never left base.
+    expect(game.zoneOf("sentry")).toBe("trash");
+    expect(game.locationOf("scout")).toBe("bf2");
     expect(game.locationOf("brute")).toBe("base");
+    expect(game.gameState.battlefields.bf2?.controller).toBe(P1);
   });
 
   test("registry payload: standard-timing spell, 3 energy, no power; the parsed ability is a friendly-unit move to a CONTROLLED battlefield (the 'Then, choose an opponent…' sentence is missing — see BUG tests)", async () => {
