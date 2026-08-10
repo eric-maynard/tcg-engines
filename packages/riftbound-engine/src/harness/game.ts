@@ -92,7 +92,9 @@ export const passivePolicy: Policy = (d) => {
   // rule 355.13 (sfd-043-221) — a CONTINUATION of an "any number of" target
   // pick (the chooser already named a set) is declined, never silently
   // extended: settling must not add targets the answer did not name.
-  if (d.kind === "pick" && d.min === 0 && d.allowDecline && d.semantics === "target") {
+  // A finalization-time target SET (355.13 / 355.14.b — `targeting`) is the
+  // controller's announced choice and is handed back unanswered instead.
+  if (d.kind === "pick" && d.min === 0 && d.allowDecline && d.semantics === "target" && d.targeting === undefined) {
     return { kind: "decline" };
   }
   return undefined;
@@ -723,6 +725,13 @@ export type RevealOptions = VerbOptions & Pick<PlayArgs, "targets" | "payOptiona
 export class SeatHandle {
   readonly game: Game;
   readonly seat: Seat;
+  /**
+   * rule 355.13 / 355.14.b — the finalization-time target SET this seat just
+   * answered in one shot (`pick(a, b)`). The older accumulate idiom followed its
+   * picks with `decline()` ("stop here"); that trailing decline is accepted as a
+   * no-op once, so both idioms read the same.
+   */
+  private closedSetPick: Decision | undefined;
 
   constructor(game: Game, seat: Seat) {
     this.game = game;
@@ -897,7 +906,10 @@ export class SeatHandle {
     // rule 429.3 / 429.3.a + 444.2.c: a pay-X prompt — and an opt-in "you may
     // pay …" — still offers the [Add] activations. rule 383.3.d: so does the
     // soft trigger-order offer (acting instead accepts the listed order).
-    return d && (d.kind === "integer" || d.kind === "yes-no" || d.kind === "order") ? (d.actions ?? []) : [];
+    // rule 419.2.a: so does a pick whose acceptance pays the picked card's cost.
+    return d && (d.kind === "integer" || d.kind === "yes-no" || d.kind === "order" || d.kind === "pick")
+      ? (d.actions ?? [])
+      : [];
   }
 
   /** Find an option by verb/moveId (+ card). */
@@ -1199,6 +1211,7 @@ export class SeatHandle {
     if (!isAnswerObject(a)) {
       throw new HarnessError(a);
     }
+    this.closedSetPick = d.kind === "pick" && d.targeting !== undefined && a.kind === "pick" ? d : undefined;
     return this.run(a, `answer(${JSON.stringify(value)})`, opts);
   }
 
@@ -1223,6 +1236,13 @@ export class SeatHandle {
   }
 
   async decline(): Promise<Extract<ActResult, { ok: true }>> {
+    const d = this.game.decision();
+    // "stop here" after a one-shot target-set pick: nothing is open to decline.
+    if (this.closedSetPick !== undefined && (!d || d.seat !== this.seat || d.kind === "action")) {
+      this.closedSetPick = undefined;
+      return { decision: d as Decision, executed: [], ok: true, seq: this.backend.seq(), violations: [] };
+    }
+    this.closedSetPick = undefined;
     return this.answer({ kind: "decline" });
   }
 

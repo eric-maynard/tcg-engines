@@ -492,7 +492,7 @@ export function deriveFromPendingChoice(ctx: DecisionContext, pc: PendingChoice)
   const chainItemId =
     fin.finalizationChainItemId ??
     fin.bindToChainItemId ??
-    (fin.resume?.kind === "trigger-cost" ? fin.resume.itemId : undefined);
+    (fin.resume?.kind === "trigger-cost" || fin.resume?.kind === "target-slot" ? fin.resume.itemId : undefined);
   const source = {
     cardId: (pc as { sourceCardId?: string }).sourceCardId,
     ...(chainItemId !== undefined ? { chainItemId } : {}),
@@ -504,7 +504,7 @@ export function deriveFromPendingChoice(ctx: DecisionContext, pc: PendingChoice)
   const genericTiming =
     resumeKind === "die-order" || resumeKind === "die-assign" || resumeKind === "damage-order"
       ? ("RPL" as const)
-      : resumeKind === "trigger-batch" || resumeKind === "trigger-cost"
+      : resumeKind === "trigger-batch" || resumeKind === "trigger-cost" || resumeKind === "target-slot"
         ? ("FIN" as const)
         : undefined;
   const base = {
@@ -562,6 +562,7 @@ export function deriveFromPendingChoice(ctx: DecisionContext, pc: PendingChoice)
     }
     // rule 355.13 / 373 / 355.11.b — generic min..max multi-pick in ONE answer.
     case "pick-many": {
+      const slotSemantics = (pc as { slotSemantics?: "split" | "upTo" }).slotSemantics;
       const d: PickDecision = {
         ...base,
         allowDecline: pc.min === 0,
@@ -571,10 +572,15 @@ export function deriveFromPendingChoice(ctx: DecisionContext, pc: PendingChoice)
         min: pc.min,
         options: pc.options.map((o) => ({
           ...(o.cardId ? { card: o.cardId } : {}),
+          ...(typeof (o as { deflect?: number }).deflect === "number" ? { deflect: (o as { deflect: number }).deflect } : {}),
           key: o.key,
-          label: o.label ?? (o.cardId ? ctx.label(o.cardId) : o.key),
+          label:
+            (o.label ?? (o.cardId ? ctx.label(o.cardId) : o.key)) +
+            (typeof (o as { deflect?: number }).deflect === "number" ? ` (+${(o as { deflect: number }).deflect} [Deflect])` : ""),
         })),
         prompt: pc.prompt ?? `Choose ${pc.min === pc.max ? pc.min : `${pc.min}–${pc.max}`}`,
+        // rule 355.13 / 355.14.b — a finalization-time target set.
+        ...(slotSemantics === "split" ? { targeting: "split-targets" as const } : slotSemantics === "upTo" ? { targeting: "up-to" as const } : {}),
         semantics:
           pc.semantics === "replacement-assign"
             ? "replacement-assign"
@@ -594,8 +600,19 @@ export function deriveFromPendingChoice(ctx: DecisionContext, pc: PendingChoice)
           const id = m.params.pickedCardId as string;
           return { card: id, key: id, label: ctx.label(id) };
         });
+      // rule 444.2.c / 419.2.a — picking a card the instruction then PLAYS
+      // commits the picker to its remaining cost, so this prompt is a Pay step:
+      // the Reaction [Add] abilities stay usable alongside the picks.
+      const pickActions =
+        pc.onPicked === "play"
+          ? groupActions(
+              ctx,
+              ctx.legal(seat).filter((m) => m.moveId !== "resolvePendingChoice"),
+            ).options
+          : [];
       const d: PickDecision = {
         ...base,
+        ...(pickActions.length > 0 ? { actions: pickActions } : {}),
         allowDecline,
         id: decisionId(ctx.seq, seat, "pick"),
         kind: "pick",
@@ -636,12 +653,20 @@ export function deriveFromPendingChoice(ctx: DecisionContext, pc: PendingChoice)
       // rule 355.14.e (ogn-041-298): fixed-total split — one allocation answer.
       if (pc.assign && typeof pc.total === "number") {
         const total = pc.total;
+        // rule 355.14.f–h — targets locked at finalization: each still-legal
+        // one ≥ `minPer` and ≤ `maxPer` (0..1 when they outnumber the damage).
+        const bounded = pc as { minPer?: number; maxPer?: number; exactTargets?: number };
+        const min = bounded.minPer ?? 0;
+        const max = bounded.maxPer ?? total;
         const d: DistributeDecision = {
           ...base,
-          buckets: pc.options.map((id) => ({ card: id, key: id, label: ctx.label(id), max: total, min: 0 })),
+          buckets: pc.options.map((id) => ({ card: id, key: id, label: ctx.label(id), max, min })),
           id: decisionId(ctx.seq, seat, "distribute"),
           kind: "distribute",
-          prompt: `Split ${total} damage`,
+          prompt:
+            bounded.exactTargets !== undefined && bounded.exactTargets < pc.options.length
+              ? `Split ${total} damage — 1 each to ${bounded.exactTargets} of the targets (the rest cease being targets)`
+              : `Split ${total} damage among the targets`,
           total,
         };
         return d;
@@ -1119,6 +1144,13 @@ export function resolvePendingAnswer(ctx: DecisionContext, decision: Decision, a
         return k;
       }
       if (k === undefined) {
+        // rule 355.13 / 753.1 — an OPTIONAL destination prompt ("you may move
+        // …", or a re-choice that may be left unmade) takes a decline as its
+        // answer; a mandatory one still needs a zone.
+        if (pc.optional === true) {
+          params.accept = false;
+          break;
+        }
         return err("ILLEGAL_ARGS", "A destination must be chosen");
       }
       // A bare battlefield id ("bf2") is accepted for the zone id

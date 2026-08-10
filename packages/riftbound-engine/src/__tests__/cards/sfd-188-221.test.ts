@@ -29,6 +29,7 @@ const CLEAVE = "ogn-004-298"; // [Action] spell, 1 energy: give a unit Assault 3
 const ENFORCER = "sfd-123-221"; // unit, 3 energy + [chaos] → 1 + [chaos]
 const HATCHLING = "sfd-018-221"; // If you would reveal cards from a deck, look at the top card first. You may recycle it. Then reveal.
 const FILLER = "ogn-175-298";
+const SEAL_OF_FOCUS = "ogn-081-298"; // gear, 0 energy + [calm]
 
 /** P1 with `energy` + one rainbow, Void Rush in hand, deck = [top, second, third, …]. */
 function board(energy: number, deck: [string, string, string] = [FAEFOLK, SKULKER, FILLER]) {
@@ -283,4 +284,29 @@ describe("Void Rush (sfd-188-221)", () => {
     const isReveal = e.type === "reveal" || e.reveal === true || e.public === true || e.visibility === "public";
     expect(isReveal).toBe(true);
   });
+
+  // rule 419.2.a / 444.2.c — banish-and-play commits the prompter to the picked card's remaining cost, so the pick
+  // prompt is a Pay step: a Reaction [Add] (recycling a ready Calm rune) may be used while it is open, and only then
+  // does the [calm]-costed Seal of Focus become a legal pick.
+  test("the pick prompt is a Pay step: a [calm] gear is unpickable on an empty pool until a Calm rune is recycled mid-prompt", async () => {
+    const game = await scenario()
+      .resources(P1, { energy: 2, power: { rainbow: 1 } })
+      .rune(P1, "calm", { alias: "calmRune" })
+      .deck(P1, [SEAL_OF_FOCUS, FILLER, FILLER], ["top", "second", "third"])
+      .hand(P1, CARD, "vr")
+      .build();
+    const d = (await castToReveal(game)) as PickDecision;
+    expect(d).toMatchObject({ kind: "pick", seat: P1 });
+    expect(d.options.map((o) => o.card)).not.toContain("top"); // Seal of Focus still needs [calm]
+    const added = await game.p1.try((p) => p.recycleRune("calmRune"));
+    expect(added.ok).toBe(true); // the Add is legal while the pay-bearing prompt is open
+    expect(game.p1.power()).toBe(1);
+    const after = game.decision() as PickDecision;
+    expect(after.options.map((o) => o.card)).toContain("top"); // now affordable
+    await game.p1.pick("top");
+    await finish(game);
+    expect(game.zoneOf("top")).toBe("base");
+    expect(game.p1.power()).toBe(0);
+  });
+
 });

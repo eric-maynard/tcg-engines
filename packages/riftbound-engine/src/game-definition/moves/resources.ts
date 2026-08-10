@@ -29,6 +29,14 @@ function holdsRunePriority(state: RiftboundGameState, playerId: string): boolean
   if (!chain?.active) {
     return true;
   }
+  // rule 444.2.c — while a prompt raised by a RESOLVING item waits on this
+  // player, the game is stopped on them; the Chain's `activePlayer` bookkeeping
+  // (still the last player to pass) does not deny them a Reaction [Add]. Which
+  // prompts open that window at all is decided by `runeAddAllowedDuringChoice`.
+  const pending = state.pendingChoice as { playerId?: string; prompter?: string } | undefined;
+  if (pending && (pending.playerId === playerId || pending.prompter === playerId)) {
+    return true;
+  }
   return chain.activePlayer === playerId;
 }
 
@@ -50,6 +58,15 @@ function runeAddAllowedDuringChoice(state: RiftboundGameState, playerId: string)
   // recycle one for Power) to raise the amount before naming it.
   if (pending.type === "pay-x") {
     return pending.playerId === playerId;
+  }
+  // rule 419.2.a / 444.2.c (rule-id: sfd-188-221 Void Rush) — picking a card the
+  // instruction then PLAYS commits the prompter to paying that card's remaining
+  // cost, so the pick prompt carries a Pay step of its own: the prompter may
+  // crack Reaction [Add] abilities before naming a card (an unaffordable card
+  // stays unpickable until the pool actually covers it).
+  if (pending.type === "reveal-and-pick") {
+    const rp = pending as unknown as { onPicked?: string; prompter?: string };
+    return rp.onPicked === "play" && rp.prompter === playerId;
   }
   if (pending.type !== "opt-in" || pending.playerId !== playerId) {
     return false;

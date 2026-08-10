@@ -266,6 +266,8 @@ export interface PickOption {
   readonly mode?: number;
   readonly seatRef?: Seat;
   readonly value?: unknown;
+  /** rule 809.1.c — the [Deflect] surcharge (Power of any Domain) picking this option incurs. */
+  readonly deflect?: number;
 }
 
 export type PickSemantics =
@@ -290,8 +292,21 @@ export interface PickDecision extends DecisionBase {
   readonly max: number;
   readonly allowDecline: boolean;
   readonly semantics?: PickSemantics;
+  /**
+   * rule 355.13 / 355.14.b — a finalization-time target SET: "split-targets" =
+   * the recipients of split damage (no amounts yet, 355.14.e), "up-to" = an
+   * "up to N" / "any number of" group (zero picks keep the item, 355.13).
+   */
+  readonly targeting?: "split-targets" | "up-to";
   /** Extra engine facts (onPicked / onRest for reveal-and-pick, field name for follow-ups). */
   readonly meta?: Readonly<Record<string, unknown>>;
+  /**
+   * rule 444.2.c / 419.2.a: actions that stay legal while a pick whose
+   * acceptance PAYS a cost is open (Reaction [Add] abilities), offered
+   * alongside the picks — an unaffordable card only becomes pickable once the
+   * pool actually covers it.
+   */
+  readonly actions?: readonly ActionOption[];
 }
 
 export interface YesNoDecision extends DecisionBase {

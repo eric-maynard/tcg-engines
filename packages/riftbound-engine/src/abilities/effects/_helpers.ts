@@ -17,6 +17,7 @@ import type { TargetDescriptor } from "../target-resolver";
 import { boundBattlefieldZone, combatRoleMightBonus, resolveTarget } from "../target-resolver";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import { findAllReplacements } from "../replacement-effects";
+import { legalBoundIds } from "../target-slots";
 import type { SpellEffectTargetShape } from "../../game-definition/moves/play/targeting";
 import { hiddenChoiceIsPulledIn } from "../../game-definition/moves/play/targeting";
 
@@ -126,6 +127,13 @@ function filterBoundByLocation(bound: string[], tgt: unknown, ctx: EffectContext
 }
 
 export function getTargetIds(effect: ExecutableEffect, ctx: EffectContext): string[] {
+  // rule 355.13 / 402.2 — a variable-count set bound on THIS node when the item
+  // was finalized ("up to two other friendly units"): exactly those objects,
+  // less any no longer legal (359.3.e.5) — never a fresh board scan (355.15).
+  const slotBound = legalBoundIds(effect, ctx);
+  if (slotBound !== undefined) {
+    return slotBound;
+  }
   // rule-id: ogs-002-024 — "all enemy units at A battlefield": a bound
   // battlefield id names the chosen LOCATION, not the affected cards; resolve
   // the descriptor pinned to that battlefield's unit zone.
@@ -216,7 +224,10 @@ export function getEffectiveMight(cardId: string, ctx: EffectContext): number {
  */
 export function getEffectiveMightInRole(cardId: string, ctx: EffectContext): number {
   const base = getEffectiveMight(cardId, ctx);
-  if (base === 0) {
+  // rule 807.1.c — only a NON-unit (no printed Might) has no combat Might. A
+  // unit whose modifiers already floored it at 0 still carries its Assault /
+  // Shield bonus, so a later "to a minimum of N" floor must count that bonus.
+  if ((getGlobalCardRegistry().get(cardId)?.might ?? 0) === 0) {
     return 0;
   }
   const meta = ctx.cards.getCardMeta?.(cardId as CoreCardId) as
