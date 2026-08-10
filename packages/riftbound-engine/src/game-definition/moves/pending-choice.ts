@@ -22,6 +22,12 @@ import { continueKillBatch, recordDieBatchAnswer } from "../../abilities/die-rep
 import { recordDamageReplacementOrder } from "../../operations/deal-damage";
 import { executeEffect } from "../../abilities/effect-executor";
 import type { EffectContext, ExecutableEffect } from "../../abilities/effect-executor";
+import {
+  type ChosenModesMeta,
+  chosenModesPatch,
+  modeInstanceKey,
+  readChosenModes,
+} from "../../abilities/effects/choice";
 import { locationKeyOf } from "../../abilities/effects/choose-per-location";
 import { markContestedOnArrival } from "../../abilities/effects/move";
 import { recalculateStaticEffects } from "../../abilities/static-abilities";
@@ -2690,15 +2696,19 @@ export const pendingChoiceMoves: Partial<
         const picked = modalOptions[idx]?.effect;
         draft.pendingChoice = undefined;
         if (choice.notChosenThisTurn) {
-          const prior =
-            (
-              context.cards.getCardMeta(choice.sourceCardId as CoreCardId) as
-                | Partial<RiftboundCardMeta>
-                | undefined
-            )?.modesChosenThisTurn ?? [];
-          context.cards.updateCardMeta(choice.sourceCardId as CoreCardId, {
-            modesChosenThisTurn: [...prior, idx],
-          } as Partial<RiftboundCardMeta>);
+          // rule 370.1.b / 383.2.c (ruling d04623892609c111) — a COPIED instance
+          // of the ability keeps its own "chosen this turn" record.
+          const modeMeta = context.cards.getCardMeta(choice.sourceCardId as CoreCardId) as
+            | ChosenModesMeta
+            | undefined;
+          const modeInstance = modeInstanceKey(choice.effect);
+          context.cards.updateCardMeta(
+            choice.sourceCardId as CoreCardId,
+            chosenModesPatch(modeMeta, modeInstance, [
+              ...readChosenModes(modeMeta, modeInstance),
+              idx,
+            ]) as Partial<RiftboundCardMeta>,
+          );
         }
         if (picked) {
           // rule 355.10 (sfd-039-221) — the picked mode's own caster-chosen

@@ -164,9 +164,32 @@ function copiedAttachmentAbilities(
     if (ctx.cards.getCardMeta(equipId as CoreCardId)?.copiedFromCardId !== cardId) {
       continue;
     }
-    out.push(...printed.filter((a) => a.type === "triggered"));
+    // rule 370.1.b / 383.2.c (ruling d04623892609c111) — the copy is a SEPARATE
+    // ability: per-ability bookkeeping ("choose one that hasn't been chosen this
+    // turn") must not be shared with the printed one, so the conferring
+    // Equipment stamps its own instance key onto the copied effect.
+    out.push(
+      ...printed
+        .filter((a) => a.type === "triggered")
+        .map((a) => ({ ...a, effect: stampModeInstance(a.effect, equipId as string) })),
+    );
   }
   return out;
+}
+
+/** Mark every mode menu inside a copied ability as belonging to `instanceId`. */
+function stampModeInstance(effect: unknown, instanceId: string): TriggerableAbility["effect"] {
+  if (typeof effect !== "object" || effect === null) {
+    return effect as TriggerableAbility["effect"];
+  }
+  const nested = (effect as { effects?: unknown }).effects;
+  return {
+    ...(effect as object),
+    _modeInstance: instanceId,
+    ...(Array.isArray(nested)
+      ? { effects: nested.map((e) => stampModeInstance(e, instanceId)) }
+      : {}),
+  } as TriggerableAbility["effect"];
 }
 
 /**

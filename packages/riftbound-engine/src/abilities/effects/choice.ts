@@ -10,6 +10,47 @@ import { resolveTarget } from "../target-resolver";
 import { type EffectHelpers } from "./_helpers";
 
 /**
+ * rule 370.1.b / 383.2.c (sfd-059-221 Svellsongur, ruling d04623892609c111) —
+ * "choose one that hasn't been chosen this turn" is a restriction of ONE ability.
+ * A copied instance of the same ability keeps its own record, keyed by the object
+ * conferring the copy (`_modeInstance`, stamped in `trigger-runner.ts`); the
+ * printed instance stays on plain `modesChosenThisTurn`.
+ */
+export interface ChosenModesMeta {
+  modesChosenThisTurn?: number[];
+  modesChosenThisTurnByInstance?: Record<string, number[]>;
+  modesChosenTurn?: number;
+}
+
+export function modeInstanceKey(effect: unknown): string | undefined {
+  return (effect as { _modeInstance?: string } | undefined)?._modeInstance;
+}
+
+export function readChosenModes(
+  meta: ChosenModesMeta | undefined,
+  instance: string | undefined,
+): number[] {
+  return instance === undefined
+    ? (meta?.modesChosenThisTurn ?? [])
+    : (meta?.modesChosenThisTurnByInstance?.[instance] ?? []);
+}
+
+export function chosenModesPatch(
+  meta: ChosenModesMeta | undefined,
+  instance: string | undefined,
+  next: number[],
+): ChosenModesMeta {
+  return instance === undefined
+    ? { modesChosenThisTurn: next }
+    : {
+        modesChosenThisTurnByInstance: {
+          ...(meta?.modesChosenThisTurnByInstance ?? {}),
+          [instance]: next,
+        },
+      };
+}
+
+/**
  * rule 809.1.c.1 (rule-id: sfd-077-221) — a modal spell declares its target as
  * it RESOLVES, so the [Deflect] surcharge for choosing an opponent's Deflect
  * object is owed here rather than at cast time. Multi-candidate picks are
@@ -122,15 +163,14 @@ function runPreChosenMode(
   if ((effect as { notChosenThisTurn?: boolean }).notChosenThisTurn === true) {
     const sourceId = ctx.sourceCardId as Parameters<typeof ctx.cards.getCardOwner>[0];
     const currentTurn = (ctx.draft as { turn?: { number?: number } }).turn?.number ?? 0;
-    const meta = ctx.cards.getCardMeta?.(sourceId) as
-      | { modesChosenThisTurn?: number[]; modesChosenTurn?: number }
-      | undefined;
+    const meta = ctx.cards.getCardMeta?.(sourceId) as ChosenModesMeta | undefined;
+    const instance = modeInstanceKey(effect);
     // rule 517.2.b — the record is turn-stamped, so a stale one lapses.
-    const prior = meta?.modesChosenTurn === currentTurn ? (meta.modesChosenThisTurn ?? []) : [];
+    const prior = meta?.modesChosenTurn === currentTurn ? readChosenModes(meta, instance) : [];
     ctx.cards.updateCardMeta?.(sourceId, {
-      modesChosenThisTurn: [...prior, index],
+      ...chosenModesPatch(meta, instance, [...prior, index]),
       modesChosenTurn: currentTurn,
-    });
+    } as never);
   }
   const picked = options[index]?.effect;
   if (!picked) {
@@ -181,15 +221,17 @@ export function handle_choice(effect: ExecutableEffect, ctx: EffectContext, h: E
   const notChosenThisTurn = (effect as { notChosenThisTurn?: boolean }).notChosenThisTurn === true;
   const sourceId = ctx.sourceCardId as Parameters<typeof ctx.cards.getCardOwner>[0];
   const currentTurn = (ctx.draft as { turn?: { number?: number } }).turn?.number ?? 0;
+  const instance = modeInstanceKey(effect);
   let alreadyChosen: number[] = [];
   if (notChosenThisTurn) {
-    const meta = ctx.cards.getCardMeta?.(sourceId) as
-      | { modesChosenThisTurn?: number[]; modesChosenTurn?: number }
-      | undefined;
+    const meta = ctx.cards.getCardMeta?.(sourceId) as ChosenModesMeta | undefined;
     if (meta?.modesChosenTurn === currentTurn) {
-      alreadyChosen = meta.modesChosenThisTurn ?? [];
-    } else if (meta?.modesChosenThisTurn?.length) {
-      ctx.cards.updateCardMeta?.(sourceId, { modesChosenThisTurn: [] });
+      alreadyChosen = readChosenModes(meta, instance);
+    } else if (meta?.modesChosenThisTurn?.length || meta?.modesChosenThisTurnByInstance) {
+      ctx.cards.updateCardMeta?.(sourceId, {
+        modesChosenThisTurn: [],
+        modesChosenThisTurnByInstance: {},
+      });
     }
     ctx.cards.updateCardMeta?.(sourceId, { modesChosenTurn: currentTurn });
   }
@@ -251,9 +293,14 @@ export function handle_choice(effect: ExecutableEffect, ctx: EffectContext, h: E
   const soleIndex = availableIndices[0] as number;
   if (options[soleIndex]?.effect) {
     if (notChosenThisTurn) {
-      ctx.cards.updateCardMeta?.(sourceId, {
-        modesChosenThisTurn: [...alreadyChosen, soleIndex],
-      });
+      ctx.cards.updateCardMeta?.(
+        sourceId,
+        chosenModesPatch(
+          ctx.cards.getCardMeta?.(sourceId) as ChosenModesMeta | undefined,
+          instance,
+          [...alreadyChosen, soleIndex],
+        ) as never,
+      );
     }
     chargeAutoBoundDeflect(options[soleIndex].effect, ctx);
     executeEffect(options[soleIndex].effect, ctx);

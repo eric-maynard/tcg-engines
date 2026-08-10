@@ -4,7 +4,12 @@
  * execution before anyone gets priority, and the chain item carries the picks.
  * Leaf module: must not import move defs.
  */
-import { playTimeModeOptions } from "../../../abilities/effects/choice";
+import {
+  type ChosenModesMeta,
+  modeInstanceKey,
+  playTimeModeOptions,
+  readChosenModes,
+} from "../../../abilities/effects/choice";
 import type { EffectContext, ExecutableEffect } from "../../../abilities/effect-executor";
 import { resolveTarget } from "../../../abilities/target-resolver";
 import { getDeflectSurcharge, payDeflectSurcharge } from "./cost";
@@ -218,13 +223,15 @@ export function raisePlayTimeModeChoice(
     // rule 355.8 (sfd-049-221) — "choose one you've not chosen this turn": modes
     // recorded on the source this turn are excluded alongside those locked for
     // earlier executions of this same play (turn-stamped record, rule 517.2.b).
+    // rule 370.1.b (ruling d04623892609c111) — a COPIED instance of the ability
+    // reads its own record, not the printed instance's.
     const meta = ctx.cards.getCardMeta?.(sourceCardId as Parameters<typeof ctx.cards.getCardOwner>[0]) as
-      | { modesChosenThisTurn?: number[]; modesChosenTurn?: number }
+      | ChosenModesMeta
       | undefined;
     const currentTurn = (ctx.draft as { turn?: { number?: number } }).turn?.number ?? 0;
     const chosenThisTurn =
       next.notChosenThisTurn === true && meta?.modesChosenTurn === currentTurn
-        ? (meta.modesChosenThisTurn ?? [])
+        ? readChosenModes(meta, modeInstanceKey(next) ?? modeInstanceKey(rootEffect))
         : [];
     const options = playTimeModeOptions(next as unknown as ExecutableEffect, ctx, [
       ...locked(),

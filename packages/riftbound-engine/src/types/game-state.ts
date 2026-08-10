@@ -223,6 +223,15 @@ export interface RiftboundCardMeta {
   modesChosenThisTurn?: number[];
 
   /**
+   * rule 370.1.b / 383.2.c (sfd-059-221 Svellsongur, ruling d04623892609c111) —
+   * a copied instance of the same "choose one that hasn't been chosen this turn"
+   * ability is a SEPARATE ability with its own restriction, so each copy keeps
+   * its own record keyed by the Equipment that confers it. `modesChosenThisTurn`
+   * stays the PRINTED instance's record.
+   */
+  modesChosenThisTurnByInstance?: Record<string, number[]>;
+
+  /**
    * Card instance ID whose abilities/text are copied onto this card while
    * this card is attached/bound to it. Used by Svellsongur to copy the unit's
    * text to the equipment for as long as it's attached.
