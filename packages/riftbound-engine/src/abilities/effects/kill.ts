@@ -44,6 +44,14 @@ function candidatesFor(
   } as never);
 }
 
+/** rule 303.2.a — every seat, starting from the turn player. */
+function turnOrderSeats(ctx: EffectContext): string[] {
+  const seats = Object.keys(ctx.draft.players);
+  const turn = ctx.draft.turn as { activePlayer?: string } | undefined;
+  const at = seats.indexOf(turn?.activePlayer ?? "");
+  return at < 0 ? seats : [...seats.slice(at), ...seats.slice(0, at)];
+}
+
 /**
  * rule 422.1.a / 355.16 (ogn-209-298) — "Each player kills one of their units":
  * every player chooses among the units THEY control and kills that one. The
@@ -59,15 +67,18 @@ function handleEachPlayerKill(
   const pending = (effect as { eachRemaining?: readonly string[] }).eachRemaining;
   let queue: string[];
   if (pending === undefined) {
-    const others = Object.keys(ctx.draft.players).filter((p) => p !== ctx.playerId);
+    // rule 303.2.a — the simultaneous per-player choices are sequenced in turn
+    // order from the TURN player, not from the spell's controller (they differ
+    // once the spell has been stolen).
+    const order = turnOrderSeats(ctx);
     const own = (ctx.boundTargets ?? [])
       .filter((id) => controllerOf(id, ctx) === ctx.playerId)
       .slice(0, 1);
     if (own.length > 0) {
       killUnits(own, ctx, h);
-      queue = others;
+      queue = order.filter((p) => p !== ctx.playerId);
     } else {
-      queue = [ctx.playerId, ...others];
+      queue = order;
     }
   } else {
     killUnits((ctx.boundTargets ?? []).slice(0, 1), ctx, h);
