@@ -2134,6 +2134,12 @@ export interface CostExtras {
    * `condition` re-checks with the real targets.
    */
   assumeChooseDiscount?: boolean;
+  /**
+   * rule 822.1.c / 822.4 / 813.4 — this play grants the card [Reaction] for its
+   * duration ([Ambush] played to a battlefield where you control units), so
+   * "cards with [Reaction] cost … more" audiences (Mystic Vortex) see it.
+   */
+  grantedReaction?: boolean;
 }
 
 const NO_BOARD_REDUCTION: StaticCostReduction = { minimum: 0, power: {}, reduction: 0 };
@@ -2228,7 +2234,9 @@ function getBoardCostIncrease(
   if (!extras.board) {
     return NO_COST_INCREASE;
   }
-  return computeStaticCostIncrease({ draft: state, ...extras.board }, playerId, cardId);
+  return computeStaticCostIncrease({ draft: state, ...extras.board }, playerId, cardId, {
+    grantedReaction: extras.grantedReaction === true,
+  });
 }
 
 /** Merge two per-domain pip tallies. */
@@ -3825,11 +3833,14 @@ export function computePlayResourceCost(
   // still paid in full, so the waiver may not swallow its Energy half.
   const additionalEnergy = Math.max(0, extras.additionalCost?.energy ?? 0);
   const ignoresBaseEnergy = extras.ignoreEnergyCost === true;
+  // rule 356.1.b.3 / 356.3 — increases are applied AFTER the base is zeroed and
+  // can lift the total back above zero, so the waiver never swallows them.
+  const waivedEnergy = additionalEnergy + boardIncrease.energy + runtimeIncrease;
   return {
     any,
-    energy: ignoresBaseEnergy ? additionalEnergy : energy,
+    energy: ignoresBaseEnergy ? waivedEnergy : energy,
     free: false,
-    ignoreEnergy: ignoresBaseEnergy && additionalEnergy === 0,
+    ignoreEnergy: ignoresBaseEnergy && waivedEnergy === 0,
     named,
     ...(hybridDomains && hybridNeed > 0 ? { hybrid: { domains: hybridDomains, n: hybridNeed } } : {}),
   };
