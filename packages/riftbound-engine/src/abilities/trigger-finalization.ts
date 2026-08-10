@@ -481,7 +481,7 @@ function selfCostStepState(
   ctx: FinalizationContext,
   live: ChainItem,
   step: Record<string, unknown>,
-): { key: string; payable: boolean } | undefined {
+): { key: string; payable: boolean; exists: boolean } | undefined {
   if (step.target !== "self") {
     return undefined;
   }
@@ -489,8 +489,12 @@ function selfCostStepState(
   if (destination === undefined) {
     return undefined;
   }
-  const zone = ctx.zones.getCardZone?.(live.cardId as CoreCardId);
-  return { key: `${live.cardId}|${String(step.type)}`, payable: zone !== destination };
+  const zone = ctx.zones.getCardZone?.(live.cardId as CoreCardId) as string | undefined;
+  // rule 186.1 / 359.3.e.12 (unl-200-219 Reflection copy of Ekko) — a token that
+  // left the board has CEASED TO EXIST: there is no "me" to recycle/banish, so
+  // the cost can never be paid (no zone at all, or the harness's "gone").
+  const exists = zone !== undefined && zone !== "gone";
+  return { exists, key: `${live.cardId}|${String(step.type)}`, payable: exists && zone !== destination };
 }
 
 /** Blank a Chain Item's remaining instruction: it resolves and does nothing. */
@@ -527,6 +531,13 @@ function payFinalizationCostStepsInner(
     // to the item that RESOLVES first (the newest on the Chain), so a later
     // copy takes the payoff over from the earlier sibling that moved the card.
     const selfCost = selfCostStepState(ctx, live, step);
+    // rule 383.3.b.1 / 404.2 — the object that would pay no longer exists at all:
+    // the Pending item cannot be finalized and leaves the Chain (never a Chain
+    // item, no priority window, no payoff).
+    if (selfCost !== undefined && !selfCost.exists && paid === 0) {
+      removeUnfinalizedItem(draft, itemId);
+      return false;
+    }
     if (selfCost !== undefined && !selfCost.payable) {
       const sibling = chainItems(draft)?.find(
         (it) =>
@@ -755,6 +766,18 @@ function pooledPower(draft: RiftboundGameState, playerId: string): number {
     (a: number, b) => a + (b ?? 0),
     0,
   );
+}
+
+/**
+ * rule 164.2.b / 429.3.a — runes this player could recycle for [rainbow] while a
+ * Pay window is open. Recycling has no ready requirement (rule 594), so every
+ * rune in the Rune Pool counts.
+ */
+function recyclableRunes(ctx: FinalizationContext, playerId: string): number {
+  const zones = ctx.zones as unknown as {
+    getCardsInZone?: (zone: string, player: string) => readonly unknown[];
+  };
+  return zones.getCardsInZone?.("runePool", playerId)?.length ?? 0;
 }
 
 /**
@@ -1144,7 +1167,10 @@ export function finalizePendingItems(draftLike: unknown, ctx: FinalizationContex
       item.deflectOffered !== true
     ) {
       const pips = minDeflectSurchargeForItem(item, draft, context);
-      if (pips > 0 && totalPooledPower(draft, item.controller) >= pips) {
+      // rule 429.3.a (ruling cb0c9c7b9d025ad8) — the Pay this prompt opens keeps
+      // the payer's rune [Add] abilities usable, so a rune it could recycle
+      // right then counts towards affordability: asking is what lets them.
+      if (pips > 0 && totalPooledPower(draft, item.controller) + recyclableRunes(ctx, item.controller) >= pips) {
         patchItem(draft, item.id, { deflectOffered: true });
         draft.pendingChoice = {
           deflectSurcharge: pips,

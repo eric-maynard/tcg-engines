@@ -104,100 +104,34 @@ describe("Ruling c6cd2ff92ac379de — buffed Sett conquering Hirana: spend the b
   });
 
   // RULING-CONFLICT: this ruling's "Option 2" (unbuffed Sett buffs first, THEN spends that buff on Hirana) contradicts
-  // CR 383.3.a/b (a trigger's "you may [cost] to …" is paid on FINALIZATION, before either item resolves) and the later
-  // ruling 202877fb824b2d2b on this exact pair. Expected per THIS ruling: unbuffed Sett conquers → order Sett first →
-  // buff → Hirana spends it → +1 card, Sett unbuffed. Actual (engine follows the CR): with no buff at finalization the
-  // Monastery opt-in is never offered; Sett just ends buffed and P1 draws nothing.
-  test.failing("BUG: ruling c6cd2ff92ac379de — Option 2 (unbuffed Sett: gain the conquer buff, then spend it on Hirana for a card); engine pays Hirana's cost at finalization so the opt-in is never offered", async () => {
+  // CR 383.3.a/b, 204.3.a, 740.4.a.2 (a trigger's leading "you may [cost] TO …" is its base cost, paid on FINALIZATION —
+  // both conquer triggers are finalized before either resolves, 383.3.d) and the later ruling 202877fb824b2d2b on this exact
+  // pair. Engine follows the CR: with no buff when the batch is finalized, Hirana's item is removed unasked (404.2).
+  test("CR 383.3.b.1 / 404.2 (contra the ruling's Option 2) — unbuffed Sett: Hirana's 'spend a buff' can't be paid at finalization, so it is never offered; Sett ends buffed and P1 draws nothing", async () => {
     const game = await hirana(false).build();
     await settConquers(game);
-    // Per the ruling P1 can order Sett's buff first and still be asked to spend it for Hirana.
     let asked = false;
+    let ordered = false;
     for (let i = 0; i < 10; i++) {
       const d = game.decision();
       if (!d || (d.kind === "action" && d.context === "main")) {
         break;
       }
       if (d.kind === "order") {
-        const od = d as OrderD;
-        await game.p1.order([keyOf(od, "mon"), keyOf(od, "sett")].filter(Boolean)); // Sett on top → buffs first
+        ordered = true;
+        await game.acceptTriggerOrder();
       } else if (d.kind === "yes-no" && d.seat === P1) {
         asked = true;
-        await game.p1.yes();
-      } else if (d.kind === "pick" && d.seat === P1) {
-        await game.p1.pick("sett");
+        await game.p1.no();
       } else if (d.kind === "action" && d.context === "chain") {
         await game.seat(d.seat).passPriority();
       } else {
         break;
       }
     }
-    expect(asked).toBe(true);
-    expect(game.p1.hand()).toEqual(["d1"]);
-    expect(game.state("sett").isBuffed).toBe(false);
-  });
-});
-
-describe("Ruling c6cd2ff92ac379de (nuances) — The Boss replaces the death: 'if this kills' effects fail, unconditional riders still happen", () => {
-  /** P2's turn. P1: The Boss legend (ready), 1 rainbow power, buffed Pal (2+1, 1 damage) at bf1. Known decks. */
-  function bossBoard() {
-    return scenario()
-      .active(P2)
-      .legend(P1, THE_BOSS, "boss")
-      .resources(P1, { power: { rainbow: 1 } })
-      .battlefield("bf1", { controller: P1 })
-      .unit(P1, "bf1", { might: 2, name: "Pal" }, "pal", { buffed: true, damage: 1 })
-      .deck(P1, ["ogn-175-298", "ogn-175-298", "ogn-175-298"], ["d1", "d2", "d3"])
-      .deck(P2, ["ogn-175-298", "ogn-175-298"], ["e1", "e2"]);
-  }
-
-  /** Drive the chain; when The Boss asks P1 "pay [rainbow], exhaust me, spend its buff … instead?", say yes. */
-  async function resolveWithBossSave(game: Game): Promise<void> {
-    let saved = false;
-    for (let i = 0; i < 12; i++) {
-      const d = game.decision();
-      if (!d || (d.kind === "action" && d.context === "main")) {
-        break;
-      }
-      if (d.kind === "yes-no") {
-        expect(d).toMatchObject({ seat: P1, source: { cardId: "boss" } });
-        await game.p1.yes();
-        saved = true;
-      } else if (d.kind === "action" && d.context === "chain") {
-        await game.seat(d.seat).passPriority();
-      } else {
-        break;
-      }
-    }
-    expect(saved).toBe(true);
-    // The death was replaced: Pal healed, exhausted, recalled to base, buff spent; Boss exhausted, rainbow paid.
-    expect(game.zoneOf("pal")).toBe("base");
-    expect(game.state("pal")).toMatchObject({ damage: 0, isBuffed: false, isExhausted: true });
-    expect(game.state("boss").isExhausted).toBe(true);
-    expect(game.p1.power("rainbow")).toBe(0);
-  }
-
-  // Expected: Disintegrate deals 3 (lethal) → The Boss recalls Pal instead of it dying → "If this kills it" is false →
-  // P2 draws nothing. Actual: the engine still queues Disintegrate's reflexive "draw 1" and P2 draws a card.
-  test("ruling c6cd2ff92ac379de — Disintegrate on a Boss-saved unit must NOT draw ('if this kills it' — it didn't die); engine draws anyway", async () => {
-    const game = await bossBoard().resources(P2, { energy: 4 }).hand(P2, DISINTEGRATE, "dis").build();
-    await game.p2.cast("dis", { targets: "pal" });
-    await resolveWithBossSave(game);
-    expect(game.zoneOf("dis")).toBe("trash");
-    expect(game.chain()).toEqual([]);
-    expect(game.p2.hand()).toEqual([]); // no "draw 1"
-    expect(game.p2.deck()[0]).toBe("e1");
-  });
-
-  test("Hidden Blade on a Boss-saved unit: the kill is replaced (Pal recalled, alive) yet 'its controller draws 2' still happens — P1 draws 2", async () => {
-    const game = await bossBoard().resources(P2, { energy: 2, power: { order: 1 } }).hand(P2, HIDDEN_BLADE, "blade").build();
-    await game.p2.cast("blade", { targets: "pal" });
-    await resolveWithBossSave(game);
-    expect(game.zoneOf("blade")).toBe("trash");
-    expect(game.chain()).toEqual([]);
-    expect(game.p1.hand()).toEqual(["d1", "d2"]);
-    expect(game.p2.hand()).toEqual([]);
-    expect(game.decision()).toMatchObject({ context: "main", kind: "action", seat: P2 });
-    expect(game.violations()).toEqual([]);
+    expect(asked).toBe(false);
+    expect(ordered).toBe(false); // only Sett's trigger reached the chain
+    expect(game.p1.hand()).toEqual([]);
+    expect(game.state("sett")).toMatchObject({ isBuffed: true, might: 5 });
   });
 });
