@@ -134,6 +134,14 @@ export interface NameCatalogEntry {
   readonly tags?: readonly string[];
 }
 
+/** Detached runtime state of a registry — see `CardDefinitionRegistry.snapshotRuntime`. */
+export interface RegistryRuntimeSnapshot {
+  readonly definitions: ReadonlyMap<string, CardDefinitionLookup>;
+  readonly copyOriginals: ReadonlyMap<string, CardDefinitionLookup>;
+  readonly copySources: ReadonlyMap<string, string>;
+  readonly copyLayers: ReadonlyMap<string, readonly { key: string; sourceId: string }[]>;
+}
+
 export class CardDefinitionRegistry {
   private readonly definitions = new Map<string, CardDefinitionLookup>();
   /** Pre-copy definitions of instances currently copying another card (rule 477.1.b). */
@@ -199,7 +207,11 @@ export class CardDefinitionRegistry {
     // it is treated as 0 for all purposes — so a card copying a token reads as
     // costing 0. Both halves are written explicitly because every reader falls
     // back to the printed card when the definition omits the field.
-    const copiedFromToken = this.isToken(top.sourceId);
+    // rule 477.1.b.1.b — an object that is ITSELF a copy has the traits it
+    // currently copies as its copyable values, so a Reflection copying a
+    // 4-cost card is copied at cost 4; only a BARE token is costless.
+    const copiedFromToken =
+      this.isToken(top.sourceId) && !this.copySources.has(top.sourceId);
     // rule 185.1.b / 477.1.b.1.a — token-ness is NOT a copyable trait: a card copying a
     // token stays a card (and a token copying a card stays a token).
     const original = this.copyOriginals.get(holderId) ?? source;
@@ -219,6 +231,16 @@ export class CardDefinitionRegistry {
    */
   copySourceOf(holderId: string): string | undefined {
     return this.copySources.get(holderId);
+  }
+
+  /**
+   * rule 477.1.b.1 — a token minted straight into a copy (`CopyOnPlay`, e.g. a
+   * Mirror Image Reflection) is registered with the copied definition rather
+   * than through `becomeCopyOf`; record what it copies so later readers — and
+   * anything copying IT (477.1.b.1.b) — see a copy, not a bare token.
+   */
+  noteCopySource(holderId: string, sourceId: string): void {
+    this.copySources.set(holderId, sourceId);
   }
 
   /**
@@ -244,6 +266,38 @@ export class CardDefinitionRegistry {
    */
   register(id: string, definition: CardDefinitionLookup): void {
     this.definitions.set(id, definition);
+  }
+
+  /**
+   * Undo support: everything a move can change here at runtime — instance
+   * registrations (tokens, duplicates, replaced battlefields) and copy layers
+   * (rule 477.1.b) — as a detached snapshot. Definitions are treated as
+   * immutable values, so a shallow copy of the maps is exact and cheap.
+   */
+  snapshotRuntime(): RegistryRuntimeSnapshot {
+    return {
+      copyLayers: new Map([...this.copyLayers].map(([k, v]) => [k, v.map((l) => ({ ...l }))])),
+      copyOriginals: new Map(this.copyOriginals),
+      copySources: new Map(this.copySources),
+      definitions: new Map(this.definitions),
+    };
+  }
+
+  /** Put back a snapshot taken by `snapshotRuntime()` (undo/redo). */
+  restoreRuntime(snapshot: RegistryRuntimeSnapshot): void {
+    const load = <K, V>(into: Map<K, V>, from: ReadonlyMap<K, V>): void => {
+      into.clear();
+      for (const [k, v] of from) {
+        into.set(k, v);
+      }
+    };
+    load(this.definitions, snapshot.definitions);
+    load(this.copyOriginals, snapshot.copyOriginals);
+    load(this.copySources, snapshot.copySources);
+    load(
+      this.copyLayers,
+      new Map([...snapshot.copyLayers].map(([k, v]) => [k, v.map((l) => ({ ...l }))])),
+    );
   }
 
   /**

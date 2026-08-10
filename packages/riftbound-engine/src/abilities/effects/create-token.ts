@@ -381,7 +381,11 @@ export function handle_createToken(effect: ExecutableEffect, ctx: EffectContext,
         abilities: copySource.abilities ? [...copySource.abilities] : undefined,
         id: tokenId,
         isToken: true,
-        keywords: [...new Set([...(copySource.keywords ?? []), ...grantedTokenKeywords])],
+        // rule 477.2.a / 477.1.b.1.a — the effect's own keywords are GRANTED
+        // (layer 2, recorded below as `grantedKeywords`), never baked into the
+        // copied sheet: an object that later copies this token takes only the
+        // copyable traits, so a granted [Temporary] is not conferred on it.
+        keywords: [...new Set(copySource.keywords ?? [])],
         powerCost: copySource.powerCost ? [...copySource.powerCost] : undefined,
         tags: copySource.tags ? [...copySource.tags] : undefined,
       });

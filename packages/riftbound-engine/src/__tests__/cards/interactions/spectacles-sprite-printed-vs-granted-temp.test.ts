@@ -257,7 +257,7 @@ describe("Case 4 — Spectacles on Daring Poro choosing R (a copy of Brute with 
 
   // Expected (477.1.b.1.b): R's copyable cost is the one it currently copies — Brute's 4 (R itself reads cost 4).
   // Actual: because the MODEL is a token the engine prices the copy at 0 (185.3.a.1 applied to a copy-of-a-card).
-  test.failing("BUG: the Poro's cost is Brute's 4 — R's current copyable cost — not a bare token's 0 (477.1.b.1.b)", async () => {
+  test("the Poro's cost is Brute's 4 — R's current copyable cost — not a bare token's 0 (477.1.b.1.b)", async () => {
     const { game, r } = await withTokens();
     await equip(game, "specs1", "poro", r);
     expect(game.state(r).energyCost).toBe(4);
@@ -267,7 +267,7 @@ describe("Case 4 — Spectacles on Daring Poro choosing R (a copy of Brute with 
   // Expected (477.2.a vs 477.1.b.1.a): R's Temporary was GRANTED by Mirror Image (layer 2) — not a copyable trait — so
   // the Poro copying R gets NO Temporary (keywords empty, like Brute's). Actual: the Reflection's minted definition
   // bakes Temporary into its keyword list, so the copy confers it (keywords: ["Temporary"], nothing granted).
-  test.failing("BUG: a granted Temporary is not conferred on a copier — the Poro-as-Brute has NO Temporary", async () => {
+  test("a granted Temporary is not conferred on a copier — the Poro-as-Brute has NO Temporary", async () => {
     const { game, r } = await withTokens();
     await equip(game, "specs1", "poro", r);
     expect(game.state("poro").name).toBe("Brute");
@@ -278,7 +278,7 @@ describe("Case 4 — Spectacles on Daring Poro choosing R (a copy of Brute with 
   // Expected: no Temporary → nothing triggers for the Poro at P1's next Beginning Phase; it is still a 4-Might 'Brute'
   // CARD in base wearing the Spectacles, while R (granted Temporary) and S (printed Temporary) both die.
   // Actual: the conferred Temporary kills the Poro too (and, flagged as a token, it even ceases to exist).
-  test.failing("BUG: the Poro-as-Brute SURVIVES P1's next Beginning Phase (still on the board, still a card, Spectacles still on) while R and S are killed", async () => {
+  test("the Poro-as-Brute SURVIVES P1's next Beginning Phase (still on the board, still a card, Spectacles still on) while R and S are killed", async () => {
     const { game, r, s } = await withTokens();
     await equip(game, "specs1", "poro", r);
     await toP1NextTurn(game);
