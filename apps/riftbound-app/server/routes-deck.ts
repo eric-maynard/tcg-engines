@@ -26,15 +26,31 @@ export function deckCardMeta(deck: Pick<SavedDeck, "legendId" | "championId">): 
   return { championName: champion?.name ?? null, domains, legendName: legend?.name ?? null };
 }
 
+/** Card totals per zone for list rows ("40 main · 8 side · 12 runes"). `main` includes the chosen champion's own copy (rule 103.2: the 40 counts it). */
+export interface DeckCounts {
+  main: number;
+  sideboard: number;
+  rune: number;
+  battlefield: number;
+}
+
+export function deckCounts(cards: readonly DeckCardEntry[]): DeckCounts {
+  const counts: DeckCounts = { battlefield: 0, main: 0, rune: 0, sideboard: 0 };
+  for (const c of cards) {
+    if (c.zone in counts) {counts[c.zone] += Math.max(0, Number(c.quantity) || 0);}
+  }
+  return counts;
+}
+
 /**
  * List/detail rows carry the ADVISORY legality report (`legality.legal`,
  * `legality.problems`) so pickers can badge "Legal ✓ / Not tournament-legal ⚠"
- * — it never gates saving, loading or playing.
+ * — it never gates saving, loading or playing — plus per-zone `counts`.
  */
-function withMeta<T extends SavedDeck>(deck: T): T & DeckCardMeta & { legality: DeckLegality } {
+function withMeta<T extends SavedDeck>(deck: T): T & DeckCardMeta & { legality: DeckLegality; counts: DeckCounts } {
   const full = "cards" in deck ? (deck as unknown as import("../src/db/deck-repo").FullDeck) : getDeck(deck.id);
   const legality = full ? savedDeckLegality(full) : { legal: true, problems: [] };
-  return { ...deck, ...deckCardMeta(deck), legality };
+  return { ...deck, ...deckCardMeta(deck), counts: deckCounts(full?.cards ?? []), legality };
 }
 
 /** Group a card list into saved-deck entries for one zone. */

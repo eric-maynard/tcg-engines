@@ -351,6 +351,7 @@ function appendDeckGroup(select, label, decks) {
     o.value = d.id;
     o.textContent = d.name;
     o.dataset.legend = d.legendName || "";
+    o.dataset.legendId = d.legendId || "";
     o.dataset.champion = d.championName || "";
     o.dataset.domains = (d.domains || []).join(",");
     o.dataset.updated = d.updatedAt || d.createdAt || "";
@@ -475,6 +476,7 @@ function syncMirrorOption(select, playerSelect) {
   const src = playerSelect && playerSelect.options[playerSelect.selectedIndex];
   const has = src && src.value;
   mirror.dataset.legend = has ? (src.dataset.legend || "") : "";
+  mirror.dataset.legendId = has ? (src.dataset.legendId || "") : "";
   mirror.dataset.champion = has ? (src.dataset.champion || "") : "";
   mirror.dataset.domains = has ? (src.dataset.domains || "") : "";
   const who = has ? [src.dataset.legend, src.dataset.champion].filter(Boolean).join(" · ") : "";
@@ -575,9 +577,17 @@ function deckOptionLegalityHtml(opt) {
   return `<span class="deck-dd-legal warn" title="${esc(tip)}" style="margin-left:6px;font-size:9px;font-weight:700;padding:0 5px;border-radius:4px;background:#2a2110;color:#ffb84d;border:1px solid #5a4420;">⚠ ${esc(n)}</span>`;
 }
 
+/** Small legend-art thumbnail left of the name (same /card-image/ URL as the board); neutral glyph when the entry has no legend. */
+function deckOptionThumbHtml(opt) {
+  const box = "flex-shrink:0;width:30px;height:30px;border-radius:6px;overflow:hidden;background:#15132a;border:1px solid #2e2a48;display:flex;align-items:center;justify-content:center;color:#4a4560;font-size:13px;";
+  const id = opt?.dataset?.legendId;
+  if (!id) return `<span class="deck-dd-thumb" style="${box}">${opt && opt.value ? "⚔" : ""}</span>`;
+  return `<span class="deck-dd-thumb" style="${box}"><img src="/card-image/${encodeURIComponent(id)}" alt="${esc(opt.dataset.legend || "Legend")}" loading="lazy" style="width:100%;height:100%;object-fit:cover;object-position:50% 18%;display:block;" onerror="this.replaceWith(document.createTextNode('⚔'))"></span>`;
+}
+
 function deckOptionHtml(opt) {
   const sub = deckOptionSubtitle(opt);
-  return `<span class="deck-dd-text">
+  return `${deckOptionThumbHtml(opt)}<span class="deck-dd-text">
       <span class="deck-dd-name">${esc(opt ? opt.textContent : "-- Choose a deck --")}${deckOptionLegalityHtml(opt)}</span>
       ${sub ? `<span class="deck-dd-sub">${esc(sub)}</span>` : ""}
     </span>

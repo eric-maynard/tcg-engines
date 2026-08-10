@@ -16,7 +16,8 @@ const { closeDb } = await import("../../src/db/schema");
 const { createUser } = await import("../../src/db/user-repo");
 const { addToSideboard, adjustRuneMix, buildDefaultDeck, builderPayload, findSideboardViolation, getOrCreateSession, getSideboard, handleDeckBuilderRoutes, removeFromSideboard, savedDeckToDeckConfig } = await import("../decks");
 const { allCards } = await import("../cards");
-const { deckCardMeta } = await import("../routes-deck");
+const { deckCardMeta, deckCounts, handleSavedDeckRoutes } = await import("../routes-deck");
+const { generateToken } = await import("../routes-auth");
 
 afterAll(() => {
   closeDb();
@@ -68,6 +69,25 @@ describe("saved deck names", () => {
       domains: [],
       legendName: null,
     });
+  });
+
+  test("list rows carry per-zone counts (main includes the champion's own copy) + legend/champion ids for the My Decks art thumbnail", async () => {
+    expect(deckCounts([
+      { cardId: "a", quantity: 3, zone: "main" },
+      { cardId: CHAMPION_ID, quantity: 1, zone: "main" },
+      { cardId: "r", quantity: 12, zone: "rune" },
+      { cardId: "s", quantity: 2, zone: "sideboard" },
+      { cardId: "b", quantity: 1, zone: "battlefield" },
+    ])).toEqual({ battlefield: 1, main: 4, rune: 12, sideboard: 2 });
+    expect(deckCounts([])).toEqual({ battlefield: 0, main: 0, rune: 0, sideboard: 0 });
+    const deck = createDeck({ ...base, cards: [{ cardId: "ogn-001-298", quantity: 2, zone: "main" }, { cardId: CHAMPION_ID, quantity: 1, zone: "main" }, { cardId: "ogn-042-298", quantity: 6, zone: "rune" }], name: "Counted" });
+    const res = await handleSavedDeckRoutes(new Request("http://x/api/saved-decks", { headers: { Authorization: `Bearer ${generateToken(user.id)}` } }), new URL("http://x/api/saved-decks"), {} as never);
+    const rows = (await res!.json()) as { id: string; legendId: string; championId: string; legendName: string; counts: unknown }[];
+    const row = rows.find((r) => r.id === deck.id)!;
+    expect(row.counts).toEqual({ battlefield: 0, main: 3, rune: 6, sideboard: 0 });
+    expect(row.legendId).toBe(LEGEND_ID);
+    expect(row.championId).toBe(CHAMPION_ID);
+    expect(row.legendName).toBe("Nine-Tailed Fox");
   });
 });
 

@@ -149,19 +149,71 @@
       background: #13121e;
       border: 1px solid #2a2740;
       border-radius: 10px;
-      padding: 16px;
+      padding: 12px;
       cursor: pointer;
       transition: border-color 0.15s, box-shadow 0.15s;
+      display: flex;
+      gap: 12px;
+      position: relative;
     }
     .deck-card:hover {
       border-color: #5a3a9a;
       box-shadow: 0 0 16px rgba(100, 60, 200, 0.15);
     }
+    /* Just-imported deck: scrolled into view and pulsed once. */
+    .deck-card.dc-new { border-color: #8a5aff; box-shadow: 0 0 0 2px rgba(138, 90, 255, 0.45), 0 0 22px rgba(138, 90, 255, 0.35); animation: dcNew 1.6s ease-out 2; }
+    @keyframes dcNew { 0% { box-shadow: 0 0 0 2px rgba(138,90,255,0.7), 0 0 28px rgba(138,90,255,0.55); } 100% { box-shadow: 0 0 0 2px rgba(138,90,255,0.25), 0 0 10px rgba(138,90,255,0.1); } }
+    /* Legend art thumbnail (cropped to the art box of the card image) with the champion overlaid bottom-right. */
+    .dc-art {
+      position: relative;
+      flex-shrink: 0;
+      width: 68px;
+      height: 92px;
+      border-radius: 7px;
+      background: #1a1830;
+      border: 1px solid #2a2740;
+    }
+    /* The card face is zoomed so the frame/text box fall outside the clip: what shows is the art. */
+    .dc-art-crop { position: absolute; inset: 0; border-radius: 6px; overflow: hidden; }
+    .dc-art .dc-legend-img {
+      display: block;
+      width: 136%;
+      margin: -13% 0 0 -18%;
+    }
+    .dc-art .dc-champ {
+      position: absolute;
+      right: -7px; bottom: -7px;
+      width: 32px; height: 44px;
+      border-radius: 4px;
+      overflow: hidden;
+      border: 2px solid #13121e;
+      background: #1a1830;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.6);
+    }
+    .dc-art .dc-champ img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 15%; display: block; }
+    .dc-art-ph {
+      width: 100%; height: 100%;
+      display: flex; align-items: center; justify-content: center;
+      color: #4a4560; font-size: 26px;
+    }
+    /* Hover the thumbnail → full legend card preview beside it. */
+    .dc-preview {
+      display: none;
+      position: absolute;
+      left: calc(100% + 10px); top: -40px;
+      width: 220px;
+      z-index: 60;
+      border-radius: 10px;
+      box-shadow: 0 12px 36px rgba(0,0,0,0.75);
+      pointer-events: none;
+    }
+    .dc-art:hover .dc-preview { display: block; }
+    .dc-body { flex: 1; min-width: 0; display: flex; flex-direction: column; }
     .deck-card .dc-name {
       font-size: 15px;
       font-weight: 700;
       color: #d4c0ff;
-      margin-bottom: 6px;
+      margin-bottom: 5px;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -170,10 +222,17 @@
       font-size: 11px;
       color: #6b6580;
       display: flex;
-      gap: 8px;
+      flex-wrap: wrap;
+      gap: 6px;
       align-items: center;
-      margin-bottom: 8px;
+      margin-bottom: 6px;
     }
+    .deck-card .dc-counts { font-size: 11px; color: #8a80a0; }
+    .deck-card .dc-counts b { color: #b8b0d0; font-weight: 600; }
+    .dc-pips { display: inline-flex; gap: 3px; margin-left: 2px; }
+    .dc-pip { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+    .dc-pip.pip-fury { background: #e5533a; } .dc-pip.pip-calm { background: #4bb36b; } .dc-pip.pip-mind { background: #4a7bff; }
+    .dc-pip.pip-body { background: #ff9a3d; } .dc-pip.pip-chaos { background: #a95bff; } .dc-pip.pip-order { background: #e8d84a; }
     .dc-version {
       font-size: 9px;
       font-weight: 700;
@@ -192,9 +251,8 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-top: 10px;
-      padding-top: 8px;
-      border-top: 1px solid #1e1a30;
+      margin-top: auto;
+      padding-top: 6px;
     }
     .deck-card .dc-date {
       font-size: 10px;
@@ -209,23 +267,6 @@
       transition: all 0.15s;
     }
     .deck-card .dc-delete:hover { color: #ff6b6b; background: #2a1515; }
-
-    /* Domain badges */
-    .domain-badge {
-      font-size: 9px;
-      padding: 1px 7px;
-      border-radius: 8px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.3px;
-    }
-    .domain-fury { background: #3a1515; color: #ff6b6b; }
-    .domain-calm { background: #153a15; color: #6bff6b; }
-    .domain-mind { background: #15153a; color: #6b8bff; }
-    .domain-body { background: #3a2a15; color: #ffaa6b; }
-    .domain-chaos { background: #2a153a; color: #bb6bff; }
-    .domain-order { background: #3a3a15; color: #ffff6b; }
-    .domain-colorless { background: #2a2a2a; color: #999; }
 
     /* Loading */
     .loading { text-align: center; padding: 40px; color: #4a4560; font-size: 13px; }
@@ -260,6 +301,7 @@
     .toast.visible { bottom: 20px; }
     .toast.success { background: #1a3a1a; color: #6bff6b; border: 1px solid #2a5a2a; }
     .toast.error { background: #3a1a1a; color: #ff6b6b; border: 1px solid #5a2a2a; }
+    .toast.warn { background: #2a2110; color: #ffb84d; border: 1px solid #5a4420; }
 
     /* Confirm modal */
     .confirm-overlay {
@@ -512,6 +554,30 @@
     return new Date(t).toLocaleDateString();
   }
 
+  /** Same URL the board uses for card faces (routes-static /card-image/:id → local file or CDN). */
+  function cardImageUrl(defId) {
+    return defId ? '/card-image/' + encodeURIComponent(defId) : '';
+  }
+
+  /** Legend art thumbnail (+ champion overlay, + hover preview); a neutral placeholder when the deck has no legend or the art 404s. */
+  function deckArtHtml(d) {
+    const legendAlt = d.legendName || 'Legend';
+    const legend = d.legendId
+      ? `<div class="dc-art-crop"><img class="dc-legend-img" src="${cardImageUrl(d.legendId)}" alt="${esc(legendAlt)}" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'dc-art-ph',textContent:'⚔'}))"></div>
+         <img class="dc-preview" src="${cardImageUrl(d.legendId)}" alt="" loading="lazy" onerror="this.remove()">`
+      : `<div class="dc-art-ph" title="No legend">⚔</div>`;
+    const champ = d.championId
+      ? `<div class="dc-champ" title="${esc(d.championName || 'Champion')}"><img src="${cardImageUrl(d.championId)}" alt="${esc(d.championName || 'Champion')}" loading="lazy" onerror="this.parentNode.remove()"></div>`
+      : '';
+    return `<div class="dc-art" data-legend-id="${esc(d.legendId || '')}">${legend}${champ}</div>`;
+  }
+
+  function countsLine(c) {
+    if (!c) return '';
+    const parts = [`<b>${c.main | 0}</b> main`, `<b>${c.sideboard | 0}</b> side`, `<b>${c.rune | 0}</b> runes`];
+    return parts.join(' · ');
+  }
+
   function renderDecks(decks, containerId, isPublic) {
     const grid = document.getElementById(containerId);
     grid.innerHTML = decks.map(d => {
@@ -519,22 +585,37 @@
       const ver = d.gameVersion || 'standard';
       const verClass = ver === 'preview' ? 'dc-version-preview' : 'dc-version-standard';
       const who = [d.legendName, d.championName].filter(Boolean).map(esc).join(' · ');
-      const domains = (d.domains || []).map(dm => `<span class="domain-badge domain-${esc(dm)}">${esc(dm)}</span>`).join('');
-      return `<div class="deck-card" onclick="openDeck('${d.id}')">
-        <div class="dc-name">${esc(d.name)}</div>
-        <div class="dc-meta">
-          <span>${d.format || 'duel'}</span>
-          <span class="dc-version ${verClass}">${ver}</span>
-          ${legalityBadge(d.legality)}
-          ${domains}
-        </div>
-        ${who ? `<div class="dc-legend">${who}</div>` : ''}
-        <div class="dc-footer">
-          <span class="dc-date" title="${esc(new Date(d.updatedAt || d.createdAt).toLocaleString())}">${updated ? 'Updated ' + updated : ''}</span>
-          ${!isPublic ? '<span class="dc-delete" onclick="event.stopPropagation(); deleteDeck(\'' + d.id + '\')">Delete</span>' : ''}
+      const pips = (d.domains || []).length ? `<span class="dc-pips" title="${esc((d.domains || []).join(' / '))}">${(d.domains || []).map(dm => `<span class="dc-pip pip-${esc(dm)}"></span>`).join('')}</span>` : '';
+      return `<div class="deck-card" data-deck-id="${esc(d.id)}" onclick="openDeck('${d.id}')">
+        ${deckArtHtml(d)}
+        <div class="dc-body">
+          <div class="dc-name" title="${esc(d.name)}">${esc(d.name)}</div>
+          <div class="dc-meta">
+            <span>${esc(d.format || 'duel')}</span>
+            <span class="dc-version ${verClass}">${esc(ver)}</span>
+            ${legalityBadge(d.legality)}
+            ${pips}
+          </div>
+          ${who ? `<div class="dc-legend" title="Legend · Champion">${who}</div>` : ''}
+          <div class="dc-counts">${countsLine(d.counts)}</div>
+          <div class="dc-footer">
+            <span class="dc-date" title="${esc(new Date(d.updatedAt || d.createdAt).toLocaleString())}">${updated ? 'Edited ' + updated : ''}</span>
+            ${!isPublic ? '<span class="dc-delete" onclick="event.stopPropagation(); deleteDeck(\'' + d.id + '\')">Delete</span>' : ''}
+          </div>
         </div>
       </div>`;
     }).join('');
+  }
+
+  /** After an import: scroll the new row into view and pulse it. */
+  function highlightDeck(deckId) {
+    const sel = '.deck-card[data-deck-id="' + String(deckId).replace(/"/g, '') + '"]';
+    const el = document.querySelector(sel);
+    if (!el) return;
+    document.querySelectorAll('.deck-card.dc-new').forEach(e => e.classList.remove('dc-new'));
+    el.classList.add('dc-new');
+    el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    setTimeout(() => el.classList.remove('dc-new'), 6000);
   }
 
   function esc(str) {
@@ -553,16 +634,29 @@
   }
 
   // Paste import → POST /api/saved-decks/import (always saves; legality is advisory)
+  /** Blank slate: the modal never carries text/name/errors over from a previous import. */
+  function resetImportForm() {
+    document.getElementById('importText').value = '';
+    document.getElementById('importName').value = '';
+    const out = document.getElementById('importResult');
+    out.textContent = '';
+    out.className = 'import-result';
+  }
   function showImport() {
     if (!currentUser) { showToast('Sign in required', 'Login or register to import decks', 'error'); return; }
-    document.getElementById('importResult').textContent = '';
-    document.getElementById('importResult').className = 'import-result';
+    resetImportForm();
     document.getElementById('importOverlay').classList.add('visible');
     document.getElementById('importText').focus();
   }
   function closeImport() {
     document.getElementById('importOverlay').classList.remove('visible');
   }
+  /**
+   * POST /api/saved-decks/import saves server-side. Success (HTTP 200 — the deck
+   * exists now, legal or not) → close, refresh My Decks, scroll to + pulse the new
+   * row, toast "Imported <name> — Legal ✓ | ⚠ n issues". Failure (empty paste /
+   * nothing recognized / auth) → the modal stays open with the paste and the errors.
+   */
   async function doImport() {
     const text = document.getElementById('importText').value.trim();
     const name = document.getElementById('importName').value.trim();
@@ -577,21 +671,21 @@
         body: JSON.stringify(name ? { text, name } : { text }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) { out.className = 'import-result err'; out.textContent = data.error || 'Import failed.'; return; }
-      const lines = [];
-      lines.push(`Saved as "${data.deck?.name || 'deck'}".`);
-      if (data.legality && !data.legality.legal) {
-        const errs = (data.legality.problems || []).filter(p => p.severity !== 'warning');
-        lines.push(`⚠ Not tournament-legal (${errs.length} issue${errs.length === 1 ? '' : 's'}) — still playable:`);
-        for (const p of errs.slice(0, 6)) lines.push('  • ' + p.message);
-      } else {
-        lines.push('Legal ✓');
+      if (!res.ok || !data.deck) {
+        const lines = [data.error || 'Import failed.'];
+        if ((data.errors || []).length) { lines.push(`${data.errors.length} line(s) not recognized:`); for (const e of data.errors.slice(0, 8)) lines.push('  • ' + e); }
+        out.className = 'import-result err';
+        out.textContent = lines.join('\n');
+        return;
       }
-      for (const w of (data.warnings || [])) lines.push('note: ' + w);
-      if ((data.errors || []).length) { lines.push(`${data.errors.length} line(s) not recognized:`); for (const e of data.errors.slice(0, 6)) lines.push('  • ' + e); }
-      out.className = 'import-result ' + ((data.errors || []).length ? 'warn' : (data.legality && !data.legality.legal ? 'warn' : 'ok'));
-      out.textContent = lines.join('\n');
-      loadDecks();
+      const errs = data.legality && !data.legality.legal ? (data.legality.problems || []).filter(p => p.severity !== 'warning') : [];
+      const verdict = errs.length ? `⚠ ${errs.length} issue${errs.length === 1 ? '' : 's'} (not tournament-legal — still playable)` : 'Legal ✓';
+      const skipped = (data.errors || []).length ? ` · ${data.errors.length} line${data.errors.length === 1 ? '' : 's'} not recognized` : '';
+      closeImport();
+      resetImportForm();
+      showToast(`Imported ${data.deck.name || 'deck'}`, verdict + skipped, errs.length || skipped ? 'warn' : 'success');
+      await loadDecks();
+      highlightDeck(data.deck.id);
     } catch {
       out.className = 'import-result err'; out.textContent = 'Import failed.';
     } finally {
@@ -654,7 +748,7 @@
         const cr = await fetch('/api/auth/dev-credentials');
         if (cr.ok) {
           const creds = await cr.json();
-          if (creds && creds.token) { document.cookie = 'rb_token=' + creds.token + ';path=/;max-age=' + (30*86400) + ';SameSite=Lax'; try{localStorage.setItem('rb_token', creds.token);}catch{} if (typeof showUser==='function' && creds.user) { showUser(creds.user.displayName || creds.user.username); return; } if (location.pathname==='/login') { location.href='/'; return; } }
+          if (creds && creds.token) { document.cookie = 'rb_token=' + creds.token + ';path=/;max-age=' + (30*86400) + ';SameSite=Lax'; try{localStorage.setItem('rb_token', creds.token);}catch{} if (creds.user) currentUser = creds.user; if (typeof showUser==='function' && creds.user) { showUser(creds.user.displayName || creds.user.username); return; } if (location.pathname==='/login') { location.href='/'; return; } }
       if (creds && creds.username && !creds.token) {
             const lr = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: creds.username, password: creds.password || '' }) });
             const data = await lr.json();
