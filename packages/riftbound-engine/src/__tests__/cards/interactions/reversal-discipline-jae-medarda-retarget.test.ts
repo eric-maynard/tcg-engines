@@ -80,7 +80,7 @@ describe("Mystic Reversal re-targets Discipline onto Jae Medarda — does 'When 
 
   // 754: choosing Jae as a NEW target during Mystic Reversal's resolution is a targeting event by the
   // spell's controller P2 = Jae's controller, so her trigger becomes a chain item above Discipline.
-  test.failing("BUG: YES — re-targeting onto Jae puts Jae's 'when you choose me' trigger on the chain above Discipline, controlled by P2 (754)", async () => {
+  test("YES — re-targeting onto Jae puts Jae's 'when you choose me' trigger on the chain above Discipline, controlled by P2 (754)", async () => {
     const game = await stolen("a");
     await game.p2.pick("jae");
     const chain = game.chain();
@@ -90,7 +90,7 @@ describe("Mystic Reversal re-targets Discipline onto Jae Medarda — does 'When 
   });
 
   // Jae's trigger resolves first (P2 draws 1), then Discipline under P2 (P2 draws 1) → net +2.
-  test.failing("BUG: YES — P2 nets +2 cards (Jae's trigger draw + Discipline's draw as its controller) (754, 359.3.d)", async () => {
+  test("YES — P2 nets +2 cards (Jae's trigger draw + Discipline's draw as its controller) (754, 359.3.d)", async () => {
     const game = await stolen("a");
     const p2Hand = game.p2.hand().length; // Mystic Reversal already left the hand
     const p2Deck = game.p2.deck().length;

@@ -80,7 +80,7 @@ import {
   getPotentialRuneEnergy,
   payResourceCost,
 } from "./play/cost";
-import { bindDestinationOnItem } from "./play/play-time-destinations";
+import { bindDestinationOnItem, reopenDestinationChoices } from "./play/play-time-destinations";
 import { collectChoiceNodes, raisePlayTimeModeChoice } from "./play/play-time-modes";
 import { isLegalMultiTargetSet, spellEffectHasLegalTargets } from "./play/targeting";
 import type { SpellEffectTargetShape } from "./play/targeting";
@@ -2764,7 +2764,32 @@ export const pendingChoiceMoves: Partial<
           const items = draft.interaction?.chain?.items ?? [];
           const item = items.find((it) => it && it.id === choice.retargetChainItemId);
           if (item) {
+            const priorTargets = [...((item as { targets?: readonly string[] }).targets ?? [])];
             (item as { targets?: readonly string[] }).targets = [picked];
+            // rule 752.1 / 753 (ven-152-166 × ogn-173-298 Ride the Wind) — the
+            // re-makeable choices include DESTINATIONS, so a re-targeted Move
+            // re-asks where the new mover goes (declining keeps the old zone).
+            reopenDestinationChoices(draft, item.id);
+            // rule 754 (sfd-142-221 Jae Medarda × ogn-080-298) — naming a NEW
+            // object while making new choices is a targeting event right then:
+            // that object's "when you choose me" triggers, with the item's
+            // (new) controller as the chooser. rule 751.1 — re-naming an object
+            // that was already chosen is not a new choice and triggers nothing.
+            if (!priorTargets.includes(picked)) {
+              fireTriggers(
+                {
+                  cardId: picked,
+                  chooserId: item.controller,
+                  sourceCardId: item.cardId,
+                  sourceType:
+                    getGlobalCardRegistry().get(item.cardId)?.cardType === "spell"
+                      ? "spell"
+                      : "ability",
+                  type: "choose",
+                },
+                { cards: context.cards, counters: context.counters, draft, zones: context.zones },
+              );
+            }
           }
           // rule 355.14.b/c + 752.1 (ogn-080-298 × unl-192-219) — the stolen
           // spell splits its source's Might among a chosen SET: ask that set
