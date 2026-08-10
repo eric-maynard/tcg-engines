@@ -337,7 +337,12 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
     }
     const bfId = (zoneId as string).slice("battlefield-".length);
     const bf = ctx.draft.battlefields[bfId];
-    if (!bf?.contested || bf.showdownComplete || !bf.contestedBy) {
+    // rule 466.2 / 323.6 — the Combat Damage Step ran and the combat is parked
+    // while the items it produced resolve. The combat is still ongoing there,
+    // so a unit that arrives in that window is designated at the next Cleanup
+    // (323.2.a) even though the Showdown itself has already closed.
+    const deferredResult = bf?.combatDamageDone === true;
+    if (!bf?.contested || (bf.showdownComplete && !deferredResult) || !bf.contestedBy) {
       continue;
     }
     // Only while a combat showdown is actually running here — a contested flag
@@ -345,7 +350,7 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
     const combatRunning = (ctx.draft.interaction?.showdownStack ?? []).some(
       (sd) => sd.active && sd.isCombatShowdown && sd.battlefieldId === bfId,
     );
-    if (!combatRunning) {
+    if (!combatRunning && !deferredResult) {
       continue;
     }
     const units = cardsInZone.filter((id) => registry.getCardType(id as string) === "unit");
@@ -372,7 +377,10 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
     const bothSidesPresent =
       units.some((id) => sideOf(id) === attackerSide) &&
       units.some((id) => sideOf(id) !== attackerSide);
-    if (!bothSidesPresent) {
+    // rule 323.2.a — in the deferred Resolution Step the combat is ongoing no
+    // matter who is left standing (the other side may have died in the damage
+    // step), so a newcomer is still designated.
+    if (!bothSidesPresent && !deferredResult) {
       continue;
     }
     for (const cardId of units) {

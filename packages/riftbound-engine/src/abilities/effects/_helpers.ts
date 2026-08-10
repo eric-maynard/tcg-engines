@@ -85,6 +85,30 @@ function hiddenScopeFor(effect: ExecutableEffect, ctx: EffectContext): string | 
     : hiddenZone;
 }
 
+/**
+ * rule 359.3.e.5 — a target locked in when the card was played still has to MEET
+ * the effect's requirements when the effect resolves. An ABSOLUTE location
+ * requirement ("a unit AT A BATTLEFIELD", "a unit in a base") is re-checked
+ * against the object's current zone: a unit Flashed home in response is no
+ * longer "a unit at a battlefield", so that instruction is skipped while the
+ * spell's other targets are unaffected. Relative locations ("here", "same",
+ * "move-to-or-from") depend on resolution context the resolver owns and are
+ * left alone.
+ */
+function filterBoundByLocation(bound: string[], tgt: unknown, ctx: EffectContext): string[] {
+  const location = typeof tgt === "object" && tgt !== null ? (tgt as { location?: string }).location : undefined;
+  if (location !== "battlefield" && location !== "base") {
+    return bound;
+  }
+  return bound.filter((id) => {
+    const zone = ctx.zones.getCardZone(id as CoreCardId);
+    if (zone === undefined) {
+      return true;
+    }
+    return location === "base" ? zone === "base" : zone.startsWith("battlefield");
+  });
+}
+
 export function getTargetIds(effect: ExecutableEffect, ctx: EffectContext): string[] {
   // rule-id: ogs-002-024 — "all enemy units at A battlefield": a bound
   // battlefield id names the chosen LOCATION, not the affected cards; resolve
@@ -100,7 +124,7 @@ export function getTargetIds(effect: ExecutableEffect, ctx: EffectContext): stri
   const excludeBound =
     typeof tgt === "object" && tgt !== null && (tgt as { excludeBound?: boolean }).excludeBound === true;
   if (ctx.boundTargets && battlefieldZone === undefined && !isSelf && !excludeBound) {
-    return [...ctx.boundTargets];
+    return filterBoundByLocation([...ctx.boundTargets], tgt, ctx);
   }
   const resolved = resolveTarget(effect.target, {
     battlefieldZone,
