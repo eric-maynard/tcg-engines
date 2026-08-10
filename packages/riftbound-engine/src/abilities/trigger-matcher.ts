@@ -1217,11 +1217,17 @@ export function findMatchingTriggers(
     // rule-id: sfd-167-221 — Deathknell: the dying unit is already in trash
     // when `die` fires; let it match its own death.
     const isDieSubject = event.type === "die" && event.cardId === card.id;
+    // rule 124.1 (ogn-186-298 Treasure Trove) — same for a bounce / banish /
+    // recycle: the card already sits in hand / banishment / the deck when
+    // `leave-board` fires, so let it match its own departure.
+    const isLeaveBoardSubject = event.type === "leave-board" && event.cardId === card.id;
     // rule-id: ogn-037-298 — a trash card matches only via trash-functioning abilities.
-    const trashOnly = card.zone === "trash" && !isDiscardSubject && !isDieSubject;
+    const trashOnly =
+      card.zone === "trash" && !isDiscardSubject && !isDieSubject && !isLeaveBoardSubject;
     if (
       !isDiscardSubject &&
       !isDieSubject &&
+      !isLeaveBoardSubject &&
       !trashOnly &&
       card.zone !== "base" &&
       !card.zone.startsWith("battlefield") &&

@@ -1932,6 +1932,22 @@ export function fireTriggers(rawEvent: GameEvent, ctx: TriggerRunnerContext): nu
       zone: ctx.zones.getCardZone?.(event.cardId as CoreCardId) ?? "trash",
     });
   }
+  // rule 124.1 (ogn-186-298 Treasure Trove) — a bounce / banish / recycle moves
+  // the permanent off the board before `leave-board` fires, exactly like a kill
+  // above, so include the departed card for its own "When this leaves the
+  // board" trigger. Its abilities and controller come from the LKI snapshot.
+  if (event.type === "leave-board" && !boardCards.some((c) => c.id === event.cardId)) {
+    const lki = getLKI(ctx.draft, event.cardId);
+    boardCards.push({
+      abilities: [
+        ...toTriggerableAbilities(lki?.copyOfCardId ?? event.cardId),
+        ...delayedTriggerAbilitiesFrom(lki?.delayedTriggers),
+      ],
+      id: event.cardId,
+      owner: (event as { controller?: string }).controller ?? lki?.controller ?? event.owner,
+      zone: ctx.zones.getCardZone?.(event.cardId as CoreCardId) ?? "trash",
+    });
+  }
   // rule-id: ogn-037-298 (rule 385.2 / 383.2.c.1) — "…play me from your trash"
   // triggers are active in the trash: scan each player's trash for cards
   // carrying such an ability (the matcher ignores their other abilities).

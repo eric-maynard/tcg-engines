@@ -394,10 +394,10 @@ export const TRIGGER_PATTERNS: {
     pattern: /^When this is played, discarded, or killed,\s*/i,
   },
   // "When this leaves the board, ..." (Treasure Trove)
-  // rule 427: killing a permanent sends it to its owner's trash, which is the
-  // only way a gear leaves the board today — the engine emits `die` for it.
+  // rule 124.1 / 427: ANY departure counts — a kill (engine `die`) and a
+  // bounce / banish / recycle (engine `leave-board`) alike.
   {
-    event: "die",
+    event: "die-or-leave-board",
     on: "self",
     pattern: /^When (?:this|I) leaves? the board,\s*/i,
   },
