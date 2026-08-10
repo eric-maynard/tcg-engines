@@ -183,6 +183,52 @@ describe("Shuriken Flip (ven-140-166)", () => {
     expect(game.zoneOf("flip")).toBe("trash");
   });
 
+  test("exactly lethal THEN move — 2 kills the lone 2-Might defender first, so Ally moving into bf1 finds it empty: no combat, P1 establishes control and conquers for 1", async () => {
+    // rule 370.1.a.2 — the sequenced instructions happen in printed order, so the damage (and the
+    // resulting death) is fully applied before the move is performed. Ally therefore arrives at an
+    // EMPTY enemy-held battlefield: no combat is staged (466.3.d needs units on both sides); the
+    // arrival still Contests it (190.3.a) and opens a non-combat showdown (344.2), on whose close
+    // P1 establishes control and conquers.
+    const game = await scenario()
+      .resources(P1, { energy: 4, power: { fury: 2 } })
+      .battlefield("bf1", { controller: P2 })
+      .unit(P2, "bf1", { might: 2, name: "Lone" }, "lone")
+      .unit(P1, "base", { might: 4, name: "Ally" }, "ally")
+      .hand(P1, CARD, "flip")
+      .build();
+    await game.p1.cast("flip", { targets: "lone" });
+    await game.settle();
+    expect(game.zoneOf("lone")).toBe("trash");
+    await game.settle({ policy: "first" });
+    await game.settle({ policy: "first" });
+    expect(game.locationOf("ally")).toBe("bf1");
+    expect(game.gameState.battlefields.bf1?.controller).toBe(P1);
+    expect(game.p1.points()).toBe(1);
+    expect(game.zoneOf("flip")).toBe("trash");
+  });
+
+  test("one short — 2 on the 3-Might Foe leaves it standing, so Ally (2) moving into bf1 fights: the marked 2 finishes Foe while Foe's 3 kills Ally → bf1 ends uncontrolled, nobody scores", async () => {
+    // rule 466.3.d — the move stages a combat because a defender is still there; the damage already
+    // marked on Foe persists into it, so 2 more is lethal while Foe's full 3 Might kills the 2-Might
+    // Ally. Both sides are wiped ⇒ nobody controls bf1 and no one conquers (466.5.b).
+    const game = await scenario()
+      .resources(P1, { energy: 4, power: { fury: 2 } })
+      .battlefield("bf1", { controller: P2 })
+      .unit(P2, "bf1", { might: 3, name: "Foe" }, "foe")
+      .unit(P1, "base", { might: 2, name: "Ally" }, "ally")
+      .hand(P1, CARD, "flip")
+      .build();
+    await game.p1.cast("flip", { targets: "foe" });
+    await game.settle();
+    await game.settle({ policy: "first" });
+    await game.settle({ policy: "first" });
+    expect(game.zoneOf("foe")).toBe("trash");
+    expect(game.zoneOf("ally")).toBe("trash");
+    expect(game.gameState.battlefields.bf1?.controller).toBeNull();
+    expect(game.p1.points()).toBe(0);
+    expect(game.p2.points()).toBe(0);
+  });
+
   test("[Flow]: from the TRASH it costs the alternate [3] + 1 power (not 1 + pip), resolves normally (2 to Big), then is BANISHED instead of returning to the trash", async () => {
     const game = await board().build();
     expect(game.p1.can("cast", "flipT")).toBe(true);
