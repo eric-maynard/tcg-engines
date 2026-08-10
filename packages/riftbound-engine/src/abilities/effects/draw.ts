@@ -47,6 +47,15 @@ export function handle_draw(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
       (ctx.draft.lastKilledUnitId === targetId ? ctx.draft.lastKilledUnitController : undefined);
     const zone = zoneOfCard(ctx as never, targetId as string);
     const onBoard = zone === "base" || (zone?.startsWith("battlefield-") ?? false);
+    // rule 359.3.e.14 / 359.3.f.2.a (ruling 59f890117e886820) — "its controller"
+    // is readable off the board only when THIS execution's own removal put it
+    // there. A bound target that was already gone when this instruction runs
+    // (the second execution of a [Repeat]ed "Kill a unit … Its controller draws
+    // 2" aimed at the same unit) makes the linked kill impossible, so the
+    // linked draw is ignored with it — nobody draws a second time.
+    if (!onBoard && ctx.draft.lastKilledUnitId !== targetId) {
+      return;
+    }
     const pid =
       (onBoard ? undefined : lkiController) ??
       ctx.cards.getCardController?.(targetId as CoreCardId) ??
