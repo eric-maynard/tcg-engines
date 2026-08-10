@@ -5,9 +5,7 @@
 // that item resolves, after every player has had priority. The `equipCard` move
 // pays the cost and pushes `{type:"equip-attach", unitId}`; this handler performs
 // the attach.
-import type { CardId as CoreCardId, PlayerId as CorePlayerId, ZoneId as CoreZoneId } from "@tcg/core";
-import { getGlobalCardRegistry } from "../../operations/card-lookup";
-import { getBattlefieldZoneId } from "../../zones/zone-configs";
+import type { CardId as CoreCardId } from "@tcg/core";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import { attachEquipment } from "./_attachment";
 import type { EffectHelpers } from "./_helpers";
@@ -39,35 +37,6 @@ export function handle_equipAttach(
   attachEquipment(ctx, equipmentId, unitId);
   h.checkBecomesMighty(unitId, mightBefore, ctx);
 
-  // rule 477.1.b (ven-137-166 Shady Spectacles): "As this is attached to a unit,
-  // choose another friendly unit. The equipped unit becomes a copy of that unit
-  // for as long as this is attached to it."
-  const registry = getGlobalCardRegistry();
-  if (registry.get(equipmentId)?.copyChosenUnitToHolder) {
-    const zoneIds = ["base", ...Object.keys(ctx.draft.battlefields ?? {}).map(getBattlefieldZoneId)];
-    const candidates: string[] = [];
-    for (const zoneId of zoneIds) {
-      for (const id of ctx.zones.getCardsInZone(
-        zoneId as CoreZoneId,
-        ctx.playerId as CorePlayerId,
-      )) {
-        if ((id as string) !== unitId && registry.get(id as string)?.cardType === "unit") {
-          candidates.push(id as string);
-        }
-      }
-    }
-    // rule 355.5: the controller chooses; a sole legal candidate is auto-bound.
-    if (candidates.length === 1 && candidates[0] !== undefined) {
-      registry.becomeCopyOf(unitId, candidates[0]);
-    } else if (candidates.length > 1 && !ctx.draft.pendingChoice) {
-      ctx.draft.pendingChoice = {
-        effect: { holderId: unitId, type: "become-copy" },
-        options: candidates,
-        playerId: ctx.playerId,
-        remaining: 1,
-        sourceCardId: equipmentId,
-        type: "choose-target",
-      } as typeof ctx.draft.pendingChoice;
-    }
-  }
+  // rule 477.1.b (ven-137-166 Shady Spectacles) — the copy clause hangs off the
+  // attach itself; `attachEquipment` runs it for every attach route.
 }

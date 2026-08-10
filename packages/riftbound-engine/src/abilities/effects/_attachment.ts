@@ -9,6 +9,7 @@ import type { CardId as CoreCardId, ZoneId as CoreZoneId } from "@tcg/core";
 import type { EffectContext } from "../effect-executor";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import { recalculateStaticEffects, type StaticAbilityContext } from "../static-abilities";
+import { getBattlefieldZoneId } from "../../zones/zone-configs";
 
 function meta(ctx: EffectContext, cardId: string): Record<string, unknown> | undefined {
   return ctx.cards.getCardMeta?.(cardId as CoreCardId);
@@ -110,6 +111,51 @@ export function attachEquipment(ctx: EffectContext, equipmentId: string, unitId:
     playerId: ctx.playerId,
     type: "attach-equipment",
   } as Parameters<NonNullable<EffectContext["fireTriggers"]>>[0]);
+
+  applyCopyOnAttach(ctx, equipmentId, unitId);
+}
+
+/**
+ * rule 477.1.b (ven-137-166 Shady Spectacles): "As this is attached to a unit,
+ * choose another friendly unit. The equipped unit becomes a copy of that unit
+ * for as long as this is attached to it." This hangs off the attach itself, not
+ * off the [Equip] ability, so every attach route (Equip, Quick-Draw play,
+ * attach effects) has to run it.
+ */
+export function applyCopyOnAttach(
+  ctx: EffectContext,
+  equipmentId: string,
+  unitId: string,
+): void {
+  const registry = getGlobalCardRegistry();
+  if (!registry.get(equipmentId)?.copyChosenUnitToHolder) {
+    return;
+  }
+  const zoneIds = [
+    "base",
+    ...Object.keys(ctx.draft.battlefields ?? {}).map(getBattlefieldZoneId),
+  ];
+  const candidates: string[] = [];
+  for (const zoneId of zoneIds) {
+    for (const id of ctx.zones.getCardsInZone(zoneId as CoreZoneId, ctx.playerId as never)) {
+      if ((id as string) !== unitId && registry.get(id as string)?.cardType === "unit") {
+        candidates.push(id as string);
+      }
+    }
+  }
+  // rule 355.5: the controller chooses; a sole legal candidate is auto-bound.
+  if (candidates.length === 1 && candidates[0] !== undefined) {
+    registry.becomeCopyOf(unitId, candidates[0]);
+  } else if (candidates.length > 1 && !ctx.draft.pendingChoice) {
+    ctx.draft.pendingChoice = {
+      effect: { holderId: unitId, type: "become-copy" },
+      options: candidates,
+      playerId: ctx.playerId,
+      remaining: 1,
+      sourceCardId: equipmentId,
+      type: "choose-target",
+    } as typeof ctx.draft.pendingChoice;
+  }
 }
 
 /**
