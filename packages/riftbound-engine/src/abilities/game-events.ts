@@ -39,6 +39,11 @@ export type GameEvent =
       to?: string;
     }
   | { type: "play-token-unit"; cardId: string; playerId: string }
+  // rule 187 / 383.4 (ogn-091-298 × sfd-134-221) — a gear token IS a gear, and
+  // putting one onto the board is "playing a gear". Tokens are not cards, so
+  // this is its own event rather than a `play-card` (which would wrongly also
+  // fire "when you play a card").
+  | { type: "play-token-gear"; cardId: string; playerId: string }
   // rule-id: ogn-167-298 — rule 811.1.c.3: playing a card from facedown IS
   // playing a card; cards that key off it specifically ("When you play a card
   // from [Hidden]") need their own event alongside play-self / play-card.

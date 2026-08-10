@@ -539,7 +539,11 @@ function triggerMatchesEvent(
   // rule 185.2.a (unl-109-219) — tokens are not cards, but they can still be
   // Played: playing a unit token IS playing a unit, so a `play-unit` trigger
   // matches the `play-token-unit` event (a `play-card` trigger still does not).
-  const tokenUnitPlay = event.type === "play-token-unit" && triggerEvents.includes("play-unit");
+  // rule 187 / 383.4 (ogn-091-298 × sfd-134-221) — likewise a gear token being
+  // played matches a `play-gear` trigger.
+  const tokenTypedPlay =
+    (event.type === "play-token-unit" && triggerEvents.includes("play-unit")) ||
+    (event.type === "play-token-gear" && triggerEvents.includes("play-gear"));
   // rule 419.1 (ven-197-166) — "when you play a card from anywhere other than
   // your hand": the `play-card` event narrowed by the play's ORIGIN zone (the
   // play pipeline stamps `from` — trash, banishment, championZone, facedown-…).
@@ -551,7 +555,7 @@ function triggerMatchesEvent(
   if (
     !triggerEvents.includes(mapped) &&
     !(typedPlay && triggerEvents.includes(typedPlay)) &&
-    !tokenUnitPlay &&
+    !tokenTypedPlay &&
     !notFromHandPlay
   ) {
     return false;
@@ -710,9 +714,9 @@ function triggerMatchesEvent(
       if (on === "friendly-other-units" && event.cardId === card.id) {
         return false;
       }
-    } else if (event.type === "play-token-unit") {
-      // rule 817.1.b (rule-id: sfd-166-221) — playing a unit TOKEN is playing a
-      // friendly unit only for the player who played it.
+    } else if (event.type === "play-token-unit" || event.type === "play-token-gear") {
+      // rule 817.1.b (rule-id: sfd-166-221) — playing a unit or gear TOKEN is
+      // playing a friendly permanent only for the player who played it.
       if (event.playerId !== card.owner) {
         return false;
       }

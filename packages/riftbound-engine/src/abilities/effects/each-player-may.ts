@@ -61,7 +61,12 @@ export function handle_eachPlayerMay(
             typeof resolveTarget
           >[0], {
             cards: ctx.cards,
-            choosing: true,
+            // rule 355.10.e vs 757/758 (ogn-187-298 Whirlwind × unl-147-219
+            // Baron Nashor) — a set chosen in whole or in part by other players
+            // is NOT targeting: the PLAYER chooses here, not the spell, so
+            // "can't be chosen by enemy spells and abilities" does not shrink
+            // anyone's list. `choosing` is what turns that filter on for a
+            // caster-chosen pool; it must stay off here.
             draft: ctx.draft,
             playerId: chooser,
             sourceCardId: ctx.sourceCardId,

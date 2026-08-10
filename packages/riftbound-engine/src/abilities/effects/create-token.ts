@@ -336,6 +336,10 @@ export function handle_createToken(effect: ExecutableEffect, ctx: EffectContext,
         tokenId,
         ctx.cards as never,
       );
+    } else {
+      // rule 187 / 383.4 (ogn-091-298 Pit Crew) — a gear token is a gear and
+      // playing one is "playing a gear"; the trigger doesn't say "non-token".
+      ctx.fireTriggers?.({ cardId: tokenId, playerId: ownerId, type: "play-token-gear" });
     }
   }
   // rule 190.3.a.1 — unit tokens played to a battlefield their controller does
