@@ -19,6 +19,8 @@ export function handle_swapBackBattlefield(
 ): void {
   const draft = ctx.draft as unknown as {
     battlefields?: Record<string, { id?: string } & Record<string, unknown>>;
+    conqueredThisTurn?: Record<string, string[]>;
+    scoredThisTurn?: Record<string, string[]>;
   };
   const zone = ctx.triggerBattlefieldZone ?? ctx.sourceZone;
   const slotKey =
@@ -87,6 +89,20 @@ export function handle_swapBackBattlefield(
         targetZoneId: `facedown-${newKey}` as CoreZoneId,
       });
       ctx.cards.updateCardMeta?.(hid as CoreCardId, { hiddenAt: newKey } as unknown as Record<string, unknown>);
+    }
+    // rule 470 / 438.7.b — the returning card IS the same battlefield object in
+    // the same slot, so the turn ledgers keyed by slot id have to follow it:
+    // otherwise a re-conquer later this turn reads as unscored and scores again.
+    for (const ledger of [draft.scoredThisTurn, draft.conqueredThisTurn]) {
+      if (!ledger) {
+        continue;
+      }
+      for (const pid of Object.keys(ledger)) {
+        const list = ledger[pid];
+        if (list?.includes(slotKey)) {
+          ledger[pid] = list.map((id) => (id === slotKey ? newKey : id));
+        }
+      }
     }
   }
   // 186.1 — the battlefield token ceases to exist once it leaves the row.
