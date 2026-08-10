@@ -325,7 +325,15 @@ function offerPileCandidates(eff: PlayEffectShape, ctx: EffectContext, pile: "tr
     ...(killedCaps !== undefined ? { costMode: { kind: "ignore-all" as const } } : {}),
   };
   const io = ctx as unknown as PlayIO;
-  const cards = ctx.zones.getCardsInZone(pile as CoreZoneId, pileOwner as CorePlayerId) as readonly string[];
+  // rule 397 / 427.3 + 056.2 — "banished with this" names the source's linked
+  // pool wherever those cards physically sit: a card owned by the opponent went
+  // to THEIR banishment, so scan every player's pile and let the link filter it.
+  const cards: readonly string[] =
+    linked === undefined
+      ? (ctx.zones.getCardsInZone(pile as CoreZoneId, pileOwner as CorePlayerId) as readonly string[])
+      : Object.keys(ctx.draft.players ?? {}).flatMap(
+          (p) => [...(ctx.zones.getCardsInZone(pile as CoreZoneId, p as CorePlayerId) as readonly string[])],
+        );
   const candidates = cards.filter((id) => {
     if (linked !== undefined && !linked.has(id)) {
       return false;

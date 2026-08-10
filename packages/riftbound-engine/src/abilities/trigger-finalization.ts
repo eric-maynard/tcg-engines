@@ -505,6 +505,34 @@ function selfCostStepState(
   return { exists, key: `${live.cardId}|${String(step.type)}`, payable: exists && zone !== destination };
 }
 
+/** Is an instruction nothing but "<move> me" (banish me / recycle me / …)? */
+function isSelfMoveInstruction(effect: unknown): boolean {
+  if (typeof effect !== "object" || effect === null) {
+    return false;
+  }
+  const e = effect as { type?: unknown; target?: unknown };
+  if (SELF_COST_STEP_DESTINATION[String(e.type)] === undefined) {
+    return false;
+  }
+  const t = e.target;
+  return t === "self" || (typeof t === "object" && t !== null && (t as { type?: unknown }).type === "self");
+}
+
+/**
+ * rule 124 / 124.1 + 383.3.b (rule-id: ogn-110-298 Ekko × sfd-090-221 The Zero
+ * Drive) — a cost step just moved "me" to another zone, where the card is a NEW
+ * object. Every sibling trigger of the same event that would move that same card
+ * ("[Deathknell] Banish me" granted by the worn Equipment) can no longer find it,
+ * so those items resolve doing nothing: a unit is recycled OR banished, never both.
+ */
+function neuterSelfMoveSiblings(draft: RiftboundGameState, itemId: string, cardId: string): void {
+  for (const it of chainItems(draft) ?? []) {
+    if (it.id !== itemId && it.cardId === cardId && isSelfMoveInstruction(it.effect)) {
+      neuterItem(draft, it.id);
+    }
+  }
+}
+
 /** Blank a Chain Item's remaining instruction: it resolves and does nothing. */
 function neuterItem(draft: RiftboundGameState, itemId: string): void {
   patchItem(draft, itemId, {
@@ -617,6 +645,7 @@ function payFinalizationCostStepsInner(
     );
     if (selfCost !== undefined) {
       patchItem(draft, itemId, { selfCostPaidKey: selfCost.key } as never);
+      neuterSelfMoveSiblings(draft, itemId, live.cardId);
     }
     paid += 1;
   }

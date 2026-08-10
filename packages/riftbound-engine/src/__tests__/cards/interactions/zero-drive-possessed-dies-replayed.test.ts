@@ -196,7 +196,7 @@ describe("(b) P1 releases the Drive: the P2-owned Sergeant is played by P1 out o
   // 056 only decides WHICH banishment zone holds a P2-owned card, it does not shrink the pool. Engine: the play-from-
   // banishment step only searches the ACTIVATOR's own banishment (effects/play.ts getCardsInZone(pile, ctx.playerId)),
   // so the P2-owned Sergeant in P2's banishment is never found — the ability resolves, costs paid, and plays nothing.
-  test.failing("BUG: (b) 397/427.3 + 191.1/191.3 — the Drive's ability PLAYS the P2-owned Sergeant from P2's banishment: it enters P1's base under P1's control, still owned by P2 → (P2, P1, base); engine leaves it in P2's banishment", async () => {
+  test("(b) 397/427.3 + 191.1/191.3 — the Drive's ability PLAYS the P2-owned Sergeant from P2's banishment: it enters P1's base under P1's control, still owned by P2 → (P2, P1, base); engine leaves it in P2's banishment", async () => {
     const game = await driveReleased();
     expect(game.zoneOf("sarge")).toBe("base");
     expect(triple(game, "sarge")).toEqual([P2, P1, "base"]);
@@ -207,7 +207,7 @@ describe("(b) P1 releases the Drive: the P2-owned Sergeant is played by P1 out o
   // Same root cause as above (nothing is played). 124/124.1 + 143.4 + 419.3: a card played from banishment is a NEW
   // object — printed 4 Might, no damage, no buff, no Equipment (the Drive is in banishment anyway), enters EXHAUSTED,
   // and nothing of the old "possessed" status remains: P1 controls it simply because P1 played it.
-  test.failing("BUG: (b) the replayed Sergeant arrives as a fresh object — 4 Might (no +2), 0 damage, EXHAUSTED, unequipped, controller P1 / owner P2 — while the Drive stays in P1's banishment with [3][mind] spent", async () => {
+  test("(b) the replayed Sergeant arrives as a fresh object — 4 Might (no +2), 0 damage, EXHAUSTED, unequipped, controller P1 / owner P2 — while the Drive stays in P1's banishment with [3][mind] spent", async () => {
     const game = await driveReleased();
     expect(game.state("sarge")).toMatchObject({
       attachments: [],
@@ -229,7 +229,7 @@ describe("(b) P1 releases the Drive: the P2-owned Sergeant is played by P1 out o
 
   // Same root cause. 191.1/191.3: control established by playing the card has no duration — unlike a "this turn"
   // control effect it does not lapse at any Ending Step.
-  test.failing("BUG: (b) P1's control of the replayed Sergeant is NOT time-limited — it is still (P2, P1, base) on P2's next turn and on P1's turn after that", async () => {
+  test("(b) P1's control of the replayed Sergeant is NOT time-limited — it is still (P2, P1, base) on P2's next turn and on P1's turn after that", async () => {
     const game = await driveReleased();
     expect(triple(game, "sarge")).toEqual([P2, P1, "base"]);
     await game.advanceTurn();
@@ -245,7 +245,7 @@ describe("(b) P1 releases the Drive: the P2-owned Sergeant is played by P1 out o
 
 describe("(c) the replayed Sergeant dies again → its OWNER's (P2's) trash once more", () => {
   // Depends on (b): the engine never replays the Sergeant, so P2's second Vengeance has no such target.
-  test.failing("BUG: (c) 428.2/056.2 — P2 Vengeances the replayed Sergeant on P2's turn: it goes to P2's trash (P2, –, P2.trash), never P1's; no Deathknell this time (no Drive attached) so nothing is banished", async () => {
+  test("(c) 428.2/056.2 — P2 Vengeances the replayed Sergeant on P2's turn: it goes to P2's trash (P2, –, P2.trash), never P1's; no Deathknell this time (no Drive attached) so nothing is banished", async () => {
     const game = await driveReleased();
     await game.advanceTurn();
     expect(game.turnPlayer()).toBe(P2);
