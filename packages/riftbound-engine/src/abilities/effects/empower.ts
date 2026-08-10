@@ -1,8 +1,40 @@
 // Effect handler: "empower", "disempower"
 import type { CardId as CoreCardId } from "@tcg/core";
+import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import { recalculateStaticEffects, type StaticAbilityContext } from "../static-abilities";
 import { type EffectHelpers, getTargetIds } from "./_helpers";
+
+/**
+ * rule 441.1.c.1 (rule-id: ven-134-166) — only a card granted permission to be
+ * Empowered several times ("I can be [Empowered] up to three times": an
+ * `empower-permission` static / `empower-limit` restriction) ignores 441.1.b–c.
+ * For everyone else an already-Empowered object cannot be Empowered, so a
+ * repeat instruction does nothing additional — it is not an empower action and
+ * raises no empower event.
+ */
+function allowsRepeatEmpower(targetId: string, priorCount: number): boolean {
+  let abilities: readonly unknown[] = [];
+  try {
+    abilities = getGlobalCardRegistry().getAbilities(targetId) ?? [];
+  } catch {
+    return false;
+  }
+  for (const ability of abilities) {
+    const a = ability as {
+      effect?: { type?: string; max?: number };
+      restrictions?: readonly { type?: string; max?: number }[];
+    };
+    const max =
+      a.effect?.type === "empower-permission"
+        ? (a.effect.max ?? Number.POSITIVE_INFINITY)
+        : a.restrictions?.find((r) => r.type === "empower-limit")?.max;
+    if (max !== undefined && priorCount < max) {
+      return true;
+    }
+  }
+  return false;
+}
 
 export function handle_empower(effect: ExecutableEffect, ctx: EffectContext, _h: EffectHelpers): void {
   const targets = getTargetIds(effect, ctx);
@@ -31,6 +63,11 @@ export function handle_empower(effect: ExecutableEffect, ctx: EffectContext, _h:
     // than once scale off HOW MANY times ("+2 [Might] for each time I'm
     // [Empowered]"), so the status carries a count alongside the flag.
     const priorCount = priorMeta?.empowerCount ?? (wasEmpowered ? 1 : 0);
+    // rule 441.1.b–c — re-empowering an already-Empowered object does nothing
+    // additional (no count, no event); the delayed "…at end of turn" half of the
+    // instruction still installs (rule 392, rule-id: ven-035-166).
+    const redundantEmpower =
+      effect.type === "empower" && wasEmpowered && !allowsRepeatEmpower(targetId, priorCount);
     // rule 392 / 383.3 (rule-id: ven-035-166, ven-099-166) — "Disempower it at
     // end of turn" (and its mirror "Empower it at end of turn") is a DELAYED
     // TRIGGERED ability, not a silent duration: at rule 317.1 it goes on the
@@ -42,7 +79,8 @@ export function handle_empower(effect: ExecutableEffect, ctx: EffectContext, _h:
       targetId as CoreCardId,
       {
         empowered: effect.type === "empower",
-        empowerCount: effect.type === "empower" ? priorCount + 1 : 0,
+        empowerCount:
+          effect.type === "empower" ? (redundantEmpower ? priorCount : priorCount + 1) : 0,
       } as unknown as Record<string, unknown>,
     );
     if (turnDuration) {
@@ -74,7 +112,7 @@ export function handle_empower(effect: ExecutableEffect, ctx: EffectContext, _h:
     }
     // A repeat Empower (441.1.c.1) leaves the flag alone but raises the count,
     // and per-empower statics have to be recomputed for it too.
-    if (wasEmpowered !== (effect.type === "empower") || effect.type === "empower") {
+    if (wasEmpowered !== (effect.type === "empower") || (effect.type === "empower" && !redundantEmpower)) {
       changed = true;
     }
     // rule 441.1.c.1 (rule-id: ven-153-166) — the empower ACTION happens every
@@ -82,7 +120,7 @@ export function handle_empower(effect: ExecutableEffect, ctx: EffectContext, _h:
     // 2nd/3rd self-Empower), so "when you empower something else" gets its
     // event each time. `becameEmpowered` carries the false→true edge that
     // "When I become [Empowered]" (rule 827.1.c) keys on instead.
-    if (effect.type === "empower") {
+    if (effect.type === "empower" && !redundantEmpower) {
       ctx.fireTriggers?.({
         becameEmpowered: !wasEmpowered,
         cardId: targetId,

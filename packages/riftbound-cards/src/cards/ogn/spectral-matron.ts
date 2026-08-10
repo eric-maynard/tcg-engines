@@ -16,9 +16,14 @@ const abilities: Ability[] = [
     effect: {
       from: "trash",
       ignoreCost: true,
+      // rule 355.5.b / 355.10.a (ruling 64025589c9493414) — the trash is a PUBLIC
+      // zone, so the unit is a TARGET of this trigger: it is named as the trigger
+      // is finalized on the chain (383.3.b) and the opponent reacts knowing it,
+      // instead of being picked on resolution. Same shape as ogn-196-298.
       target: {
         controller: "friendly",
         filter: [{ energyCost: { lte: 3 } }, { powerCost: { lte: 1 } }],
+        location: "trash",
         type: "unit",
       },
       type: "play",

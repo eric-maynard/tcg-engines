@@ -84,7 +84,8 @@ describe("Spectral Matron (ogn-226-298)", () => {
     await game.settle();
     await game.p1.yes();
     await game.settle(); // rule 402 (finalization)
-    await game.p1.pick("skulker");
+    await game.p1.pick("skulker"); // rule 383.3.b — the trash target is named at FINALIZATION
+    await game.settle(); // …then the item resolves and the played unit picks its location
     const dest = game.decision();
     if (dest?.kind === "pick" && dest.seat === P1) {
       await game.p1.pick(dest.options[0]?.key as string); // choose a location if asked
