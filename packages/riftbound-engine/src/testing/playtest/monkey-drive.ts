@@ -104,7 +104,13 @@ const readState = () => p.evaluate(() => {
 
 const clickables = () => p.evaluate(() => {
   // Stamp a stable data-mkey on every clickable so the driver can address them
-  // reliably (avoids nth-of-type mis-hits).
+  // reliably (avoids nth-of-type mis-hits). Keys restart at 0 each call, so any
+  // stamp left over from an earlier step (e.g. a button whose #chainOverlay lost
+  // .visible) would collide and loc()'s .first() could resolve to that hidden
+  // element -> click timeout. Clear every previous stamp first.
+  document.querySelectorAll<HTMLElement>("[data-mkey]").forEach((e) => {
+    delete e.dataset.mkey;
+  });
   let ord = 0;
   const out: { key: string; kind: string; label: string; cardId?: string }[] = [];
   const push = (els: NodeListOf<Element>, kind: string, labelAttr?: string) => {

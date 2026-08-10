@@ -336,13 +336,18 @@ function repeatVariantsFor(moves, chosen) {
   // The engine enumerates one variant per ORDERING of the same target multiset,
   // which would render a duplicate "Repeat xN" button per ordering. Keep one per
   // repeatCount, preferring the ordering the player actually clicked.
+  // rule 356.2.a — the Repeat cost itself can be a card the PLAYER chooses
+  // ("Repeat — Discard 1"): keying on repeatCount alone collapsed every
+  // discardId into one button and discarded whichever variant came first.
+  // Key on the cost card too so each candidate gets its own button.
   const byCount = new Map();
   for (const m of matches) {
     const n = m.params?.repeatCount ?? 0;
-    const existing = byCount.get(n);
+    const key = `${n} ${costChoiceId(m) ?? ""}`;
+    const existing = byCount.get(key);
     if (!existing || (!sameTargetOrder(moveTargetList(existing), chosen) &&
                       sameTargetOrder(moveTargetList(m), chosen))) {
-      byCount.set(n, m);
+      byCount.set(key, m);
     }
   }
   return [...byCount.values()].sort((a, b) => (a.params?.repeatCount ?? 0) - (b.params?.repeatCount ?? 0));
@@ -516,9 +521,14 @@ function updateTargetBanner() {
     for (const m of mandatory) {
       buttons.push({ label: additionalCostLabel(m), move: m });
     }
-    // rule 573 — one button per extra Repeat the player can pay for.
+    // rule 573 — one button per extra Repeat the player can pay for. When the
+    // Repeat cost is a card the player picks (Discard 1 / Sacrifice), name it —
+    // there is one button per candidate and an unlabelled button would hide
+    // which card is being spent.
+    const repeatNeedsCostLabel = repeats.filter(m => costChoiceId(m) !== null).length > 1;
     for (const m of repeats) {
-      buttons.push({ label: `Repeat x${m.params.repeatCount}`, move: m });
+      const cost = repeatNeedsCostLabel && costChoiceId(m) !== null ? ` — ${additionalCostLabel(m)}` : "";
+      buttons.push({ label: `Repeat x${m.params.repeatCount}${cost}`, move: m });
     }
     // rule 356.2.b — one button per optional additional cost the player may elect.
     for (const m of paid) {
