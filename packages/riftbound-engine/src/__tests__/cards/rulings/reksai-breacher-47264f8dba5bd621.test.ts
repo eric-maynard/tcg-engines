@@ -35,11 +35,9 @@ describe("Ruling 47264f8dba5bd621 — Rek'Sai's granted Accelerate on a Champion
     expect(game.violations()).toEqual([]);
   });
 
-  // Expected (805.1.a + Rek'Sai's static): the Champion Zone is "anywhere other than a player's hand", so the champion play
-  // should OFFER the Accelerate election ([1] + 1 Power) and, when paid, Rumble enters READY with the pool emptied.
-  // Actual: playFromChampionZone only reads the champion's own printed optional cost — Rek'Sai's granted Accelerate is
-  // never offered on this path (no variant, no prompt), so there is no way to pay it and Rumble always enters exhausted.
-  test.failing("BUG: ruling 47264f8dba5bd621 — the Champion-Zone play offers no way to pay Rek'Sai's granted Accelerate; paying [1]+[fury] should make Rumble enter ready", async () => {
+  // 805.1.a + Rek'Sai's static: the Champion Zone is "anywhere other than a player's hand", so the champion play OFFERS
+  // the Accelerate election ([1] + 1 Power) and, when paid, Rumble enters READY with the pool emptied.
+  test("ruling 47264f8dba5bd621 — the Champion-Zone play offers Rek'Sai's granted Accelerate; paying [1]+[fury] makes Rumble enter ready", async () => {
     const game = await board().build();
     const opt = game.p1.option("playChampion");
     const electable =

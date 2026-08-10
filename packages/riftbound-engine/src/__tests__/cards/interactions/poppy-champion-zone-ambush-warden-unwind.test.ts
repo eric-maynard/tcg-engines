@@ -280,10 +280,7 @@ describe("Poppy from the CHAMPION ZONE — Ambush's conditional Reaction × Mage
     expect(game.zoneOf("poppy")).toBe("hand");
   });
 
-  // Expected: both cost variants in the Closed-state Ambush play from hand too. Actual: the Ambush enumeration path
-  // emits only the full-cost variant (a raw paid request IS accepted and charges 3 energy + [order] + 3 XP — only the
-  // menu is short).
-  test.failing("BUG: (d) hand, no Warden, Closed: BOTH cost variants (full | 3 XP) are on the menu for the Ambush play to bf1", async () => {
+  test("(d) hand, no Warden, Closed: BOTH cost variants (full | 3 XP) are on the menu for the Ambush play to bf1", async () => {
     const game = await closedState({ inHand: true });
     expect(costVariants(game, true)).toEqual(["full", "xp"]);
   });

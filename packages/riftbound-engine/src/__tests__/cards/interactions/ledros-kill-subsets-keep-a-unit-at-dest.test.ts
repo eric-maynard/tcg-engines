@@ -19,22 +19,24 @@
  * Open-state Cleanup), 337.2 (a permanent resolves right after finalizing — no priority window).
  *
  * Rulings — CONFLICT on "kill every friendly unit at the battlefield you play him TO": Ledros 730775fe + Cruel Patron
- * 7e1f5339… / db8a04e8… say ILLEGAL (location invalid at Check Legality ⇒ per 355.16 the choice may not even be made);
- * Ledros cdc183fe says LEGAL (control persists through the Closed state). The engine's BATTLEFIELD CONTROL TIMING model
- * (operations/battlefield-control.ts, FIXER-PRIMER) follows the "control persists" reading; this file is adjudicated on
- * the ILLEGAL line, consistently with interactions/cruel-patron-lone-bf-victim-not-offered.test.ts and the Stalking Wolf
- * tests — the disagreeing facets are `test.failing("BUG: …")` exactly like there.
+ * 7e1f5339… / db8a04e8… / 81bdefc5… (pre-Unleashed) say ILLEGAL; Ledros cdc183fe and the official Unleashed clarification
+ * 9a32c2cc829f221a ("abilities that kill units as a cost in order to play another unit will be able to kill units at
+ * battlefields and then play the resulting unit to that same battlefield" — 187.4.c / 190.4 / 323.6: control cannot be
+ * lost while the play is on the chain) say LEGAL. RULING-CONFLICT: the engine follows the CR + the official clarification
+ * (operations/battlefield-control.ts, FIXER-PRIMER § BATTLEFIELD CONTROL TIMING, rulings/cruel-patron-9a32c2cc829f221a,
+ * stalking-wolf-lone-poro-ambush-rollback (d)): a kill-set that empties the CONTROLLED destination is a legal line — the
+ * location is still Valid at Check Legality (358.3), so 355.16 has nothing to forbid. (An [Ambush] REACTION play is
+ * different: 822.3 voids the granted Reaction once the cost leaves no friendly unit there — see the Stalking Wolf tests.)
  *
  * Expected:
- *   (a) offered: base × {S1S2, S1R, S2R, S1S2R}; bf1 × {S1R, S2R} ONLY (S1S2 / S1S2R absent for bf1); no kill-set of size < 2
- *       anywhere (2 [order] can't pay 3+ pips, 358.2). bf1/{S2,R}: S2 → trash, R ceases to exist, pay 6 + [order][order],
- *       Ledros enters bf1 exhausted beside S1, P1 keeps bf1, no chain / no P2 window.
- *   (b) only {S1,S2} makes it payable and that empties bf1 ⇒ bf1 absent; offered = base × {S1S2}. Play: both Sergeants in
- *       trash, Ledros in base, bf1 uncontrolled after the next Open-state Cleanup (323.6).
- *   (c) base × every subset of {S1,S2,R} incl. ∅; bf1 × every subset NOT containing both S1 and S2 (∅, S1, S2, R, S1R, S2R);
- *       cost = 6 + (4 − |kills|) [order].
- *   (d) refused / fully undone: S1 (2 dmg, exhausted) and S2 still at bf1, never trashed; R in base; pool 6 + 2 order;
- *       Ledros in hand; chain empty; bf1 P1's; no cards-played bookkeeping.
+ *   (a) offered: base × {S1S2, S1R, S2R, S1S2R}; bf1 × the same four; no kill-set of size < 2 anywhere (2 [order] can't
+ *       pay 3+ pips, 358.2). bf1/{S2,R}: S2 → trash, R ceases to exist, pay 6 + [order][order], Ledros enters bf1
+ *       exhausted beside S1, P1 keeps bf1, no chain / no P2 window.
+ *   (b) only {S1,S2} makes it payable; offered = {base, bf1} × {S1S2}. Play to base: both Sergeants in trash, Ledros in
+ *       base, bf1 uncontrolled after the next Open-state Cleanup (323.6).
+ *   (c) base × every subset of {S1,S2,R} incl. ∅; bf1 × every subset too; cost = 6 + (4 − |kills|) [order].
+ *   (d) raw {bf1, kill S1+S2}: legal — S1 + S2 in trash, 6 + [order]×2 paid, Ledros ALONE at bf1, bf1 still P1's (he holds
+ *       it), never a partial rollback.
  */
 import { describe, expect, test } from "bun:test";
 import type { Game } from "../../../harness";
@@ -110,20 +112,20 @@ describe("Commander Ledros — kill-set × destination combinatorics: a unit mus
     expect(linesAt(game, "base")).toEqual(["r+s1", "r+s1+s2", "r+s2", "s1+s2"]);
   });
 
-  // Expected: bf1 × {S1,R} and bf1 × {S2,R} leave a Sergeant at bf1 → legal and must be OFFERED.
-  // Actual: the playUnit enumerator emits kill-any variants for location=base only; bf1 gets no kill line at all
-  // (the raw move below proves the engine itself accepts bf1/{S2,R}).
-  test.failing("BUG: (a) destination bf1 offers {S1,R} and {S2,R} (a Sergeant stays behind → location valid, 355.2.a)", async () => {
+  // bf1 × {S1,R} and bf1 × {S2,R} leave a Sergeant at bf1 → legal and offered (every kill line is offered at every destination).
+  test("(a) destination bf1 offers {S1,R} and {S2,R} (a Sergeant stays behind → location valid, 355.2.a)", async () => {
     const game = await board({ order: 2 }).build();
     expect(linesAt(game, "bf1")).toEqual(expect.arrayContaining(["r+s1", "r+s2"]));
     await game.p1.play("ledros", { costs: { paid: { "kill-any": ["s2", "r"] } }, to: "bf1" });
     expect(game.zoneOf("ledros")).toBe("battlefield-bf1");
   });
 
-  test("(a) destination bf1 does NOT offer {S1,S2} nor {S1,S2,R} — killing every friendly unit at the battlefield he is played to may not even be chosen (355.16 / 357.3 → 358.3)", async () => {
+  // RULING-CONFLICT: riftjudge 730775fe (Ledros) / 7e1f5339… (Cruel Patron) say a kill-set that empties the destination is
+  // not even offered; CR 190.4 / 323.6 + official 9a32c2cc829f221a say control persists while the play is on the chain, so
+  // the location stays Valid — engine follows CR: bf1 offers {S1,S2} and {S1,S2,R} exactly like base.
+  test("(a) destination bf1 ALSO offers {S1,S2} and {S1,S2,R} — control of bf1 cannot lapse while Ledros is being played (190.4, 323.6, official 9a32c2cc829f221a)", async () => {
     const game = await board({ order: 2 }).build();
-    expect(linesAt(game, "bf1")).not.toContain("s1+s2");
-    expect(linesAt(game, "bf1")).not.toContain("r+s1+s2");
+    expect(linesAt(game, "bf1")).toEqual(["r+s1", "r+s1+s2", "r+s2", "s1+s2"]);
   });
 
   test("(a) bf1/{S2,R} submitted to the engine: S2 → trash, R ceases to exist (never in trash), pays 6 + [order][order], Ledros enters bf1 EXHAUSTED beside the untouched S1, P1 keeps bf1", async () => {
@@ -167,12 +169,14 @@ describe("Commander Ledros — kill-set × destination combinatorics: a unit mus
 
   // ── (b) no Recruit: S1 + S2 are P1's only units ──────────────────────────────────────────────────────
 
-  test("(b) without the Recruit the only payable set is {S1,S2}, which empties bf1 → the ONLY line offered is base/{S1,S2}; destination bf1 is absent entirely", async () => {
+  // RULING-CONFLICT: riftjudge 730775fe says bf1 is absent here; CR 190.4 / 323.6 + official 9a32c2cc829f221a keep bf1
+  // Valid while the play is pending — engine follows CR: {base, bf1} × {S1,S2}.
+  test("(b) without the Recruit the only payable set is {S1,S2}; it is offered to base AND to bf1 (control persists through the play — 190.4, 323.6)", async () => {
     const game = await board({ order: 2, recruit: false }).build();
     expect(game.p1.can("play", "ledros")).toBe(true);
-    expect(lines(game)).toEqual(["base/s1+s2"]);
-    const dests = (game.p1.option("play", "ledros")?.fields.find((f) => f.name === "location")?.options ?? []).map(bf);
-    expect(dests).toEqual(["base"]);
+    expect(lines(game)).toEqual(["base/s1+s2", "bf1/s1+s2"]);
+    const dests = (game.p1.option("play", "ledros")?.fields.find((f) => f.name === "location")?.options ?? []).map(bf).sort();
+    expect(dests).toEqual(["base", "bf1"]);
   });
 
   test("(b) play it: both Sergeants die as the cost (→ trash), 6 + [order]×2 paid, Ledros lands in base; bf1 holds no P1 unit and is UNCONTROLLED after the next Open-state Cleanup (323.6)", async () => {
@@ -196,19 +200,18 @@ describe("Commander Ledros — kill-set × destination combinatorics: a unit mus
     expect(linesAt(game, "base")).toEqual(["r", "r+s1", "r+s1+s2", "r+s2", "s1", "s1+s2", "s2", "∅"]);
   });
 
-  test("(c) destination bf1 offers ∅ (full price, nobody dies) and never {S1,S2} / {S1,S2,R}", async () => {
+  test("(c) destination bf1 offers ∅ (full price, nobody dies) and — RULING-CONFLICT resolved to CR 190.4/323.6 — {S1,S2} / {S1,S2,R} as well", async () => {
     const game = await board({ order: 4 }).build();
     const atBf1 = linesAt(game, "bf1");
     expect(atBf1).toContain("∅");
-    expect(atBf1).not.toContain("s1+s2");
-    expect(atBf1).not.toContain("r+s1+s2");
+    expect(atBf1).toContain("s1+s2");
+    expect(atBf1).toContain("r+s1+s2");
   });
 
-  // Expected: bf1 × {S1} {S2} {R} {S1,R} {S2,R} all leave a Sergeant behind → offered. Actual: only the no-kill bf1
-  // variant is enumerated (kill-any variants are emitted for base only).
-  test.failing("BUG: (c) destination bf1 also offers {S1} {S2} {R} {S1,R} {S2,R} — exactly the subsets that leave a Sergeant at bf1", async () => {
+  // Every kill line is a cost of PLAYING him (356.2.b), so bf1 lists every subset base does.
+  test("(c) destination bf1 offers every subset of {S1,S2,R} — the same eight lines as base", async () => {
     const game = await board({ order: 4 }).build();
-    expect(linesAt(game, "bf1")).toEqual(["r", "r+s1", "r+s2", "s1", "s2", "∅"]);
+    expect(linesAt(game, "bf1")).toEqual(["r", "r+s1", "r+s1+s2", "r+s2", "s1", "s1+s2", "s2", "∅"]);
   });
 
   test("(c) cost = 6 + (4 − |kills|) [order]: ∅ → order 4→0; {R} → 4→1; {S1,R} (to bf1, raw) → 4→2; {S1,S2,R} → 4→3 — always all 6 energy", async () => {
@@ -235,29 +238,27 @@ describe("Commander Ledros — kill-set × destination combinatorics: a unit mus
     expect(three.zoneOf("ledros")).toBe("base");
   });
 
-  // ── (d) rollback probe on board (a): raw {bf1, kill S1 + S2} ─────────────────────────────────────────
+  // ── (d) raw {bf1, kill S1 + S2} on board (a) ────────────────────────────────────────────────────────
 
-  // Expected (355.16 → 358.3 / 358.5, Ledros ruling 730775fe, Cruel Patron 7e1f5339… / db8a04e8…): killing BOTH units
-  // holding bf1 while playing Ledros TO bf1 is not a legal line — refused up front or fully undone, state untouched.
-  // Actual: the engine's control-timing model (control persists through the Closed state — the cdc183fe reading)
-  // accepts it: S1 + S2 go to the trash, 6 + [order]×2 is paid and Ledros lands on bf1, which stays P1's.
-  test.failing("BUG: (d) raw playUnit {bf1, kill [S1,S2]} leaves the game untouched — S1 (2 dmg, exhausted) + S2 at bf1 never trashed, R in base, pool 6 + 2 order, Ledros in hand, chain empty, bf1 P1's, no cards-played increment (358.5)", async () => {
+  // RULING-CONFLICT: riftjudge 730775fe (Ledros) / 7e1f5339… / db8a04e8… (Cruel Patron) say this line is illegal and
+  // fully undone (358.5); CR 190.4 / 323.6 (control lapses only in an OPEN-state Cleanup — the play is on the chain while
+  // its cost is paid) + official 9a32c2cc829f221a say it is legal — engine follows CR: both Sergeants die as the cost, 6 +
+  // [order]×2 is paid, Ledros lands ALONE on bf1 and, holding it himself, keeps it for P1.
+  test("(d) raw playUnit {bf1, kill [S1,S2]} is LEGAL — S1 + S2 in trash, R untouched, pool 0/0, Ledros alone at bf1 which stays P1's (190.4, 323.6, official 9a32c2cc829f221a)", async () => {
     const game = await board({ order: 2 }).build();
-    const hashBefore = game.stateHash();
-    await rawPlay(game, "bf1", ["s1", "s2"]);
-    expect(game.zoneOf("s1")).toBe("battlefield-bf1");
-    expect(game.state("s1")).toMatchObject({ damage: 2, isExhausted: true });
-    expect(game.zoneOf("s2")).toBe("battlefield-bf1");
-    expect(game.state("s2")).toMatchObject({ damage: 0, isExhausted: false });
-    expect(game.p1.trash()).toEqual([]);
+    const r = await rawPlay(game, "bf1", ["s1", "s2"]);
+    expect(r.ok).toBe(true);
+    expect([...game.p1.trash()].sort()).toEqual(["s1", "s2"]);
     expect(game.zoneOf("r")).toBe("base");
-    expect(game.p1.resources()).toEqual({ energy: 6, power: { order: 2 } });
-    expect(game.zoneOf("ledros")).toBe("hand");
+    expect(game.p1.resources()).toEqual({ energy: 0, power: { order: 0 } });
+    expect(game.zoneOf("ledros")).toBe("battlefield-bf1");
+    expect([...game.p1.units("bf1")]).toEqual(["ledros"]);
     expect(game.chain()).toEqual([]);
+    expect(cardsPlayed(game)).toBe(1);
+    await game.settle();
     expect(game.gameState.battlefields.bf1).toMatchObject({ contested: false, controller: P1 });
-    expect(cardsPlayed(game)).toBe(0);
     expect(game.decision()).toMatchObject({ context: "main", kind: "action", seat: P1 });
-    expect(game.stateHash()).toBe(hashBefore);
+    expect(game.violations()).toEqual([]);
   });
 
   test("(d) whatever the engine decides about that line, it is never a PARTIAL rollback: either everything happened (Ledros on bf1, both paid) or nothing did (Ledros in hand, pool intact)", async () => {

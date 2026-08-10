@@ -90,6 +90,9 @@ scripted — then answer it explicitly (`game.p1.pick("x")`) and continue.
 
 If a verb needs a choice you did not give, it throws `AMBIGUOUS_ACTION` naming the missing
 argument and the legal values (e.g. ``cast(cleave): needs `targets` — one of: ally | foe``).
+One default applies: a unit play offered at several destinations (base plus battlefields a
+permission opens — every cost line is offered at each of them, rule 355.2.a) goes to the BASE
+when no `to` is given; name `to: "bf1"` for anything else.
 
 ## Expressing each kind of decision
 

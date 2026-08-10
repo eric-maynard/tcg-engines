@@ -398,13 +398,56 @@ Recipe — timing wrong: spell → card `rulesText`/`normalizeSpellTiming`; abil
 - PARAMS: every play move (`playUnit/playSpell/playGear/revealHidden/playFromChampionZone/activateAbility`) accepts
   `costs: PlayCostSelection {alternativeId?, paid: {<costId>: true | {objects, count?, spec?}}}`; the legacy per-kind params
   (`paidAdditionalCost, additionalCostSpec, sacrificeId(s), discardId, spentBuffIds, altCost, viaFlow, recycleIds`) are
-  SHIMS: conditions/reducers expand `costs` via `legacyParamsFromSelection`, enumerators attach `costs` via
-  `withCostsParam` (only when something is selected, so plain variants are unchanged). Harness: `play(c, {costs:{paid:
+  SHIMS: spells expand `costs` via `legacyParamsFromSelection` and attach it via `withCostsParam`; PERMANENTS resolve
+  either shape against the play-options model (`resolveSubmittedUnitPlay`) and emit `costs` (+ `quote`) on every variant
+  that pays something. Harness: `play(c, {costs:{paid:
   {accelerate:true, "spend-buff-any":["ally"]}}})`, `cast(c, {costs:{alternativeId:"flow"}})`, `{paid:{kill:"pawn"}}`;
   the old `accelerate|payOptional|sacrifice|discard|flow` args still work. `draft.additionalCostsPaid[cardId]` is the LIST
   of paid ids (read via `operations/additional-costs-paid.ts additionalCostWasPaid(state, card, id?)`; condition
   `paid-additional-cost` may carry `costId`). Two optional costs on one card (Kraken Hunter) are independent: the bare
   legacy flag on an object-cost variant means THAT cost; the resource cost is elected by an explicit `additionalCostSpec`.
+- PLAY OPTIONS — permanents (`E/game-definition/moves/play/play-options.ts`, rules 354–358 / 419.1.a / 811; core spec
+  `core-rules/play-options-parity.test.ts` = PROPERTY "enumerated ≡ accepted ≡ charged" over seeded boards + targeted
+  rules): ONE module answers, for a unit/gear played from ANY origin — `{kind:"hand"|"trash"|"championZone"|"facedown"
+  (battlefieldId)|"effect"(destinations, extras, free, from)}` —, (1) `computeUnitPlayOptions(state, io, player, card,
+  origin) → UnitPlayOption[] {destination, selection: PlayCostSelection (canonical: alternativeId + paid ids WITH their
+  objects / priced spec), total: TotalCost, quote {energy, power{domain:n}, any, xp, paidIds, entersReady}, admittedBy
+  standard|reaction|ambush|always, grantedReaction, redirect? mandatory|optional}` = every LEGAL and PAYABLE (destination ×
+  cost selection): destinations from `unitPlayDestinations` (355.2.a base / RECORDED-controller battlefields; 355.2.b card
+  + board permissions — open bf, occupied enemy, "where there are enemy units", attacked, `can-play-to-occupied`; 822.1.b
+  [Ambush] with `ambushNeedsPresence`; ven-157 battlefield redirect `{pips, otherwiseValid}`; 054.1 Warden / "units can't
+  be played here" / conquered-only filters; facedown = its battlefield only; effect = the instruction's list), selections
+  = cross product over the model's additional costs (`choicesFor`: accelerate|accelerate-granted|pay → one entry per priced
+  SHAPE incl. Ezreal flex shapes and the XP-for-discount shape; kill → each controlled candidate the descriptor matches;
+  kill-any / spend-buff-any → every SUBSET (`objectSubsets`, full power set ≤ `OBJECT_SUBSET_FULL_LIMIT`=6 candidates,
+  prefixes beyond — and only listed sets are ACCEPTED); discard → each other hand card; exhaust → ready legend / matching
+  permanent; return-to-hand → each friendly gear; mandatory ⇒ no unpaid choice) × origin alternative (facedown ⇒ `hidden`,
+  trash ⇒ `self-trash` when the card has one, hand/CZ ⇒ printed or `alt`), each run through `evaluate`: timing admission
+  (standard now / [Reaction] keyword in `reactionWindowOpen` / Ambush with a friendly unit STILL there after the cost's
+  victims leave — 822.3 / redirect paid), `grantedReaction` = facedown or Ambush-into-presence (822.4/811.6 → Mystic Vortex
+  prices it), `computeTotalCost(…, ctx{board, grantedReaction, playedFrom, extras}, model + a `redirect` entry)`, XP check,
+  `canPayResourceCost` (pool-only, ONE assignment: named pips from their Domain then pooled [A], any-Domain/hybrid last —
+  135.2.e.5). Not admitted / illegal / unpayable ⇒ ABSENT (355.16, 357.3). (2) `resolveSubmittedUnitPlay(state, io, player,
+  card, origin, params)` = the option a SUBMITTED move names (legacy per-kind params via `selectionFromLegacyParams`, or
+  `costs`; a legacy `paidAdditionalCost:true` that elects nothing the play offers ⇒ refused; an explicit `costs` id the play
+  does not carry ⇒ refused; at a redirect battlefield the flag also elects the pips, a non-controller always pays them) or
+  undefined ⇒ the move's `condition` is false and its reducer a no-op (358.5). (3) `payUnitPlayCosts(draft, io, option)`
+  = rule 357 on the draft: resources recomputed with `consume` (one-shot riders) and paid ONCE via `payResourceCost`, XP,
+  discard (event), spent buffs (one `spend-buff` event each), cost-kills through the kill effect (Deathknell / 357.2.a; a
+  kill-any survivor pays its pip back), exhaust, return-to-hand → `{paidIds, entersReady, suspended}` (a die-shield prompt
+  mid-payment ⇒ `draft.suspendedPlay`, `completeSuspendedPlay`). (4) `unitPlayOptionParams(option)` = the legacy variant
+  shape menus keep (`location, paidAdditionalCost, additionalCostSpec, sacrificeId(s), discardId, spentBuffIds, altCost`)
+  + canonical `costs` + hidden `quote`. ROUTED: `playUnit` (hand + trash grants; condition/enumerator/reducer are 3 lines
+  each), `playFromChampionZone` (419.1.a — identical to hand: XP shape, granted Accelerate, Warden, 340.4 reseat via
+  `completeUnitPlay`), `revealHidden` for units/gear (spells keep their target-lock flow and price via `revealSpellCost` =
+  `computePlayResourceCost({altCost 0, grantedReaction})`, Deflect at target lock). BATTLEFIELD CONTROL: a kill cost that
+  empties the CONTROLLED destination is LEGAL (190.4/323.6 + official 9a32c2cc829f221a — control persists while the play is
+  on the chain; ledros/cruel-patron facets carry RULING-CONFLICT); an [Ambush] REACTION play whose cost empties its
+  destination is not (822.3). HARNESS: `seat.legal()/option()` variants carry `params.quote`; a unit play offered at several
+  destinations goes to BASE when `play(card,{…})` names no `to` (every cost line is offered at every destination now).
+  TODO(a7c4dc7d481b): effect plays (`play-pipeline.ts continueEffectPlay` dialog) still price through their own
+  `costExtrasFor`; spells are not modelled here — [Repeat] needs PER-EXECUTION target sets (`executions:[{targets…}]`,
+  820.2.a) when they are.
 - `getOptionalPlayCost(cardId)` (cost.ts) is still the per-shape reader behind the model: kinds `accelerate|pay|kill|
   discard|exhaust|spend-buff|return-to-hand` (+`mandatory`, `energyDiscount`, `ignoresBaseCost`, `entersReadyIfPaid`,
   `condition`); `getBuffSpendCost` / `getKillAnyNumberCost` / `getSacrificeCostDiscount` / `getGrantedAcceleratePlayCost`
@@ -442,8 +485,9 @@ Recipe — timing wrong: spell → card `rulesText`/`normalizeSpellTiming`; abil
   Mid-resolution pays already accept rune taps while their prompt is open (444.2.c).
 Recipe — additional cost not offered/mandatory: dump abilities → does `getPlayCostModel` list it (bun -e with a harness
 game, see cost-model.test.ts `ctxOf`)? No → reshape the ability to what `getOptionalPlayCost` reads (explicit `abilities`
-is fastest). Yes but not enumerated → the move's enumerator variant for that kind (play-unit `expandPaidCostVariants` /
-`payableOptionalCostVariants` / buff & kill-any subsets; play-spell paid variants).
+is fastest). Yes but not enumerated → for a PERMANENT the play-options model (below: `play-options.ts choicesFor` names
+the objects/specs each cost id may take, `costCandidates` the board objects; a new cost id needs a case in `choicesFor`,
+`normaliseSelection`, `unitPlayOptionParams` and `payUnitPlayCosts`); for a spell play-spell's paid variants.
 Recipe — wrong total: assert `computeTotalCost(...).resources` in a unit test first; then fix inside
 `computePlayResourceCost` (board static → `static-cost-reduction.ts matchesPlayedCard`/`minimum`; own text →
 `getSelfScaledEnergyReduction`/`getSelfConditional*`; one-shot → `takeNextPlayDiscount` / `meta.costModifier`).

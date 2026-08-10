@@ -38,6 +38,14 @@ sub-step is intentionally not implemented; see `moves/play/cost-model.ts`).
   extra [A] is actually in the pool).
 - The single convenience is the app's right-click Recycle: recycling an untapped rune auto-taps it for +1 Energy
   first. That resource lands in the pool BEFORE any play starts, so it is ordinary pool affordability.
+- What a menu OFFERS for a permanent (hand, Champion Zone, facedown flip) is exactly what the engine ACCEPTS and what it
+  CHARGES (`moves/play/play-options.ts`, one model for every origin): every destination × every optional-cost election
+  (each priced shape, each legal object / subset) that is legal AND payable from the CURRENT pool as one assignment
+  (specific-Domain pips from their Domain or pooled [A]; any-Domain pips from whatever is left — which of two equally
+  stocked Domains pays an any-Domain pip is the engine's pick, not the player's). An election the pool cannot cover
+  together with the rest of the cost is absent (never "accepted, then silently dropped"); a raw move naming anything
+  outside that set is refused with the state untouched. Each variant carries a `quote` (energy / pips / any / xp) a UI
+  may show.
 - Pays demanded while an ability RESOLVES (a spell's / activation's "pay [1] to …", a trigger's LATER "then you may
   pay …", a leading "you may pay [C]. If you do, …" — rule 205: not a cost, a Pay performed on resolution, 444.2 —
   or a counter's ransom) keep their prompt open; the player may tap runes while it is open and then answer — still

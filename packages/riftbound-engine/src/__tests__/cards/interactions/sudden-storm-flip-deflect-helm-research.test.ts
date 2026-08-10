@@ -130,18 +130,13 @@ describe("(a) Helm EMPOWERED — the flip at the Deflect Poro costs 1 energy + 2
     expect(game.p1.energy()).toBe(2);
   });
 
-  // Expected (356.3 → 356.4.d/f): 0 +[A] Deflect +[A] Vortex +[1][A] Helm = 1 + AAA, then Researchers −[1][A]: energy
-  // floored at 1, ONE pip removed → 1 energy + 2 power, so {3, r4} → {2, r2}. Actual: the from-facedown cost path adds
-  // the increases and the Deflect pip but never applies the Researchers' [rainbow] discount → 3 power taken ({2, r1}).
-  test.failing("BUG: the flip should take exactly 1 energy + 2 power — Researchers' [A] discount removes one of the three pips (356.4.d, 356.4.f); engine charges 3 power", async () => {
+  test("the flip should take exactly 1 energy + 2 power — Researchers' [A] discount removes one of the three pips (356.4.d, 356.4.f)", async () => {
     const game = await p1HasFocus({ energy: 3, helm: "empowered", power: { rainbow: 4 } });
     await flipAtPoro(game);
     expect(game.p1.resources()).toEqual({ energy: 2, power: { rainbow: 2 } });
   });
 
-  // Expected: {1 energy, 2 power} is the exact price, so the Poro IS offered and the pool empties. Actual: the engine
-  // prices the Poro at 1 + 3 power, finds it unaffordable and binds the only "affordable" target (Researchers) instead.
-  test.failing("BUG: with the exact pool {1, rainbow 2} the Poro is offered, chosen, and the pool empties to {0, 0}", async () => {
+  test("with the exact pool {1, rainbow 2} the Poro is offered, chosen, and the pool empties to {0, 0}", async () => {
     const game = await p1HasFocus({ energy: 1, helm: "empowered", power: { rainbow: 2 } });
     await flipAtPoro(game);
     expect(game.p1.resources()).toEqual({ energy: 0, power: { rainbow: 0 } });
@@ -184,16 +179,13 @@ describe("(b) Helm present but NOT empowered — 1 energy + 1 power", () => {
     expect(game.p1.energy()).toBe(2);
   });
 
-  // Expected: 0 +[A] Deflect +[A] Vortex +[1] Helm = 1 + AA; Researchers: energy stays 1, −A → 1 energy + 1 power:
-  // {3, r4} → {2, r3}. Actual: no [rainbow] discount on the flip → 2 power taken ({2, r2}).
-  test.failing("BUG: the flip should take exactly 1 energy + 1 power (Deflect + Vortex − Researchers' pip); engine charges 2 power", async () => {
+  test("the flip should take exactly 1 energy + 1 power (Deflect + Vortex − Researchers' pip)", async () => {
     const game = await p1HasFocus({ energy: 3, helm: "plain", power: { rainbow: 4 } });
     await flipAtPoro(game);
     expect(game.p1.resources()).toEqual({ energy: 2, power: { rainbow: 3 } });
   });
 
-  // Expected: {1, r1} pays it exactly (Poro offered, pool empties). Actual: Poro priced at 1 + 2 power → not offered.
-  test.failing("BUG: with the exact pool {1, rainbow 1} the Poro is offered and the pool empties", async () => {
+  test("with the exact pool {1, rainbow 1} the Poro is offered and the pool empties", async () => {
     const game = await p1HasFocus({ energy: 1, helm: "plain", power: { rainbow: 1 } });
     await flipAtPoro(game);
     expect(game.p1.resources()).toEqual({ energy: 0, power: { rainbow: 0 } });
@@ -211,16 +203,13 @@ describe("(c) no Helm at all — 0 energy + 1 power: a discount's floor never RA
     expect(broke.p1.energy()).toBe(0);
   });
 
-  // Expected: 0 +[A] Deflect +[A] Vortex = AA; −A (Researchers) → 0 energy + 1 power: {3, r4} → {3, r3}.
-  // Actual: 2 power taken ({3, r2}) — the [rainbow] discount is not applied to a from-facedown play.
-  test.failing("BUG: the flip should take exactly 0 energy + 1 power (A + A − A); engine charges 2 power", async () => {
+  test("the flip should take exactly 0 energy + 1 power (A + A − A)", async () => {
     const game = await p1HasFocus({ energy: 3, helm: false, power: { rainbow: 4 } });
     await flipAtPoro(game);
     expect(game.p1.resources()).toEqual({ energy: 3, power: { rainbow: 3 } });
   });
 
-  // Expected: {0, r1} is the exact price at the Poro. Actual: not offered (engine wants 2 power).
-  test.failing("BUG: with the exact pool {0 energy, rainbow 1} the Poro is offered and the pool empties", async () => {
+  test("with the exact pool {0 energy, rainbow 1} the Poro is offered and the pool empties", async () => {
     const game = await p1HasFocus({ energy: 0, helm: false, power: { rainbow: 1 } });
     await flipAtPoro(game);
     expect(game.p1.resources()).toEqual({ energy: 0, power: { rainbow: 0 } });

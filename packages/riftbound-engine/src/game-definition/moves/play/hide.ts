@@ -24,17 +24,26 @@ import { getGlobalCardRegistry } from "../../../operations/card-lookup";
 import { hiddenCapacityAt } from "../../../operations/hidden-capacity";
 import { notePlayThisTurn } from "../../../operations/plays-this-turn";
 import { battlefieldForbidsUnitPlays, playIsForbidden } from "../../../abilities/play-restrictions";
-import { computeStaticCostIncrease } from "../../../operations/static-cost-reduction";
-import type { CostReductionContext } from "../../../operations/static-cost-reduction";
 import { getBattlefieldZoneId, getFacedownZoneId } from "../../../zones/zone-configs";
 import {
+  type PlayResourceCost,
+  canPayResourceCost,
+  computePlayResourceCost,
+  createMetaAccessor,
   getCardEffectiveMight,
-  getGrantedAcceleratePlayCost,
-  getOptionalPlayCost,
   opponentsRestrictedToBase,
+  payResourceCost,
   spendablePowerPool,
 } from "./cost";
 import { enterPlayedPermanent } from "./play-pipeline";
+import {
+  type SubmittedUnitPlay,
+  type UnitPlayOrigin,
+  computeUnitPlayOptions,
+  payUnitPlayCosts,
+  resolveSubmittedUnitPlay,
+  unitPlayOptionParams,
+} from "./play-options";
 import {
   beginRevealPairLock,
   beginRevealSlotLock,
@@ -240,257 +249,50 @@ function revealIsPrevented(
 }
 
 /**
- * rule-id: sfd-029-221 (rule 805.1.a) — a card revealed from facedown is played
- * from somewhere other than a hand, so a board static may grant it Accelerate.
- * Returns the granted cost when it is both licensed and affordable.
+ * rule 811.1.b / 356.1.b / 356.3 / 356.4 — the resource cost of playing a SPELL
+ * from facedown: base cost ignored (the "hidden" alternative → 0), the
+ * INCREASES opponents' statics and battlefields impose still added on top
+ * (Vex's "enemy spells cost [1][A] more", Helm of Suppression, Mystic Vortex —
+ * the card HAS [Reaction] while played from facedown, 811.6), and what is left
+ * is a Total Cost that total-cost discounts reduce in turn (Applied Researchers'
+ * "[1][A] less" eats an added pip; its own floor never RAISES a zeroed total —
+ * 356.4.e). ONE computation — the same `computePlayResourceCost` every play
+ * uses; the [Deflect] surcharge of the object the flip then names is settled as
+ * that target is locked (`reveal-target-lock.ts`). Permanents flipped from
+ * facedown price through the play-options model instead (`play-options.ts`,
+ * origin `facedown`).
  */
-function grantedAccelerateForReveal(
+function revealSpellCost(
   state: RiftboundGameState,
   playerId: string,
   cardId: string,
   ctx: {
-    cards: {
-      getCardController?: (id: CoreCardId) => string | undefined;
-      getCardOwner: (id: CoreCardId) => string | undefined;
-    };
-    zones: { getCardsInZone: (zoneId: CoreZoneId, playerId?: CorePlayerId) => readonly CoreCardId[] };
+    // biome-ignore lint/suspicious/noExplicitAny: engine move context is framework-typed
+    cards: any;
+    // biome-ignore lint/suspicious/noExplicitAny: engine move context is framework-typed
+    zones: any;
   },
-): { energy: number; power: string[] } | undefined {
-  const board: { cardId: string; controller: string | undefined }[] = [];
-  const zoneIds: string[] = ["base"];
-  for (const bfId of Object.keys(state.battlefields)) {
-    zoneIds.push(getBattlefieldZoneId(bfId));
-  }
-  for (const zoneId of zoneIds) {
-    for (const id of ctx.zones.getCardsInZone(zoneId as CoreZoneId)) {
-      board.push({
-        cardId: id as string,
-        controller: ctx.cards.getCardController?.(id) ?? ctx.cards.getCardOwner(id),
-      });
-    }
-  }
-  const cost = getGrantedAcceleratePlayCost(cardId, playerId, board, false);
-  if (!cost) {
-    return undefined;
-  }
-  const pool = state.runePools[playerId];
-  if (!pool || pool.energy < cost.energy) {
-    return undefined;
-  }
-  const power = pool.power as Partial<Record<string, number>>;
-  const remaining: Record<string, number> = {};
-  for (const [d, v] of Object.entries(power)) {
-    if (typeof v === "number" && v > 0) {
-      remaining[d] = v;
-    }
-  }
-  for (const domain of cost.power) {
-    // rule 135.2.e.5.a — a pooled [rainbow] Power pays any named-domain pip.
-    if ((remaining[domain] ?? 0) > 0) {
-      remaining[domain] = (remaining[domain] ?? 0) - 1;
-      continue;
-    }
-    if ((remaining.rainbow ?? 0) > 0) {
-      remaining.rainbow = (remaining.rainbow ?? 0) - 1;
-      continue;
-    }
-    return undefined;
-  }
-  return cost;
-}
-
-/**
- * rule 356.2 / 811.1.b (rule-id: unl-028-219) — playing a card from Hidden
- * ignores its BASE cost only; the card's own optional additional cost ("You may
- * pay [fury] as an additional cost to play me") is still offered and still paid
- * from the pool. Returns the resource cost when the player can afford it.
- */
-function ownOptionalPayCostForReveal(
-  state: RiftboundGameState,
-  playerId: string,
-  cardId: string,
-): { energy: number; power: string[] } | undefined {
-  const optional = getOptionalPlayCost(cardId);
-  if (!optional || optional.kind !== "pay" || optional.mandatory) {
-    return undefined;
-  }
-  const raw = optional.cost as
-    | { energy?: number; power?: readonly string[]; xp?: number }
-    | undefined;
-  // XP and other non-pool costs are out of scope for the flip path.
-  if (!raw || (raw.xp ?? 0) > 0) {
-    return undefined;
-  }
-  const cost = { energy: raw.energy ?? 0, power: [...(raw.power ?? [])] };
-  if (cost.energy === 0 && cost.power.length === 0) {
-    return undefined;
-  }
-  const pool = state.runePools[playerId];
-  if (!pool || pool.energy < cost.energy) {
-    return undefined;
-  }
-  return planPipPayment(powerTally(pool), cost.power) === undefined ? undefined : cost;
-}
-
-/** Deduct a granted Accelerate cost from the player's pool (rule 805.1.a). */
-function payGrantedAccelerate(
-  draft: RiftboundGameState,
-  playerId: string,
-  cost: { energy: number; power: readonly string[] },
-): void {
-  const pool = draft.runePools[playerId];
-  if (!pool) {
-    return;
-  }
-  pool.energy = Math.max(0, pool.energy - cost.energy);
-  for (const domain of cost.power) {
-    const key = domain as keyof typeof pool.power;
-    if ((pool.power[key] ?? 0) > 0) {
-      pool.power[key] = Math.max(0, (pool.power[key] ?? 0) - 1);
-      continue;
-    }
-    const rainbow = "rainbow" as keyof typeof pool.power;
-    if ((pool.power[rainbow] ?? 0) > 0) {
-      pool.power[rainbow] = Math.max(0, (pool.power[rainbow] ?? 0) - 1);
-    }
-  }
-}
-
-/**
- * rule 356.1 / 356.3 / 356.4 (rule-id: sfd-146-221) — playing a card from
- * Hidden "ignores its base cost" (base → 0, rule 811.1.b / 356.1), but cost
- * INCREASES from opponents' statics are still applied on top (356.3), and no
- * discount may be applied to what is left (356.4). So the price of a flip is
- * exactly the static increase — e.g. Vex's "enemy spells cost [1][rainbow]
- * more" makes a facedown flip cost [1][rainbow].
- */
-function revealSurcharge(
-  state: RiftboundGameState,
-  playerId: string,
-  cardId: string,
-  ctx: {
-    cards: {
-      getCardController?: (id: CoreCardId) => string | undefined;
-      getCardMeta?: (id: CoreCardId) => unknown;
-      getCardOwner: (id: CoreCardId) => string | undefined;
-      updateCardMeta?: (id: CoreCardId, meta: Partial<RiftboundCardMeta>) => void;
-    };
-    zones: { getCardsInZone: (zoneId: CoreZoneId, playerId?: CorePlayerId) => readonly CoreCardId[] };
-  },
-): { energy: number; pips: string[] } {
-  const increase = computeStaticCostIncrease(
-    {
-      cards: {
-        getCardController: ctx.cards.getCardController,
-        getCardMeta: (id: CoreCardId) =>
-          ctx.cards.getCardMeta?.(id) as Partial<RiftboundCardMeta> | undefined,
-        getCardOwner: ctx.cards.getCardOwner,
-        updateCardMeta: (id: CoreCardId, meta: Partial<RiftboundCardMeta>) =>
-          ctx.cards.updateCardMeta?.(id, meta),
-      },
-      draft: state,
-      zones: ctx.zones,
-    } as CostReductionContext,
+  consume = false,
+): PlayResourceCost {
+  return computePlayResourceCost(
+    state,
     playerId,
     cardId,
-    // rule 811.6 — played from facedown, the card has [Reaction] for audiences
-    // like Mystic Vortex even though its printed timing is [Action].
-    { fromHidden: true },
+    {
+      altCost: { energy: 0, power: [] },
+      board: { cards: ctx.cards, zones: ctx.zones },
+      // rule 811.6 — played from facedown, the card has [Reaction] for audiences
+      // like Mystic Vortex even though its printed timing is [Action].
+      grantedReaction: true,
+    },
+    createMetaAccessor(ctx.cards),
+    consume,
   );
-  const pips: string[] = [];
-  for (const [domain, count] of Object.entries(increase.power)) {
-    for (let i = 0; i < (count ?? 0); i++) {
-      pips.push(domain);
-    }
-  }
-  return { energy: Math.max(0, increase.energy), pips };
 }
 
-/** Remaining Power per domain, as a mutable tally. */
-function powerTally(pool: { power: Partial<Record<string, number>> } | undefined): Record<string, number> {
-  const out: Record<string, number> = {};
-  for (const [d, v] of Object.entries(pool?.power ?? {})) {
-    if (typeof v === "number" && v > 0) {
-      out[d] = v;
-    }
-  }
-  return out;
-}
-
-/**
- * rule 135.2.e.5.a — a named-domain pip is payable from that domain or from
- * pooled [rainbow]; a [rainbow] pip is payable from ANY domain. Returns the
- * domains actually spent, or undefined when the pool can't cover the cost.
- */
-function planPipPayment(
-  remaining: Record<string, number>,
-  pips: readonly string[],
-): string[] | undefined {
-  const spent: string[] = [];
-  for (const pip of pips) {
-    if (pip === "rainbow") {
-      // rule 135.2.e.5.a/b — [A] is payable from any domain; spend pooled [A]
-      // first so domain-specific Power stays available for domain-specific pips.
-      const key =
-        (remaining.rainbow ?? 0) > 0
-          ? "rainbow"
-          : Object.entries(remaining)
-              .filter(([, v]) => v > 0)
-              .sort(([, a], [, b]) => b - a)[0]?.[0];
-      if (key === undefined) {
-        return undefined;
-      }
-      remaining[key] -= 1;
-      spent.push(key);
-      continue;
-    }
-    if ((remaining[pip] ?? 0) > 0) {
-      remaining[pip] -= 1;
-      spent.push(pip);
-      continue;
-    }
-    if ((remaining.rainbow ?? 0) > 0) {
-      remaining.rainbow -= 1;
-      spent.push("rainbow");
-      continue;
-    }
-    return undefined;
-  }
-  return spent;
-}
-
-/** rule 356.3 — can this player pay the flip surcharge? */
-function canAffordRevealSurcharge(
-  state: RiftboundGameState,
-  playerId: string,
-  cost: { energy: number; pips: readonly string[] },
-): boolean {
-  if (cost.energy === 0 && cost.pips.length === 0) {
-    return true;
-  }
-  const pool = state.runePools[playerId];
-  if (!pool || pool.energy < cost.energy) {
-    return false;
-  }
-  return planPipPayment(powerTally(pool), cost.pips) !== undefined;
-}
-
-/** rule 356.3 — deduct the flip surcharge from the player's pool. */
-function payRevealSurcharge(
-  draft: RiftboundGameState,
-  playerId: string,
-  cost: { energy: number; pips: readonly string[] },
-): void {
-  const pool = draft.runePools[playerId];
-  if (!pool) {
-    return;
-  }
-  pool.energy = Math.max(0, pool.energy - cost.energy);
-  const spent = planPipPayment(powerTally(pool), cost.pips);
-  for (const domain of spent ?? []) {
-    const key = domain as keyof typeof pool.power;
-    pool.power[key] = Math.max(0, (pool.power[key] ?? 0) - 1);
-  }
+/** The play-options origin of a facedown permanent (rule 811.1.d.1 — played AT its battlefield). */
+function facedownOrigin(meta: Partial<RiftboundCardMeta> | undefined): UnitPlayOrigin {
+  return { kind: "facedown", ...(typeof meta?.hiddenAt === "string" ? { battlefieldId: meta.hiddenAt } : {}) };
 }
 
 /**
@@ -1225,33 +1027,37 @@ export const revealHidden: Defs["revealHidden"] = {
     ) {
       return false;
     }
-    // rule-id: sfd-029-221 (rule 805.1.a) — the optional Accelerate cost is only
-    // payable when a static licenses it and the pool covers it.
-    // rule 356.2 (rule-id: unl-028-219) — or the card's OWN optional additional
-    // cost, which a flip still offers and still pays.
-    if (
-      context.params.paidAdditionalCost === true &&
-      !grantedAccelerateForReveal(
-        state,
-        context.params.playerId as string,
-        context.params.cardId as string,
-        context,
-      ) &&
-      !ownOptionalPayCostForReveal(
-        state,
-        context.params.playerId as string,
-        context.params.cardId as string,
-      )
-    ) {
+    // rule 811.1.d.3 / 355–358 — a PERMANENT flipped from facedown is a play
+    // through the one play-options model (origin `facedown`): its battlefield is
+    // the only destination, "ignoring its cost" the base-cost alternative, its
+    // optional additional costs (own "you may pay …", XP, Accelerate granted to
+    // non-hand plays — discounts such as Ezreal's applied) electable, keyword
+    // surcharges on its granted [Reaction] (811.6) added, the whole payable as
+    // ONE pool assignment. Anything the model does not list is refused.
+    if (getGlobalCardRegistry().getCardType(context.params.cardId as string) !== "spell") {
+      return (
+        resolveSubmittedUnitPlay(
+          state,
+          { cards: context.cards, counters: context.counters, zones: context.zones },
+          context.params.playerId as string,
+          context.params.cardId as string,
+          facedownOrigin(meta),
+          context.params as SubmittedUnitPlay,
+        ) !== undefined
+      );
+    }
+    // A spell has no optional additional cost to elect on the flip.
+    if (context.params.paidAdditionalCost === true) {
       return false;
     }
-    // rule 356.1 / 356.3 (rule-id: sfd-146-221) — the flip ignores the base
-    // cost but must still pay any static increase an opponent imposes.
+    // rule 356.1 / 356.3 / 356.4 (rule-id: sfd-146-221) — the flip ignores the base
+    // cost but must still pay what increases leave standing after discounts.
     if (
-      !canAffordRevealSurcharge(
+      !canPayResourceCost(
         state,
         context.params.playerId as string,
-        revealSurcharge(state, context.params.playerId as string, context.params.cardId as string, context),
+        context.params.cardId as string,
+        revealSpellCost(state, context.params.playerId as string, context.params.cardId as string, context),
       )
     ) {
       return false;
@@ -1286,15 +1092,24 @@ export const revealHidden: Defs["revealHidden"] = {
         if (!hiddenSpellHasLegalTargets(state, hid as string, playerId, meta.hiddenAt, context)) {
           continue;
         }
-        // rule 356.3 (rule-id: sfd-146-221) — an unaffordable static surcharge
-        // makes the flip illegal, so don't offer it.
-        if (
-          !canAffordRevealSurcharge(
+        // rule 811.1.d.3 — permanents: one variant per play option of the model
+        // (plain / each electable optional cost shape), all priced and payable.
+        if (getGlobalCardRegistry().getCardType(hid as string) !== "spell") {
+          for (const option of computeUnitPlayOptions(
             state,
+            { cards: context.cards, counters: context.counters, zones: context.zones },
             playerId,
-            revealSurcharge(state, playerId, hid as string, context),
-          )
-        ) {
+            hid as string,
+            facedownOrigin(meta),
+          )) {
+            const { location: _location, ...params } = unitPlayOptionParams(option);
+            results.push({ cardId: hid as string, playerId, ...params } as (typeof results)[number]);
+          }
+          continue;
+        }
+        // rule 356.3 (rule-id: sfd-146-221) — an unaffordable surcharge makes the
+        // flip illegal, so don't offer it.
+        if (!canPayResourceCost(state, playerId, hid as string, revealSpellCost(state, playerId, hid as string, context))) {
           continue;
         }
         // rule 355.5 / 355.13 / 355.15 (rule-id: sfd-043-221) — an "any number
@@ -1334,26 +1149,6 @@ export const revealHidden: Defs["revealHidden"] = {
           continue;
         }
         results.push({ cardId: hid as string, playerId });
-        // rule-id: sfd-029-221 (rule 805.1.a) — offer the granted Accelerate as a
-        // second variant so the reveal can enter ready.
-        if (grantedAccelerateForReveal(state, playerId, hid as string, context)) {
-          results.push({
-            cardId: hid as string,
-            costs: { alternativeId: "hidden", paid: { "accelerate-granted": true } },
-            paidAdditionalCost: true,
-            playerId,
-          } as (typeof results)[number]);
-        }
-        // rule 356.2 (rule-id: unl-028-219) — the card's own "You may pay … as an
-        // additional cost to play me" is offered on the flip as well.
-        if (ownOptionalPayCostForReveal(state, playerId, hid as string)) {
-          results.push({
-            cardId: hid as string,
-            costs: { alternativeId: "hidden", paid: { pay: true } },
-            paidAdditionalCost: true,
-            playerId,
-          } as (typeof results)[number]);
-        }
       }
     }
     return results;
@@ -1392,9 +1187,28 @@ export const revealHidden: Defs["revealHidden"] = {
       !preInteraction?.chain?.items.length &&
       getActiveShowdown(preInteraction ?? createInteractionState())?.focusPlayer === playerId;
 
-    // rule 356.1 / 356.3 / 356.4 (rule-id: sfd-146-221) — base cost ignored,
-    // opponents' static increases still paid, no discounts applied.
-    payRevealSurcharge(draft, playerId, revealSurcharge(draft, playerId, cardId, { cards, zones }));
+    // rule 811.1.d.3 / 357 — a permanent: resolve the submitted play against the
+    // model and pay ITS total (never anything else); a spell: pay what the
+    // increases leave standing (Deflect follows as its target is locked).
+    const unitOption =
+      cardType === "spell"
+        ? undefined
+        : resolveSubmittedUnitPlay(
+            draft,
+            { cards, counters, zones },
+            playerId as string,
+            cardId as string,
+            facedownOrigin(meta),
+            context.params as SubmittedUnitPlay,
+          );
+    if (cardType !== "spell" && !unitOption) {
+      // rule 358.5 — not a legal play: nothing happens (the condition refused it).
+      return;
+    }
+    const unitPaid = unitOption ? payUnitPlayCosts(draft, { cards, counters, zones }, unitOption) : undefined;
+    if (cardType === "spell") {
+      payResourceCost(draft, playerId as string, cardId as string, revealSpellCost(draft, playerId as string, cardId as string, { cards, zones }, true));
+    }
 
     // Clear hidden state — the card is no longer facedown regardless
     // Of its eventual destination.
@@ -1492,37 +1306,16 @@ export const revealHidden: Defs["revealHidden"] = {
     // (sfd-029-221), fires the play triggers (with `fromHiddenAt` so their
     // targets stay at that battlefield — 811.1.d.2) and counts the play.
     (draft as { lastPlayTriggerBatch?: string }).lastPlayTriggerBatch = undefined;
-    if (cardType === "unit" || cardType === "gear" || cardType === "equipment") {
-      let paidAccelerate = false;
-      let paidOwnOptional = false;
-      if (cardType === "unit" && context.params.paidAdditionalCost === true) {
-        const cost = grantedAccelerateForReveal(draft, playerId, cardId, { cards, zones });
-        if (cost) {
-          payGrantedAccelerate(draft, playerId, cost);
-          paidAccelerate = true;
-        }
-      }
-      // rule 356.2 (rule-id: unl-028-219) — the card's own optional additional
-      // cost is paid from the pool as the flip plays it, so its
-      // "if you paid the additional cost" trigger sees the payment.
-      if (!paidAccelerate && context.params.paidAdditionalCost === true) {
-        const own = ownOptionalPayCostForReveal(draft, playerId, cardId);
-        if (own) {
-          payGrantedAccelerate(draft, playerId, own);
-          paidOwnOptional = true;
-        }
-      }
+    if (unitOption && unitPaid) {
       enterPlayedPermanent(
         { cards, counters, draft, zones },
         {
           cardId,
-          entersReady: paidAccelerate,
-          entryZone: battlefieldId
-            ? (getBattlefieldZoneId(battlefieldId) as string)
-            : ((zones.getCardZone(cardId as CoreCardId) as string | undefined) ?? "base"),
+          entersReady: unitPaid.entersReady,
+          entryZone: unitOption.destination,
           from: battlefieldId ? `facedown-${battlefieldId}` : "facedown",
-          paidAdditionalCost: paidAccelerate || paidOwnOptional,
-          paidIds: paidAccelerate ? ["accelerate-granted"] : paidOwnOptional ? ["pay"] : [],
+          paidAdditionalCost: unitPaid.paidAdditionalCost,
+          paidIds: unitPaid.paidIds,
           playerId,
           via: "hidden",
           ...(battlefieldId ? { fromHiddenAt: battlefieldId } : {}),

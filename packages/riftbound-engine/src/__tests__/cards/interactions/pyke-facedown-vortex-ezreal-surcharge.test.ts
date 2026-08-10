@@ -115,17 +115,12 @@ describe("Pyke flipped at Mystic Vortex mid-showdown — Vortex surcharge × opt
     expect(flipVariants(game)).toContain(false);
   });
 
-  // Expected (356.4.c / 356.4.f): Ezreal strips Pyke's optional [fury] the moment it is added, so the +pay
-  // variant costs exactly the Vortex [rainbow] — affordable with calm — and must be offered beside the no-pay
-  // one. Actual: the flip path prices the optional pip verbatim (no Ezreal), finds no fury and drops the variant.
-  test.failing("BUG: (a) with Ezreal BOTH variants are offered — the +pay [fury] is discounted to 0 and only the Vortex [rainbow] remains (356.4.c, 356.4.f, 357.3)", async () => {
+  test("(a) with Ezreal BOTH variants are offered — the +pay [fury] is discounted to 0 and only the Vortex [rainbow] remains (356.4.c, 356.4.f, 357.3)", async () => {
     const game = await showdown({ ezreal: true });
     expect(flipVariants(game)).toEqual([false, true]);
   });
 
-  // Expected: +pay flip = 0 energy + [rainbow] (calm 1 → 0); Pyke enters at the Vortex as a defender; the cost
-  // counts as PAID (356.4.f.1) → trigger readies him and gives +2 → 4 Might, ready. Actual: variant not legal.
-  test.failing("BUG: (a) +pay flip with Ezreal costs only the calm, and Pyke — cost 'paid' per 356.4.f.1 — is readied at 4 Might as a defender", async () => {
+  test("(a) +pay flip with Ezreal costs only the calm, and Pyke — cost 'paid' per 356.4.f.1 — is readied at 4 Might as a defender", async () => {
     const game = await showdown({ ezreal: true });
     await game.p1.reveal("pyke", { payOptional: true });
     expect(game.p1.resources()).toEqual({ energy: 0, power: { calm: 0 } });
@@ -179,11 +174,7 @@ describe("Pyke flipped at Mystic Vortex mid-showdown — Vortex surcharge × opt
     expect(flipVariants(game)).toEqual([false, true]);
   });
 
-  // Expected (135.2.e.5.a / 356.7): the fury MUST go to Pyke's [fury] pip and the calm covers the Vortex's
-  // any-domain pip → pool emptied, cost paid → readied, 4 Might. Actual: the engine pays the Vortex surcharge
-  // first with whichever domain sits first in the pool (here fury), then finds no fury for Pyke's pip and
-  // silently skips it (calm left over, no ready/+2) — the outcome depends on pool insertion order.
-  test.failing("BUG: (c) +pay with {fury:1, calm:1}: fury pays Pyke's pip, calm pays the Vortex pip → pool EMPTY, Pyke readied at 4 Might (135.2.e.5.a, 356.4.f.1)", async () => {
+  test("(c) +pay with {fury:1, calm:1}: fury pays Pyke's pip, calm pays the Vortex pip → pool EMPTY, Pyke readied at 4 Might (135.2.e.5.a, 356.4.f.1)", async () => {
     const game = await showdown({ power: { fury: 1, calm: 1 } });
     await game.p1.reveal("pyke", { payOptional: true });
     expect(game.p1.resources()).toEqual({ energy: 0, power: { fury: 0, calm: 0 } });
@@ -200,10 +191,7 @@ describe("Pyke flipped at Mystic Vortex mid-showdown — Vortex surcharge × opt
     expect(game.state("pyke")).toMatchObject({ isExhausted: true, might: 2 });
   });
 
-  // Expected (357.3 / 355.16): with a lone fury the +pay variant needs 2 power → unaffordable → absent.
-  // Actual: the surcharge check and the optional-pip check each see the same fury and both pass, so the
-  // engine offers a +pay flip that then eats the fury for the Vortex and never pays Pyke's pip.
-  test.failing("BUG: (c) control — with {fury:1} ALONE the +pay variant is absent (one fury can't pay [fury] AND [rainbow]); only the no-pay flip is offered (357.3)", async () => {
+  test("(c) control — with {fury:1} ALONE the +pay variant is absent (one fury can't pay [fury] AND [rainbow]); only the no-pay flip is offered (357.3)", async () => {
     const game = await showdown({ power: { fury: 1 } });
     expect(flipVariants(game)).toEqual([false]);
   });
@@ -220,10 +208,7 @@ describe("Pyke flipped at Mystic Vortex mid-showdown — Vortex surcharge × opt
     expect(game.state("pyke")).toMatchObject({ isExhausted: true, location: "mv", might: 2 });
   });
 
-  // Expected (356.4.c / 356.4.f.1): 0 + [fury] − Ezreal's [rainbow] = 0 energy, 0 power, still "paid" → the
-  // +pay variant is offered with an empty pool and Pyke enters at the Vortex READY with 4 Might.
-  // Actual: the flip path ignores Ezreal, sees no fury in the pool and never offers the +pay variant.
-  test.failing("BUG: (d) own turn with Ezreal and an empty pool: the +pay variant is offered for free and Pyke enters ready at 4 Might (356.4.c, 356.4.f.1)", async () => {
+  test("(d) own turn with Ezreal and an empty pool: the +pay variant is offered for free and Pyke enters ready at 4 Might (356.4.c, 356.4.f.1)", async () => {
     const game = await board({ active: P1, ezreal: true, power: {} }).build();
     expect(flipVariants(game)).toEqual([false, true]);
     await game.p1.reveal("pyke", { payOptional: true });

@@ -193,8 +193,11 @@ const PARAM_ARG: Record<string, { arg: string; kind: ActionFieldKind }> = {
   xAmount: { arg: "x", kind: "int" },
 };
 
-/** Params never surfaced as fields. additionalCostSpec / costs ride with the legacy cost params they mirror. */
-const HIDDEN_PARAMS = new Set(["playerId", "additionalCostSpec", "costs", "modes", "permissionId"]);
+/**
+ * Params never surfaced as fields. additionalCostSpec / costs ride with the legacy cost params they mirror;
+ * `quote` is the play-options model's cost breakdown (energy / per-Domain pips / any-Domain pips / xp).
+ */
+const HIDDEN_PARAMS = new Set(["playerId", "additionalCostSpec", "costs", "modes", "permissionId", "quote"]);
 
 /** Follow-up priority: which still-varying field to ask about first. */
 const FOLLOW_UP_ORDER = [
@@ -1565,6 +1568,10 @@ const DEFAULT_PREFS: { param: string; keep: (v: unknown) => boolean }[] = [
   // enumerated both ways; plain `play(gear)` spends it, `params:
   // { useEnergyWaiver: false }` pays full price and keeps it.
   { keep: (v) => v !== false, param: "useEnergyWaiver" },
+  // rule 355.2.a — every cost line of a unit play is offered at EVERY valid
+  // destination (base and each battlefield a permission opens); plain
+  // `play(card, {...costs})` without `to` means the default location, the base.
+  { keep: (v) => v === undefined || v === "base", param: "location" },
 ];
 
 function choiceFor(ctx: DecisionContext, field: string, value: unknown, card?: CardRef): PickOption {

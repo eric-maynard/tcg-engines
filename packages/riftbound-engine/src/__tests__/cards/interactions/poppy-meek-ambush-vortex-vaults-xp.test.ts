@@ -111,12 +111,7 @@ describe("Poppy [Ambush] into a Mystic Vortex showdown on the turn P1 held Vault
     expect(game.p1.xp()).toBe(5);
   });
 
-  // Expected: with 5 XP the seat menu offers BOTH variants to the Vortex — plain (7 + [order] + [rainbow]) and
-  // spend-3-XP (4 + [order] + [rainbow]) — and `play(poppy, {to: mv, payOptional: true})` takes the latter.
-  // Actual: the enumerator lists only the plain variant for the Ambush destination (the XP variant is never
-  // offered to a battlefield P1 does not control, whatever the pool), although the raw move prices and accepts
-  // it correctly (next test).
-  test.failing("BUG: (a) the spend-3-XP variant → Vortex must be OFFERED in the showdown menu and playable via the bundle for exactly 4 energy + [order] + [rainbow], XP 5 → 2 (356.2.b.1, 356.3, 356.4, 357.2)", async () => {
+  test("(a) the spend-3-XP variant → Vortex must be OFFERED in the showdown menu and playable via the bundle for exactly 4 energy + [order] + [rainbow], XP 5 → 2 (356.2.b.1, 356.3, 356.4, 357.2)", async () => {
     const game = await p1FocusAtVortex({ energy: 4, power: { order: 1, rainbow: 1 } });
     expect(variants(game)).toContainEqual(["battlefield-mv", true]);
     await game.p1.play("poppy", { payOptional: true, to: "mv" });
@@ -202,7 +197,7 @@ describe("Poppy [Ambush] into a Mystic Vortex showdown on the turn P1 held Vault
   // on the menu (it is for → base at the same price, and the raw move to Vaults is accepted and charges 4).
   // Actual: the enumerator offers the XP variant to a battlefield destination only once the pool covers the
   // UNdiscounted 7 — at 4..6 energy only [base, xp] is listed.
-  test.failing("BUG: (c) with exactly 4 energy + [order] the spend-XP play → Vaults must be offered alongside → base (same 4 + [order] total; 356.4, 358)", async () => {
+  test("(c) with exactly 4 energy + [order] the spend-XP play → Vaults must be offered alongside → base (same 4 + [order] total; 356.4, 358)", async () => {
     const game = await p1Main({ energy: 4, power: { order: 1 } });
     expect(variants(game)).toEqual([
       ["base", true],

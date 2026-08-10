@@ -78,6 +78,24 @@ export interface CostModelContext {
   readonly assumeChooseDiscount?: boolean;
   /** rule 356.1.b.2 — the play ignores its Energy component. */
   readonly ignoreEnergyCost?: boolean;
+  /**
+   * rule 822.4 / 811.6 / 356.3 — the card HAS [Reaction] for this play (an
+   * [Ambush] unit played to a battlefield where its controller has units, a
+   * card played from facedown), so "cards with [Reaction] cost more" applies.
+   */
+  readonly grantedReaction?: boolean;
+  /**
+   * The zone the play comes from (`hand`, `championZone`, `trash`,
+   * `facedown`, `banishment`, …). `facedown` puts the rule 812.2 "ignoring its
+   * cost" alternative on the model even for a card an effect hid.
+   */
+  readonly playedFrom?: string;
+  /**
+   * Base-cost overrides an INSTRUCTION imposes on the play (rule 356.1.a/b —
+   * "for [cost]", "ignoring its [Energy] cost", "reduced by [N]") and any
+   * destination surcharge (Dragon Roost's pips), merged under the selection.
+   */
+  readonly extras?: Partial<CostExtras>;
 }
 
 /** Stable ids of the additional costs this module derives. */
@@ -90,6 +108,8 @@ export const ADDITIONAL_COST_IDS = {
   kill: "kill",
   killAny: "kill-any",
   pay: "pay",
+  /** rule 356.2 / 355.2.b (ven-157-166) — a DESTINATION battlefield's "pay [A][A] to play a X here". */
+  redirect: "redirect",
   returnToHand: "return-to-hand",
   spendBuff: "spend-buff",
   spendBuffAny: "spend-buff-any",
@@ -220,7 +240,7 @@ export function getPlayCostModel(
   if (selfTrash) {
     alternatives.push({ cost: toComponent(selfTrash), from: ["trash"], id: ALTERNATIVE_COST_IDS.selfTrash });
   }
-  if (registry.hasKeyword(cardId, "Hidden")) {
+  if (registry.hasKeyword(cardId, "Hidden") || ctx.playedFrom === "facedown") {
     // rule 812.2 — a facedown [Hidden] card is played from its battlefield ignoring its cost.
     alternatives.push({ cost: {}, from: ["facedown"], id: ALTERNATIVE_COST_IDS.hidden });
   }
@@ -441,12 +461,20 @@ export function computeTotalCost(
   selection: PlayCostSelection,
   ctx: CostModelContext = {},
   model: PlayCostModel = getPlayCostModel(state, playerId, cardId, ctx),
+  /** Spend one-shot "next card costs N less" riders — ONLY inside the pay path on a draft. */
+  consume = false,
 ): TotalCost {
   const objects: ObjectPayment[] = [];
   const paidIds: string[] = [];
   let entersReady = false;
   let illegal: string | undefined;
+  const seed = ctx.extras ?? {};
   const extras: CostExtras = {
+    ...seed,
+    ...(seed.additionalCost
+      ? { additionalCost: { energy: seed.additionalCost.energy ?? 0, power: [...(seed.additionalCost.power ?? [])] } }
+      : {}),
+    ...(seed.waivePower ? { waivePower: { ...seed.waivePower } } : {}),
     ...(ctx.board ? { board: ctx.board } : {}),
     ...(ctx.targets ? { targets: [...ctx.targets] } : {}),
     ...(ctx.chosenTargetId ? { chosenTargetId: ctx.chosenTargetId } : {}),
@@ -454,6 +482,7 @@ export function computeTotalCost(
     ...(ctx.repeatCount !== undefined ? { repeatCount: ctx.repeatCount } : {}),
     ...(ctx.assumeChooseDiscount ? { assumeChooseDiscount: true } : {}),
     ...(ctx.ignoreEnergyCost ? { ignoreEnergyCost: true } : {}),
+    ...(ctx.grantedReaction ? { grantedReaction: true } : {}),
   };
 
   // rule 356.1.a — alternative cost.
@@ -476,9 +505,14 @@ export function computeTotalCost(
       illegal ??= `unknown-cost:${id}`;
     }
   }
-  let addEnergy = 0;
-  const addPower: string[] = [];
+  let addEnergy = extras.additionalCost?.energy ?? 0;
+  const addPower: string[] = [...(extras.additionalCost?.power ?? [])];
   const waive: Record<string, number> = {};
+  for (const [d, n] of Object.entries(extras.waivePower ?? {})) {
+    if (n && n > 0) {
+      waive[d] = n;
+    }
+  }
   for (const entry of model.additional) {
     const paid = paidEntry(selection, entry.id);
     if (entry.id === ADDITIONAL_COST_IDS.deflect) {
@@ -551,6 +585,12 @@ export function computeTotalCost(
         objects.push({ costId: entry.id, kind: "return-to-hand", objects: paid.objects });
         break;
       }
+      case ADDITIONAL_COST_IDS.redirect: {
+        // rule 356.2 / 355.2.b (ven-157-166) — the destination's own pips.
+        addEnergy += entry.cost.energy ?? 0;
+        addPower.push(...(entry.cost.power ?? []));
+        break;
+      }
       default: {
         break;
       }
@@ -558,11 +598,15 @@ export function computeTotalCost(
   }
   if (addEnergy !== 0 || addPower.length > 0) {
     extras.additionalCost = { energy: addEnergy, power: addPower };
+  } else {
+    delete extras.additionalCost;
   }
   if (Object.keys(waive).length > 0) {
     extras.waivePower = waive;
+  } else {
+    delete extras.waivePower;
   }
-  const resources = computePlayResourceCost(state, playerId, cardId, extras, ctx.getCardMeta, false);
+  const resources = computePlayResourceCost(state, playerId, cardId, extras, ctx.getCardMeta, consume);
   return { entersReady, extras, objects, paidIds, resources, ...(illegal ? { illegal } : {}) };
 }
 

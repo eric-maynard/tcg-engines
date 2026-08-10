@@ -164,12 +164,7 @@ describe("Eclipse Dragon × Dragon Roost × Herald of Scales — two independent
     expect(viaRoost.state("dragon")).toMatchObject({ isExhausted: true, zone: "battlefield-roost" });
   });
 
-  // Expected (357.3): 'both' needs 7 energy + 3 power (one of them fury); with 2 power in the pool the election is
-  // deterministically unpayable → the variant must be ABSENT and a request for it refused with nothing spent.
-  // Actual: playUnit checks the Accelerate cost and the Roost pips SEPARATELY against the pool, so {roost, paid} is
-  // enumerated; executing it pays 6 + both pips for the Roost, then silently drops the unpayable Accelerate — the
-  // Dragon lands exhausted for a "both" request.
-  test.failing("BUG: (b) pool {7, fury:1, calm:1}: the 'both' variant (Accelerate + Roost = 7 + 3 power) is ABSENT and asking for it is refused with the pool intact (357.3)", async () => {
+  test("(b) pool {7, fury:1, calm:1}: the 'both' variant (Accelerate + Roost = 7 + 3 power) is ABSENT and asking for it is refused with the pool intact (357.3)", async () => {
     const pool: Pool = { energy: 7, power: { calm: 1, fury: 1 } };
     const game = await board(pool).build();
     expect(variants(game)).not.toContainEqual(v("roost", true));

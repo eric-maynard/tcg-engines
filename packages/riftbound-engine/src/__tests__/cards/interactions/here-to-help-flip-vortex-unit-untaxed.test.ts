@@ -114,13 +114,14 @@ describe("Here to Help flipped at Mystic Vortex → untaxed Vanguard Sergeant mi
     expect(game.zoneOf("hthHidden")).toBe("chain");
   });
 
-  // Expected (811.6 + 356.1.b.3 + 356.3): the flip ignores the base 2+[body] but, being a card WITH Reaction
-  // played during a showdown at the Vortex, pays the [rainbow] surcharge → {energy 3, body 1, rainbow 0}.
-  // Actual: the engine only surcharges cards with PRINTED Reaction; the Hidden-granted Reaction is missed → free.
-  test("(a) flipping Here to Help at the Vortex during the showdown costs exactly [rainbow] — base cost ignored, surcharge not (811.1.b, 811.6, 356.1.b.3)", async () => {
+  // 811.6 + 356.1.b.3 + 356.3: the flip ignores the base 2+[body] but, being a card WITH Reaction played during a
+  // showdown at the Vortex, pays the [rainbow] surcharge → energy untouched, exactly ONE power (of any domain,
+  // 135.2.e.5.a — which of the two equally-stocked pips pays it is the pool's business) leaves the pool.
+  test("(a) flipping Here to Help at the Vortex during the showdown costs exactly one power of any domain — base cost ignored, surcharge not (811.1.b, 811.6, 356.1.b.3)", async () => {
     const game = await closedState();
     await game.p1.reveal("hthHidden");
-    expect(game.p1.resources()).toEqual({ energy: 3, power: { body: 1, rainbow: 0 } });
+    expect(game.p1.energy()).toBe(3);
+    expect(game.p1.power()).toBe(1);
   });
 
   test("(a) it resolves BEFORE Cleave: after both pass, P1 is asked for the unit while Cleave is still on the chain", async () => {
@@ -168,7 +169,7 @@ describe("Here to Help flipped at Mystic Vortex → untaxed Vanguard Sergeant mi
     await game.p1.pick("sarge");
     expect(game.locationOf("sarge")).toBe("mv");
     expect(game.p1.energy()).toBe(2);
-    expect(game.p1.power("body")).toBe(1); // the [body] pip was never touched (base cost ignored on the flip)
+    expect(game.p1.power()).toBe(1); // exactly one pip went on the flip's [rainbow]; the base [body] cost was ignored
   });
 
   test("(b) the Sergeant enters EXHAUSTED and is designated a Defender in the ongoing combat (323.2.a)", async () => {

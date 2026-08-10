@@ -271,10 +271,7 @@ describe("Here to Help → Atakhan onto the held Vaults of Helia: −[3], +[1] a
     // (the harness's generic `costPaid` invariant does not know the kill discount — not asserted here)
   });
 
-  // Expected: the legal-action menu lists the Vaults as a destination for the kill-Qiyana hand play (the move
-  // accepts it, above). Actual: when only the kill discount makes Atakhan affordable the enumerator emits the
-  // paid variants with location "base" only, so `play(ata, {to: vaults, sacrifice: qiyana})` has no variant.
-  test.failing("BUG: (f) the direct kill-Qiyana play is OFFERED to the Vaults, not just to base (355.2.a — a controlled battlefield is a valid location; enumerator/condition mismatch)", async () => {
+  test("(f) the direct kill-Qiyana play is OFFERED to the Vaults, not just to base (355.2.a — a controlled battlefield is a valid location)", async () => {
     const game = await board().build();
     await holdVaultsThenFloat(game, { energy: 5, order: 3 });
     const locations = [...new Set((game.p1.option("play", "ata")?.variants ?? []).filter((v) => v.params.sacrificeId === "qiyana").map((v) => game.normalizeZone(String(v.params.location))))].sort();

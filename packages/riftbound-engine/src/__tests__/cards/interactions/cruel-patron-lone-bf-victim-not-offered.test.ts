@@ -23,22 +23,22 @@
  * follows Patron leaving the chain / entering the board), 337.2 (a unit resolves immediately after
  * finalizing — no priority window), 419.2.a (unpayable → not a legal play), 419.4.b (Legion-style
  * counters key off Finalized plays).
- * Rulings: Cruel Patron 7e1f5339aa98e7ce / 81bdefc55681da4a / dbfdd1e2c7fcd2fb / db8a04e8cd97d7ad —
- * killing your only unit at the battlefield you are playing Patron to makes that location invalid at
- * Check Legality, so the play is illegal. (Tension noted: Heedless Resurrection ruling 65067299111e398c
- * argues control persists through a Closed state; the Patron-specific rulings are explicit and are
- * followed here.) Ruling 78b8dc653fe50147 — a unit with no triggers gives the opponent no window.
+ * Rulings: Cruel Patron 7e1f5339aa98e7ce / 81bdefc55681da4a / dbfdd1e2c7fcd2fb / db8a04e8cd97d7ad (pre-Unleashed) —
+ * killing your only unit at the battlefield you are playing Patron to makes that location invalid, so the play is
+ * illegal. RULING-CONFLICT: the official Unleashed clarification 9a32c2cc829f221a (187.4.c / 190.4 / 323.6 — control of a
+ * battlefield cannot be lost while items are on the chain; "abilities that kill units as a cost in order to play another
+ * unit will be able to kill units at battlefields and then play the resulting unit to that same battlefield", with Cruel
+ * Patron as its own first example) and the engine's one BATTLEFIELD CONTROL TIMING model say LEGAL. The engine follows
+ * the CR + the official clarification; the older facets are rewritten to it below. Ruling 78b8dc653fe50147 — a unit with
+ * no triggers gives the opponent no window.
  *
  * Expected:
- *   (a) locations {base, bf1}; bf1 → kill options {Recruit} ONLY (Sergeant would empty bf1 → illegal, so
- *       it must be absent, not rejected later); base → {Sergeant, Recruit}. bf1/kill Recruit: Recruit
- *       ceases to exist, energy 4 → 0, Patron at bf1 exhausted beside the Sergeant, P1 keeps bf1, no
- *       chain / no P2 priority.
- *   (b) locations {base} only. Play: Sergeant → trash, 4 paid, Patron in base exhausted; bf1 has no P1
- *       unit → P1 loses control at the Cleanup following Patron's resolution.
+ *   (a) locations {base, bf1}; kill options at EITHER location = {Sergeant, Recruit}. bf1/kill Recruit: Recruit ceases to
+ *       exist, energy 4 → 0, Patron at bf1 exhausted beside the Sergeant, P1 keeps bf1, no chain / no P2 priority.
+ *   (b) locations {base, bf1}. → base: Sergeant → trash, 4 paid, Patron in base exhausted; bf1 has no P1 unit → P1
+ *       loses control at the Cleanup following Patron's resolution. → bf1: legal; Patron alone there keeps bf1.
  *   (c) not a legal play at all.
- *   (d) refused / fully undone: Sergeant still at bf1 with 1 damage, exhausted, never in the trash; bf1
- *       still P1's; energy 4; Patron in HAND; chain empty; trash unchanged; no cards-played increment.
+ *   (d) the raw {bf1, kill Sergeant} bundle is one complete legal play — never a partial outcome.
  */
 import { describe, expect, test } from "bun:test";
 import type { Game } from "../../../harness";
@@ -76,7 +76,7 @@ function killsOfferedAt(game: Game, location: "base" | "bf1"): string[] {
 }
 const cardsPlayed = (game: Game) => (game.gameState as unknown as { cardsPlayedThisTurn?: Record<string, number> }).cardsPlayedThisTurn?.[P1] ?? 0;
 
-describe("Cruel Patron — the lone unit holding the battlefield you play Patron to is not a legal victim", () => {
+describe("Cruel Patron — killing the lone unit holding the battlefield you play Patron to (RULING-CONFLICT resolved to CR 190.4 / 323.6: legal, control persists mid-play)", () => {
   // ---- (a) Sergeant alone at bf1 + Recruit in base ------------------------------------------------------
 
   test("(a) locations offered for Patron = {base, bf1} (355.2.a)", async () => {
@@ -92,13 +92,14 @@ describe("Cruel Patron — the lone unit holding the battlefield you play Patron
     expect(all).not.toContain("enemy");
   });
 
-  // Expected (355.16 / 357.3 / 358.3 + Patron rulings): with bf1 elected, killing the Sergeant would empty
-  // bf1 and make the location illegal at Check Legality → that payment must be ABSENT from the offer.
-  // Actual: the engine enumerates {location: bf1, sacrifice: sarge} as a valid variant.
-  test.failing("BUG: (a) electing bf1: kill-cost candidates = {Recruit} ONLY — the lone Sergeant holding bf1 must not be offered (355.16, 357.3, 358.3)", async () => {
+  // RULING-CONFLICT: riftjudge 7e1f5339aa98e7ce / 81bdefc55681da4a / dbfdd1e2c7fcd2fb / db8a04e8cd97d7ad say the lone
+  // Sergeant must not be offered when bf1 is elected; CR 190.4 / 323.6 (control lapses only in an OPEN-state Cleanup —
+  // Patron is on the chain while its cost is paid) + the official Unleashed clarification 9a32c2cc829f221a ("kill units as
+  // a cost … then play the resulting unit to that same battlefield") say bf1 stays Valid — engine follows CR: both units
+  // are candidates at bf1 exactly as in base (operations/battlefield-control.ts, rulings/cruel-patron-9a32c2cc829f221a).
+  test("(a) electing bf1: kill-cost candidates = {Sergeant, Recruit} — bf1 cannot be lost mid-play (190.4, 323.6, official 9a32c2cc829f221a)", async () => {
     const game = await board({ recruit: true }).build();
-    expect(killsOfferedAt(game, "bf1")).toEqual(["recruit"]);
-    await expect(game.p1.play("patron", { sacrifice: "sarge", to: "bf1" })).rejects.toThrow();
+    expect(killsOfferedAt(game, "bf1")).toEqual(["recruit", "sarge"]);
   });
 
   test("(a) play Patron → bf1 killing the Recruit: token ceases to exist, 4 energy → 0, Patron at bf1 EXHAUSTED beside the untouched Sergeant, P1 keeps bf1", async () => {
@@ -130,21 +131,21 @@ describe("Cruel Patron — the lone unit holding the battlefield you play Patron
 
   // ---- (b) the Sergeant is P1's ONLY unit ------------------------------------------------------------------
 
-  // Expected: the only payable cost (kill the Sergeant) deterministically invalidates bf1 as a location, and
-  // base IS an alternative, so bf1 must not be offered at all (355.16). Actual: {base, bf1} are both offered.
-  test.failing("BUG: (b) with the Sergeant as the only friendly unit, the ONLY location offered is base — bf1 is absent (355.16, 358.3)", async () => {
+  // RULING-CONFLICT: riftjudge 7e1f5339… / db8a04e8… say bf1 is absent and {bf1, kill Sergeant} rejected; CR 190.4 /
+  // 323.6 + official 9a32c2cc829f221a keep bf1 Valid through the play — engine follows CR: {base, bf1} both offered, and
+  // Patron → bf1 killing the lone Sergeant lands there and HOLDS bf1 for P1.
+  test("(b) with the Sergeant as the only friendly unit BOTH locations are offered and Patron → bf1 killing him is legal: Sergeant in trash, 4 paid, Patron alone at bf1, bf1 still P1's (190.4, 323.6)", async () => {
     const game = await board().build();
     expect(game.p1.can("play", "patron")).toBe(true);
     expect(killsOfferedAt(game, "base")).toEqual(["sarge"]);
-    expect(locationsOffered(game)).toEqual(["base"]);
-  });
-
-  // Expected: the bundle {to: bf1, kill: Sergeant} is illegal and must be rejected. Actual: accepted —
-  // Patron lands at bf1 and P1 keeps the battlefield it just emptied.
-  test.failing("BUG: (b) play(patron → bf1, kill Sergeant) is rejected outright (358.3 / Patron rulings)", async () => {
-    const game = await board().build();
-    await expect(game.p1.play("patron", { sacrifice: "sarge", to: "bf1" })).rejects.toThrow();
-    expect(game.zoneOf("patron")).toBe("hand");
+    expect(locationsOffered(game)).toEqual(["base", "battlefield-bf1"]);
+    await game.p1.play("patron", { sacrifice: "sarge", to: "bf1" });
+    expect(game.zoneOf("sarge")).toBe("trash");
+    expect(game.p1.energy()).toBe(0);
+    expect(game.zoneOf("patron")).toBe("battlefield-bf1");
+    await game.settle();
+    expect(game.gameState.battlefields.bf1).toMatchObject({ contested: false, controller: P1 });
+    expect(game.violations()).toEqual([]);
   });
 
   test("(b) play Patron → base: Sergeant killed to trash as the cost (357.2), 4 energy paid, Patron in P1's base exhausted, no P1 unit left at bf1", async () => {
@@ -203,16 +204,14 @@ describe("Cruel Patron — the lone unit holding the battlefield you play Patron
     expect(game.zoneOf("enemy")).toBe("base");
   });
 
-  // ---- (d) rollback probe: forced {bf1, kill Sergeant} on board (b) --------------------------------------------
+  // ---- (d) the raw bundle {bf1, kill Sergeant} on board (b) ---------------------------------------------------
 
-  // Expected (358.3 + 358.5): whether the raw submission is refused up front or undone at Check Legality, the
-  // state afterwards is EXACTLY the state before — in particular no partial rollback (unit dead but Patron in
-  // hand, or energy gone). Actual: the engine accepts the move; the Sergeant is in the trash and Patron sits
-  // at bf1 with 0 energy left.
-  test.failing("BUG: (d) a raw playUnit {location: bf1, kill: Sergeant} leaves the game untouched — Sergeant at bf1 (1 dmg, exhausted, never trashed), bf1 P1's, energy 4, Patron in hand, chain/trash empty, no cards-played increment (358.3, 358.5, 419.4.b)", async () => {
+  // RULING-CONFLICT: riftjudge 7e1f5339… / db8a04e8… expect this refused and fully undone (358.5); CR 190.4 / 323.6 +
+  // official 9a32c2cc829f221a make it a legal play — engine follows CR. What must hold either way: never a PARTIAL
+  // outcome — everything happened (Sergeant dead, 4 paid, Patron on bf1, one card played).
+  test("(d) a raw playUnit {location: bf1, kill: Sergeant} is a complete, legal play — Sergeant in trash, energy 0, Patron at bf1, bf1 P1's, exactly one card played (357.2, 358, 190.4)", async () => {
     const game = await board().build();
-    const hashBefore = game.stateHash();
-    await game.p1.try((p) =>
+    const r = await game.p1.try((p) =>
       p.do("playUnit", {
         cardId: "patron",
         costs: { paid: { kill: { objects: ["sarge"] } } },
@@ -221,15 +220,15 @@ describe("Cruel Patron — the lone unit holding the battlefield you play Patron
         sacrificeId: "sarge",
       }),
     );
-    expect(game.zoneOf("sarge")).toBe("battlefield-bf1");
-    expect(game.state("sarge")).toMatchObject({ damage: 1, isExhausted: true });
-    expect(game.p1.trash()).toEqual([]);
-    expect(game.gameState.battlefields.bf1).toMatchObject({ contested: false, controller: P1 });
-    expect(game.p1.energy()).toBe(4);
-    expect(game.zoneOf("patron")).toBe("hand");
+    expect(r.ok).toBe(true);
+    expect(game.zoneOf("sarge")).toBe("trash");
+    expect(game.p1.energy()).toBe(0);
+    expect(game.zoneOf("patron")).toBe("battlefield-bf1");
     expect(game.chain()).toEqual([]);
-    expect(cardsPlayed(game)).toBe(0);
+    expect(cardsPlayed(game)).toBe(1);
     expect(game.decision()).toMatchObject({ context: "main", kind: "action", seat: P1 });
-    expect(game.stateHash()).toBe(hashBefore);
+    await game.settle();
+    expect(game.gameState.battlefields.bf1).toMatchObject({ contested: false, controller: P1 });
+    expect(game.violations()).toEqual([]);
   });
 });
