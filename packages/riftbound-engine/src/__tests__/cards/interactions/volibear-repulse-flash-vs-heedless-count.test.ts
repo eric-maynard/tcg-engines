@@ -353,8 +353,9 @@ describe("(d) baseline — Volibear names ONLY A: Repulse is legal from the star
   // choices are a friendly unit and Volibear's ABILITY on the chain — it never chooses Volibear — so it
   // costs exactly 1 + [body]. Actual: the engine keys the ability's chain item by Volibear's card id and
   // charges [Deflect 2] on top, so with exactly 1 energy + 1 body Repulse is not offered.
-  test.failing("BUG: Repulse aimed at Volibear's trigger pays no Deflect — castable with exactly 1 energy + [body] (809.1.c: Deflect is about choosing the unit, not its ability)", async () => {
-    const game = await board().resources(P2, { energy: 1, power: { body: 1 } }).build();
+  test("Repulse aimed at Volibear's trigger pays no Deflect — castable with exactly 1 energy + [body] (809.1.c: Deflect is about choosing the unit, not its ability)", async () => {
+    // exactly Repulse's printed cost in the pool: 1 energy + one [body], nothing spare for a Deflect
+    const game = await board({ body: 1 }).resources(P2, { energy: 1 }).build();
     await attackNaming(game, ["a"]);
     expect(game.p2.resources()).toEqual({ energy: 1, power: { body: 1 } });
     expect(game.p2.can("cast", "repulse")).toBe(true);

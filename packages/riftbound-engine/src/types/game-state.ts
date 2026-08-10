@@ -707,6 +707,15 @@ export interface RevealAndPickChoice {
   readonly playIgnoreCost?: boolean;
 
   /**
+   * rule 356.4 / 359.3.e.6 (ogn-242-298 Baited Hook): "you may BANISH a unit
+   * from among them AND play it" — the banish is its own instruction and
+   * happens on selection, so the pick is offered even when the play that
+   * follows cannot be performed (e.g. an unpayable mandatory additional cost).
+   * The card then simply stays in banishment.
+   */
+  readonly playBanishFirst?: boolean;
+
+  /**
    * rule 356.1.b.1 (ogn-115-298 Promising Future): "playing it, ignoring its
    * Energy cost" — Power pips are still paid in full.
    */
@@ -1369,6 +1378,83 @@ export interface PickManyChoice {
   readonly thenIsSequenceRest?: boolean;
 }
 
+/**
+ * rule 751–755 — one re-choosable CHOICE SLOT of a finalized chain item (see
+ * `abilities/new-choices.ts`): a mode (355.3), a target / Might-reference
+ * source (355.5), a target SET (355.13 / 355.14.b) or a Move Destination
+ * (355.4). `current` is what the item holds right now (card ids, a zone id, a
+ * mode index as a string); `parent` names the slot this one depends on (a
+ * mode's own target, a mover's destination, a split's recipients).
+ */
+export interface NewChoiceSlotState {
+  readonly key: string;
+  readonly kind: "mode" | "target" | "source" | "targets" | "destination";
+  readonly label: string;
+  readonly parent?: string;
+  readonly current: readonly string[];
+  /** open = not asked yet; kept = declined / re-named; changed = a new choice was made; skipped = nothing legal to offer or its parent was kept. */
+  readonly status: "open" | "kept" | "changed" | "skipped";
+}
+
+/** One option of the slot currently asked by a `new-choices` prompt. */
+export interface NewChoiceOption extends PendingItem {
+  /** True for the value the item currently holds — naming it again keeps it (751.1). */
+  readonly current?: boolean;
+  /** rule 355.3 — mode index, for a mode slot. */
+  readonly mode?: number;
+  /** rule 355.4 — zone id, for a destination slot. */
+  readonly zone?: string;
+  /**
+   * rule 754 / 755 — the [Deflect] surcharge newly choosing this object INCURS;
+   * shown for information only: costs "to play" incurred by new choices are ignored.
+   */
+  readonly deflectIgnored?: number;
+}
+
+/**
+ * rule 751–755 (ogn-080-298 Mystic Reversal, ven-152-166 Rebuttal — "you may
+ * make new choices for it") — the NEW CHOICES dialog for finalized chain item
+ * `itemId`, asked of `playerId` (its new controller) one slot at a time in
+ * `slots` order: `cursor` is the slot on offer and `options` / `min` / `max` /
+ * `keepable` describe it, every candidate computed from the chooser's seat
+ * (753.1 — "friendly" / "enemy" re-read; the item itself never a target,
+ * 355.9.c). Answers: `pickedKeys` (re-)names the slot's value(s) — the current
+ * value again keeps it, a new one is a NEW targeting event (754: "when you
+ * choose me" fires; 755: any cost it incurs is ignored); `keep: true` keeps the
+ * slot (and skips the slots depending on it); `keepAll: true` keeps everything
+ * still open. The item stays finalized throughout — no re-pending, no payment.
+ */
+export interface NewChoicesChoice {
+  readonly type: "new-choices";
+  readonly playerId: PlayerId;
+  /** The chain item's card (the spell being re-chosen for). */
+  readonly sourceCardId: CardId;
+  readonly itemId: string;
+  /** The card whose effect granted the new choices (Mystic Reversal), if any. */
+  readonly grantedBy?: CardId;
+  /**
+   * rule 359.3.d / 752.1 — this prompt belongs to the item being re-chosen,
+   * not to the resolution that granted it, so the granting spell settles at once.
+   */
+  readonly reChoose: true;
+  /** "you MAY make new choices" — every slot may be kept. */
+  readonly optional: boolean;
+  /** rule 811.1.d.2 — a from-Hidden play's "here" lock rides along to the new controller. */
+  readonly hiddenZone?: string;
+  /** Every object the item targeted before the dialog opened (754: only NEW objects trigger). */
+  readonly originalTargets: readonly string[];
+  readonly slots: readonly NewChoiceSlotState[];
+  readonly cursor: number;
+  readonly options: readonly NewChoiceOption[];
+  readonly min: number;
+  readonly max: number;
+  /** False when the slot MUST be (re-)named — its parent changed and left it empty (753.1). */
+  readonly keepable: boolean;
+  /** "split" / "upTo" for a target-set slot (355.14.b / 355.13). */
+  readonly slotSemantics?: "split" | "upTo";
+  readonly prompt: string;
+}
+
 export type PendingChoice =
   | CombatDamageChoice
   | RevealAndPickChoice
@@ -1379,6 +1465,7 @@ export type PendingChoice =
   | ChooseModeChoice
   | ChoosePlayerChoice
   | ConfirmChoice
+  | NewChoicesChoice
   | OptInChoice
   | OrderChoice
   | PickManyChoice

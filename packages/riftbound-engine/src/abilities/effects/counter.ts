@@ -4,6 +4,7 @@ import { removeChainItem } from "../../chain";
 import { isLegalCounterTarget } from "../../chain/counter-target";
 import { canAffordPower } from "../../game-definition/moves/chain/effect-context";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
+import { noteCounteredPlay } from "../../operations/plays-this-turn";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import { type EffectHelpers } from "./_helpers";
 
@@ -181,6 +182,22 @@ export function handle_counter(effect: ExecutableEffect, ctx: EffectContext, _h:
       if (targetItem && !targetItem.countered && !targetItem.uncounterable) {
         // Mutate in-place (we're inside an Immer draft)
         (targetItem as { countered: boolean }).countered = true;
+        // rule 412 (ruling 5807cc9df8627167) — a countered spell never
+        // resolves, so "when you play your Nth card in a turn" skips its
+        // ordinal and the NEXT card played is that turn's Nth. The play still
+        // counts for non-triggered bookkeeping (419.4.b — Legion, "played
+        // another spell this turn"), so only the ordinal is voided.
+        if (targetItem.type === "spell") {
+          const spellController =
+            ctx.cards.getCardController?.(targetItem.cardId as CoreCardId) ??
+            ctx.cards.getCardOwner(targetItem.cardId as CoreCardId);
+          const ordinal = (
+            ctx.draft as { spellPlayOrdinals?: Record<string, number> }
+          ).spellPlayOrdinals?.[targetItem.cardId];
+          if (spellController && ordinal !== undefined) {
+            noteCounteredPlay(ctx.draft, spellController, ordinal);
+          }
+        }
         // rule-id: sfd-206-221 — remember "that spell" for follow-up steps, since
         // a countered spell no longer sits on the chain to be read back.
         ctx.draft.lastCounterTargetId = targetItem.cardId;
@@ -189,11 +206,16 @@ export function handle_counter(effect: ExecutableEffect, ctx: EffectContext, _h:
         // settles when it leaves the chain.
         // rule 829.1.b.1 / 370.2 / 372 — a spell played via [Flow] carries a
         // delayed "banish it instead" replacement on leaving the chain; it wins
-        // over "to hand instead of trash" whichever order the two apply.
+        // over "to hand instead of trash" whichever order the two apply. Same
+        // for a spell played with a "recycle it after you play it" rider
+        // (Fizz, Kai'Sa — `resolveTo: "mainDeck"`; ruling 54eaac53e28fa48f):
+        // rule 372 lets the owner order the two replacements, but either
+        // order ends with the spell recycled.
         if (
           (effect as { destination?: string }).destination === "hand" &&
           targetItem.type === "spell" &&
-          targetItem.resolveTo !== "banishment"
+          targetItem.resolveTo !== "banishment" &&
+          targetItem.resolveTo !== "mainDeck"
         ) {
           (targetItem as { resolveTo?: string }).resolveTo = "hand";
         }

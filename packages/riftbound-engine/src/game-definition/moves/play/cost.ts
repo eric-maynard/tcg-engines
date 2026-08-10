@@ -1817,6 +1817,58 @@ function locationIgnoresDeflect(
   return false;
 }
 
+/** Does this effect tree name a Chain object (a spell/ability) as its target? */
+function namesChainObject(node: unknown, depth = 0): boolean {
+  if (node === null || typeof node !== "object" || depth > 8) {
+    return false;
+  }
+  for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
+    if (
+      key === "target" &&
+      typeof value === "object" &&
+      value !== null &&
+      ["ability", "spell", "spell-or-ability"].includes(
+        String((value as { type?: unknown }).type),
+      )
+    ) {
+      return true;
+    }
+    if (namesChainObject(value, depth + 1)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * rule 809.1.c (unl-106-219 × ogn-041-298) — [Deflect] taxes spells and
+ * abilities that choose the PERMANENT ("each time they choose me"). A counter
+ * aimed at that permanent's ABILITY on the Chain chooses a different object —
+ * the Chain Item — so it owes no Deflect, even though the item is keyed by the
+ * permanent's card id.
+ */
+function choiceIsChainAbility(
+  state: RiftboundGameState,
+  targetId: string,
+  sourceCardId?: string,
+): boolean {
+  if (sourceCardId === undefined) {
+    return false;
+  }
+  const items =
+    (
+      state as {
+        interaction?: { chain?: { items?: readonly { cardId?: string; type?: string }[] } };
+      }
+    ).interaction?.chain?.items ?? [];
+  if (!items.some((it) => it?.cardId === targetId && it.type === "ability")) {
+    return false;
+  }
+  return (getGlobalCardRegistry().getAbilities(sourceCardId) ?? []).some((ability) =>
+    namesChainObject((ability as { effect?: unknown }).effect),
+  );
+}
+
 export function getDeflectSurcharge(
   _state: RiftboundGameState,
   _playerId: string,
@@ -1838,6 +1890,10 @@ export function getDeflectSurcharge(
     // rule 766 / 767 — Deflect is Inactive for this payment while the chosen
     // object sits at a battlefield that waives it.
     if (locationIgnoresDeflect(_state, targetId, zones)) {
+      continue;
+    }
+    // rule 809.1.c — the choice is the ability on the Chain, not the unit.
+    if (choiceIsChainAbility(_state, targetId, sourceCardId)) {
       continue;
     }
     const controller =

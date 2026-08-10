@@ -684,7 +684,7 @@ function makeDeflectAffordable(
     }
   }
   return (cardId: string): boolean =>
-    getDeflectSurcharge(ctx.draft as never, playerId ?? "", [cardId], ctx.cards, undefined, ctx.zones) <=
+    getDeflectSurcharge(ctx.draft as never, playerId ?? "", [cardId], ctx.cards, source, ctx.zones) <=
     budget;
 }
 

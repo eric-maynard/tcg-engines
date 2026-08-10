@@ -7,6 +7,7 @@
 
 import { getGlobalCardRegistry } from "../operations/card-lookup";
 import type { GameEvent } from "./game-events";
+import { counteredPlaysBefore } from "../operations/plays-this-turn";
 
 /**
  * rule 383.4.d — card types an `on` descriptor may scope its subject to. Only
@@ -290,14 +291,17 @@ function restrictionSatisfied(
         // its play was tallied, so use the ordinal recorded when it was played.
         const recorded =
           event.type === "play-card" ? state?.spellPlayOrdinals?.[event.cardId] : undefined;
+        const owner = "playerId" in event ? event.playerId : card.owner;
         if (recorded !== undefined) {
-          return recorded === n;
+          // rule 412 (ruling 5807cc9df8627167) — a countered play never
+          // resolved, so it does not take up an ordinal for this trigger.
+          return recorded - counteredPlaysBefore(state ?? {}, owner, recorded) === n;
         }
         // Reducers fire play-card BEFORE incrementing cardsPlayedThisTurn, so
         // the current play is the (prior + 1)th card this turn.
-        const playerId = "playerId" in event ? event.playerId : card.owner;
-        const prior = state?.cardsPlayedThisTurn?.[playerId] ?? 0;
-        return prior + 1 === n;
+        const prior = state?.cardsPlayedThisTurn?.[owner] ?? 0;
+        const ordinal = prior + 1;
+        return ordinal - counteredPlaysBefore(state ?? {}, owner, ordinal) === n;
       }
       // rule-id: ogn-205-298 — "The third time I move in a turn": fireTriggers
       // tallies the event before matching, so the Nth occurrence is exactly a
@@ -651,6 +655,12 @@ function triggerMatchesEvent(
     // rule 383.1 (sfd-047-221) — "When YOU buff me" is attributed to the
     // buffing player: an opponent's effect buffing this card must not fire it.
     if (mapped === "buff" && "playerId" in event && event.playerId !== card.owner) {
+      return false;
+    }
+    // rule 827.1.c / 441.1.c.1 (rule-id: ven-153-166) — "When I become
+    // [Empowered]" is an edge trigger: re-empowering an already-Empowered card
+    // still publishes the empower ACTION event, but nothing BECAME Empowered.
+    if (event.type === "empower" && event.becameEmpowered === false) {
       return false;
     }
     // rule 383.4.b (sfd-057-221) — "When YOU choose me" is attributed to the
