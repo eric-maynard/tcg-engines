@@ -1392,8 +1392,14 @@ export interface NewChoiceSlotState {
   readonly label: string;
   readonly parent?: string;
   readonly current: readonly string[];
-  /** open = not asked yet; kept = declined / re-named; changed = a new choice was made; skipped = nothing legal to offer or its parent was kept. */
-  readonly status: "open" | "kept" | "changed" | "skipped";
+  /**
+   * open = not reached yet; kept = declined (everything depending on it is
+   * skipped); renamed = the current value was named again (751.1 — not a new
+   * choice, its dependants are still offered); changed = a new choice was made;
+   * settled = nothing legal to change to (753.2), not asked; skipped = its
+   * parent was kept.
+   */
+  readonly status: "open" | "kept" | "renamed" | "changed" | "settled" | "skipped";
 }
 
 /** One option of the slot currently asked by a `new-choices` prompt. */
