@@ -3280,6 +3280,11 @@ export const pendingChoiceMoves: Partial<
           const [next, ...rest] = choice.queue ?? [];
           if (next !== undefined) {
             draft.pendingChoice = { ...choice, cardId: next, queue: rest };
+          } else if (choice.thenChoice !== undefined) {
+            // rule 373 (unl-086-219 Zilean) — the play-token event's own
+            // replacement offer waited behind the destination prompts; every
+            // token is placed now, so raise it.
+            draft.pendingChoice = choice.thenChoice as typeof draft.pendingChoice;
           }
           // rule 355.1 (unl-076-219) — the token stands at its destination now:
           // re-evaluate continuous effects that count units there ("+1 [Might]

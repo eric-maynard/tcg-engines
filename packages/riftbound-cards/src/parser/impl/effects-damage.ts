@@ -124,6 +124,37 @@ export function parseDamageEffect(text: string): DamageEffect | SequenceEffect |
     } as unknown as DamageEffect;
   }
 
+  // rules 417 / 437 / 370-371 (riftjudge 3afdd260, 501859c8) — "Deal N to a
+  // unit K times" / "Deal K instances of N to a unit" is K SEPARATE damage
+  // instances, not one hit of K×N: prevention decrements per instance and a
+  // "would die" replacement fires at the instance that first reaches lethal,
+  // with the remaining instances still to come. Expanding to a sequence of K
+  // damage effects gives exactly that (the same shape Icathian Rain gets from
+  // its six printed lines) — one target choice per instance, all made as the
+  // card is played (rule 355).
+  const timesMatch = text.match(/^Deal (\d+) to (.+?) (?:(twice)|(\d+) times)\.?$/i);
+  const instancesMatch = text.match(/^Deal (\d+) instances of (\d+) to (.+?)\.?$/i);
+  if (timesMatch || instancesMatch) {
+    const amount = Number.parseInt(timesMatch ? timesMatch[1] : instancesMatch![2], 10);
+    const targetText = timesMatch ? timesMatch[2] : instancesMatch![3];
+    const count = timesMatch
+      ? timesMatch[3]
+        ? 2
+        : Number.parseInt(timesMatch[4], 10)
+      : Number.parseInt(instancesMatch![1], 10);
+    if (Number.isFinite(count) && count >= 2 && count <= 20) {
+      const target = parseCardTarget(targetText);
+      return {
+        effects: Array.from({ length: count }, () => ({
+          amount,
+          target: target as AnyTarget,
+          type: "damage" as const,
+        })),
+        type: "sequence",
+      } as SequenceEffect;
+    }
+  }
+
   // Handle "Deal N to TARGET" pattern
   const match = text.match(/^Deal (\d+) to (.+?)\.?$/i);
   if (match) {

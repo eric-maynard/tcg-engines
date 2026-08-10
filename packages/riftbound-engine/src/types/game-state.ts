@@ -979,6 +979,12 @@ export interface ChooseDestinationChoice {
   readonly created?: true;
   readonly queue?: readonly CardId[];
   /**
+   * rule 373 (unl-086-219 Zilean) — another prompt owed by the SAME play-token
+   * event that raised these per-token destination prompts (the optional
+   * replacement offer). Raised once every queued token has been placed.
+   */
+  readonly thenChoice?: unknown;
+  /**
    * rule-id: ogn-258-298 (rule 387) — "Move an enemy unit. Then do this: …"
    * follow-up whose subject is the moved unit at its (only now known)
    * destination. Executed after the move with the moved unit bound and

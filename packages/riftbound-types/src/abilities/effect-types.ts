@@ -142,6 +142,12 @@ export interface LookEffect {
   /** "You may …" — the pick is declinable. */
   readonly optional?: boolean;
   /**
+   * rule 424.1 (unl-064-219 Fate Weaver) — "You may REVEAL a spell … from
+   * among them and draw it": the look itself is private, but the picked card
+   * is shown to every player.
+   */
+  readonly revealPick?: boolean;
+  /**
    * rule-id: ogn-062-298-look-banish-play — what happens to the picked card.
    * `"play"` banishes it then plays it (optionally at `reduceCost` less).
    */
@@ -662,6 +668,23 @@ export interface GrantAbilityEffect {
 }
 
 /**
+ * Grant one or more TAGs (rule 135.2 — "I am a Mech.", the CR's "Other
+ * friendly units are Yordles" example).
+ *
+ * Tag-granting text is ADDITIVE: printed tags stay and the granted ones count
+ * everywhere a printed tag counts (tag filters, "among your units" tallies,
+ * tribal triggers). `duration: "static"` — the default for a static ability —
+ * means it is recomputed on every static recalculation, so the tag lasts
+ * exactly as long as the granting effect applies.
+ */
+export interface GrantTagEffect {
+  readonly type: "grant-tag";
+  readonly tags: readonly string[];
+  readonly target?: AnyTarget;
+  readonly duration?: "turn" | "permanent" | "static";
+}
+
+/**
  * Grant multiple keywords effect
  */
 export interface GrantKeywordsEffect {
@@ -1134,6 +1157,7 @@ export type Effect =
   | GrantKeywordEffect
   | GrantKeywordsEffect
   | GrantAbilityEffect
+  | GrantTagEffect
 
   // Control flow
   | SequenceEffect
@@ -1177,6 +1201,7 @@ export type StaticEffect =
   | GrantKeywordEffect
   | GrantKeywordsEffect
   | GrantAbilityEffect
+  | GrantTagEffect
   | IncreaseVictoryScoreEffect
   | IncreaseHiddenCapacityEffect
   | PreventScoreEffect

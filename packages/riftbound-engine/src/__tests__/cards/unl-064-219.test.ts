@@ -126,6 +126,27 @@ describe("Fate Weaver (unl-064-219)", () => {
     expect((d?.kind === "pick" ? d.options.map((o) => o.card) : []).sort()).toEqual(["five", "four"]);
   });
 
+  test("rule 424.1 — the pick is REVEALED: drawing Falling Comet records a public reveal naming it (the look itself stays private)", async () => {
+    const game = await inHand().build();
+    await game.p1.play("weaver");
+    await game.settle();
+    expect(game.decision()).toMatchObject({ kind: "pick", seat: P1 });
+    await game.p1.pick("five");
+    await game.settle();
+    expect(game.p1.hand()).toEqual(["five"]);
+    expect(game.gameState.publicReveals?.at(-1)).toMatchObject({ cardIds: ["five"], playerId: P1 });
+  });
+
+  test("rule 424.1 — declining reveals nothing: no public-reveal entry is added for the private look", async () => {
+    const game = await inHand().build();
+    const before = game.gameState.publicReveals?.length ?? 0;
+    await game.p1.play("weaver");
+    await game.settle();
+    await game.p1.decline();
+    await game.settle();
+    expect(game.gameState.publicReveals?.length ?? 0).toBe(before);
+  });
+
   test("'you MAY': declining draws nothing, recycles all 4 to the bottom, leaves the 5th card on top and the trash empty", async () => {
     const game = await inHand().build();
     const deckSize = game.p1.deck().length;

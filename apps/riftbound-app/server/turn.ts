@@ -56,8 +56,12 @@ export function applySessionMove(
   // `formatMoveLog` narrates a flagged pick generically.
   let recordedParams = params;
   if (moveId === "resolvePendingChoice") {
-    const open = session.engine.getState().pendingChoice as { private?: boolean } | undefined;
-    if (open?.private) {
+    const open = session.engine.getState().pendingChoice as
+      | { private?: boolean; revealPick?: boolean }
+      | undefined;
+    // rule 424.1 (unl-064-219 Fate Weaver) — "reveal … and draw it": the look
+    // was private but the PICK is public, so the log names it.
+    if (open?.private && !open.revealPick) {
       recordedParams = { ...params, privateChoice: true };
     }
   }

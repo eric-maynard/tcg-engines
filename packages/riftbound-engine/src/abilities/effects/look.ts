@@ -60,7 +60,7 @@ function revealReplacementPrefix(
  * carries for being looked at or revealed from the top of its owner's deck.
  * Only a self-scoped "as you look at or reveal ME" ability qualifies.
  */
-function asYouLookAbility(cardId: string): unknown {
+export function asYouLookAbility(cardId: string): unknown {
   const abilities = getGlobalCardRegistry().getAbilities(cardId) ?? [];
   for (const a of abilities as readonly {
     type?: string;
@@ -469,6 +469,10 @@ export function handle_look(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
     // REVEAL ("Reveal the top 2 …") is the opposite: every player sees them, so
     // the prompt is not private.
     ...(isReveal ? {} : { private: true }),
+    // rule 424.1 (unl-064-219 Fate Weaver) — "You may REVEAL a spell … from
+    // among them and draw it": the look stays private, but the card actually
+    // picked is shown to everyone, so the pick is recorded as a public reveal.
+    ...(lookEff.revealPick ? { revealPick: true } : {}),
     prompter: looker,
     revealed: topN,
     revealer: looker,

@@ -164,6 +164,9 @@ export function parseLookEffect(text: string): LookEffect | undefined {
       },
       from,
       optional: true,
+      // rule 424.1 — the verb is REVEAL: the look is private, but the card
+      // actually taken is shown to every player ("choose" below is not).
+      revealPick: true,
       ...(restToTrash ? { onRest: "trash" as const } : {}),
       type: "look",
     } as LookEffect;

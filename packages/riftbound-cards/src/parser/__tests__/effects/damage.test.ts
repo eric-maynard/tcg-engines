@@ -392,4 +392,45 @@ describe("Effect: Damage", () => {
       );
     });
   });
+
+  // rules 417 / 370-371 (riftjudge 3afdd260) — "K times" / "K instances of N" is K separate
+  // damage instances (prevention decrements per instance; a "would die" replacement fires at the
+  // instance that first reaches lethal), so it parses to a SEQUENCE of K damage effects, never a
+  // single hit of K×N.
+  describe("multi-instance damage", () => {
+    const seq = (text: string) => {
+      const result = parseAbilities(text);
+      expect(result.success).toBe(true);
+      return (result.abilities?.[0] as { effect?: { effects?: unknown[]; type?: string } })?.effect;
+    };
+
+    it("should parse 'Deal 2 to a unit 4 times.' as four separate damage effects", () => {
+      const effect = seq("Deal 2 to a unit 4 times.");
+      expect(effect?.type).toBe("sequence");
+      expect(effect?.effects).toHaveLength(4);
+      expect(effect?.effects?.[0]).toEqual(
+        expect.objectContaining({ amount: 2, type: "damage" }),
+      );
+    });
+
+    it("should parse 'Deal 3 to a unit twice.' as two separate damage effects", () => {
+      const effect = seq("Deal 3 to a unit twice.");
+      expect(effect?.type).toBe("sequence");
+      expect(effect?.effects).toHaveLength(2);
+      expect(effect?.effects?.[1]).toEqual(
+        expect.objectContaining({ amount: 3, type: "damage" }),
+      );
+    });
+
+    it("should parse 'Deal 6 instances of 2 to a unit.' as six separate damage effects", () => {
+      const effect = seq("Deal 6 instances of 2 to a unit.");
+      expect(effect?.type).toBe("sequence");
+      expect(effect?.effects).toHaveLength(6);
+    });
+
+    it("should leave a plain 'Deal 2 to a unit.' as a single damage effect", () => {
+      const effect = seq("Deal 2 to a unit.");
+      expect(effect?.type).toBe("damage");
+    });
+  });
 });
