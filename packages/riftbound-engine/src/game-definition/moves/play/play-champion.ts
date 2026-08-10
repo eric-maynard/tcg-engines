@@ -29,6 +29,7 @@ import {
   getOptionalPlayCost,
   getPotentialRuneEnergy,
   deductCost,
+  opponentsRestrictedToBase,
 } from "./cost";
 import { legacyParamsFromSelection, paidIdsFromLegacyParams, withCostsParam } from "./cost-model";
 
@@ -37,24 +38,54 @@ type Defs = GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCar
 /**
  * rule 356.2 with rule 355.10.a.1 (rule-id: unl-052-219) — an optional
  * additional cost printed on a champion is offered on EVERY play of that card,
- * including the play from the Champion Zone. Only the rune-paid shapes
- * (`accelerate` / `pay`) are payable on this path.
+ * including the play from the Champion Zone: the rune-paid shapes
+ * (`accelerate` / `pay`) and, rule 356.2.b.1 (rule-id: unl-178-219), the
+ * "spend N XP … if you do, I cost [N] less" shape.
  */
-function championOptionalRuneCost(
-  cardId: string,
-): { kind: "accelerate" | "pay"; energy: number; power: readonly string[] } | undefined {
+function championOptionalRuneCost(cardId: string):
+  | {
+      kind: "accelerate" | "pay";
+      energy: number;
+      power: readonly string[];
+      xp: number;
+      energyDiscount: number;
+    }
+  | undefined {
   const optional = getOptionalPlayCost(cardId);
   if (optional?.kind !== "accelerate" && optional?.kind !== "pay") {
     return undefined;
   }
-  if ((optional.cost?.xp ?? 0) > 0) {
-    return undefined;
-  }
+  const xp = optional.cost?.xp ?? 0;
   return {
     energy: optional.cost?.energy ?? 0,
+    // rule 560 — the "I cost [N] less" rider is honoured on the XP path only,
+    // exactly as the hand play prices it.
+    energyDiscount: xp > 0 ? (optional.energyDiscount ?? 0) : 0,
     kind: optional.kind,
     power: optional.cost?.power ?? [],
+    xp,
   };
+}
+
+/**
+ * rule 356.2.b.1 — the extras that price the PAID variant: the extra runes,
+ * netted against the "I cost [N] less" rider.
+ */
+function paidCostExtras(optional: {
+  energy: number;
+  power: readonly string[];
+  energyDiscount: number;
+}): { energy: number; power: readonly string[] } {
+  return { energy: optional.energy - optional.energyDiscount, power: optional.power };
+}
+
+/** rule 356.2.b.1 — can this player still afford the paid variant (XP included)? */
+function canPayChampionOptional(
+  state: RiftboundGameState,
+  playerId: string,
+  optional: { xp: number },
+): boolean {
+  return optional.xp === 0 || (state.players[playerId]?.xp ?? 0) >= optional.xp;
 }
 
 /**
@@ -166,6 +197,17 @@ export const playFromChampionZone: Defs["playFromChampionZone"] = {
       return false;
     }
 
+    // rule 054.1 / 355.2 (rule-id: ogn-070-298) — an enemy static that confines
+    // this player's unit plays to their base beats every play-LOCATION
+    // permission, [Ambush] included: the Champion-Zone play is still a unit
+    // play, so no battlefield destination is legal.
+    if (
+      isBattlefieldZone((context.params.location as string | undefined) ?? "") &&
+      opponentsRestrictedToBase(state, context.zones, context.params.playerId as string)
+    ) {
+      return false;
+    }
+
     // rule 419.1.a / 822.1.b — an [Ambush] champion may be played from the
     // Champion Zone in any Reaction window, to a battlefield where its
     // controller has units; every other Champion-Zone play is a Discretionary
@@ -218,13 +260,17 @@ export const playFromChampionZone: Defs["playFromChampionZone"] = {
       if (!optional) {
         return false;
       }
+      // rule 356.2.b.1 (unl-178-219) — the XP half of the cost must be payable too.
+      if (!canPayChampionOptional(state, context.params.playerId as string, optional)) {
+        return false;
+      }
       if (
         !canAffordCard(
           state,
           context.params.playerId as string,
           championId as string,
           {
-            additionalCost: { energy: optional.energy, power: optional.power },
+            additionalCost: paidCostExtras(optional),
             board: { cards: context.cards, zones: context.zones },
           },
           createMetaAccessor(context.cards),
@@ -282,18 +328,53 @@ export const playFromChampionZone: Defs["playFromChampionZone"] = {
       // "playing me", so the champion's own (possibly [Level]-gated) cost
       // reductions price it: ask the shared cost path instead of comparing the
       // printed Energy, which also gets the Power pips checked.
-      if (
-        !canAffordCard(
+      const affordFull = canAffordCard(
+        state,
+        context.playerId as string,
+        cardId as string,
+        { board: { cards: context.cards, zones: context.zones } },
+        createMetaAccessor(context.cards),
+        energy - (state.runePools?.[context.playerId]?.energy ?? 0),
+      );
+      // rule 356.2 / 356.2.b.1 (unl-052-219, unl-178-219) — the champion's own
+      // optional additional cost is offered on this play too, at every legal
+      // destination; when only the discounted (XP) line is affordable it alone
+      // keeps the play on the menu.
+      const optional = championOptionalRuneCost(cardId as string);
+      const affordPaid =
+        optional !== undefined &&
+        canPayChampionOptional(state, context.playerId as string, optional) &&
+        canAffordCard(
           state,
           context.playerId as string,
           cardId as string,
-          { board: { cards: context.cards, zones: context.zones } },
+          {
+            additionalCost: paidCostExtras(optional),
+            board: { cards: context.cards, zones: context.zones },
+          },
           createMetaAccessor(context.cards),
           energy - (state.runePools?.[context.playerId]?.energy ?? 0),
-        )
-      ) {
+        );
+      if (!affordFull && !affordPaid) {
         continue;
       }
+      const destinations: string[] = [];
+      const offer = (location: string) => {
+        if (destinations.includes(location)) {
+          return;
+        }
+        destinations.push(location);
+        if (affordFull) {
+          results.push({ location, playerId: context.playerId as PlayerId });
+        }
+        if (affordPaid) {
+          results.push({
+            location,
+            paidAdditionalCost: true,
+            playerId: context.playerId as PlayerId,
+          });
+        }
+      };
       // rule 419.1.a / 822.1.b — [Ambush] offers every battlefield where this
       // player already has units, in any window they may act in.
       if (getGlobalCardRegistry().hasKeyword(cardId as string, "Ambush")) {
@@ -304,7 +385,7 @@ export const playFromChampionZone: Defs["playFromChampionZone"] = {
             context.playerId as CorePlayerId,
           );
           if (friendly.length > 0) {
-            results.push({ location: bfZoneId, playerId: context.playerId as PlayerId });
+            offer(bfZoneId);
           }
         }
       }
@@ -317,7 +398,7 @@ export const playFromChampionZone: Defs["playFromChampionZone"] = {
       if (canPlayToEnemyOccupiedBattlefield(cardId as string)) {
         for (const bfId of Object.keys(state.battlefields ?? {})) {
           const bfZoneId = getBattlefieldZoneId(bfId);
-          if (results.some((r) => r.location === bfZoneId)) {
+          if (destinations.includes(bfZoneId)) {
             continue;
           }
           if (
@@ -330,11 +411,11 @@ export const playFromChampionZone: Defs["playFromChampionZone"] = {
               context.playerId as string,
             )
           ) {
-            results.push({ location: bfZoneId, playerId: context.playerId as PlayerId });
+            offer(bfZoneId);
           }
         }
       }
-      results.push({ location: "base", playerId: context.playerId as PlayerId });
+      offer("base");
       // rule 356.2 / 355.10.a.1 (rule-id: unl-052-219) — offer the champion's
       // own optional additional cost here too; it is only a variant when the
       // pool can actually cover the base cost plus the extra.
@@ -357,31 +438,16 @@ export const playFromChampionZone: Defs["playFromChampionZone"] = {
           });
         }
       }
-      const optional = championOptionalRuneCost(cardId as string);
-      if (
-        optional &&
-        canAffordCard(
-          state,
-          context.playerId as string,
-          cardId as string,
-          {
-            additionalCost: { energy: optional.energy, power: optional.power },
-            board: { cards: context.cards, zones: context.zones },
-          },
-          createMetaAccessor(context.cards),
-          energy - (state.runePools?.[context.playerId]?.energy ?? 0),
-        )
-      ) {
-        results.push({
-          location: "base",
-          paidAdditionalCost: true,
-          playerId: context.playerId as PlayerId,
-        });
-      }
     }
     {
+      // rule 054.1 / 355.2 (rule-id: ogn-070-298) — same restriction as the
+      // hand play: drop every battlefield destination while an enemy static
+      // confines this player's unit plays to their base.
+      const offered = opponentsRestrictedToBase(state, context.zones, context.playerId as string)
+        ? results.filter((r) => !isBattlefieldZone(r.location))
+        : results;
       const championId = championZoneCards[0] as string | undefined;
-      return championId ? results.map((r) => withCostsParam(r, championId)) : results;
+      return championId ? offered.map((r) => withCostsParam(r, championId)) : offered;
     }
   },
   reducer: (draft, rawContext) => {
@@ -405,12 +471,6 @@ export const playFromChampionZone: Defs["playFromChampionZone"] = {
     if (championZoneCards.length > 0) {
       const championId = championZoneCards[0];
       if (championId) {
-        // rule 357.1.a: tap ready runes for any Energy shortfall at Pay time.
-        deductCost(draft, playerId, championId as string, {}, createMetaAccessor(context.cards), {
-          counters: context.counters,
-          zones: context.zones,
-        });
-
         // rule 356.2 / 355.10.a.1 (rule-id: unl-052-219) — pay the champion's
         // optional additional cost while playing it, so "if you paid the
         // additional cost" riders on the play trigger see it as paid.
@@ -419,6 +479,30 @@ export const playFromChampionZone: Defs["playFromChampionZone"] = {
         const optional = paidAdditionalCost
           ? championOptionalRuneCost(championId as string)
           : undefined;
+        // rule 356.2.b.1 (unl-178-219) — "spend N XP … if you do, I cost [N]
+        // less": spend the XP up front so the base cost is charged discounted.
+        let energyDiscount = 0;
+        if (optional && optional.xp > 0) {
+          const player = draft.players[playerId];
+          if (player && player.xp >= optional.xp) {
+            player.xp -= optional.xp;
+            energyDiscount = optional.energyDiscount;
+            paidOptional = true;
+          }
+        }
+        // rule 357.1.a: tap ready runes for any Energy shortfall at Pay time.
+        deductCost(
+          draft,
+          playerId,
+          championId as string,
+          energyDiscount > 0 ? { additionalCost: { energy: -energyDiscount } } : {},
+          createMetaAccessor(context.cards),
+          {
+            counters: context.counters,
+            zones: context.zones,
+          },
+        );
+
         const pool = draft.runePools[playerId];
         if (optional && pool) {
           const spend = planPips(optional.power, pool.power);
@@ -473,6 +557,14 @@ export const playFromChampionZone: Defs["playFromChampionZone"] = {
             via: "champion",
           },
         );
+
+        // rule 337.2 / 340.4 — the unit resolved the instant it was finalized
+        // and never sat on the chain, so once nothing is Pending the controller
+        // of the newest REMAINING item gains Priority. `finalizeSweepTouched`
+        // is what the end-of-move finalization sweep reads to reseat it.
+        if (draft.interaction?.chain?.items.length) {
+          draft.finalizeSweepTouched = true;
+        }
       }
     }
   },

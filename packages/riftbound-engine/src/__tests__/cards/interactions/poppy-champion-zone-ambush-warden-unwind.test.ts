@@ -143,21 +143,21 @@ describe("Poppy from the CHAMPION ZONE — Ambush's conditional Reaction × Mage
   // Expected (108.3.d / 419.1.a + 356.2.b.1): the CZ play offers the same two cost variants a hand play does — 6+[order],
   // or spend 3 XP → 3+[order]. Actual: playFromChampionZone only knows rune-paid optional costs (Accelerate / "pay"),
   // so the XP variant is never enumerated (and a raw request for it is refused).
-  test.failing("BUG: (a) no Warden, Closed: BOTH cost variants are offered for the CZ play — full 6+[order] and 'spend 3 XP → 3+[order]' (419.1.a, 356.2.b.1)", async () => {
+  test("(a) no Warden, Closed: BOTH cost variants are offered for the CZ play — full 6+[order] and 'spend 3 XP → 3+[order]' (419.1.a, 356.2.b.1)", async () => {
     const game = await closedState();
     expect(costVariants(game)).toEqual(["full", "xp"]);
   });
 
   // Same gap, seen from the pool: with only 3 energy the XP line is the only affordable one, so Poppy must still be
   // offered (to bf1). Actual: not offered at all.
-  test.failing("BUG: (a) with only 3 energy (+4 XP) the XP variant alone keeps CZ-Poppy on the menu → bf1", async () => {
+  test("(a) with only 3 energy (+4 XP) the XP variant alone keeps CZ-Poppy on the menu → bf1", async () => {
     const game = await closedState({ energy: 3 });
     expect(game.p1.can("playChampion")).toBe(true);
     expect(destinations(game)).toEqual(["bf1"]);
   });
 
   // Expected: XP 4→1, pool 6/1 → 3/0, CZ empty, Poppy at bf1 exhausted. Actual: the XP payment is refused on the CZ path.
-  test.failing("BUG: (a) playing CZ-Poppy to bf1 SPENDING 3 XP: XP 4→1, pool → 3 energy / 0 order, the CZ is empty and Poppy stands at bf1 exhausted (356.2.b.1, 359.2.c)", async () => {
+  test("(a) playing CZ-Poppy to bf1 SPENDING 3 XP: XP 4→1, pool → 3 energy / 0 order, the CZ is empty and Poppy stands at bf1 exhausted (356.2.b.1, 359.2.c)", async () => {
     const game = await closedState();
     await game.p1.choose("playFromChampionZone", { payOptional: true, to: "bf1" });
     expect(game.p1.xp()).toBe(1);
@@ -181,7 +181,7 @@ describe("Poppy from the CHAMPION ZONE — Ambush's conditional Reaction × Mage
   // Expected (337.2 → 340.4): Poppy resolved immediately, so priority goes to the controller of the newest REMAINING
   // item — P2 (the Ray) — who has nothing but pass/concede. The hand play does exactly that. Actual: after the CZ play
   // P1 keeps priority.
-  test.failing("BUG: (a) P2 cannot respond to Poppy herself: right after the CZ play priority sits with P2 as controller of the Ray, with only pass/concede on the menu (337.2, 340.4)", async () => {
+  test("(a) P2 cannot respond to Poppy herself: right after the CZ play priority sits with P2 as controller of the Ray, with only pass/concede on the menu (337.2, 340.4)", async () => {
     const game = await closedState();
     await game.p1.playChampion("bf1");
     expect(game.decision()).toMatchObject({ context: "chain", kind: "action", seat: P2 });
@@ -208,7 +208,7 @@ describe("Poppy from the CHAMPION ZONE — Ambush's conditional Reaction × Mage
 
   // Expected (054.1): the Warden confines P1's unit plays to base; base carries no Reaction for Poppy (813.4) → in the
   // Closed state she is offered NOWHERE. Actual: the CZ play ignores the Warden's play-restriction and still offers bf1.
-  test.failing("BUG: (b) Warden at bf2, Closed: CZ-Poppy is offered NOWHERE — absent from P1's menu, bf1 refused (054.1 over 822.1.b; 813.4)", async () => {
+  test("(b) Warden at bf2, Closed: CZ-Poppy is offered NOWHERE — absent from P1's menu, bf1 refused (054.1 over 822.1.b; 813.4)", async () => {
     const game = await closedState({ warden: true });
     expect(game.p1.can("playChampion")).toBe(false);
     expect(destinations(game)).toEqual([]);
@@ -218,7 +218,7 @@ describe("Poppy from the CHAMPION ZONE — Ambush's conditional Reaction × Mage
   });
 
   // Expected: own Open turn + Warden → {base} only. Actual: the CZ play offers bf1 (Ambush) as well as base.
-  test.failing("BUG: (b) Warden at bf2, P1's OWN Neutral Open turn: CZ-Poppy is offered to BASE only — bf1 is suppressed by the Warden (054.1, 355.2.a)", async () => {
+  test("(b) Warden at bf2, P1's OWN Neutral Open turn: CZ-Poppy is offered to BASE only — bf1 is suppressed by the Warden (054.1, 355.2.a)", async () => {
     const game = await ownOpenTurn({ warden: true });
     expect(game.p1.can("playChampion")).toBe(true);
     expect(destinations(game)).toEqual(["base"]);
@@ -228,7 +228,7 @@ describe("Poppy from the CHAMPION ZONE — Ambush's conditional Reaction × Mage
   });
 
   // Expected: both cost variants on that base play. Actual: no XP variant on the CZ path (see (a)).
-  test.failing("BUG: (b) …and that base play comes in BOTH cost variants (full | 3 XP)", async () => {
+  test("(b) …and that base play comes in BOTH cost variants (full | 3 XP)", async () => {
     const game = await ownOpenTurn({ warden: true });
     expect(costVariants(game)).toEqual(["full", "xp"]);
   });
@@ -262,7 +262,7 @@ describe("Poppy from the CHAMPION ZONE — Ambush's conditional Reaction × Mage
 
   // Expected: the full-cost request to bf1 is refused just the same (the Warden forbids the destination). Actual: the
   // CZ path accepts it — Poppy lands on bf1 for 6+[order] despite the Warden.
-  test.failing("BUG: (c) the same probe at FULL cost {→ bf1} is refused too and leaves the identical pristine state (054.1, 358.5)", async () => {
+  test("(c) the same probe at FULL cost {→ bf1} is refused too and leaves the identical pristine state (054.1, 358.5)", async () => {
     const game = await closedState({ warden: true });
     const before = probeSnapshot(game);
     const r = await game.p1.try((p) => p.do("playFromChampionZone", { location: "battlefield-bf1", playerId: P1 }));
