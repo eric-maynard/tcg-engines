@@ -5,7 +5,7 @@ import { beginPlay, type PlayIO } from "../../game-definition/moves/play/play-pi
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import { findAllReplacements, type ReplacementContext } from "../replacement-effects";
 import { type EffectHelpers, recordPublicReveal } from "./_helpers";
-import { fireMandatoryRevealAbilities, handle_look } from "./look";
+import { fireMandatoryRevealAbilities, handle_look, offerAsYouRevealChoice } from "./look";
 
 /**
  * rule 369.1 / 370.1 (sfd-018-221 Void Hatchling) — "If you would reveal cards
@@ -149,15 +149,45 @@ export function handle_reveal(effect: ExecutableEffect, ctx: EffectContext, _h: 
     };
     const trashesMisses = missHandling.trash !== undefined;
     let missed = false;
-    const top = ctx.zones
+    const deckNow = ctx.zones
       .getCardsInZone("mainDeck" as CoreZoneId, actor as CorePlayerId)
-      .slice(0, Math.max(1, revEff.amount ?? 1));
-    // rule 424.1 — present the cards to every player BEFORE anything moves
-    // them: once a match is drawn or a miss is recycled the identity is gone.
-    recordPublicReveal(ctx, actor, top.map((c) => c as string));
-    // rule 424 / 429.2 — the revealed cards' own mandatory on-reveal abilities
-    // resolve immediately, before the reveal's draw/recycle follow-up.
-    fireMandatoryRevealAbilities(top.map((c) => c as string), actor, ctx, _h);
+      .map((c) => c as string);
+    // rule 354.3 / 370.1 (ogn-194-298 Nocturne) — a revealed card that removed itself with
+    // its own "as you … reveal me" replacement is no longer part of this reveal; the rest of
+    // the instruction still ranges over the cards revealed, never over fresh cards pulled up
+    // behind them.
+    const carried = (revEff as { revealedIds?: readonly string[] }).revealedIds;
+    const top = carried
+      ? carried.filter((id) => deckNow.includes(id))
+      : deckNow.slice(0, Math.max(1, revEff.amount ?? 1));
+    const alreadyOffered = (revEff as { revealOffered?: readonly string[] }).revealOffered;
+    if (alreadyOffered === undefined) {
+      // rule 424.1 — present the cards to every player BEFORE anything moves
+      // them: once a match is drawn or a miss is recycled the identity is gone.
+      recordPublicReveal(ctx, actor, top);
+      // rule 424 / 429.2 — the revealed cards' own mandatory on-reveal abilities
+      // resolve immediately, before the reveal's draw/recycle follow-up.
+      fireMandatoryRevealAbilities(top, actor, ctx, _h);
+    }
+    // rule 369.1 / 370.1 (sfd-041-221 Apprentice Smith × ogn-194-298 Nocturne) — an OPTIONAL
+    // "as you look at or reveal me from the top of your deck" replacement is offered on a
+    // reveal exactly as it is on a look, before this reveal's own draw/recycle follow-up.
+    if (
+      offerAsYouRevealChoice(
+        ctx,
+        top,
+        actor,
+        (nowOffered) => ({
+          ...(effect as object),
+          asPlayer: actor,
+          revealedIds: top,
+          revealOffered: nowOffered,
+        }),
+        alreadyOffered ?? [],
+      )
+    ) {
+      return;
+    }
     for (const cardId of top) {
       if (registry.get(cardId as string)?.cardType === revEff.until) {
         ctx.zones.moveCard({

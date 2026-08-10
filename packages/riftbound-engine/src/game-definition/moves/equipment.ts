@@ -23,6 +23,7 @@ import { recalculateStaticEffects } from "../../abilities/static-abilities";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import { getBattlefieldZoneId } from "../../zones/zone-configs";
 import { removeFromBoard } from "../../operations/leave-board";
+import { survivesOwnDeath } from "../../abilities/die-replacement-batch";
 import { deductAbilityCost } from "./chain/activate-ability";
 import { buildEffectContext } from "./chain/effect-context";
 import { canPayEquipCost, equipCostForTarget, printedEquipCost } from "./equip-cost";
@@ -69,10 +70,31 @@ function equipSacrificeOptions(
   boardUnits: readonly { id: string; controller: string | undefined }[],
   playerId: string,
   holderUnitId: string,
+  holderSurvivesOwnDeath = false,
 ): string[] {
   return boardUnits
-    .filter((u) => u.controller === playerId && u.id !== holderUnitId)
+    .filter(
+      (u) =>
+        u.controller === playerId &&
+        // rule 372 / 373 (ogn-077-298 Zhonya's Hourglass, sfd-051-221 Guardian Angel) — the
+        // holder MAY be its own fodder when a die replacement removes something ELSE
+        // instead: the unit never leaves the board, so it is still a legal target at
+        // 358.1's final check and the Equipment attaches as planned.
+        (u.id !== holderUnitId || holderSurvivesOwnDeath),
+    )
     .map((u) => u.id);
+}
+
+/** The context slice {@link survivesOwnDeath} reads, assembled from a move's state + context. */
+function deathShieldCtx(
+  state: RiftboundGameState,
+  context: { cards: unknown; zones: unknown },
+): Parameters<typeof survivesOwnDeath>[0] {
+  return {
+    cards: context.cards,
+    draft: state,
+    zones: context.zones,
+  } as unknown as Parameters<typeof survivesOwnDeath>[0];
 }
 
 /**
@@ -189,7 +211,12 @@ export const equipmentMoves: Partial<
           // cost needs a friendly unit that is not the one being equipped —
           // with none, the ability cannot be activated at all.
           if (cost?.killFriendlyUnit) {
-            const fodder = equipSacrificeOptions(unitsWithController, playerId, unitId);
+            const fodder = equipSacrificeOptions(
+              unitsWithController,
+              playerId,
+              unitId,
+              survivesOwnDeath(deathShieldCtx(state, context), unitId),
+            );
             for (const sacrificeId of fodder) {
               results.push({ equipmentId, playerId, sacrificeId, unitId });
             }
@@ -281,7 +308,16 @@ export const equipmentMoves: Partial<
       // must be supplied, or the Equip cannot be activated.
       if (equipCost?.killFriendlyUnit) {
         const sacrificeId = context.params.sacrificeId as string | undefined;
-        if (!sacrificeId || sacrificeId === context.params.unitId) {
+        if (!sacrificeId) {
+          return false;
+        }
+        // rule 372 / 373 — naming the holder itself is legal only when its death is
+        // replaced (Zhonya's Hourglass / Guardian Angel dies instead and the unit is
+        // healed, exhausted and recalled), so the target survives the payment.
+        if (
+          sacrificeId === context.params.unitId &&
+          !survivesOwnDeath(deathShieldCtx(state, context), sacrificeId)
+        ) {
           return false;
         }
         if (getGlobalCardRegistry().get(sacrificeId)?.cardType !== "unit") {
