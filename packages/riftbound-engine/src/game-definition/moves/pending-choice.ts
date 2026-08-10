@@ -591,6 +591,61 @@ export function returnToHandCostCandidates(
 }
 
 /**
+ * rule 383.3.b / 745.2 (rule-id: ogn-282-298 Monastery of Hirana, ogn-147-298
+ * Wildclaw Shaman) — the units whose Buff can pay a "you may spend a buff to …"
+ * base cost: units the paying player CONTROLS (745.2) that carry at least one
+ * Buff counter, the source itself included ("spend a buff" may be its own).
+ * One entry per unit; a unit carrying several counters (702.2.b) pays one.
+ */
+export function spendBuffCostCandidates(
+  state: RiftboundGameState,
+  playerId: string,
+  _sourceCardId: string,
+  // biome-ignore lint/suspicious/noExplicitAny: move context bag is framework-typed
+  context: any,
+): string[] {
+  if (typeof context?.zones?.getCardsInZone !== "function") {
+    return [];
+  }
+  const zoneIds = [
+    "base",
+    ...Object.keys((state as { battlefields?: Record<string, unknown> }).battlefields ?? {}).map(
+      (bf) => `battlefield-${bf}`,
+    ),
+  ];
+  const registry = getGlobalCardRegistry();
+  const out: string[] = [];
+  for (const zoneId of zoneIds) {
+    for (const seat of Object.keys(state.players ?? {})) {
+      for (const rawId of context.zones.getCardsInZone(zoneId as CoreZoneId, seat as CorePlayerId)) {
+        const id = rawId as string;
+        if (out.includes(id)) {
+          continue;
+        }
+        const controller =
+          context.cards?.getCardController?.(id as CoreCardId) ??
+          context.cards?.getCardOwner?.(id as CoreCardId) ??
+          seat;
+        if (controller !== playerId) {
+          continue;
+        }
+        const type = registry.getCardType(id) as string | undefined;
+        if (type !== undefined && type !== "unit" && !id.startsWith("token-")) {
+          continue;
+        }
+        const meta = context.cards?.getCardMeta?.(id as CoreCardId) as
+          | { buffed?: boolean; extraBuffs?: number }
+          | undefined;
+        if ((meta?.buffed === true ? 1 : 0) + (meta?.extraBuffs ?? 0) > 0) {
+          out.push(id);
+        }
+      }
+    }
+  }
+  return out;
+}
+
+/**
  * rule 355.10.c.1 (rule-id: sfd-026-221) — a cost paid WITHIN an instruction
  * ("recycle another friendly unit to play a Mech from your trash") is only
  * payable when the instruction itself has something to do: with no matching
@@ -715,14 +770,21 @@ function canPayOptInCost(
       return false;
     }
   }
-  // rule 205 / 355.10.c.1 (rule-id: sfd-207-221) — "you may pay [1] AND return
-  // a unit you control here …": both halves are one payment, so with no legal
-  // unit to return the option cannot be taken (never the energy alone).
+  // rule 355.10.c.1 — "… and return a unit you control here TO …": an object
+  // half of one payment, so with no legal unit to return the option cannot be
+  // taken (never the energy alone).
   const bounceSpec = cost.returnToHand;
   if (bounceSpec !== undefined && typeof bounceSpec === "object" && bounceSpec !== null) {
     if (returnToHandCostCandidates(state, playerId, sourceCardId, bounceSpec, context).length === 0) {
       return false;
     }
+  }
+  // rule 383.3.b / 745.2 (rule-id: ogn-282-298) — "you may spend a buff to …"
+  // needs a Buff on a unit the payer controls RIGHT NOW (at finalization); a
+  // buff some other trigger would grant later cannot pay it (ruling 202877fb824b2d2b).
+  const spendBuff = (cost.spendBuff as number) ?? 0;
+  if (spendBuff > 0 && spendBuffCostCandidates(state, playerId, sourceCardId, context).length < spendBuff) {
+    return false;
   }
   const pool = state.runePools[playerId];
   if (!pool) {
@@ -1117,6 +1179,7 @@ function resumePending(
   const resume = choice.resume;
   switch (resume.kind) {
     case "die-order":
+    case "die-batch-order":
     case "die-assign": {
       recordDieBatchAnswer(draft, resume, {
         ...answer,
@@ -2382,7 +2445,9 @@ export const pendingChoiceMoves: Partial<
               boundTargets?: readonly string[];
               else?: unknown;
               sourcePlayerId: string;
+              sourceZone?: string;
               then?: unknown;
+              triggerSourceId?: string;
             };
           }
         ).payChoice;
@@ -2400,6 +2465,9 @@ export const pendingChoiceMoves: Partial<
             executeEffect(branch as ExecutableEffect, {
               ...buildEffectContext(draft, payChoice.sourcePlayerId, choice.sourceCardId, context),
               ...(payChoice.boundTargets ? { boundTargets: payChoice.boundTargets } : {}),
+              // rule 359.3.f — same referents as the interrupted resolution.
+              ...(payChoice.sourceZone !== undefined ? { sourceZone: payChoice.sourceZone } : {}),
+              ...(payChoice.triggerSourceId !== undefined ? { triggerSourceId: payChoice.triggerSourceId } : {}),
             });
           }
           if (!draft.pendingChoice) {

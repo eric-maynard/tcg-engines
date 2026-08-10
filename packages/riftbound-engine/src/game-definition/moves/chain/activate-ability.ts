@@ -26,6 +26,8 @@ import { fireTriggers } from "../../../abilities/trigger-runner";
 import { evaluateLegionCondition } from "../../../abilities/legion-conditions";
 import { evaluateWhileLevel } from "../../../abilities/xp-conditions";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
+import type { BuffCardsIo } from "../../../operations/buff-counters";
+import { removeOneBuffCounter } from "../../../operations/buff-counters";
 import { removeFromBoard } from "../../../operations/leave-board";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../../types";
 import {
@@ -2570,11 +2572,7 @@ export const activateAbility: Defs["activateAbility"] = {
       // rule 702.2.b (ogn-164-298 Sett): spending a buff removes it; Might
       // readers look at top-level meta.buffed, so mirror the flag there.
       if (cost.spend === "buff") {
-        context.counters.setFlag(cardId as CoreCardId, "buffed", false);
-        context.cards.updateCardMeta(
-          cardId as CoreCardId,
-          { buffed: false } as Partial<RiftboundCardMeta>,
-        );
+        removeOneBuffCounter(context.cards as BuffCardsIo, context.counters, cardId as string);
         // rule 702.2.b: paying a "Spend my buff:" cost is a spend like any
         // other — "When you spend a buff" fires here too, not only on the
         // play-time additional-cost paths.

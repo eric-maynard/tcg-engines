@@ -285,6 +285,7 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
     openPrompt !== undefined &&
     ((openPrompt.type === "opt-in" && openPrompt.suspendedDeathCardId !== undefined) ||
       openPrompt.resume?.kind === "die-order" ||
+      openPrompt.resume?.kind === "die-batch-order" ||
       openPrompt.resume?.kind === "die-assign");
   if (lethalIds.length > 0 && !batchWaiting) {
     const outcome = runDieBatch(ctx, lethalIds, { canPrompt: true });

@@ -20,6 +20,8 @@ import {
   isLegalTiming,
 } from "../../../chain";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
+import type { BuffCardsIo } from "../../../operations/buff-counters";
+import { removeOneBuffCounter } from "../../../operations/buff-counters";
 import { removeFromBoard } from "../../../operations/leave-board";
 import { canPlayViaAmbush } from "../../../keywords/keyword-effects";
 import { selfPlayIsForbidden } from "../../../abilities/play-restrictions";
@@ -2113,14 +2115,10 @@ export const playUnit: Defs["playUnit"] = {
       { counters: context.counters, zones: context.zones },
     );
 
-    // rule 702.2.b: spending a buff removes it; Might readers look at
-    // top-level meta.buffed, so mirror the counter flag there.
+    // rule 702.2.b: spending a buff removes ONE buff counter; Might readers
+    // look at top-level meta.buffed, so mirror the counter flag there.
     for (const id of spentBuffs) {
-      counters.setFlag(id as CoreCardId, "buffed", false);
-      context.cards.updateCardMeta?.(
-        id as CoreCardId,
-        { buffed: false } as Partial<RiftboundCardMeta>,
-      );
+      removeOneBuffCounter(context.cards as BuffCardsIo, counters, id);
     }
     // rule 702.2.b: each buff spent is its own event ("When you spend a buff"
     // fires once per buff, so spending two buffs mints two Gold tokens).

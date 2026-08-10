@@ -503,7 +503,10 @@ export function deriveFromPendingChoice(ctx: DecisionContext, pc: PendingChoice)
   // ordering is part of finalization ("FIN"); everything else resolves ("RES").
   const resumeKind = (pc as { resume?: { kind?: string } }).resume?.kind;
   const genericTiming =
-    resumeKind === "die-order" || resumeKind === "die-assign" || resumeKind === "damage-order"
+    resumeKind === "die-order" ||
+    resumeKind === "die-batch-order" ||
+    resumeKind === "die-assign" ||
+    resumeKind === "damage-order"
       ? ("RPL" as const)
       : resumeKind === "trigger-batch" || resumeKind === "trigger-cost" || resumeKind === "target-slot"
         ? ("FIN" as const)
@@ -877,6 +880,10 @@ export function deriveFromPendingChoice(ctx: DecisionContext, pc: PendingChoice)
       if (cost?.discard) {
         costParts.push(`[discard ${cost.discard}]`);
       }
+      // rule 383.3.b / 745 (ogn-282-298) — "spend a buff to …" is a base cost too.
+      if ((cost as { spendBuff?: number } | undefined)?.spendBuff) {
+        costParts.push("[spend a buff]");
+      }
       // rule 404.2 / 809.1.c.1 — the [Deflect] surcharge this item's own choice
       // will owe is part of the same answer, so name it alongside the base cost.
       const deflectPips = (pc as { deflectSurcharge?: number }).deflectSurcharge ?? 0;
@@ -891,6 +898,21 @@ export function deriveFromPendingChoice(ctx: DecisionContext, pc: PendingChoice)
         costText = costText ? `${costText} and exhaust` : "Exhaust";
       }
       costText = costText ? `${costText} to use` : "Use";
+      // rule 383.3.a / 205 / 444.2 — a "you may pay [C]. If you do, …" trigger is
+      // opted into NOW (finalization) but its Pay is a game action performed —
+      // and separately declinable — as it RESOLVES; say so on the first prompt.
+      const finItemId = (pc as { finalizationChainItemId?: string }).finalizationChainItemId;
+      const resEffect = (pc.resolved as { effect?: { type?: string; condition?: { type?: string; cost?: { energy?: number; power?: string[]; xp?: number } } } } | undefined)?.effect;
+      let laterPay = "";
+      if (finItemId !== undefined && cost === undefined && resEffect?.type === "conditional" && resEffect.condition?.type === "pay-cost") {
+        const c = resEffect.condition.cost ?? {};
+        const parts = [
+          ...(c.energy ? [`[${c.energy}]`] : []),
+          ...(c.power ?? []).map((p) => `[${p}]`),
+          ...(c.xp ? [`[${c.xp} XP]`] : []),
+        ];
+        laterPay = ` (you pay ${parts.join("") || "its cost"} as it resolves)`;
+      }
       // rule 444.2.c / 429.3.a: a Pay demanded by a resolving/finalizing ability
       // is still a Pay step — Reaction [Add] abilities stay activatable here, so
       // the seat's remaining actions ride alongside the yes/no.
@@ -906,7 +928,7 @@ export function deriveFromPendingChoice(ctx: DecisionContext, pc: PendingChoice)
         consequence: "Perform the optional triggered ability",
         id: decisionId(ctx.seq, seat, "yes-no"),
         kind: "yes-no",
-        prompt: `${costText} ${ctx.label(pc.sourceCardId)}'s optional ability?`,
+        prompt: `${costText} ${ctx.label(pc.sourceCardId)}'s optional ability?${laterPay}`,
       };
       return d;
     }

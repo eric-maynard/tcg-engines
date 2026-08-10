@@ -1157,6 +1157,13 @@ export interface OptInChoice {
     readonly else?: unknown;
     readonly sourcePlayerId: PlayerId;
     readonly boundTargets?: readonly string[];
+    /**
+     * rule 359.3.f — the resolving item's referents ("here" of a battlefield /
+     * conquer trigger, the triggering card) so the branch run on the answer
+     * reads them exactly as the interrupted resolution did.
+     */
+    readonly sourceZone?: string;
+    readonly triggerSourceId?: string;
   };
   /**
    * rule 354.2 / 355.1.a — this question belongs to a card an effect is
@@ -1226,6 +1233,13 @@ export type PendingResume =
   | { readonly kind: "die-order"; readonly dyingCardId: CardId }
   /** rule 373 — the answer names the death a single-use replacement is applied to first. */
   | { readonly kind: "die-assign"; readonly replacementId: string }
+  /**
+   * rule 373.1 — one player controls replacements for SEVERAL deaths of the
+   * same batch and one of the dying objects is itself a replacement source
+   * (Soraka + Guardian Angel): the answer orders those deaths, i.e. which
+   * replacement applies first. Keys are the dying card ids.
+   */
+  | { readonly kind: "die-batch-order" }
   /** rule 383.3.d — the answer orders these (already appended) trigger items on the Chain. */
   | { readonly kind: "trigger-batch"; readonly itemIds: readonly string[] }
   /**
@@ -1801,6 +1815,8 @@ export interface RiftboundGameState {
     dying: string[];
     /** rule 371.2 — dying id → optional replacement ids already offered (still dying ⇒ declined). */
     asked?: Record<string, string[]>;
+    /** rule 373.1 — the batch-wide "which death's replacement applies first" question was settled. */
+    batchOrdered?: boolean;
     /** A Kill instruction / cost / Temporary batch to finish on resume (SBA batches re-detect themselves). */
     kill?: { to: string; cause: unknown; playerId: string; sourceCardId: string };
   };

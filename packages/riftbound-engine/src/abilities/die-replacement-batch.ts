@@ -569,9 +569,69 @@ export function runDieBatch(ctx: Ctx, ids: readonly string[], opts: DieBatchOpti
   }
 }
 
+/**
+ * rule 373.1 (ruling b9a88df37a35379b — Soraka, Wanderer + Guardian Angel) —
+ * when ONE player controls replacements for several deaths of the same batch
+ * AND one of the dying objects is itself the source of such a replacement, the
+ * order the deaths are processed in changes the outcome (Soraka must still be
+ * "here" to save the smaller units, so her controller may apply her
+ * replacement before the one that recalls her). That player orders them.
+ * Returns the prompt items (death id as key, its replacement's source as the
+ * card shown) plus the chooser, or undefined when nothing is order-sensitive.
+ */
+function batchOrderQuestion(
+  ctx: Ctx,
+  state: BatchState,
+): { playerId: string; items: PendingItem[] } | undefined {
+  const live = state.queue.filter((id) => !RUNNING.has(id) && stillOnBoard(ctx, id));
+  if (live.length < 2) {
+    return undefined;
+  }
+  const entries: { death: string; source: string; controller: string }[] = [];
+  for (const death of live) {
+    const cand = collectDieCandidates(ctx, death).find((c) => !c.optional);
+    if (cand) {
+      entries.push({ controller: cand.controller, death, source: cand.sourceCardId });
+    }
+  }
+  if (entries.length < 2 || new Set(entries.map((e) => e.source)).size < 2) {
+    return undefined;
+  }
+  const controllers = new Set(entries.map((e) => e.controller));
+  // Cross-controller order stays turn order (373.1).
+  if (controllers.size !== 1) {
+    return undefined;
+  }
+  // Order only matters when a dying object shields ANOTHER dying object.
+  if (!entries.some((e) => e.source !== e.death && live.includes(e.source))) {
+    return undefined;
+  }
+  return {
+    items: entries.map((e) => ({ cardId: e.source, key: e.death })),
+    playerId: [...controllers][0] as string,
+  };
+}
+
 function processBatch(ctx: Ctx, state: BatchState, opts: DieBatchOptions): DieBatchResult {
   const draft = ctx.draft;
   const canPrompt = (): boolean => opts.canPrompt && !draft.pendingChoice;
+
+  // rule 373.1 — batch-wide ordering of order-sensitive deaths, asked before
+  // any replacement of the batch is applied.
+  if (state.batchOrdered !== true) {
+    const question = batchOrderQuestion(ctx, state);
+    if (question && canPrompt()) {
+      draft.pendingChoice = {
+        items: question.items,
+        playerId: question.playerId,
+        prompt: "Order these deaths' replacement effects (first = applied first)",
+        resume: { kind: "die-batch-order" },
+        type: "order",
+      };
+      return { dying: [], replaced: [...state.replaced], suspended: true };
+    }
+    state.batchOrdered = true;
+  }
 
   for (let guard = 0; guard < 256 && state.queue.length > 0; guard++) {
     const cardId = state.queue[0] as string;
@@ -759,11 +819,26 @@ export function continueKillBatch(
  */
 export function recordDieBatchAnswer(
   draft: RiftboundGameState,
-  resume: { kind: "die-order"; dyingCardId: string } | { kind: "die-assign"; replacementId: string },
+  resume:
+    | { kind: "die-order"; dyingCardId: string }
+    | { kind: "die-assign"; replacementId: string }
+    | { kind: "die-batch-order" },
   answer: { orderedKeys?: readonly string[]; pickedKeys?: readonly string[]; defaultOrder?: readonly string[] },
 ): void {
   const state = draft.dieBatch;
   if (!state) {
+    return;
+  }
+  // rule 373.1 — the chosen death order for the whole batch; first = its
+  // replacement applies first.
+  if (resume.kind === "die-batch-order") {
+    const order =
+      answer.orderedKeys && answer.orderedKeys.length > 0 ? answer.orderedKeys : (answer.defaultOrder ?? []);
+    state.batchOrdered = true;
+    state.queue = [
+      ...order.filter((id) => state.queue.includes(id)),
+      ...state.queue.filter((id) => !order.includes(id)),
+    ];
     return;
   }
   if (resume.kind === "die-order") {
