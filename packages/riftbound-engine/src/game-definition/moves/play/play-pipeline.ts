@@ -45,6 +45,7 @@ import {
 } from "../../../zones/zone-configs";
 import {
   addToChain,
+  collapseTriggerBatch,
   createInteractionState,
   getActiveShowdown,
   removeChainItem,
@@ -222,6 +223,11 @@ export function enterPlayedPermanent(io: PlayIO, spec: EnterPlayedPermanentSpec)
     (draft.additionalCostsPaid as Record<string, boolean | readonly string[]>)[cardId] = true;
   }
   const canFire = typeof zones.getCardsInZone === "function" && cards && counters;
+  // rule 383.3.d — `play-self`, `play-card` and the stun event are separate
+  // publications of ONE play, so every trigger they raise triggered
+  // SIMULTANEOUSLY and their controller may still order them (Evelynn's own
+  // play trigger vs. Star Spring's "when a player plays a unit here").
+  const chainLenBeforePlayTriggers = draft.interaction?.chain?.items.length ?? 0;
   if (canFire) {
     fireTriggers(
       {
@@ -244,6 +250,11 @@ export function enterPlayedPermanent(io: PlayIO, spec: EnterPlayedPermanentSpec)
     if (spec.stun === true) {
       fireTriggers({ cardId, type: "stun" } as Parameters<typeof fireTriggers>[0], trig);
     }
+    collapseTriggerBatch(draft.interaction, chainLenBeforePlayTriggers);
+    // The from-Hidden publication of the SAME play happens after this call
+    // returns (`hide.ts`), so hand it the batch these triggers share.
+    (draft as { lastPlayTriggerBatch?: string }).lastPlayTriggerBatch =
+      draft.interaction?.chain?.items[chainLenBeforePlayTriggers]?.triggerBatch;
   }
   if (draft.cardsPlayedThisTurn) {
     draft.cardsPlayedThisTurn[playerId] = (draft.cardsPlayedThisTurn[playerId] ?? 0) + 1;

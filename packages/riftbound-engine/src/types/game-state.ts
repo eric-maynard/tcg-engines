@@ -371,6 +371,16 @@ export interface BattlefieldState {
   controllerOccupied?: boolean;
 
   /**
+   * rule 190.4.b / 464–466 — who controlled this battlefield when its current
+   * Showdown began. The 323.6 vacancy check may strip control mid-Showdown
+   * (the last defender Flashes home), but the contest itself does not convert
+   * the battlefield: the conquer that ends it must still report the
+   * pre-Showdown controller so "conquer a battlefield that was uncontrolled"
+   * (sfd-116-221 Yone) reads the control the battlefield actually had.
+   */
+  controllerAtShowdownStart?: PlayerId | null;
+
+  /**
    * Set when the mandatory Combat Showdown at this battlefield has completed
    * (all Relevant Players passed). Rule 625.1 / 516.4.f: the Showdown is a
    * required sub-phase of Combat — `resolveFullCombat` may not run until it
@@ -914,6 +924,12 @@ export interface ChooseTargetChoice {
    */
   readonly retargetChainItemId?: string;
   /**
+   * rule 355.14.a/b + 752.1 (ogn-080-298 × unl-192-219) — the re-targeted item
+   * ALSO names a split-damage recipient set behind its Might-reference source:
+   * this descriptor raises that follow-up prompt once the source is re-chosen.
+   */
+  readonly retargetSplitTarget?: unknown;
+  /**
    * rule 355.13 — the prompt may be declined (`accept:false`), leaving the
    * effect's existing choices untouched. Set for "you MAY make new choices".
    */
@@ -1237,6 +1253,20 @@ export type PendingResume =
       readonly boundTargets?: readonly string[];
     }
   /** No follow-up (tests / producers that read the answer off `lastPendingAnswer`). */
+  /**
+   * rule 752.1 / 355.14.b — the answer is the re-chosen split-damage recipient
+   * SET of stolen chain item `itemId`, bound behind the source already
+   * re-named in slot 0. rule 755: costs incurred by these new choices (a
+   * [Deflect] surcharge) are ignored, so nothing is charged here.
+   */
+  | { readonly kind: "retarget-split"; readonly itemId: string }
+  /**
+   * rule 752.1 / 753 — the answer is the re-chosen target GROUP of stolen chain
+   * item `itemId`: one card per caster-chosen slot of a multi-slot spell
+   * ("Return a friendly unit and an enemy unit …"). An empty answer keeps the
+   * existing choices; rule 755 ignores any cost the new choices incur.
+   */
+  | { readonly kind: "retarget-slots"; readonly itemId: string }
   | { readonly kind: "none"; readonly tag?: string };
 
 /** One entry of an `order` / `pick-many` prompt. */
@@ -1287,6 +1317,13 @@ export interface PickManyChoice {
    * "upTo" = an "up to N" / "any number of" group. Absent for other picks.
    */
   readonly slotSemantics?: "split" | "upTo";
+  /**
+   * rule 753 / 753.1 — one candidate list per caster-chosen slot of a multi-slot
+   * re-choice. The answer is legal only when its cards can be matched one-to-one
+   * onto these slots, so "a friendly unit and an enemy unit" cannot end on two
+   * same-side units.
+   */
+  readonly slotOptions?: readonly (readonly string[])[];
   readonly prompt?: string;
   readonly constraint?: {
     readonly totalMightAtMost?: number;

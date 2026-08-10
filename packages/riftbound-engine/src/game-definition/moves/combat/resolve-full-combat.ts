@@ -193,7 +193,12 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
     // deaths can empty it and state-based checks clear control (466.5.b)
     // before the outcome is applied, so "a battlefield that was uncontrolled"
     // must read the controller from before the damage step, not after.
-    const controllerBeforeCombat = battlefield.controller ?? null;
+    // rule 190.4.b — a defender that left mid-Showdown (Flashed home) may have
+    // already tripped the 323.6 vacancy check, but the battlefield was still
+    // controlled all through the contest: fall back to the controller recorded
+    // when this Showdown opened.
+    const controllerBeforeCombat =
+      battlefield.controller ?? battlefield.controllerAtShowdownStart ?? null;
 
     const attackingPlayer = battlefield.contestedBy;
     if (!attackingPlayer) {

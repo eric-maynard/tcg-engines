@@ -54,6 +54,19 @@ type Defs = GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCar
  */
 const HIDE_POWER_COST = 1;
 
+/** rule 383.3.d — put the triggered items added since `from` into `batch` (no-op without one). */
+function stampBatch(draft: RiftboundGameState, from: number, batch: string | undefined): void {
+  const items = draft.interaction?.chain?.items;
+  if (!items || batch === undefined) {
+    return;
+  }
+  for (let i = from; i < items.length; i++) {
+    if (items[i].triggered === true) {
+      items[i] = { ...items[i], triggerBatch: batch };
+    }
+  }
+}
+
 /**
  * rule-id: ogn-264-298 — rule 517.2.b: a turn-scoped "you can hide cards
  * ignoring costs this turn" licence, installed as a `turn-static` by the
@@ -1019,7 +1032,18 @@ function lockRevealedSpellTarget(
       hiddenChoiceIsPulledIn(item.effect as SpellEffectTargetShape) ||
       ctx.zones.getCardZone(id as CoreCardId) === bfZone,
   );
-  if (options.length < 2) {
+  if (options.length === 0) {
+    return;
+  }
+  // rule 355.5 with rule 402.2 — a lone legal candidate is no decision, but it is
+  // still CHOSEN as the card is played: lock it onto the chain item so a response
+  // that moves it away mistargets (359.3.e.5) and a later re-choice by a new
+  // controller (752.1) starts from a real target instead of nothing.
+  if (options.length === 1) {
+    const idx = items?.findIndex((it) => it.id === item.id) ?? -1;
+    if (items && idx >= 0) {
+      items[idx] = { ...items[idx], targets: [options[0] as string] };
+    }
     return;
   }
   draft.pendingChoice = {
@@ -1414,6 +1438,7 @@ export const revealHidden: Defs["revealHidden"] = {
     // replacement / "I enter ready" statics / a paid granted Accelerate
     // (sfd-029-221), fires the play triggers (with `fromHiddenAt` so their
     // targets stay at that battlefield — 811.1.d.2) and counts the play.
+    (draft as { lastPlayTriggerBatch?: string }).lastPlayTriggerBatch = undefined;
     if (cardType === "unit" || cardType === "gear" || cardType === "equipment") {
       let paidAccelerate = false;
       let paidOwnOptional = false;
@@ -1456,6 +1481,7 @@ export const revealHidden: Defs["revealHidden"] = {
     // playing it "from [Hidden]" (units, gear and equipment alike).
     // rule 811.1.d.2 — "(here)": carry the facedown battlefield on the event so
     // the trigger's own targets are scoped to it (sfd-139-221).
+    const chainLenBeforeHiddenTriggers = draft.interaction?.chain?.items.length ?? 0;
     fireTriggers(
       {
         cardId,
@@ -1466,6 +1492,13 @@ export const revealHidden: Defs["revealHidden"] = {
       },
       { cards, counters, draft, zones },
     );
+    // rule 383.3.d / 811.1.c.3 — `play-self` / `play-card` (fired as the card
+    // entered) and `play-from-hidden` are separate publications of ONE play, so
+    // the triggers they raise triggered SIMULTANEOUSLY and their controller may
+    // still order them (Evelynn's from-Hidden trigger vs. Star Spring's "when a
+    // player plays a unit here"). Only those two windows join: designation and
+    // arrival triggers raised in between are their own, later batch (337.1.b).
+    stampBatch(draft, chainLenBeforeHiddenTriggers, (draft as { lastPlayTriggerBatch?: string }).lastPlayTriggerBatch);
 
     // rule 347.1.a/.b — the Focus action of playing this card started a Chain
     // (its own play triggers); when THAT chain closes Focus passes to the next

@@ -424,6 +424,11 @@ export function beginShowdownAt(io: ArrivalIO, battlefieldId: string, opts: Begi
     return c !== undefined && c !== attacker;
   });
   const isCombat = attackers.length > 0 && defenders.length > 0;
+  // rule 190.4.b — the contest does not convert the battlefield: remember who
+  // held it as the Showdown opened, so a defender leaving mid-Showdown (and the
+  // 323.6 vacancy check that follows) cannot make the conquer that ends this
+  // Showdown look like a conquer of an UNCONTROLLED battlefield (sfd-116-221).
+  bf.controllerAtShowdownStart = bf.controller ?? null;
   bf.stagedByAction = undefined;
   const playerIds = Object.keys(draft.players);
   const defender = isCombat
