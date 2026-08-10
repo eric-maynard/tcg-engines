@@ -77,9 +77,14 @@ export function handle_empower(effect: ExecutableEffect, ctx: EffectContext, _h:
     if (wasEmpowered !== (effect.type === "empower") || effect.type === "empower") {
       changed = true;
     }
-    // Rule 827.1.c: "When I become [Empowered]" fires on the false→true edge.
-    if (effect.type === "empower" && !wasEmpowered) {
+    // rule 441.1.c.1 (rule-id: ven-153-166) — the empower ACTION happens every
+    // time it is performed, even on a card that is already Empowered (Kayle's
+    // 2nd/3rd self-Empower), so "when you empower something else" gets its
+    // event each time. `becameEmpowered` carries the false→true edge that
+    // "When I become [Empowered]" (rule 827.1.c) keys on instead.
+    if (effect.type === "empower") {
       ctx.fireTriggers?.({
+        becameEmpowered: !wasEmpowered,
         cardId: targetId,
         owner: ctx.cards.getCardOwner(targetId as CoreCardId) ?? ctx.playerId,
         // rule 441.3.a — the player the effect DIRECTS to empower is the one who

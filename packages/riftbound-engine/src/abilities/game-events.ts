@@ -193,7 +193,17 @@ export type GameEvent =
   // rule 441.3.a (rule-id: ven-153-166) — the player a Game Effect DIRECTS to
   // empower is the one who "empowers", so `actor` (not the empowered card's
   // `owner`) decides whether "YOU empower something".
-  | { type: "empower"; cardId: string; owner: string; actor?: string }
+  // rule 441.1.c.1 (rule-id: ven-153-166) — empowering an already-Empowered
+  // card is still an empower ACTION ("when you empower something else"); it
+  // just changes nothing. `becameEmpowered` marks the false→true edge, which is
+  // what "When I become [Empowered]" (827.1.c) keys on.
+  | {
+      type: "empower";
+      cardId: string;
+      owner: string;
+      actor?: string;
+      becameEmpowered?: boolean;
+    }
   | { type: "heal"; cardId: string; amount: number }
   // rule-id: unl-055-219 — `owner` = stunned unit's controller, `stunnedBy` =
   // the player whose effect stunned it, `battlefieldId` set when the stunned

@@ -1339,6 +1339,14 @@ export function isAffordablePlayPick(
   if (choice.type !== "reveal-and-pick" || choice.onPicked !== "play") {
     return true;
   }
+  // rule 356.4 / 359.3.e.6 (ogn-242-298 Baited Hook) — "you may BANISH a unit
+  // from among them AND play it": the banish is its own instruction and lands
+  // on selection, so an unplayable card is still a legal pick (it just stays
+  // banished when the play cannot be performed). Only a pick whose ONLY
+  // consequence is the play is filtered by playability.
+  if ((choice as { playBanishFirst?: boolean }).playBanishFirst === true) {
+    return true;
+  }
   // Minimal unit-test contexts (no board accessors) cannot price anything.
   const zones = context?.zones as { getCardsInZone?: unknown; getCardZone?: unknown } | undefined;
   if (typeof zones?.getCardsInZone !== "function" || typeof zones?.getCardZone !== "function") {

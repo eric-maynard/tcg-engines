@@ -225,7 +225,11 @@ export function handle_recycle(effect: ExecutableEffect, ctx: EffectContext, _h:
         sourceCardId: ctx.sourceCardId,
         type: "reveal-and-pick",
         ...(ownerChoice ? { position: "owner-choice" as const } : {}),
-        ...(upTo ? { optional: true } : {}),
+        // rule 355.13 (rule-id: ogn-212-298) — "Recycle UP TO 4 cards": the
+        // count is a ceiling answered in one go, so the prompt must not re-park
+        // for the picks the chooser declined to take (which would strand the
+        // batch's single `recycle` event behind a decline).
+        ...(upTo ? { optional: true, upTo: true } : {}),
         ...(n > 1 ? { remaining: n } : {}),
       };
       return;
