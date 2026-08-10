@@ -2054,7 +2054,20 @@ export function fireTriggers(rawEvent: GameEvent, ctx: TriggerRunnerContext): nu
       ctx,
       match.cardId,
     ),
-  );
+  )
+    // rule 383.3.b.1 — a trigger whose cost cannot be paid can't be taken, so
+    // it never enters the Chain at all (not even as a Pending Item that a
+    // later effect could rescue). Only state-decided costs are known this
+    // early: an already-exhausted source can never pay [Exhaust] (rule-id:
+    // sfd-187-221 Void Burrower conquering Hall of Legends). Resource costs
+    // stay a finalization question — those are payable up to the opt-in.
+    .filter((match) => {
+      const cost = extractPayCost(match.ability.condition);
+      if (cost?.exhaust !== true) {
+        return true;
+      }
+      return ctx.cards.getCardMeta(match.cardId as CoreCardId)?.exhausted !== true;
+    });
 
   // rule 808.2 / rule-id: ogn-236-298 (Karthus, Eternal) — "Your [Deathknell]
   // effects trigger an additional time": each instance triggers separately, so

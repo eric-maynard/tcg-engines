@@ -292,6 +292,11 @@ export class CardDefinitionRegistry {
         ab.condition === undefined &&
         ab.effect?.type === "grant-keyword" &&
         ab.effect.keyword === keyword &&
+        // rule 724 / 718.3 — an Equipment's EFFECT TEXT keyword ([Deflect] on
+        // Hexdrinker) is not the gear's own printed keyword: Inactive while
+        // unattached, and while attached it belongs to the HOST — so choosing
+        // the gear itself never owes that Deflect.
+        (ab as { effectText?: boolean }).effectText !== true &&
         (ab.effect.target === undefined || ab.effect.target === "self")
       );
     });
