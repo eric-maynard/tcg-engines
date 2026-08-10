@@ -10,13 +10,22 @@
 export interface TagBearingMeta {
   readonly namedTag?: string;
   readonly grantedTags?: readonly string[];
+  /**
+   * rule 135.2 — TAGs conferred by a continuous effect ("I am a Mech." on an
+   * attached Equipment). Additive like the others: printed tags stay.
+   */
+  readonly staticTags?: readonly string[];
 }
 
 export function effectiveTags(
   printed: readonly string[] | undefined,
   meta: TagBearingMeta | undefined,
 ): string[] {
-  const gained = [...(meta?.grantedTags ?? []), ...(meta?.namedTag ? [meta.namedTag] : [])];
+  const gained = [
+    ...(meta?.grantedTags ?? []),
+    ...(meta?.staticTags ?? []),
+    ...(meta?.namedTag ? [meta.namedTag] : []),
+  ];
   return [...(printed ?? []), ...gained];
 }
 

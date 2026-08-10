@@ -192,6 +192,15 @@ const FRIENDLY_PLAY_LOCATION_PATTERN =
  */
 const BONUS_DAMAGE_STATIC_PATTERN = /^Your spells and abilities deal (\d+) Bonus Damage\.?$/i;
 
+/**
+ * rule 135.2 (sfd-073-221 Experimental Hexplate) — "I am a Mech." confers a
+ * TAG. "am" is just another conjugation of "to be", so it reads exactly like
+ * "is"/"are", and the grant is ADDITIVE: whatever the card already is, it stays.
+ * rule 136.2 — on an attached Equipment "I" is the equipped unit, which the
+ * engine's equipment self-target remap handles.
+ */
+const SELF_IS_TAG_PATTERN = /^(?:I am|I'm|This is) an? ([A-Za-z][\w'-]*(?: [A-Za-z][\w'-]*)*)\.?$/;
+
 // ============================================================================
 // Helper Functions
 // ============================================================================
@@ -363,7 +372,8 @@ export function isStaticAbility(text: string): boolean {
     RESTRICTION_PATTERN.test(cleanText) ||
     PLAY_LOCATION_PATTERN.test(cleanText) ||
     FRIENDLY_PLAY_LOCATION_PATTERN.test(cleanText) ||
-    BONUS_DAMAGE_STATIC_PATTERN.test(cleanText)
+    BONUS_DAMAGE_STATIC_PATTERN.test(cleanText) ||
+    SELF_IS_TAG_PATTERN.test(cleanText)
   );
 }
 
@@ -496,6 +506,23 @@ function parseStaticAbilityInner(
           target: "controller",
           type: "grant-keyword",
           value: Number.parseInt(controllerBonusDamageMatch[1], 10),
+        } as unknown as Effect,
+        type: "static",
+      } as StaticAbility,
+      endIndex: text.length,
+      startIndex: 0,
+    };
+  }
+
+  // rule 135.2 / 136.2 — "I am a Mech." grants the TAG (additively) to the
+  // speaker; on an attached Equipment that is the equipped unit.
+  const selfIsTagMatch = cleanText.match(SELF_IS_TAG_PATTERN);
+  if (selfIsTagMatch) {
+    return {
+      ability: {
+        effect: {
+          tags: [selfIsTagMatch[1]],
+          type: "grant-tag",
         } as unknown as Effect,
         type: "static",
       } as StaticAbility,

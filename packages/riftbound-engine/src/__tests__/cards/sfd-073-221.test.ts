@@ -61,11 +61,14 @@ async function equip(game: Game, unitId: string, equipmentId = "hex"): Promise<v
 }
 
 describe("Experimental Hexplate (sfd-073-221)", () => {
-  test("registry payload: 1-cost Mind equipment, +1 bonus, exactly one ability — the [Equip] keyword costed one [mind] pip and no energy", async () => {
+  test("registry payload: 1-cost Mind equipment, +1 bonus, two abilities — the [Equip] keyword costed one [mind] pip and no energy, plus the effect-text 'I am a Mech.' tag grant (rule 135.2)", async () => {
     const def = (await loadDefaultCardPool()).get(CARD);
     expect(def).toMatchObject({ cardType: "equipment", domain: "mind", energyCost: 1, mightBonus: 1, name: "Experimental Hexplate" });
     expect(def?.powerCost ?? []).toEqual([]);
-    expect(def?.abilities).toEqual([{ cost: { power: ["mind"] }, keyword: "Equip", type: "keyword" }]);
+    expect(def?.abilities).toEqual([
+      { cost: { power: ["mind"] }, keyword: "Equip", type: "keyword" },
+      { effect: { tags: ["Mech"], type: "grant-tag" }, effectText: true, type: "static" },
+    ]);
   });
 
   test("PLAY cost: 1 energy and no power; it lands in base as an unattached, ready gear carrying the Equip keyword; 0 energy (even with mind power) cannot play it; not on the opponent's turn", async () => {

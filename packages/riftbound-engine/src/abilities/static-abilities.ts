@@ -19,6 +19,7 @@ import type {
   ZoneId as CoreZoneId,
 } from "@tcg/core";
 import { getActiveShowdown } from "../chain/chain-state";
+import { effectiveTags } from "./card-tags";
 import { KEYWORD_DEFINITIONS } from "../keywords/keyword-effects";
 import { getGlobalCardRegistry } from "../operations/card-lookup";
 import { additionalCostWasPaid } from "../operations/additional-costs-paid";
@@ -160,7 +161,11 @@ function existsHereFilterMatches(
     if (!filter.tag) {
       return true;
     }
-    return (getGlobalCardRegistry().get(cardId)?.tags ?? []).includes(filter.tag);
+    // rule 135.2 — a granted tag ("I am a Mech.") counts as a tag here too.
+    return effectiveTags(
+      getGlobalCardRegistry().get(cardId)?.tags,
+      ctx.cards.getCardMeta(cardId as CoreCardId),
+    ).includes(filter.tag);
   }
   const meta = (ctx.cards.getCardMeta(cardId as CoreCardId) ?? {}) as Partial<RiftboundCardMeta> &
     Record<string, unknown>;
@@ -895,7 +900,8 @@ function resolveStaticTargetsFromDescriptor(
           // Poro, and Ivern units here have +1 [Might]").
           const tag = (t.filter as { tag?: string | readonly string[] }).tag;
           if (tag !== undefined) {
-            const tags = def?.tags ?? [];
+            // rule 135.2 — tags granted by a continuous effect count as tags.
+            const tags = effectiveTags(def?.tags, ctx.cards.getCardMeta(c.id as CoreCardId));
             const wanted = Array.isArray(tag) ? (tag as readonly string[]) : [tag as string];
             if (!wanted.some((w) => tags.includes(w))) {
               return false;
@@ -1170,6 +1176,32 @@ function applyStaticEffect(
         );
       }
     }
+  } else if (effectType === "grant-tag") {
+    // rule 135.2 / 136.2 — "I am a Mech." on an attached Equipment gives the
+    // WEARER the tag (targets were already remapped by `resolveStaticTargets`),
+    // and tag-granting text is additive: printed tags stay.
+    const tags = (effect.tags as string[] | undefined) ?? [];
+    if (tags.length === 0) {
+      return;
+    }
+    for (const targetId of targetIds) {
+      const meta = ctx.cards.getCardMeta(targetId as CoreCardId) as
+        | Partial<RiftboundCardMeta>
+        | undefined;
+      const existing = meta?.staticTags ?? [];
+      const printed = getGlobalCardRegistry().get(targetId)?.tags ?? [];
+      const added = tags.filter(
+        (t) =>
+          !existing.some((e) => e.toLowerCase() === t.toLowerCase()) &&
+          !printed.some((e) => e.toLowerCase() === t.toLowerCase()),
+      );
+      if (added.length > 0) {
+        ctx.cards.updateCardMeta(
+          targetId as CoreCardId,
+          { staticTags: [...existing, ...added] } as Partial<RiftboundCardMeta>,
+        );
+      }
+    }
   } else if (effectType === "grant-ability") {
     // rule 364 / 135.4.b (unl-213-219) — "Units here have '<cost>: <effect>.'":
     // a continuous grant of the activated ability printed on the SOURCE card at
@@ -1260,6 +1292,17 @@ export function recalculateStaticEffects(ctx: StaticAbilityContext): boolean {
       }
     }
 
+    // rule 135.2 — tags conferred by a continuous effect are re-derived every
+    // pass, so the tag ends the moment the granting effect stops applying
+    // (the Equipment is detached, leaves the board, …).
+    if (meta.staticTags && meta.staticTags.length > 0) {
+      ctx.cards.updateCardMeta(
+        card.id as CoreCardId,
+        { staticTags: undefined } as Partial<RiftboundCardMeta>,
+      );
+      changed = true;
+    }
+
     // rule 364 (unl-213-219) — remove static-duration granted abilities; the
     // grant is re-applied below only while the card still matches its source's
     // descriptor (it ends the moment the unit leaves the battlefield).
@@ -1289,6 +1332,10 @@ export function recalculateStaticEffects(ctx: StaticAbilityContext): boolean {
   // That are commutative (e.g., two +1 Might auras) the order does not
   // Matter, so the observable result is unchanged for those cases.
 
+  // Pass 0 (layer "characteristic"): tag grants. They must land before the
+  // ability layer, because a keyword aura can select on tag ("Your Mechs each
+  // have [Assault]" must see a unit the Hexplate just made a Mech).
+  const PASS_0_EFFECTS = new Set(["grant-tag"]);
   const PASS_1_EFFECTS = new Set(["grant-keyword", "grant-keywords", "grant-ability"]);
   const PASS_2_EFFECTS = new Set(["modify-might"]);
 
@@ -1395,6 +1442,8 @@ export function recalculateStaticEffects(ctx: StaticAbilityContext): boolean {
     }
   };
 
+  // Pass 0 — characteristic-setting (tags)
+  applyPass(PASS_0_EFFECTS);
   // Pass 1 — type/ability-setting
   applyPass(PASS_1_EFFECTS);
   // Pass 2 — arithmetic
