@@ -6,6 +6,7 @@ import { isAllAtOneBattlefield, resolveTarget } from "../target-resolver";
 import { type EffectHelpers, getTargetIds } from "./_helpers";
 import { findSpendableBuff } from "./spend-buff";
 import { canSpendXp } from "./spend-xp";
+import { getDeflectSurcharge } from "../../game-definition/moves/play/cost";
 import {
   collectIndependentTargetSlots,
   collectSequenceTargetSlots,
@@ -654,12 +655,40 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
         (subCtx.boundTargets === undefined || pvOptions !== undefined) &&
         ctx.draft.pendingChoice === undefined
       ) {
-        const options =
+        const allOptions =
           pvOptions ??
           resolveTarget(
             { ...(subTarget as TargetDescriptor), quantity: "all" },
             { ...resolverCtx, choosing: true } as Parameters<typeof resolveTarget>[1],
           );
+        // rule 809.1.c / 809.1.c.1 / 809.1.d (356.2.a.2) — [Deflect] taxes
+        // ABILITIES as well as spells and the surcharge is incurred when the
+        // target is CHOSEN, even when the taxed card is the ONLY candidate
+        // (rule 355.10.d.2 — a sole legal candidate is still a choice). A
+        // candidate whose surcharge the chooser cannot cover is not a legal
+        // choice, so it is dropped here and never offered; the prompt carries
+        // `deflectTax` so `pending-choice.ts` charges it at pick time.
+        const surchargeOf = (id: string): number =>
+          getDeflectSurcharge(
+            ctx.draft,
+            ctx.playerId,
+            [id],
+            ctx.cards as Parameters<typeof getDeflectSurcharge>[3],
+            ctx.sourceCardId,
+          );
+        const deflectTax = allOptions.some((id) => surchargeOf(id) > 0);
+        let options = allOptions;
+        if (deflectTax) {
+          const budget = Object.values(
+            (ctx.draft.runePools?.[ctx.playerId]?.power ?? {}) as Partial<Record<string, number>>,
+          ).reduce((a: number, b) => a + (b ?? 0), 0);
+          options = allOptions.filter((id) => surchargeOf(id) <= budget);
+        }
+        if (allOptions.length > 0 && options.length === 0) {
+          // rule 809.1.d — nothing may be chosen, so the step selects nothing
+          // (rule 355.13); it must not fall through to a fresh board scan.
+          continue;
+        }
         if (options.length > 0) {
           const rest = seq.effects.slice(i + 1);
           ctx.draft.pendingChoice = {
@@ -672,6 +701,7 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
             remaining: Math.min(upToN, options.length),
             sourceCardId: ctx.sourceCardId,
             type: "choose-target",
+            ...(deflectTax ? { deflectTax: true as const } : {}),
             ...(rest.length > 0 ? { then: { effects: rest, type: "sequence" } } : {}),
           } as typeof ctx.draft.pendingChoice;
           carryBattlefieldZone();
