@@ -43,7 +43,7 @@ import { RuleEngine } from "@tcg/core";
 import type { PlayerId } from "@tcg/core";
 import type { ServerWebSocket } from "bun";
 import { type LogEntry, actorName, makeLogEntry } from "../src/narrator";
-import { runOpponent } from "./ai-opponent";
+import { chooseBotBattlefield, runOpponent } from "./ai-opponent";
 import { allCards, makeLookupPayload, registerCard, registry } from "./cards";
 import { MAX_SIDEBOARD_SIZE, summarizeLegality, validateDeckConfig } from "./deck-rules";
 import { gameLogger } from "./log";
@@ -55,7 +55,11 @@ import {
   type SideboardCardRef,
   type SideboardSeatState,
   type WsData,
+  broadcast,
+  gameSessions,
   getInternalSnapshot,
+  lobbies,
+  lobbyByCode,
 } from "./state";
 
 /** Create a game from two deck configurations */
@@ -687,6 +691,128 @@ export function buildPregamePayload(session: GameSession, playerId: string): Rec
   };
 }
 
+export type BattlefieldResult = { ok: true; completed: boolean } | { ok: false; error: string };
+
+/**
+ * Record `playerId`'s battlefield for this game (Match, rule 486.5). The pick
+ * is final: a second selection from the same seat is refused. When both seats
+ * have chosen, the battlefields are public → sideboard (if anyone can) else
+ * mulligan. Callers bump `seq` and broadcast.
+ */
+export function selectBattlefield(session: GameSession, playerId: string, battlefieldId: unknown): BattlefieldResult {
+  const pregame = session.pregame;
+  if (!pregame || pregame.phase !== "battlefield_select") {
+    return { error: "Not choosing battlefields right now", ok: false };
+  }
+  if (!session.players.includes(playerId)) {
+    return { error: "Not a seated player", ok: false };
+  }
+  if (pregame.battlefieldSelections[playerId]) {
+    return { error: "Battlefield already locked in", ok: false };
+  }
+  const options = pregame.battlefieldOptions[playerId] ?? [];
+  if (typeof battlefieldId !== "string" || !options.includes(battlefieldId)) {
+    return { error: "Invalid battlefield choice", ok: false };
+  }
+  pregame.battlefieldSelections[playerId] = battlefieldId;
+  const bfName = registry.get(battlefieldId)?.name ?? battlefieldId;
+  session.log.push(makeLogEntry(`${actorName(playerId, session.playerNames)} locked in a battlefield (${bfName}).`, { rewindable: true }));
+  const allSelected = session.players.every((p) => pregame.battlefieldSelections[p]);
+  if (!allSelected) {
+    return { completed: false, ok: true };
+  }
+  session.log.push(makeLogEntry("Both battlefields are locked."));
+  // Battlefields now public → sideboard (if anyone can), else mulligan.
+  advancePastReveal(session);
+  return { completed: true, ok: true };
+}
+
+/** The seat the sandbox bot (Goldfish / Claude) plays, if this is a sandbox game. */
+export function botSeat(session: GameSession): string | undefined {
+  return session.sandbox ? session.players[1] : undefined;
+}
+
+const botPregameInFlight = new WeakSet<GameSession>();
+
+/**
+ * Sandbox games: have the bot seat (Goldfish / Claude) answer whatever the
+ * pregame currently asks of it — its battlefield in a Match (486.5; Claude is
+ * asked with a bounded call, else a seeded pick), and a no-change sideboard
+ * lock-in. The mulligan is answered alongside the human's
+ * (handlePregameMessage). Idempotent and re-entrant: safe to call after every
+ * pregame transition; at most one bot decision is in flight per game.
+ */
+export async function runBotPregame(session: GameSession, opts: { gameId?: string } = {}): Promise<void> {
+  const seat = botSeat(session);
+  const pregame = session.pregame;
+  if (!seat || !pregame || !pregame.sandbox || botPregameInFlight.has(session)) {
+    return;
+  }
+  if (pregame.phase === "battlefield_select" && !pregame.battlefieldSelections[seat]) {
+    const options = pregame.battlefieldOptions[seat] ?? [];
+    if (options.length === 0) {
+      return;
+    }
+    botPregameInFlight.add(session);
+    let pick: { defId: string; note: string };
+    try {
+      pick = await chooseBotBattlefield(session, seat, options);
+    } catch (error) {
+      console.error("[pregame] bot battlefield pick failed:", (error as Error)?.message ?? error);
+      pick = { defId: options[0] as string, note: `${actorName(seat, session.playerNames)} picked a battlefield (fallback).` };
+    } finally {
+      botPregameInFlight.delete(session);
+    }
+    // The human may have left (session dropped) or the phase moved while the model thought.
+    if (session.pregame !== pregame || pregame.phase !== "battlefield_select" || pregame.battlefieldSelections[seat]) {
+      return;
+    }
+    session.log.push(makeLogEntry(pick.note));
+    const r = selectBattlefield(session, seat, pick.defId);
+    if (r.ok) {
+      if (r.completed && opts.gameId) {gameLogger.logStateChange(opts.gameId, "battlefield_select", pregame.phase);}
+      session.seq++;
+      broadcastPregameUpdate(session);
+    }
+  }
+  // Sideboard: the bot never swaps — lock in as soon as the phase opens.
+  if (session.pregame === pregame && pregame.phase === "sideboard" && pregame.sideboard?.[seat] && !pregame.sideboard[seat].locked) {
+    const r = lockSideboard(session, seat);
+    if (r.ok) {
+      session.seq++;
+      broadcastPregameUpdate(session);
+    }
+  }
+}
+
+/**
+ * A seat left before the game started: the match is abandoned for both seats.
+ * Everyone connected gets `game_ended`, sockets are closed, the session is
+ * dropped and the lobby that spawned it (if any) is freed.
+ */
+export function abandonPregame(session: GameSession, gameId: string, playerId: string): void {
+  const who = actorName(playerId, session.playerNames);
+  session.log.push(makeLogEntry(`${who} left before the game started — match abandoned.`));
+  gameLogger.logPlayerDisconnected(gameId, playerId, "", "voluntary_leave_pregame");
+  gameLogger.logStateChange(gameId, "pregame", "abandoned");
+  const reason = playerId === session.players[0] ? "host_left" : "opponent_left";
+  broadcast(session, { playerId, pregame: true, reason, type: "game_ended" });
+  for (const [, client] of session.clients) {
+    try { client.ws.close(1000, "Match abandoned"); } catch { /* */ }
+  }
+  session.clients.clear();
+  delete session.pregame;
+  gameSessions.delete(gameId);
+  for (const [id, lobby] of lobbies) {
+    if (lobby.gameId !== gameId) {continue;}
+    for (const sock of [lobby.host.ws, lobby.guest?.ws]) {
+      try { sock?.send(JSON.stringify({ reason, type: "lobby_closed" })); } catch { /* */ }
+    }
+    lobbyByCode.delete(lobby.code);
+    lobbies.delete(id);
+  }
+}
+
 /**
  * Handle pregame-phase WebSocket messages (battlefield select, mulligan, and
  * the move/resync guard). Returns true if the caller should stop processing
@@ -701,35 +827,24 @@ export function handlePregameMessage(
 ): boolean {
   if (!session.pregame) {return false;}
 
+  if (msg.type === "leave_game") {
+    // Leaving before the game starts abandons the match for BOTH seats (there
+    // is nothing to rejoin): tell everyone, drop the session, free the lobby.
+    abandonPregame(session, gameId, playerId);
+    return true;
+  }
+
   if (msg.type === "pregame_battlefield_select" && session.pregame.phase === "battlefield_select") {
-    const bfId = msg.battlefieldId as string;
-    const options = session.pregame.battlefieldOptions[playerId] ?? [];
-    if (!options.includes(bfId)) {
-      ws.send(JSON.stringify({ error: "Invalid battlefield choice", type: "error" }));
+    const result = selectBattlefield(session, playerId, msg.battlefieldId);
+    if (!result.ok) {
+      ws.send(JSON.stringify({ error: result.error, errorCode: "BATTLEFIELD_SELECT", type: "error" }));
     } else {
-      session.pregame.battlefieldSelections[playerId] = bfId;
-      const bfDef = registry.get(bfId);
-      const bfName = bfDef?.name ?? bfId;
-      session.log.push(
-        makeLogEntry(
-          `${actorName(playerId, session.playerNames)} locked in a battlefield (${bfName}).`,
-          { rewindable: true },
-        ),
-      );
-      // Check if both players have selected
-      const allSelected = session.players.every((p) => session.pregame!.battlefieldSelections[p]);
-      if (allSelected) {
-        session.log.push(
-          makeLogEntry(
-            "Both battlefields are locked. Roll a d20 to decide first player.",
-          ),
-        );
-        // Battlefields now public → sideboard (if anyone can), else mulligan.
-        advancePastReveal(session);
-      }
       session.seq++;
       broadcastPregameUpdate(session);
+      // The bot seat may still owe its pick (or now owes a sideboard lock-in).
+      void runBotPregame(session, { gameId });
     }
+    return true;
   }
 
   if (msg.type === "sideboard_swap") {

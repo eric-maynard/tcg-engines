@@ -285,6 +285,12 @@ function cancelLeaveGame() {
   document.getElementById("confirmLeave").classList.remove("visible");
 }
 
+/**
+ * Leave from anywhere (in game, any pregame screen, the roll overlay): tell
+ * the server on whichever socket is live (leave_game → during the pregame the
+ * match is abandoned for both seats; leave_lobby before a game exists), then
+ * drop all client state and land on the play menu.
+ */
 function confirmLeaveGame() {
   document.getElementById("confirmLeave").classList.remove("visible");
 
@@ -292,24 +298,43 @@ function confirmLeaveGame() {
   if (ws && ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify({ type: "leave_game", role: lobbyRole }));
   }
+  if (typeof lobbyWs !== "undefined" && lobbyWs && lobbyWs.readyState === WebSocket.OPEN) {
+    try { lobbyWs.send(JSON.stringify({ type: "leave_lobby" })); } catch { /* closing anyway */ }
+  }
+  returnToPlayMenu();
+}
 
-  // Disconnect and return to lobby
+/** Drop every socket + per-game client state and show the play menu (start screen). */
+function returnToPlayMenu() {
   disconnectWs();
   gameId = null;
   gameState = null;
   availableMoves = [];
   pregameState = null;
   clearSession();
+  if (typeof lobbyWs !== "undefined" && lobbyWs) { try { lobbyWs.close(1000); } catch { /* */ } lobbyWs = null; }
+  if (typeof lobbyId !== "undefined") { lobbyId = null; lobbyCode = null; lobbyRole = null; }
+  if (typeof _soloAutoStart !== "undefined") _soloAutoStart = false;
+  if (typeof _coinRollInterval !== "undefined" && _coinRollInterval) { clearInterval(_coinRollInterval); _coinRollInterval = null; }
+  if (typeof _coinFlipShown !== "undefined") _coinFlipShown = false;
+  setSandboxGame(false);
 
   // Reset UI to lobby
   document.getElementById("gameSidebar")?.classList.add("hidden");
   document.getElementById("pregameOverlay")?.classList.remove("visible");
+  document.getElementById("coinOverlay")?.classList.remove("visible");
+  document.getElementById("confirmLeave")?.classList.remove("visible");
   document.getElementById("startScreen").classList.remove("hidden");
 
-  // Show the menu
+  // Show the menu; re-arm the solo picker for a fresh start
   document.getElementById("lobbyMenu")?.classList.remove("hidden");
   document.getElementById("lobbyRoom")?.classList.add("hidden");
   document.getElementById("joinForm")?.classList.add("hidden");
+  document.getElementById("soloDeckPicker")?.classList.add("hidden");
+  const soloBtn = document.querySelector("#soloDeckPicker .start-btn");
+  if (soloBtn) soloBtn.disabled = false;
+  const soloStatus = document.getElementById("soloDeckStatus");
+  if (soloStatus) { soloStatus.textContent = ""; soloStatus.style.color = ""; }
 }
 
 function showDisconnectBanner(playerName) {

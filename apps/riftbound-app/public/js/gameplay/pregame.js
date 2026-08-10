@@ -1,5 +1,42 @@
 // pregame.js — Pregame phase: coin flip, battlefield selection, sideboarding, mulligan
 
+/**
+ * Every pregame screen (roll / choose-first, battlefield pick, waiting,
+ * sideboard, mulligan) carries a persistent "Leave match" button so a player
+ * can always abandon: it confirms, tells the server (leave_game on the game
+ * socket → match abandoned for both seats; leave_lobby before a game exists)
+ * and returns to the play menu. Injected once per overlay; idempotent.
+ */
+function ensurePregameLeaveButton() {
+  for (const id of ["pregameOverlay", "coinOverlay"]) {
+    const overlay = document.getElementById(id);
+    if (!overlay || overlay.querySelector(".pregame-leave-btn")) continue;
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "pregame-leave-btn";
+    btn.id = id === "pregameOverlay" ? "pregameLeaveBtn" : "coinLeaveBtn";
+    btn.textContent = "Leave match";
+    btn.title = "Abandon this match and return to the menu";
+    btn.addEventListener("click", (e) => { e.stopPropagation(); showPregameLeaveConfirm(); });
+    overlay.appendChild(btn);
+  }
+}
+
+function showPregameLeaveConfirm() {
+  const msg = document.getElementById("confirmLeaveMsg");
+  if (msg) {
+    msg.textContent = isSandboxGame
+      ? "Abandon this practice game and return to the menu?"
+      : "Leaving now abandons the match for both players. Your opponent will be returned to the lobby.";
+  }
+  document.getElementById("confirmLeave")?.classList.add("visible");
+}
+
+if (typeof document !== "undefined") {
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", ensurePregameLeaveButton, { once: true });
+  else ensurePregameLeaveButton();
+}
+
 /** Show dice-roll turn order animation with choose-who-goes-first for the winner */
 function showCoinFlip(flip, onDone) {
   // Don't re-trigger if already showing
@@ -7,6 +44,7 @@ function showCoinFlip(flip, onDone) {
 
   const overlay = document.getElementById("coinOverlay");
   if (!overlay) { if (onDone) onDone(); return; }
+  ensurePregameLeaveButton();
 
   _coinFlipShown = true;
   _coinFlipOnDone = onDone;
@@ -140,6 +178,7 @@ function handlePregameSync(pregame, state) {
   const overlay = document.getElementById("pregameOverlay");
   const content = document.getElementById("pregameContent");
   overlay.classList.add("visible");
+  ensurePregameLeaveButton();
   content.classList.toggle("sideboard-step", pregame.phase === "sideboard");
 
   if (pregame.phase === "battlefield_select") {

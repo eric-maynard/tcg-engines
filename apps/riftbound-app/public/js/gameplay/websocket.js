@@ -170,11 +170,13 @@ function connectWs() {
         }
         break;
 
-      case "game_ended":
-        // Host left — game is over, return to lobby
-        addLogEntry("Game ended — host left");
-        showToast("Game ended — host left the game");
+      case "game_ended": {
+        // Host left (or anyone left during the pregame) — game is over, return to the menu
+        const why = msg.reason === "opponent_left" ? "your opponent left" : "host left the game";
+        addLogEntry(`Game ended — ${why}`);
+        showToast(msg.pregame ? `Match abandoned — ${why}` : `Game ended — ${why}`);
         setTimeout(() => {
+          if (typeof returnToPlayMenu === "function") { returnToPlayMenu(); return; }
           disconnectWs();
           gameId = null;
           gameState = null;
@@ -185,6 +187,7 @@ function connectWs() {
           document.getElementById("lobbyRoom")?.classList.add("hidden");
         }, 2000);
         break;
+      }
 
       case "pong":
         break;

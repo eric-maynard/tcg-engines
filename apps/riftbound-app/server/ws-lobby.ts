@@ -8,9 +8,9 @@ import { deckLegalityForId, loadDeckConfig } from "./decks";
 import { json } from "./http";
 import { gameLogger } from "./log";
 import { maySelectDeck, parseOpponentDeck, syncOpponentSeatDeck } from "./opponent-deck";
-import { createGameFromDecks } from "./pregame";
+import { createGameFromDecks, runBotPregame } from "./pregame";
 import { getUserIdFromRequest } from "./routes-auth";
-import { type RouteCtx, type RouteResult, type WsData, broadcastLobby, gameSessions, lobbies } from "./state";
+import { type Lobby, type RouteCtx, type RouteResult, type WsData, broadcastLobby, gameSessions, lobbies, lobbyByCode } from "./state";
 
 // GET /ws/lobby/:id?role=host|guest — upgrade to lobby WebSocket
 export async function handleLobbyUpgrade(req: Request, url: URL, ctx: RouteCtx): RouteResult {
@@ -163,89 +163,116 @@ export function lobbyWsMessage(ws: ServerWebSocket<WsData>, msg: Record<string, 
         return;
       }
     }
-    // D20 roll to determine who CHOOSES first player (rule 115)
+    // D20 roll to determine who CHOOSES first player (rule 115). Reroll on tie.
     let p1Roll = 0;
     let p2Roll = 0;
-    if (lobby.sandbox) {
-      // In goldfish mode, rig so the host always wins (goldfish can't choose)
-      p1Roll = 20;
-      p2Roll = Math.floor(Math.random() * 19) + 1;
-    } else {
-      // Reroll on tie
-      do {
-        p1Roll = Math.floor(Math.random() * 20) + 1;
-        p2Roll = Math.floor(Math.random() * 20) + 1;
-      } while (p1Roll === p2Roll);
-    }
+    do {
+      p1Roll = Math.floor(Math.random() * 20) + 1;
+      p2Roll = Math.floor(Math.random() * 20) + 1;
+    } while (p1Roll === p2Roll);
     const flipWinner = p1Roll > p2Roll ? "player-1" : "player-2";
     lobby.coinFlip = { firstPlayer: "", p1Roll, p2Roll, winner: flipWinner };
+    // The practice seat (Goldfish / Claude) has no socket to answer with: when
+    // it wins the roll it elects to go first (rule 115) and the game starts now.
+    if (lobby.sandbox && flipWinner === "player-2") {
+      startLobbyGame(lobby, "player-2");
+      return;
+    }
     broadcastLobby(lobby);
   }
 
   // Flip winner chooses who goes first (rule 115)
   if (msg.type === "choose_first") {
-    console.log("[Lobby] choose_first received:", { choice: msg.choice, coinFlip: lobby.coinFlip, role });
     if (!lobby.coinFlip || lobby.coinFlip.firstPlayer) {
       console.log("[Lobby] choose_first rejected: no coinFlip or already chosen");
       return;
     }
     const winnerRole = lobby.coinFlip.winner === "player-1" ? "host" : "guest";
-    console.log("[Lobby] winnerRole:", winnerRole, "senderRole:", role);
     if (role !== winnerRole) { console.log("[Lobby] choose_first rejected: not winner"); return; }
 
     const chosen = msg.choice === "opponent"
       ? (role === "host" ? "player-2" : "player-1")
       : (role === "host" ? "player-1" : "player-2");
-    lobby.coinFlip = { ...lobby.coinFlip, firstPlayer: chosen };
+    startLobbyGame(lobby, chosen);
+  }
 
-    // NOW start the game with the chosen first player. The practice seat's
-    // deck was validated at create/select time; re-sync so "mirror" reflects
-    // the host's final pick.
-    syncOpponentSeatDeck(lobby);
-    const deck1 = loadDeckConfig(lobby.host.deckId);
-    const deck2 = loadDeckConfig(lobby.guest.deckId);
-
-    const gameId = crypto.randomUUID();
-    const session = createGameFromDecks(deck1, deck2, undefined, {
-      firstPlayer: chosen,
-      gameMode: lobby.gameMode,
-      initiativeRoll: {
-        p1Roll: lobby.coinFlip.p1Roll,
-        p2Roll: lobby.coinFlip.p2Roll,
-        winner: lobby.coinFlip.winner,
-      },
-      names: {
-        "player-1": lobby.host.name,
-        "player-2": lobby.guest?.name ?? "Player 2",
-      },
-      sandbox: lobby.sandbox,
-    });
-    // Hand the solo opponent driver (Claude seat) over to the game session.
-    if (lobby.opponent) {
-      session.opponent = lobby.opponent;
-      (lobby.opponent as { gameId?: string }).gameId = gameId;
-      lobby.opponent = undefined;
+  // Leave the lobby (Back / Leave match before the game exists). Host → the
+  // lobby is gone (guest told `lobby_closed`); guest → the seat reopens and a
+  // pending roll is void.
+  if (msg.type === "leave_lobby") {
+    if (role === "host") {
+      try { lobby.guest?.ws?.send(JSON.stringify({ reason: "host_left", type: "lobby_closed" })); } catch { /* */ }
+      lobbyByCode.delete(lobby.code);
+      lobbies.delete(lobby.id);
+      console.log(`[Lobby] ${lobby.code} closed — host left`);
+    } else if (lobby.guest && lobby.status !== "started") {
+      lobby.guest = null;
+      lobby.coinFlip = null;
+      lobby.status = "waiting";
+      broadcastLobby(lobby);
     }
-    gameSessions.set(gameId, session);
-    gameLogger.logGameCreated(gameId, session.players, lobby.gameMode, "random", {
-      firstPlayer: chosen,
-      flipWinner: lobby.coinFlip.winner,
-      guestDeckId: lobby.guest?.deckId,
-      hostDeckId: lobby.host.deckId,
-      lobbyCode: lobby.code,
-      opponent: session.opponent ? `claude:${session.opponent.info.model ?? "?"}` : "goldfish",
-      ...(lobby.sandbox ? { opponentDeckMode: lobby.opponentDeck?.mode ?? "default" } : {}),
-      sandbox: lobby.sandbox,
-      source: "lobby",
-    });
-    lobby.gameId = gameId;
-    lobby.status = "started";
-    broadcastLobby(lobby);
+    try { ws.close(1000, "Left lobby"); } catch { /* */ }
+    return;
   }
 
   if (msg.type === "ping") {
     ws.send(JSON.stringify({ type: "pong" }));
   }
+}
+
+/**
+ * Start the lobby's game with `chosen` taking the first turn: build the
+ * session from both seats' decks, hand over the solo opponent driver, kick
+ * the bot seat's pregame decisions (Bo3 battlefield…), and broadcast.
+ */
+function startLobbyGame(lobby: Lobby, chosen: string): void {
+  if (!lobby.coinFlip || !lobby.guest) {return;}
+  lobby.coinFlip = { ...lobby.coinFlip, firstPlayer: chosen };
+
+  // The practice seat's deck was validated at create/select time; re-sync so
+  // "mirror" reflects the host's final pick.
+  syncOpponentSeatDeck(lobby);
+  const deck1 = loadDeckConfig(lobby.host.deckId);
+  const deck2 = loadDeckConfig(lobby.guest.deckId);
+
+  const gameId = crypto.randomUUID();
+  const session = createGameFromDecks(deck1, deck2, undefined, {
+    firstPlayer: chosen,
+    gameMode: lobby.gameMode,
+    initiativeRoll: {
+      p1Roll: lobby.coinFlip.p1Roll,
+      p2Roll: lobby.coinFlip.p2Roll,
+      winner: lobby.coinFlip.winner,
+    },
+    names: {
+      "player-1": lobby.host.name,
+      "player-2": lobby.guest?.name ?? "Player 2",
+    },
+    sandbox: lobby.sandbox,
+  });
+  // Hand the solo opponent driver (Claude seat) over to the game session.
+  if (lobby.opponent) {
+    session.opponent = lobby.opponent;
+    (lobby.opponent as { gameId?: string }).gameId = gameId;
+    lobby.opponent = undefined;
+  }
+  gameSessions.set(gameId, session);
+  gameLogger.logGameCreated(gameId, session.players, lobby.gameMode, "random", {
+    firstPlayer: chosen,
+    flipWinner: lobby.coinFlip.winner,
+    guestDeckId: lobby.guest?.deckId,
+    hostDeckId: lobby.host.deckId,
+    lobbyCode: lobby.code,
+    opponent: session.opponent ? `claude:${session.opponent.info.model ?? "?"}` : "goldfish",
+    ...(lobby.sandbox ? { opponentDeckMode: lobby.opponentDeck?.mode ?? "default" } : {}),
+    sandbox: lobby.sandbox,
+    source: "lobby",
+  });
+  lobby.gameId = gameId;
+  lobby.status = "started";
+  broadcastLobby(lobby);
+  // Bo3: the bot seat picks its battlefield now (Claude: bounded model call).
+  void runBotPregame(session, { gameId });
 }
 
 function sendLobbyError(ws: ServerWebSocket<WsData>, error: string): void {

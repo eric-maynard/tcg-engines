@@ -8,7 +8,7 @@ import { actorName, makeLogEntry } from "../src/narrator";
 import { SERVER_ONLY_MOVES } from "./config";
 import { json } from "./http";
 import { gameLogger } from "./log";
-import { buildPregamePayload, handlePregameMessage } from "./pregame";
+import { buildPregamePayload, handlePregameMessage, runBotPregame } from "./pregame";
 import { buildAvailableMoves, buildGameSnapshot } from "./snapshot";
 import { type RouteCtx, type RouteResult, type WsData, broadcast, gameSessions } from "./state";
 import { runOpponent } from "./ai-opponent";
@@ -271,4 +271,9 @@ export function gameWsOpen(ws: ServerWebSocket<WsData>): void {
     playerId,
     type: "player_connected",
   }, connId);
+
+  // A sandbox bot seat may owe a pregame decision (Bo3 battlefield…): idempotent kick.
+  if (session.pregame && session.sandbox) {
+    void runBotPregame(session, { gameId });
+  }
 }

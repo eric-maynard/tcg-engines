@@ -2656,6 +2656,17 @@
     .pregame-info {
       font-size: 12px; color: #5a5278; margin-top: 8px;
     }
+    /* Persistent "Leave match" on every pregame screen + the roll overlay (pregame.js ensurePregameLeaveButton). */
+    .pregame-leave-btn {
+      position: fixed; top: 16px; right: 20px; z-index: 1;
+      padding: 7px 14px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer;
+      background: #2a1828; border: 1px solid #6a3048; color: #d08898; letter-spacing: 0.3px;
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
+    }
+    .pregame-leave-btn:hover { background: #3a2030; border-color: #a04860; color: #f0a0b0; }
+    /* features.js injects a generic .confirm-overlay { z-index: 300 } after this sheet; the
+       leave confirmation must sit above the pregame (2500) and roll (3000) overlays. */
+    #confirmLeave { z-index: 4000; }
 
     /* ============================================
        W14 — Non-modal Sideboard Overlay

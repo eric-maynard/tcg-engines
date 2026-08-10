@@ -1093,6 +1093,8 @@ export interface ClaudeOpponentOptions {
   pacingMs?: number;
   /** Per-call timeout (ms). */
   timeoutMs?: number;
+  /** Pregame decisions (battlefield pick): one attempt, this timeout (ms), then a seeded fallback. */
+  pregameTimeoutMs?: number;
   /** Backoff base for retryable API failures (ms). */
   backoffMs?: number;
   maxActionsPerSegment?: number;
@@ -1211,7 +1213,7 @@ export class ClaudeOpponent implements OpponentHandle {
   readonly #apiKey: string | undefined;
   readonly #callModel: CallModel;
   readonly #lookupTools: LookupTool[];
-  readonly #opts: Required<Pick<ClaudeOpponentOptions, "pacingMs" | "timeoutMs" | "backoffMs" | "maxActionsPerSegment">>;
+  readonly #opts: Required<Pick<ClaudeOpponentOptions, "pacingMs" | "timeoutMs" | "pregameTimeoutMs" | "backoffMs" | "maxActionsPerSegment">>;
   gameId: string | undefined;
   /**
    * Rewind debounce: while `Date.now() < holdUntil` the seat does not act (a
@@ -1240,6 +1242,7 @@ export class ClaudeOpponent implements OpponentHandle {
       backoffMs: opts.backoffMs ?? 1000,
       maxActionsPerSegment: opts.maxActionsPerSegment ?? 40,
       pacingMs: opts.pacingMs ?? (aiMockEnabled() && opts.callModel === undefined ? 150 : 600),
+      pregameTimeoutMs: opts.pregameTimeoutMs ?? 10_000,
       timeoutMs: opts.timeoutMs ?? 45_000,
     };
     this.gameId = opts.gameId;
@@ -1599,6 +1602,81 @@ export class ClaudeOpponent implements OpponentHandle {
   }
 
   /**
+   * Pregame (Match, rule 486.5): pick the battlefield this seat contributes.
+   * ONE model call bounded by `pregameTimeoutMs` (no retries — the human is
+   * staring at "Waiting for opponent"); any failure / timeout / bad index
+   * returns `{ error }` and the caller falls back to a seeded pick.
+   */
+  async pickBattlefield(session: GameSession, optionDefIds: readonly string[]): Promise<{ index: number; rationale: string } | { error: string }> {
+    if (this.disabledReason) {
+      return { error: this.disabledReason };
+    }
+    const key = this.#key();
+    if (!key) {
+      return { error: "no API key available" };
+    }
+    const human = session.players.find((p) => p !== this.seat) ?? "player-1";
+    const legendLine = (seat: string): string => {
+      const id = session.decks?.[seat]?.legendId;
+      const def = id ? registry.get(id) : undefined;
+      if (!def) {
+        return "unknown";
+      }
+      const text = (def.rulesText ?? "").replace(/\s+/g, " ").trim();
+      return `${def.name}${text ? ` — ${text.length > 200 ? `${text.slice(0, 199)}…` : text}` : ""}`;
+    };
+    const menu: MenuItem[] = optionDefIds.map((defId, index) => ({ index, kind: "move", label: defName(defId) ?? defId, moves: [], sig: `bf:${defId}` }));
+    const lines = [
+      "PREGAME — Best-of-3 match, rule 486.5: each player puts ONE of their three registered battlefields into play for this game (the other player contributes one of theirs). Choose the battlefield that best suits your deck and legend against this opponent.",
+      `Your legend: ${legendLine(this.seat)}`,
+      `Opponent's legend: ${legendLine(human)}`,
+      "",
+      "LEGAL ACTIONS (your three battlefields):",
+      ...optionDefIds.map((defId, i) => {
+        const def = registry.get(defId);
+        const text = (def?.rulesText ?? "").replace(/\s+/g, " ").trim();
+        return `[${i}] ${def?.name ?? defId}${text ? ` — ${text}` : ""}`;
+      }),
+      "",
+      "Call choose with the index of the battlefield you contribute.",
+    ];
+    const req: ModelRequest = {
+      max_tokens: 200,
+      messages: [{ content: lines.join("\n"), role: "user" }],
+      meta: { menu, seat: this.seat },
+      model: this.modelId,
+      system: systemPromptFor(session, this.seat, this.info.label),
+      tool_choice: { name: CHOOSE_TOOL.name, type: "tool" },
+      tools: [CHOOSE_TOOL],
+    };
+    const ctrl = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<never>((_r, reject) => {
+      timer = setTimeout(() => { ctrl.abort(); reject(new AiCallError("model call timed out", 0, true)); }, this.#opts.pregameTimeoutMs);
+    });
+    this.thinking = true;
+    this.#pushStatus(session);
+    try {
+      const res = asResponse(await Promise.race([this.#callModel(req, { apiKey: key, signal: ctrl.signal }), timeout]));
+      const use = res.toolUses.find((t) => t.name === CHOOSE_TOOL.name);
+      const index = Number((use?.input as { index?: unknown } | undefined)?.index);
+      if (!use || !Number.isInteger(index) || index < 0 || index >= optionDefIds.length) {
+        return { error: "invalid choice from the model" };
+      }
+      const rationale = String((use.input as { rationale?: unknown }).rationale ?? "").slice(0, 140);
+      return { index, rationale };
+    } catch (error) {
+      const e = error as AiCallError;
+      console.log(`[ai] ${this.modelId} pregame call failed: ${this.#redact(e?.message ?? String(error))}`);
+      return { error: ctrl.signal.aborted || /timed out/.test(e?.message ?? "") ? "model timed out" : "model call failed" };
+    } finally {
+      if (timer) {clearTimeout(timer);}
+      this.thinking = false;
+      this.#pushStatus(session);
+    }
+  }
+
+  /**
    * Run the AI seat until the cursor leaves it. One loop per game at a time;
    * a trigger that arrives mid-loop schedules a re-check when the loop ends.
    */
@@ -1770,6 +1848,41 @@ export function runOpponent(session: GameSession, opts: { humanSeat?: string; ga
   if (goldfish) {
     sandboxAutoPlay(session, goldfish);
   }
+}
+
+/** FNV-1a → an index in [0, n): a per-game deterministic pick that never touches the engine RNG (replays stay exact). */
+function seededIndex(seedText: string, n: number): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < seedText.length; i++) {
+    h ^= seedText.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return n > 0 ? h % n : 0;
+}
+
+/**
+ * Pregame battlefield pick (Match, rule 486.5) for the sandbox bot seat.
+ * Claude seat → one bounded model call (ClaudeOpponent.pickBattlefield); the
+ * Goldfish, or any model failure/timeout → a pick seeded by the game seed.
+ * Returns the definition id plus a shared-log line explaining who chose how.
+ */
+export async function chooseBotBattlefield(session: GameSession, seat: string, optionDefIds: readonly string[]): Promise<{ defId: string; note: string }> {
+  const seeded = (): string => {
+    const seed = `${session.engine.getRNG().getSeed()}|bf|${seat}|${optionDefIds.join(",")}`;
+    return optionDefIds[seededIndex(seed, optionDefIds.length)] as string;
+  };
+  const ai = session.opponent;
+  if (ai instanceof ClaudeOpponent) {
+    const r = await ai.pickBattlefield(session, optionDefIds);
+    if ("index" in r) {
+      const defId = optionDefIds[r.index] as string;
+      return { defId, note: `🤖 ${ai.shortName} chose its battlefield: ${defName(defId) ?? defId}${r.rationale ? ` — '${r.rationale}'` : ""}` };
+    }
+    const defId = seeded();
+    return { defId, note: `🤖 ${ai.shortName}: ${r.error} — battlefield picked at random (${defName(defId) ?? defId}).` };
+  }
+  const defId = seeded();
+  return { defId, note: `🐟 ${session.playerNames[seat] ?? "Goldfish"} picked a battlefield at random: ${defName(defId) ?? defId}.` };
 }
 
 const pendingTimers = new WeakMap<GameSession, ReturnType<typeof setTimeout>>();
