@@ -765,6 +765,11 @@ function resolveStaticTargetsFromDescriptor(
   source: BoardCard,
   boardCards: BoardCard[],
   ctx: StaticAbilityContext,
+  // rule 359.3.f.4 — "friendly" reads from the player the effect belongs to.
+  // A turn-scoped continuous effect has no board source to read a controller
+  // off (its card is in a trash by then, and control of the chain item may
+  // have changed hands), so its owner is passed in explicitly.
+  controllerOverride?: string,
 ): string[] | undefined {
   if (!target || typeof target !== "object") {
     return undefined;
@@ -815,7 +820,7 @@ function resolveStaticTargetsFromDescriptor(
   const ownBattlefield =
     source.zone === "battlefieldRow" ? ctx.draft.battlefields?.[source.id] : undefined;
   const sourceController =
-    ownBattlefield?.controller ?? controllerOf(ctx, source.id, source.owner);
+    controllerOverride ?? ownBattlefield?.controller ?? controllerOf(ctx, source.id, source.owner);
   return boardCards
     .filter((c) => {
       // rule 208.2 (sfd-089-221) — "(including me)": the source is addressed by
@@ -1406,7 +1411,14 @@ export function recalculateStaticEffects(ctx: StaticAbilityContext): boolean {
       continue;
     }
     const source: BoardCard = { id: ts.sourceCardId, owner: ts.controllerId, zone: "" };
-    const targetIds = resolveStaticTargetsFromDescriptor(effect.target, source, boardCards, ctx) ?? [];
+    const targetIds =
+      resolveStaticTargetsFromDescriptor(
+        effect.target,
+        source,
+        boardCards,
+        ctx,
+        ts.controllerId,
+      ) ?? [];
     applyStaticEffect(effect, targetIds, ctx, source);
     anyApplied = true;
   }
