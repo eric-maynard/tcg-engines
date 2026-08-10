@@ -109,7 +109,12 @@ function parseAbilitiesInner(text: string, options?: ParserOptions): ParseAbilit
                   ...a,
                   restrictions: [
                     ...((a as { restrictions?: { type: string }[] }).restrictions ?? []),
-                    { type: "self-at-battlefield" },
+                    // rule 145 (ruling 9da4c771a3593f96, sfd-088-221 Renata ×
+                    // ogn-111-298 Heimerdinger) — this sentence is a separate
+                    // static about the PRINTING card's own abilities, not part
+                    // of any of them: a card that copies those abilities does
+                    // not inherit the restriction.
+                    { printedCardOnly: true, type: "self-at-battlefield" },
                   ],
                 } as Ability)
               : a,

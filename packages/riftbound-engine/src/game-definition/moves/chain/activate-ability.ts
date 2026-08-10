@@ -1435,9 +1435,19 @@ export const activateAbility: Defs["activateAbility"] = {
     // Rule 580.3 (unl-160-219): "Use this ability only while I'm at a
     // battlefield" attaches a self-at-battlefield restriction to the
     // activated ability; the host card must be at a battlefield zone.
-    const abilityRestrictions = (ability as { restrictions?: readonly { type: string }[] })
-      .restrictions;
-    if (abilityRestrictions?.some((r) => r.type === "self-at-battlefield")) {
+    const abilityRestrictions = (
+      ability as { restrictions?: readonly { type: string; printedCardOnly?: boolean }[] }
+    ).restrictions;
+    // rule 145 (ruling 9da4c771a3593f96) — a card-level "Use MY abilities only
+    // while I'm at a battlefield" restricts the printing card only; a copier
+    // inherits the ability without it.
+    if (
+      abilityRestrictions?.some(
+        (r) =>
+          r.type === "self-at-battlefield" &&
+          (r.printedCardOnly !== true || !sourceCardId || sourceCardId === cardId),
+      )
+    ) {
       if (!zone.startsWith("battlefield")) {
         return false;
       }
@@ -1950,9 +1960,19 @@ export const activateAbility: Defs["activateAbility"] = {
 
         // Rule 580.3 (unl-160-219): "Use this ability only while I'm at a
         // battlefield" — skip when the host card is not at a battlefield.
-        const abilityRestrictions = (ability as { restrictions?: readonly { type: string }[] })
-          .restrictions;
-        if (abilityRestrictions?.some((r) => r.type === "self-at-battlefield")) {
+        const abilityRestrictions = (
+          ability as { restrictions?: readonly { type: string; printedCardOnly?: boolean }[] }
+        ).restrictions;
+        // rule 145 (ruling 9da4c771a3593f96) — a card-level "Use MY abilities
+        // only while I'm at a battlefield" is a separate static of the printing
+        // card, so a copier (Heimerdinger) inherits the ability without it.
+        if (
+          abilityRestrictions?.some(
+            (r) =>
+              r.type === "self-at-battlefield" &&
+              (r.printedCardOnly !== true || entry.sourceCardId === entry.hostCardId),
+          )
+        ) {
           const hostZone = context.zones.getCardZone(entry.hostCardId as CoreCardId) as
             | string
             | undefined;

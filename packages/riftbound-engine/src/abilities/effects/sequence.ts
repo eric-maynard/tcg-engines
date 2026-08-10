@@ -166,6 +166,9 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
     effects?: ExecutableEffect[];
     independentExecution?: boolean;
     pendingValue?: { source: number };
+    // rule 354.2 (sfd-154-221) — a remainder suspended behind the source
+    // step's own prompt carries that step's pending value explicitly.
+    pendingValueBound?: readonly string[];
   };
   // rule 820.2.a (sfd-129-221) — a suspended Repeat remainder carries its own
   // slots' ids; whatever the prompt bound (the unit that just moved) is not
@@ -215,9 +218,9 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
     // inner sequence has no `target` of its own, so without this seed the
     // play step fell through to a board scan and never added the pending
     // chain item that keeps the turn closed (rule 355.2 location choice).
-    let pending: readonly string[] | undefined = (
-      ctx as { pendingSequenceValue?: readonly string[] }
-    ).pendingSequenceValue;
+    let pending: readonly string[] | undefined =
+      seq.pendingValueBound ??
+      (ctx as { pendingSequenceValue?: readonly string[] }).pendingSequenceValue;
     // rule-id: ogn-220-298 — "Stun a friendly unit and an enemy unit at the
     // same battlefield": a later `location: "same"` step resolves against the
     // battlefield zone of the earlier step's chosen target.
@@ -236,6 +239,24 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
       (seq as { independentTargets?: boolean }).independentTargets === true
         ? collectIndependentTargetSlots(seq as unknown as SpellEffectTargetShape)
         : undefined;
+    // rule 820.2.a (ogn-213-298 Hidden Blade) — a [Repeat]ed spell whose
+    // instructions are themselves a sequence ("Kill a unit at a battlefield.
+    // Its controller draws 2.") keeps the caster's choice on an INNER step, so
+    // the executions own no descriptor slot here: route the i-th locked pick to
+    // the i-th execution instead of handing every execution the whole list.
+    // An execution owning SEVERAL slots ("Deal 2 to a unit at a battlefield,
+    // then deal 2 to up to one other unit", sfd-023-221) enumerates its own
+    // picks in the same flat list, so only a one-slot execution qualifies.
+    const repeatedSubSequences =
+      indepSlots !== undefined &&
+      indepSlots.length === 0 &&
+      seq.effects !== undefined &&
+      seq.effects.length > 1 &&
+      seq.effects.every((e) => e.type === "sequence") &&
+      ctx.boundTargets !== undefined &&
+      ctx.boundTargets.length === seq.effects.length &&
+      (collectSequenceTargetSlots(seq.effects[0] as unknown as SpellEffectTargetShape) ?? [])
+        .length === 1;
     let seqSlots = (ctx as { sequenceSlots?: SequenceSlots }).sequenceSlots;
     if (!seqSlots && !indepSlots && ctx.boundTargets && sameIdx < 0) {
       const slots = collectSequenceTargetSlots(seq as unknown as SpellEffectTargetShape);
@@ -420,7 +441,7 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
       // rule 820.2.a (sfd-136-221) — a bare `counter` carries no target
       // descriptor, so it owns no descriptor slot: route the caster's i-th
       // locked chain item to the i-th execution.
-      if (repeatedCounterTargets) {
+      if (repeatedCounterTargets || repeatedSubSequences) {
         const id = ctx.boundTargets?.[i];
         const { boundTargets: _drop, ...rest } = ctx;
         subCtx = id !== undefined ? { ...rest, boundTargets: [id] } : rest;
@@ -428,7 +449,19 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
       if (indepSlots) {
         const k = indepSlots.findIndex((s) => s.index === i);
         if (k >= 0) {
-          let id = ctx.boundTargets?.[k];
+          // rule 359.3.e.5 / 359.3.e.7 (ogn-029-298 × sfd-163-221) — this
+          // slot's pick was made at play time and is no longer a legal target
+          // (it left the board, or came back as a new object): the instruction
+          // does nothing and no new choice is made for it (355.15). The picks
+          // that survived were compacted, so shift past the vacated slots to
+          // keep every later instruction on its OWN pick.
+          const vacated = ctx.vacatedTargetSlots;
+          if (vacated?.includes(k) === true) {
+            continue;
+          }
+          let id = ctx.boundTargets?.[
+            vacated === undefined ? k : k - vacated.filter((v) => v < k).length
+          ];
           // rule 355.8 (ogn-029-298) — every instruction that names a target
           // must choose one if a legal choice exists. A slot the caster left
           // unlocked at play time is chosen HERE (prompting when there is more
@@ -767,6 +800,18 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
           return;
         }
       }
+      // rule 359.3.e.6 (ogn-213-298 Hidden Blade × [Repeat]) — "Kill a unit at a
+      // battlefield. Its controller draws 2": the second clause names the object
+      // the first one acted on, so when the first instruction found no legal
+      // target left (the bound unit was saved and recalled to base, and is no
+      // longer at a battlefield) the linked clause is ignored with it.
+      if (
+        prevPerformed === false &&
+        subTarget === undefined &&
+        (sub as { player?: unknown }).player === "target-controller"
+      ) {
+        continue;
+      }
       prevPerformed =
         typeof subTarget === "object" &&
         subTarget.type !== "self" &&
@@ -881,8 +926,13 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
           // targets, each move needs its own destination prompt, so this step's
           // prompt must not be overwritten. The remainder resumes from the
           // prompt carrying its slots' picks.
+          // rule 354.2 / 184.1 (sfd-154-221 Guards!) — and when the later steps
+          // name what THIS step produced ("Play a … token. You may pay [order]
+          // to ready it"), the rider is part of the same instruction: it waits
+          // for the destination answer instead of being dropped.
           (parked?.type === "choose-destination" &&
             (indepSlots !== undefined ||
+              seq.pendingValue?.source === i ||
               (seqSlots !== undefined &&
                 stepSlotIdx >= 0 &&
                 seqSlots.bound.slice(stepSlotIdx + 1).some((id) => id !== undefined)))) ||
@@ -911,6 +961,12 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
                 seqSlots !== undefined && stepSlotIdx >= 0
                 ? seqSlots.bound.slice(stepSlotIdx + 1).filter((id): id is string => id !== undefined)
                 : undefined;
+          // rule 354.2 (sfd-154-221) — the remainder still refers to what this
+          // step produced, so the pending value rides into the continuation.
+          const pvCarry =
+            seq.pendingValue?.source === i && pending !== undefined && pending.length > 0
+              ? [...pending]
+              : undefined;
           ctx.draft.pendingChoice = {
             ...(parked as object),
             then:
@@ -920,8 +976,18 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
                     effects: rest,
                     independentTargets: true,
                     type: "sequence",
+                    ...(pvCarry ? { pendingValueBound: pvCarry } : {}),
                   }
-                : { effects: rest, independentExecution: true, type: "sequence" },
+                : pvCarry
+                  ? {
+                      // "…to ready IT" names the object this step produced, so
+                      // the remainder keeps it bound instead of re-choosing.
+                      boundTargetsOverride: pvCarry,
+                      effects: rest,
+                      pendingValueBound: pvCarry,
+                      type: "sequence",
+                    }
+                  : { effects: rest, independentExecution: true, type: "sequence" },
             // The continuation is the REST OF THE SEQUENCE, not the prompt's
             // own follow-up: it must still run when an optional prompt is
             // declined ("you may [Predict], then reveal the top card").
