@@ -540,7 +540,11 @@ export function handle_createToken(effect: ExecutableEffect, ctx: EffectContext,
         ...effect,
         amount: 1,
         replacementKey: key,
-        skipTokenReplacement: true,
+        // rule 370.2 / 372 (ruling c7d76a38908939f3) — 370.2 only bars the SAME
+        // ability from re-applying, so a SECOND Zilean may still apply to the
+        // already-replaced event: the re-entry stays open to further offers and
+        // each source's once-each-turn key (consumed on accept, above) is what
+        // stops one Zilean looping. Two Zileans ⇒ two offers ⇒ 1 + 1 + 1 tokens.
         then: undefined,
       },
       playerId: ctx.playerId,
