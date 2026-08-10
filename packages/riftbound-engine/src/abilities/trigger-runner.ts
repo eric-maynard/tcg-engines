@@ -1537,6 +1537,53 @@ export function getBoardCards(
   return boardCards;
 }
 
+/** Object-form `on` that still names the trigger's own source ({filter:["self"]}). */
+function isSelfScopedOn(on: unknown): boolean {
+  if (typeof on !== "object" || on === null) {
+    return false;
+  }
+  const filter = (on as { filter?: unknown }).filter;
+  return typeof filter === "string" ? filter === "self" : (filter as unknown[])?.includes?.("self") === true;
+}
+
+/**
+ * rule 383.2.c.2 — a Game Object leaving its trigger's zone at the same time
+ * the trigger's condition is met does not trigger. The exceptions are the
+ * look-back self forms — rule 808 Deathknell / "When I die" (`on: "self"`, the
+ * matcher's default, or an object `on` filtered to `"self"` like Draven's "When
+ * I die in combat") — and, per rule 383.2.c.1, an ability that functions in the
+ * zone the card is entering ("…play me from your trash", Immortal Phoenix),
+ * which is evaluated as the card arrives there.
+ *
+ * `zone: "floating"` entries are delayed abilities that outlive their source
+ * (rule 392), so they are never suppressed by their source card leaving.
+ */
+function leavesWithTheEvent(
+  match: MatchedTrigger,
+  event: GameEvent,
+  ctx: TriggerRunnerContext,
+  boardCards: readonly CardWithAbilities[],
+): boolean {
+  if (event.type !== "die" && event.type !== "leave-board") {
+    return false;
+  }
+  const on = (match.ability.trigger as { on?: unknown } | undefined)?.on ?? "self";
+  if (on === "self" || isSelfScopedOn(on)) {
+    return false;
+  }
+  // rule 383.2.c.1 — abilities live in the trash are evaluated on arrival.
+  if (abilityFunctionsFromTrash(match.ability)) {
+    return false;
+  }
+  const leaving =
+    getLeavingBatch(ctx.draft).some((s) => s.cardId === match.cardId) ||
+    match.cardId === (event as { cardId?: string }).cardId;
+  if (!leaving) {
+    return false;
+  }
+  return !boardCards.some((c) => c.id === match.cardId && c.zone === "floating");
+}
+
 /**
  * Fire triggers for a game event.
  *
@@ -1750,6 +1797,33 @@ function battlefieldOfCard(ctx: TriggerRunnerContext, cardId: string): string | 
   return undefined;
 }
 
+/**
+ * rule 383.4 / 386 — a permanent's triggered abilities only see events that happen
+ * while it is on the board; the exception (rule 808, [Deathknell] / "When I die") is
+ * about the card ITSELF. So the dying card, re-added to the scan for its own `die`
+ * event, may only match SELF-scoped triggers: a unit never sees itself die for a
+ * "when a friendly unit dies" ability (ruling 5db3a4ddd8c65c5b — Wraith of Echoes).
+ */
+function selfScopedTriggers(abilities: TriggerableAbility[]): TriggerableAbility[] {
+  return abilities.filter((ability) => {
+    // rule 385.2 / 383.2.c.1 (ogn-037-298 Immortal Phoenix) — an ability that
+    // functions FROM THE TRASH is active exactly where the dying card now is, so
+    // it legitimately sees the death that put it there.
+    if (abilityFunctionsFromTrash(ability)) {
+      return true;
+    }
+    const on = (ability as { trigger?: { on?: unknown } }).trigger?.on;
+    if (on === undefined || on === "self") {
+      return true;
+    }
+    if (typeof on === "object" && on !== null) {
+      const filters = (on as { filter?: unknown }).filter;
+      return Array.isArray(filters) ? filters.includes("self") : filters === "self";
+    }
+    return false;
+  });
+}
+
 export function fireTriggers(rawEvent: GameEvent, ctx: TriggerRunnerContext): number {
   // rule 185 / 052 (ogn-235-298 Karma, Channeler) — "when you recycle one or
   // more CARDS to your Main Deck": a token is not a card, so it is never among
@@ -1923,18 +1997,23 @@ export function fireTriggers(rawEvent: GameEvent, ctx: TriggerRunnerContext): nu
       // rule 150.2 / 808 (sfd-090-221) — Effect Text from the Equipment it wore
       // as it died: the attachments are already detached, so read them from LKI.
       abilities: [
-        ...toTriggerableAbilities(lki?.copyOfCardId ?? event.cardId),
+        // rule 383.4 / 386 — off-board by now: only its own "When I die" text applies.
+        ...selfScopedTriggers(toTriggerableAbilities(lki?.copyOfCardId ?? event.cardId)),
         ...delayedTriggerAbilitiesFrom(lki?.delayedTriggers),
-        ...attachedEffectTextAbilities({
-          equippedWith: lki?.attachments as RiftboundCardMeta["equippedWith"],
-        }),
+        ...selfScopedTriggers(
+          attachedEffectTextAbilities({
+            equippedWith: lki?.attachments as RiftboundCardMeta["equippedWith"],
+          }),
+        ),
         // rule 136.2.c / 719.1 / 808.1.d.2 (sfd-059-221 Svellsongur) — a
         // text-copying Equipment gives the wearer a SECOND instance of each of
         // its triggered abilities (808.2), and a Deathknell noted while the
         // Equipment was still attached survives the detach that death causes.
-        ...copiedAttachmentAbilitiesFromLKI(
-          toTriggerableAbilities(lki?.copyOfCardId ?? event.cardId),
-          lki?.attachments,
+        ...selfScopedTriggers(
+          copiedAttachmentAbilitiesFromLKI(
+            toTriggerableAbilities(lki?.copyOfCardId ?? event.cardId),
+            lki?.attachments,
+          ),
         ),
       ],
       id: event.cardId,
@@ -2093,7 +2172,15 @@ export function fireTriggers(rawEvent: GameEvent, ctx: TriggerRunnerContext): nu
         return true;
       }
       return ctx.cards.getCardMeta(match.cardId as CoreCardId)?.exhausted !== true;
-    });
+    })
+    // rule 383.2.c.2 (rule-id: ogn-118-298 Wraith of Echoes) — a Game Object
+    // that leaves its trigger's zone at the same moment its condition is met
+    // does not trigger (the Viktor example). Only the look-back self forms
+    // (rule 808 Deathknell, "When I die/leave") see a death they are part of,
+    // so a card in the leaving batch matches nothing else: not its own death
+    // through a "when a friendly unit dies" trigger, and not the simultaneous
+    // death of another unit.
+    .filter((match) => !leavesWithTheEvent(match, event, ctx, boardCards));
 
   // rule 808.2 / rule-id: ogn-236-298 (Karthus, Eternal) — "Your [Deathknell]
   // effects trigger an additional time": each instance triggers separately, so
