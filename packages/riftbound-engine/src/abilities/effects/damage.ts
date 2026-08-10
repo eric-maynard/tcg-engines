@@ -23,6 +23,14 @@ import { type EffectHelpers, getTargetIds, getEffectiveMight, resolveAmount } fr
  * reference locked at boundTargets[0] (see `_helpers.resolveAmount`).
  */
 function mightReferenceUnit(effect: ExecutableEffect, ctx: EffectContext): string | undefined {
+  // rule 417.6.b.2 (rule-id: ogn-250-298 Stormbringer) — "Deal damage equal to
+  // ITS Might" has no unit subject: the referenced unit only supplies the
+  // NUMBER, the resolving spell/ability is still the source (and so the damage
+  // is spell/ability damage for prevention). `dealer: "source"` marks that
+  // phrasing apart from "IT deals damage equal to its Might" (417.6.b.3).
+  if ((effect as unknown as { dealer?: string }).dealer === "source") {
+    return undefined;
+  }
   const raw = (effect.amount as { might?: unknown } | undefined)?.might;
   const pending = (ctx as { pendingSequenceValue?: readonly string[] }).pendingSequenceValue?.[0];
   if (raw === "pending-value") {
@@ -408,23 +416,30 @@ export function handle_damage(effect: ExecutableEffect, ctx: EffectContext, h: E
     }
     const assignedTotal = Object.values(assigned).reduce((a, b) => a + b, 0);
     let surplus = Math.max(0, n - assignedTotal);
-    // Rule 355.14.e/f/g (unl-192-219): the caster distributes surplus
-    // damage at resolution — one choose-target pick per surplus point,
-    // each appended to boundTargets so re-entry sees it as +1 assigned.
+    // Rule 355.14.e/f/g (unl-192-219): with damage left over after every
+    // locked recipient's mandatory point, the controller DIVIDES the whole
+    // pool at resolution in ONE `distribute` answer — each recipient ≥ 1,
+    // summing to the pool (the same prompt a finalization-bound split uses,
+    // `resolveBoundSplit`). The answer re-enters here as one boundTargets
+    // occurrence per point, behind the reference unit when there is one.
     if (surplus > 0 && splitTargets.length > 1 && (refId !== undefined || !hasRef)) {
-      const encoded: string[] = refId !== undefined ? [refId] : [];
-      for (const id of splitTargets) {
-        for (let i = 0; i < assigned[id]; i++) encoded.push(id);
-      }
       ctx.draft.pendingChoice = {
         type: "choose-target",
         playerId: ctx.playerId,
         sourceCardId: ctx.sourceCardId,
         effect,
         options: splitTargets,
-        remaining: surplus,
-        boundTargets: encoded,
+        remaining: n,
         assign: true,
+        total: n,
+        minPer: 1,
+        maxPer: n - (splitTargets.length - 1),
+        exactTargets: splitTargets.length,
+        // rule 355.14.b — the recipients were chosen (and paid for) at finalization.
+        targetsPreChosen: true,
+        ...(refId !== undefined ? { boundPrefix: [refId] } : {}),
+        // rule 359.3.f — "here" as this resolution reads it must survive the prompt.
+        ...(typeof ctx.sourceZone === "string" ? { sourceZone: ctx.sourceZone } : {}),
       } as RiftboundGameState["pendingChoice"];
       return;
     }

@@ -269,11 +269,10 @@ describe("(b) P2 re-picks source B and split targets {Poro, G}", () => {
     expect(item?.targets ?? []).toContain("poro");
   });
 
-  // Expected: at resolution P2 (controller) splits B's 3 Might between Poro and G, each ≥ 1 (355.14.f);
-  // choosing 2 → Poro, 1 → G kills both (2 and 1 Might) → two reflexive "gain 1 XP" → P2 +2 XP, P1 +0;
-  // B/X/Y/F undamaged; Alpha Strike → its OWNER P1's trash. Actual: no re-choice; F stays the (null)
-  // source and nothing happens.
-  test.failing("BUG: resolves under P2 — 3 split 2/1 onto Poro and G, both die, P2 gains 2 XP, B/X/Y untouched, Alpha Strike → P1's trash", async () => {
+  // At resolution P2 (controller) splits B's 3 Might between Poro and G, each ≥ 1 (355.14.f); choosing
+  // 2 → Poro, 1 → G kills both (2 and 1 Might) → two reflexive "gain 1 XP" → P2 +2 XP, P1 +0; B/X/Y/F
+  // undamaged; Alpha Strike → its OWNER P1's trash.
+  test("resolves under P2 — 3 split 2/1 onto Poro and G, both die, P2 gains 2 XP, B/X/Y untouched, Alpha Strike → P1's trash", async () => {
     const game = await stolen();
     await openRechoice(game);
     await rechoose(game, "b", ["poro", "g"]);

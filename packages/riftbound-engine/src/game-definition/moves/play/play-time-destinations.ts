@@ -179,16 +179,13 @@ export function raisePlayTimeDestinationChoice(
     // rule 447.2.b / 462.3 — a battlefield the mover may not become present at
     // (teammate there, or units of two other players) is never offered.
     const options = keepLegalArrivals(worded, mover, ctx);
-    // rule 753.1 — a re-choice that has no legal answer is simply not made: the
-    // remembered destination stands rather than becoming "no destination".
-    const reChoose = node._destKept !== undefined;
     if (options.length === 0) {
-      node._dest = reChoose ? node._destKept : null;
+      node._dest = null;
       continue;
     }
     // rule 355.13 — a "you MAY move" instruction keeps its prompt even with a
     // single destination: declining is an answer.
-    if (options.length === 1 && node.optional !== true && (!reChoose || options[0] === node._destKept)) {
+    if (options.length === 1 && node.optional !== true) {
       node._dest = options[0] as string;
       continue;
     }
@@ -196,7 +193,7 @@ export function raisePlayTimeDestinationChoice(
       bindToChainItemId: item.id,
       cardId: mover,
       destinationNodeIndex: index,
-      ...(node.optional === true || reChoose ? { optional: true } : {}),
+      ...(node.optional === true ? { optional: true } : {}),
       options,
       playerId: item.controller as string,
       sourceCardId: item.cardId as string,
@@ -248,30 +245,6 @@ export function bindDestinationOnItem(
   }
   const node = writableDestinationNodes(item)[nodeIndex ?? 0];
   if (node) {
-    // rule 753.1 — declining a re-choice keeps the destination the previous
-    // controller locked in, never "no destination".
-    node._dest = zoneId === null && node._destKept !== undefined ? node._destKept : zoneId;
-    node._destKept = undefined;
-  }
-}
-
-/**
- * rule 752.1 / 753 (ven-152-166 Rebuttal, ogn-080-298 Mystic Reversal) — "you
- * may make new choices for it": Move DESTINATIONS are re-choosable alongside
- * targets. Re-open every bound destination of `itemId` so the finalization
- * checkpoint asks it again from the item's NEW controller, remembering the old
- * answer so a declined re-choice keeps it (753.1).
- */
-export function reopenDestinationChoices(draft: unknown, itemId: string): void {
-  const item = chainItemsOf(draft)?.find((it) => it?.id === itemId);
-  if (!item) {
-    return;
-  }
-  for (const node of writableDestinationNodes(item)) {
-    if (node._dest === undefined) {
-      continue;
-    }
-    node._destKept = node._dest;
-    node._dest = undefined;
+    node._dest = zoneId;
   }
 }

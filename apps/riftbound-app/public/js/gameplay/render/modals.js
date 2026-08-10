@@ -109,6 +109,12 @@ function pendingChoiceTitle(pending) {
       const range = pending.min === pending.max ? `${pending.min}` : `${pending.min}–${pending.max}`;
       return `${src ? `${src}: ` : ""}${pending.prompt ?? "Choose"} (${range})`;
     }
+    // rule 751–755 — one keep-or-change slot of a stolen item's NEW CHOICES dialog.
+    case "new-choices": {
+      const slot = pending.slots?.[pending.cursor];
+      const step = pending.slots?.length > 1 ? ` (${(pending.cursor ?? 0) + 1}/${pending.slots.length})` : "";
+      return pending.prompt ?? `New choices for ${src ?? "the spell"} — ${slot?.label ?? "choice"}${step}`;
+    }
     default: return pending.prompt ?? "Choose";
   }
 }
@@ -135,6 +141,9 @@ function pendingPickLabel(pending, p) {
     if (p.orderedKeys.length === 0) return "Keep this order";
     return p.orderedKeys.map(k => pending?.items?.find(i => i.key === k)?.label ?? promptName(k)).join(" → ");
   }
+  // rule 753 — a new-choices slot kept as it is.
+  if (p.keepAll === true) return p.label ?? "Keep all remaining choices";
+  if (p.keep === true) return p.label ?? "Keep current choice";
   if (Array.isArray(p.pickedKeys)) {
     if (p.label) return p.label;
     return p.pickedKeys.length ? p.pickedKeys.map(k => pending?.options?.find?.(o => o.key === k)?.label ?? promptName(k)).join(" + ") : "None";
@@ -158,7 +167,10 @@ function pendingPickLabel(pending, p) {
 
 /** Prompts answered with a composed value (sequence / subset / amount) rather than one click per enumerated variant. */
 function isCompositePending(pending) {
-  return !!pending && (pending.type === "order" || pending.type === "pick-many" || pending.type === "pay-x" || pending.type === "order-cards");
+  if (!pending) return false;
+  // rule 355.13 / 355.14.b via 752 — a target SET slot of a new-choices dialog is ticked and confirmed like any pick-many.
+  if (pending.type === "new-choices") return (pending.max ?? 1) > 1;
+  return pending.type === "order" || pending.type === "pick-many" || pending.type === "pay-x" || pending.type === "order-cards";
 }
 
 // Local, un-sent state of the composite choosers (reset whenever the prompt changes).
@@ -300,8 +312,8 @@ function renderPendingChoiceModal() {
 function renderCompositeChoice(pending, box) {
   const picks = availableMoves.filter(m => m.moveId === "resolvePendingChoice");
   const me = picks[0]?.playerId ?? viewingPlayer;
-  const key = JSON.stringify([pending.type, pending.sourceCardId, pending.items ?? pending.options ?? pending.cards ?? null, picks.length]);
-  if (_compose.key !== key) _compose = { key, seq: [], set: [], x: null };
+  const key = JSON.stringify([pending.type, pending.sourceCardId, pending.items ?? pending.options ?? pending.cards ?? null, pending.cursor ?? null, picks.length]);
+  if (_compose.key !== key) _compose = { key, seq: [], set: [], x: null, seeded: false };
   const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
   const send = (params) => {
     const exact = picks.find(m => Object.keys(params).every(k => same(m.params?.[k], params[k])));
@@ -341,8 +353,10 @@ function renderCompositeChoice(pending, box) {
     return;
   }
 
-  if (pending.type === "pick-many") {
-    const opts = (pending.options || []).map(o => ({ key: o.key, label: o.label ?? promptName(o.cardId ?? o.key), cardId: o.cardId }));
+  if (pending.type === "pick-many" || pending.type === "new-choices") {
+    // rule 751.1 / 755 — a new-choices set marks what the item holds now and the (ignored) Deflect a new object would incur.
+    const opts = (pending.options || []).map(o => ({ key: o.key, label: (o.label ?? promptName(o.cardId ?? o.key)) + (o.current ? " (current)" : "") + (o.deflectIgnored ? ` (+${o.deflectIgnored} Deflect — ignored)` : ""), cardId: o.cardId }));
+    if (pending.type === "new-choices" && _compose.set.length === 0 && !_compose.seeded) { _compose.set = (pending.options || []).filter(o => o.current).map(o => o.key); _compose.seeded = true; }
     const set = _compose.set.filter(k => opts.some(o => o.key === k));
     const min = pending.min ?? 0, max = pending.max ?? opts.length;
     const ok = set.length >= min && set.length <= max;
@@ -356,14 +370,22 @@ function renderCompositeChoice(pending, box) {
     html += `</div><div class="choice-modal-btns">`;
     html += `<button class="choice-modal-btn choice-compose-confirm" data-compose-confirm ${ok ? "" : 'disabled style="opacity:.5"'}>Done (${set.length})</button>`;
     if (min === 0) html += `<button class="choice-modal-btn" data-compose-none>None</button>`;
+    // rule 753 — a keepable new-choices slot may be left as it is (this one, or everything still open).
+    if (pending.type === "new-choices" && pending.keepable) {
+      html += `<button class="choice-modal-btn" data-compose-keep>Keep current</button>`;
+      html += `<button class="choice-modal-btn" data-compose-keep-all>Keep all remaining</button>`;
+    }
     html += `</div>`;
     box.innerHTML = html;
     box.querySelectorAll("[data-check-key]").forEach(el => el.addEventListener("click", () => {
       const k = el.dataset.checkKey;
       _compose.set = _compose.set.includes(k) ? _compose.set.filter(x => x !== k) : [..._compose.set, k];
+      _compose.seeded = true;
       renderCompositeChoice(pending, box);
     }));
     box.querySelector("[data-compose-none]")?.addEventListener("click", () => send({ pickedKeys: [] }));
+    box.querySelector("[data-compose-keep]")?.addEventListener("click", () => send({ keep: true }));
+    box.querySelector("[data-compose-keep-all]")?.addEventListener("click", () => send({ keepAll: true }));
     box.querySelector("[data-compose-confirm]")?.addEventListener("click", () => { if (ok) send({ pickedKeys: opts.map(o => o.key).filter(k => set.includes(k)) }); });
     return;
   }

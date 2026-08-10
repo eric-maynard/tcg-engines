@@ -9,6 +9,7 @@ import {
   parseExtraTurnEffect,
   parseGainControlOfSpellEffect,
   parseLoseControlEffect,
+  parseNewChoicesEffect,
   parseTakeControlEffect,
   parseWinGameEffect,
 } from "./effects-control";
@@ -94,6 +95,7 @@ export function parseEffect(text: string): Effect | undefined {
     parseFightEffect(cleaned) ??
     parsePreventDamageEffect(cleaned) ??
     parseGainControlOfSpellEffect(cleaned) ??
+    parseNewChoicesEffect(cleaned) ??
     parseTakeControlEffect(cleaned) ??
     parseSpendBuffEffect(cleaned) ??
     parseLoseControlEffect(cleaned) ??

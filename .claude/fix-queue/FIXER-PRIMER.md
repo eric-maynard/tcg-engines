@@ -98,6 +98,44 @@ Recipe: 1) dump enriched abilities. 2) JSON wrong → explicit `abilities` in th
   back UNANSWERED (it does not auto-decline it); the split's `distribute` comes at RES with bucket min/max.
   Harness: these prompts have `timing:"FIN"`; answer them right after the triggering verb (or `{answers:[…]}` — e.g.
   `cast("charm",{targets:"foe",answers:["bf2"]})`), THEN settle.
+- NEW CHOICES for a finalized item (rules 751–755 — Mystic Reversal ogn-080 / Rebuttal ven-152 "gain control of
+  a spell … you may make new choices for it"; parser also emits a standalone `{type:"new-choices", target}` for
+  "[you may] choose new targets for it / that spell", handler `effects/new-choices.ts`): ONE module,
+  `E/abilities/new-choices.ts offerNewChoices(draft, itemId, chooser, ctx, {optional, grantedBy})`, called by
+  `effects/gain-control-of-spell.ts` right after it flips `item.controller` (+ `originalController`, + 340.4
+  `reseatPriorityAfterResolution` so the NEW controller of the newest item holds priority even when nothing is
+  offered). It reads the item's CHOICE SLOTS off what finalization recorded and raises ONE `pendingChoice
+  {type:"new-choices", itemId, slots[{key,kind,label,parent?,current,status}], cursor, options[{key,cardId|zone|mode,
+  current?,deflectIgnored?}], min,max, keepable, slotSemantics?, reChoose:true}` that walks the slots in order:
+  `mode:i` (355.3, `_chosenIndex`; per [Repeat] execution) → its own `mode-target:i` (parent mode; on
+  `item.targets` for a lone menu of a played spell/activation, else `_chosenTargets`) → SPELL positional targets
+  mirroring play-spell's `item.targets` layout (`source`+`split` set for a Might-reference split — cap = NEW
+  source's Might+bonus, 355.14.c; `source`+`target:1` for [reference, victim]/[reference, damaged]; pair shapes
+  fight/swap/same-battlefield validated as a PAIR; `target:i` per distinct sequence slot — Star-Crossed; `set`
+  for "up to N"/"any"/exact-N incl. ZERO for "up to"; plain `target:0` incl. counter/chain targets) or ABILITY
+  positional `target:i` + `set:<path>` per `targetSlots` entry (rebinds entry + `_bound` + flat targets) →
+  `dest:i` per bound `_dest` (parent = the slot holding its mover; options `moveDestinationOptions`+
+  `keepLegalArrivals` for the CURRENT mover). Candidates always from the CHOOSER's seat with `choosing:true`
+  (753.1 friendly/enemy re-read; item itself excluded 355.9.c; from-Hidden `hiddenZone` lock kept 811.1.d.2);
+  per-player / "must" / chooseAtResolution / criteria (`quantity:"all"`) instructions are NOT slots (355.10 —
+  Cull the Weak offers nothing). A slot is OFFERED only if some legal value ≠ current exists (sets: any candidate;
+  753.2 ⇒ no prompt at all when no slot qualifies). Answers (`resolvePendingChoice`): `pickedKeys` (card id /
+  zone / mode; naming the current value = keep-but-still-ask-dependants, status `renamed`; a new value = `changed`:
+  written onto the item at once, rule 754 `choose` event fired for objects not in `originalTargets`, rule 755 NO
+  cost charged — `deflectIgnored` is informational), `keep:true`/`accept:false` (status `kept`; its dependants
+  `skipped` — declining a mode keeps mode+target, declining a mover keeps its destination), `keepAll:true`. A
+  dependant whose CHANGED parent left it empty is mandatory (`keepable:false`, sole candidate auto-bound 402.2-style;
+  a split set whose old members no longer fit ⇒ min 1). Item never re-pended; dialog end ⇒ `postChoiceCleanup`
+  (340.4 reseat). Resolution reads the rebound slots like any finalized item; a Might-reference spell split now
+  divides at RES with ONE fixed-total `distribute` (`effects/damage.ts`, `boundPrefix:[ref]` re-entry) like
+  `resolveBoundSplit`. Harness: each slot is a `kind:"pick"` Decision (`semantics` mode|destination|target,
+  `targeting` for sets, `allowDecline` = keepable, `timing:"RES"`, `source.pendingChoiceType:"new-choices"`) with
+  `newChoices {itemId, grantedBy, slot, slots[]}` and options `current`/`deflectIgnored`; answer with
+  `pick(x)` / `chooseMode(i)` / `pick("bf2")` / `decline()` (= keep), or `seat.rechoose({target:"y",
+  destination:"bf2", source:…, split:[…], "mode:1":0})` (walks every slot: named ⇒ pick, parent of a named
+  dependant ⇒ re-name current, else keep) / `seat.keepChoices()`; passive `settle()` keeps. UI: `modals.js`
+  (single slots = card tiles/buttons incl. "Keep current choice"; sets = tick-and-confirm + Keep). Core spec:
+  `E/__tests__/core-rules/new-choices.test.ts`.
 Recipe — add a filter (non-token, in-base, at-a-battlefield, other, stunned…):
 1) `T/targeting/riftbound-target-dsl.ts` — add to `SimpleFilter` if new.
 2) `E/abilities/target-resolver.ts matchesFilter` — add the `case` (token: `cardId.startsWith("token-")`, as in

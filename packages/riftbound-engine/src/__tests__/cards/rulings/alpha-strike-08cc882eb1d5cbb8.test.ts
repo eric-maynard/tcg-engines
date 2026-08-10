@@ -36,10 +36,13 @@ function board(opts: { allyMight: number; minions: number }) {
 
 const targetSets = (game: Game) => (game.p1.option("cast", "alpha")?.fields.find((f) => f.arg === "targets")?.options ?? []) as string[][];
 
-/** Answer every damage-assignment prompt, alternating between the Minions; records every bucket ever offered. */
+/**
+ * Answer the damage division (355.14.e/f — ONE `distribute`: each locked recipient ≥ its minimum, the rest
+ * spread alternately between them); records every bucket ever offered.
+ */
 async function assignAll(game: Game): Promise<string[]> {
   const seen = new Set<string>();
-  for (let i = 0; i < 12; i++) {
+  for (let i = 0; i < 4; i++) {
     const d: Decision | null = game.decision();
     if (d?.kind !== "distribute") {
       break;
@@ -49,8 +52,13 @@ async function assignAll(game: Game): Promise<string[]> {
       seen.add((b.card ?? b.key) as string);
     }
     const open = d.buckets.filter((b) => b.max > 0);
-    const pick = open[i % open.length]!;
-    await game.p1.distribute({ [pick.key]: 1 });
+    const allocation: Record<string, number> = Object.fromEntries(open.map((b) => [b.key, b.min]));
+    let left = d.total - open.reduce((sum, b) => sum + b.min, 0);
+    for (let n = 0; left > 0; n++, left--) {
+      const b = open[n % open.length]!;
+      allocation[b.key] = (allocation[b.key] ?? 0) + 1;
+    }
+    await game.p1.distribute(allocation);
   }
   return [...seen].toSorted();
 }

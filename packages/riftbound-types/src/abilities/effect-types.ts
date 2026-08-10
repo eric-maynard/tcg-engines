@@ -926,6 +926,20 @@ export interface GainControlOfSpellEffect {
 }
 
 /**
+ * rule 751–755 — "You may make new choices for it" / "choose new targets for
+ * it" as its own instruction: the finalized chain item named (`target` — a
+ * spell / the pending value of a preceding "choose a spell", else the newest
+ * other item) has its finalization choices (modes, targets, destinations)
+ * re-offered to this effect's controller. `optional: false` for a bare
+ * "Choose new targets for it" (still slot-by-slot keep-or-change, 753).
+ */
+export interface NewChoicesEffect {
+  readonly type: "new-choices";
+  readonly target?: AnyTarget;
+  readonly optional?: boolean;
+}
+
+/**
  * Take extra turn effect
  */
 export interface ExtraTurnEffect {
@@ -1180,6 +1194,7 @@ export type Effect =
   | AttachOrDetachEffect
   | DetachEffect
   | GainControlOfSpellEffect
+  | NewChoicesEffect
   | ExtraTurnEffect
   | WinGameEffect
   | IncreaseVictoryScoreEffect

@@ -28,6 +28,11 @@ import { recalculateStaticEffects } from "../../abilities/static-abilities";
 import { isBlockedByTwoOtherPlayers } from "./movement/helpers";
 import { contestBattlefieldOnArrival } from "./movement/contest-arrival";
 import { openPendingContestedShowdown } from "./chain/showdown";
+import {
+  applyNewChoicesAnswer,
+  enumerateNewChoicesAnswers,
+  isValidNewChoicesAnswer,
+} from "../../abilities/new-choices";
 import { hasTrashToBanishReplacement } from "../../abilities/replacement-effects";
 import { resolveTarget } from "../../abilities/target-resolver";
 import { bindTargetSlot } from "../../abilities/target-slots";
@@ -86,7 +91,7 @@ import {
   getPotentialRuneEnergy,
   payResourceCost,
 } from "./play/cost";
-import { bindDestinationOnItem, reopenDestinationChoices } from "./play/play-time-destinations";
+import { bindDestinationOnItem } from "./play/play-time-destinations";
 import { collectChoiceNodes, raisePlayTimeModeChoice } from "./play/play-time-modes";
 import { isLegalMultiTargetSet, spellEffectHasLegalTargets } from "./play/targeting";
 import type { SpellEffectTargetShape } from "./play/targeting";
@@ -813,6 +818,10 @@ export function weaponmasterEquipCost(
     energy: base.energy,
     power,
     ...(base.recycleFromTrash !== undefined ? { recycleFromTrash: base.recycleFromTrash } : {}),
+    // rule 821.1.c.3 / 730.2 (unl-158-219 Shepherd's Heirloom): "Spend N XP" is
+    // not [A] either — it is paid in full, and below N XP the Equipment can't
+    // be offered at all (821.1.c.5).
+    ...(base.xp !== undefined && base.xp > 0 ? { xp: base.xp } : {}),
     // rule 821.1.c.3 (sfd-178-221 Blade of the Ruined King): the "Kill a
     // friendly unit" half is not a resource, so [A] never waives it — the
     // Weaponmaster still owes it.
@@ -1178,72 +1187,6 @@ function resumePending(
       }
       return;
     }
-    // rule 752.1 / 355.14.b — the re-chosen split-damage recipient set of a
-    // stolen chain item, bound behind the source already re-named in slot 0.
-    // rule 754: an object newly named this way is freshly targeted, so its
-    // Targeting Effects trigger. rule 755: the costs those new choices incur
-    // (a [Deflect] surcharge) are IGNORED — nothing is charged here.
-    case "retarget-split": {
-      const picked = (answer.pickedKeys ?? []).map(
-        (k) => (choice.type === "pick-many" ? choice.options.find((o) => o.key === k)?.cardId : undefined) ?? k,
-      );
-      const item = draft.interaction?.chain?.items.find((it) => it.id === resume.itemId);
-      if (!item) {
-        return;
-      }
-      const prior = item.targets ?? [];
-      const before = new Set(prior);
-      const source = prior[0];
-      (item as { targets?: readonly string[] }).targets =
-        source !== undefined ? [source, ...picked] : [...picked];
-      const trigCtx = { cards: context.cards, counters: context.counters, draft, zones: context.zones };
-      for (const cardId of picked) {
-        if (before.has(cardId) || draft.battlefields?.[cardId] !== undefined) {
-          continue;
-        }
-        fireTriggers(
-          { cardId, chooserId: item.controller, sourceCardId: item.cardId, sourceType: "spell", type: "choose" },
-          trigCtx,
-        );
-      }
-      if (!draft.pendingChoice) {
-        postChoiceCleanup(draft, context);
-      }
-      return;
-    }
-    // rule 752.1 / 753 — the re-chosen target GROUP of a stolen multi-slot
-    // spell. rule 754: cards newly named this way are freshly targeted, so
-    // their Targeting Effects trigger; rule 755: the costs those new choices
-    // incur (a [Deflect] surcharge) are IGNORED — nothing is charged here.
-    case "retarget-slots": {
-      const picked = (answer.pickedKeys ?? []).map(
-        (k) => (choice.type === "pick-many" ? choice.options.find((o) => o.key === k)?.cardId : undefined) ?? k,
-      );
-      const item = draft.interaction?.chain?.items.find((it) => it.id === resume.itemId);
-      const slotOptions = choice.type === "pick-many" ? choice.slotOptions : undefined;
-      // An empty answer is "I keep my choices" (the offer is a "you may").
-      if (item && slotOptions && picked.length > 0) {
-        const ordered = assignToSlots(slotOptions, picked);
-        if (ordered) {
-          const before = new Set(item.targets ?? []);
-          (item as { targets?: readonly string[] }).targets = ordered;
-          const trigCtx = { cards: context.cards, counters: context.counters, draft, zones: context.zones };
-          for (const cardId of ordered) {
-            if (before.has(cardId) || draft.battlefields?.[cardId] !== undefined) {
-              continue;
-            }
-            fireTriggers(
-              { cardId, chooserId: item.controller, sourceCardId: item.cardId, sourceType: "spell", type: "choose" },
-              trigCtx,
-            );
-          }
-        }
-      }
-      if (!draft.pendingChoice) {
-        postChoiceCleanup(draft, context);
-      }
-      return;
-    }
     case "subset-repick": {
       const picked = (answer.pickedKeys ?? []).map(
         (k) => (choice.type === "pick-many" ? choice.options.find((o) => o.key === k)?.cardId : undefined) ?? k,
@@ -1446,6 +1389,10 @@ export function pickDefaultForChoice(choice: PendingChoice): string | number | u
   if (choice.type === "order-cards" || choice.type === "order" || choice.type === "pick-many") {
     return undefined;
   }
+  // rule 753 — a "you may make new choices" slot nobody answers keeps its value.
+  if (choice.type === "new-choices") {
+    return undefined;
+  }
   if (choice.type === "opt-in") {
     return undefined;
   }
@@ -1560,6 +1507,15 @@ export const pendingChoiceMoves: Partial<
             (id) => context.zones.getCardZone(id as CoreCardId),
             deflectAffordableFor(state, choice, context),
           )
+        );
+      }
+      // rule 751–755 — one slot of a finalized item's NEW CHOICES dialog.
+      if (choice.type === "new-choices") {
+        return isValidNewChoicesAnswer(
+          state,
+          choice,
+          context.params as Record<string, unknown>,
+          buildEffectContext(state, choice.playerId, choice.sourceCardId, context),
         );
       }
       // rule 465.2.c.3 / 465.2.c.7 — the assigning player answers with one
@@ -1836,6 +1792,21 @@ export const pendingChoiceMoves: Partial<
           playerId: context.playerId as string,
         }));
       }
+      // rule 751–755 — the slot on offer: one variant per option (subsets for a
+      // short set) plus keep / keep-all; any other legal `pickedKeys` is accepted too.
+      if (choice.type === "new-choices") {
+        if (choice.playerId !== (context.playerId as string)) {
+          return [];
+        }
+        return enumerateNewChoicesAnswers(choice).filter((params) =>
+          isValidNewChoicesAnswer(
+            state,
+            choice,
+            params,
+            buildEffectContext(state, choice.playerId, choice.sourceCardId, context),
+          ),
+        );
+      }
       if (choice.type === "weaponmaster-equip") {
         if (choice.playerId !== (context.playerId as string)) {
           return [];
@@ -2026,6 +1997,21 @@ export const pendingChoiceMoves: Partial<
         resumePending(draft, choice, { pickedKeys }, context);
         return;
       }
+      // rule 751–755 — answer the slot on offer; the dialog parks its next slot
+      // (or ends). rule 754 triggers ride on the effect context's `fireTriggers`.
+      if (choice.type === "new-choices") {
+        const ncCtx = buildEffectContext(draft, choice.playerId, choice.sourceCardId, context);
+        if (!isValidNewChoicesAnswer(draft, choice, context.params as Record<string, unknown>, ncCtx)) {
+          return;
+        }
+        applyNewChoicesAnswer(draft, choice, context.params as Record<string, unknown>, ncCtx);
+        if (!draft.pendingChoice) {
+          // rule 340.4 — the dialog is over: Priority to the newest item's
+          // CURRENT controller (postChoiceCleanup re-seats it), no re-pending.
+          postChoiceCleanup(draft, context);
+        }
+        return;
+      }
 
       // rule 465.2.c.3 — record the assignment; `resolveFullCombat` re-runs
       // (its condition is blocked while a pendingChoice exists) and applies it.
@@ -2166,8 +2152,17 @@ export const pendingChoiceMoves: Partial<
           choice.sourceCardId,
           context,
         );
+        const declineEffect = (choice as { declineEffect?: ExecutableEffect }).declineEffect;
         if (context.params.accept === true) {
           executeEffect(choice.effect as ExecutableEffect, {
+            ...confirmCtx,
+            ...(choice.boundTargets ? { boundTargets: choice.boundTargets } : {}),
+          });
+        } else if (declineEffect !== undefined) {
+          // rule 355.1.a — an OPTIONAL ADDITIONAL COST election (not a bare
+          // "you may"): declining still performs the thing being paid for, just
+          // without the cost's effect (a token still enters, exhausted).
+          executeEffect(declineEffect, {
             ...confirmCtx,
             ...(choice.boundTargets ? { boundTargets: choice.boundTargets } : {}),
           });
@@ -2582,7 +2577,7 @@ export const pendingChoiceMoves: Partial<
         // Rule 355.8 (unl-182-219): execute the picked modal option; when
         // `notChosenThisTurn` is set, record the index on the source card's
         // meta so subsequent Repeat casts exclude it.
-        // rule 752.1 (ven-152-166) — the new controller declines to re-choose.
+        // rule 355.13 — an optional menu may be declined outright.
         if (choice.optional && context.params.accept === false) {
           draft.pendingChoice = undefined;
           postChoiceCleanup(draft, context);
@@ -2603,16 +2598,6 @@ export const pendingChoiceMoves: Partial<
             return;
           }
           const nodes = collectChoiceNodes(item.effect);
-          // rule 751.1 / 752.1 (ven-152-166) — new choices for a stolen item
-          // REPLACE the locked ones: drop the old mode and its bound targets so
-          // the new controller re-chooses both from their own seat.
-          if (choice.reChoose === true) {
-            for (const n of nodes) {
-              n._chosenIndex = undefined;
-              n._chosenTargets = undefined;
-            }
-            (item as { targets?: readonly string[] }).targets = undefined;
-          }
           const node = nodes.find((n) => n._chosenIndex === undefined);
           if (node) {
             node._chosenIndex = idx;
@@ -2800,97 +2785,6 @@ export const pendingChoiceMoves: Partial<
           postChoiceCleanup(draft, context);
           return;
         }
-        // rule-id: ogn-080-298 (rule 355.9) — "You may make new choices for
-        // it": the pick RE-TARGETS a chain item the chooser just gained
-        // control of; rewrite that item's locked targets instead of executing
-        // anything now (the stolen spell resolves later, on its own).
-        if (choice.retargetChainItemId !== undefined) {
-          // Declining leaves the item's existing targets in place.
-          if (context.params.accept === false) {
-            draft.pendingChoice = undefined;
-            postChoiceCleanup(draft, context);
-            return;
-          }
-          if (!choice.options.includes(picked)) {
-            return;
-          }
-          const items = draft.interaction?.chain?.items ?? [];
-          const item = items.find((it) => it && it.id === choice.retargetChainItemId);
-          if (item) {
-            const priorTargets = [...((item as { targets?: readonly string[] }).targets ?? [])];
-            (item as { targets?: readonly string[] }).targets = [picked];
-            // rule 752.1 / 753 (ven-152-166 × ogn-173-298 Ride the Wind) — the
-            // re-makeable choices include DESTINATIONS, so a re-targeted Move
-            // re-asks where the new mover goes (declining keeps the old zone).
-            reopenDestinationChoices(draft, item.id);
-            // rule 754 (sfd-142-221 Jae Medarda × ogn-080-298) — naming a NEW
-            // object while making new choices is a targeting event right then:
-            // that object's "when you choose me" triggers, with the item's
-            // (new) controller as the chooser. rule 751.1 — re-naming an object
-            // that was already chosen is not a new choice and triggers nothing.
-            if (!priorTargets.includes(picked)) {
-              fireTriggers(
-                {
-                  cardId: picked,
-                  chooserId: item.controller,
-                  sourceCardId: item.cardId,
-                  sourceType:
-                    getGlobalCardRegistry().get(item.cardId)?.cardType === "spell"
-                      ? "spell"
-                      : "ability",
-                  type: "choose",
-                },
-                { cards: context.cards, counters: context.counters, draft, zones: context.zones },
-              );
-            }
-          }
-          // rule 355.14.b/c + 752.1 (ogn-080-298 × unl-192-219) — the stolen
-          // spell splits its source's Might among a chosen SET: ask that set
-          // now, capped by the damage the NEWLY named source has available
-          // (355.14.c) and drawn from the new controller's seat ("enemy"
-          // flips with the item's controller). rule 355.14.e: only the
-          // recipients are named here — the amounts wait for resolution.
-          const splitDesc = (choice as { retargetSplitTarget?: unknown }).retargetSplitTarget;
-          if (item && splitDesc !== undefined) {
-            const pool = resolveTarget({ ...(splitDesc as never), quantity: "all" }, {
-              cards: context.cards,
-              choosing: true,
-              draft,
-              playerId: item.controller,
-              sourceCardId: item.cardId,
-              sourceZone: context.zones.getCardZone(item.cardId as CoreCardId),
-              zones: context.zones,
-            } as Parameters<typeof resolveTarget>[1]) as string[];
-            const cap = getCardEffectiveMight(picked, (c) =>
-              context.cards.getCardMeta?.(c) as Partial<RiftboundCardMeta> | undefined,
-            );
-            const max = Math.min(cap, pool.length);
-            if (max > 0) {
-              const nameOf = (id: string): string =>
-                (context.cards.getCardName?.(id as CoreCardId) as string | undefined) ??
-                (getGlobalCardRegistry().get(id) as { name?: string } | undefined)?.name ??
-                id;
-              draft.pendingChoice = {
-                max,
-                // rule 355.5 / 753.1 — legal recipients exist, so the set may
-                // not be left empty: a re-choice that names none is illegal.
-                min: 1,
-                options: pool.map((id) => ({ cardId: id, key: id, label: nameOf(id) })),
-                playerId: item.controller,
-                prompt: `Choose the targets to split ${nameOf(item.cardId)}'s damage among (up to ${max}; amounts are decided when it resolves)`,
-                resume: { itemId: item.id, kind: "retarget-split" },
-                semantics: "target",
-                slotSemantics: "split",
-                sourceCardId: item.cardId,
-                type: "pick-many",
-              } as RiftboundGameState["pendingChoice"];
-              return;
-            }
-          }
-          draft.pendingChoice = undefined;
-          postChoiceCleanup(draft, context);
-          return;
-        }
         // rule-id: ogn-256-298 (rule 355.13) — "any number of <units>": each
         // pick accumulates; remaining options are re-pruned against the
         // target's aggregate constraints (one battlefield, `totalMight` cap)
@@ -3053,11 +2947,14 @@ export const pendingChoiceMoves: Partial<
             return;
           }
           draft.pendingChoice = undefined;
-          const encoded: string[] = [];
+          // rule 355.14.a (unl-192-219) — a Might-referencing split keeps its
+          // reference unit in front of the per-point occurrences on re-entry.
+          const encoded: string[] = [...(((choice as { boundPrefix?: readonly string[] }).boundPrefix ?? []) as string[])];
+          const prefixLen = encoded.length;
           for (const [id, n] of Object.entries(allocation)) {
             for (let i = 0; i < n; i++) encoded.push(id);
           }
-          if (encoded.length > 0) {
+          if (encoded.length > prefixLen) {
             // rule 355.14.b / 359.2 — targets locked at finalization were chosen
             // (surcharge paid, "when you choose me" fired) THEN; this answer only
             // divides the damage among them.
@@ -3347,6 +3244,30 @@ export const pendingChoiceMoves: Partial<
               draft,
               zones: context.zones,
             } as unknown as Parameters<typeof recalculateStaticEffects>[0]);
+          }
+          // rule 354.2 / 184.1 (sfd-154-221 Guards!) — the rest of the same
+          // instruction ("You may pay [order] to ready it") waited behind the
+          // destination prompt; every token is placed now, so run it.
+          if (
+            draft.pendingChoice === undefined &&
+            choice.then &&
+            context.cards &&
+            context.counters
+          ) {
+            const thenCtx = {
+              ...buildEffectContext(
+                draft,
+                choice.playerId,
+                (choice.sourceCardId ?? choice.cardId) as string,
+                context,
+              ),
+              boundTargets: [choice.cardId as string],
+              sameZone: targetZoneId,
+            };
+            executeEffect(choice.then as ExecutableEffect, thenCtx);
+            if (!draft.pendingChoice) {
+              postChoiceCleanup(draft, context);
+            }
           }
           return;
         }

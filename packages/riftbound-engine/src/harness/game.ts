@@ -68,6 +68,10 @@ export const passivePolicy: Policy = (d) => {
     }
     return undefined;
   }
+  // rule 753 — a "you MAY make new choices" slot nobody answers keeps its value.
+  if (d.kind === "pick" && d.newChoices !== undefined && d.allowDecline) {
+    return { kind: "decline" };
+  }
   // rule 359.3.e.6 — "play a card from your trash/banishment" is compulsory
   // (min 1, no decline), but WHICH card is played is still the performer's
   // announced choice: hand the offer back instead of taking it silently, so the
@@ -1260,6 +1264,66 @@ export class SeatHandle {
 
   async chooseMode(index: number): Promise<Extract<ActResult, { ok: true }>> {
     return this.answer({ keys: [String(index)], kind: "pick" });
+  }
+
+  /**
+   * rule 753 — answer this seat's NEW CHOICES dialog ("gain control of a spell …
+   * you may make new choices for it") slot by slot from ONE map: a slot named
+   * in `changes` (by its key — "mode:0", "target:0", "source", "split", "set",
+   * "dest:0" … — or by its kind — "mode" / "target" / "source" / "targets" /
+   * "destination") is re-chosen to that value; every other slot is kept. A
+   * kept slot whose dependants ARE named (keep the mover, re-route it) is
+   * re-named to its current value so the dialog still asks them. Returns the
+   * slots as the engine settled them.
+   */
+  async rechoose(changes: Readonly<Record<string, CardRef | number | readonly (CardRef | number)[]>>): Promise<readonly { key: string; status?: string }[]> {
+    let last: readonly { key: string; status?: string }[] = [];
+    for (let i = 0; i < 16; i++) {
+      const d = this.game.decision();
+      if (d?.kind !== "pick" || d.seat !== this.seat || d.newChoices === undefined) {
+        break;
+      }
+      last = d.newChoices.slots;
+      const slot = d.newChoices.slot;
+      const wanted = changes[slot.key] ?? changes[slot.kind];
+      if (wanted !== undefined) {
+        const keys = (Array.isArray(wanted) ? wanted : [wanted]).map(String);
+        await this.answer({ keys, kind: "pick" });
+        continue;
+      }
+      const dependantNamed = d.newChoices.slots.some((s) => s.parent === slot.key && (changes[s.key] !== undefined || changes[s.kind] !== undefined));
+      const current = d.options.filter((o) => o.current).map((o) => o.key);
+      if (dependantNamed && current.length > 0) {
+        await this.answer({ keys: current, kind: "pick" });
+      } else if (d.allowDecline) {
+        await this.answer({ kind: "decline" });
+      } else {
+        throw new HarnessError({
+          code: "AMBIGUOUS_ACTION",
+          detail: { options: d.options.map((o) => o.key), slot },
+          message: `rechoose(): slot "${slot.key}" (${slot.label}) must be re-chosen — name it in the map`,
+        });
+      }
+    }
+    return last;
+  }
+
+  /** rule 753 — keep every (remaining) choice of this seat's NEW CHOICES dialog. */
+  async keepChoices(): Promise<void> {
+    for (let i = 0; i < 16; i++) {
+      const d = this.game.decision();
+      if (d?.kind !== "pick" || d.seat !== this.seat || d.newChoices === undefined) {
+        return;
+      }
+      if (!d.allowDecline) {
+        throw new HarnessError({
+          code: "AMBIGUOUS_ACTION",
+          detail: { slot: d.newChoices.slot },
+          message: `keepChoices(): slot "${d.newChoices.slot.key}" has no value to keep — it must be re-chosen`,
+        });
+      }
+      await this.answer({ kind: "decline" });
+    }
   }
 
   async name(cardName: string): Promise<Extract<ActResult, { ok: true }>> {

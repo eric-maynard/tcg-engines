@@ -922,6 +922,12 @@ export interface ChooseTargetChoice {
   /** rule 355.14.b / 359.2 — the options were CHOSEN (and paid for) at finalization; the answer only divides. */
   readonly targetsPreChosen?: true;
   /**
+   * rule 355.14.a (unl-192-219 Alpha Strike) — ids that ride IN FRONT of the
+   * per-point occurrences when the allocation re-enters the effect: a
+   * Might-referencing split's reference unit (`boundTargets[0]`).
+   */
+  readonly boundPrefix?: readonly string[];
+  /**
    * rule-id: ogn-256-298 (rule 355.13) — "any number of <units>": picks
    * accumulate in `picked` until the chooser declines (`accept:false`) or no
    * legal option remains; `options` is re-pruned after each pick against the
@@ -944,19 +950,8 @@ export interface ChooseTargetChoice {
    */
   readonly deflectTax?: true;
   /**
-   * rule 355.9 (ogn-080-298 Mystic Reversal) — "You may make new choices for
-   * it": the pick RE-TARGETS this chain item instead of executing anything.
-   */
-  readonly retargetChainItemId?: string;
-  /**
-   * rule 355.14.a/b + 752.1 (ogn-080-298 × unl-192-219) — the re-targeted item
-   * ALSO names a split-damage recipient set behind its Might-reference source:
-   * this descriptor raises that follow-up prompt once the source is re-chosen.
-   */
-  readonly retargetSplitTarget?: unknown;
-  /**
-   * rule 355.13 — the prompt may be declined (`accept:false`), leaving the
-   * effect's existing choices untouched. Set for "you MAY make new choices".
+   * rule 355.13 / 402.1 — the prompt may be declined (`accept:false`): a "you
+   * may" whose choice this pick is.
    */
   readonly optional?: true;
 }
@@ -1060,17 +1055,7 @@ export interface ChooseModeChoice {
   readonly modeSlot?: number;
   /** Modes already locked for earlier executions (rule 355.8 narrows the menu). */
   readonly chosenModes?: readonly number[];
-  /**
-   * rule 752.1 (ven-152-166 Rebuttal / ogn-080-298) — "you may make new choices
-   * for it": the mode menu of a chain item whose control just changed. The
-   * pick REPLACES the locked mode (and clears the item's locked targets so the
-   * new controller re-chooses them); declining keeps every earlier choice.
-   */
-  readonly reChoose?: true;
-  /**
-   * rule 355.13 — the prompt may be declined (`accept:false`), leaving the
-   * item's existing choices untouched.
-   */
+  /** rule 355.13 — the menu may be declined (`accept:false`), choosing no mode. */
   readonly optional?: true;
 }
 
@@ -1284,20 +1269,6 @@ export type PendingResume =
       readonly boundTargets?: readonly string[];
     }
   /** No follow-up (tests / producers that read the answer off `lastPendingAnswer`). */
-  /**
-   * rule 752.1 / 355.14.b — the answer is the re-chosen split-damage recipient
-   * SET of stolen chain item `itemId`, bound behind the source already
-   * re-named in slot 0. rule 755: costs incurred by these new choices (a
-   * [Deflect] surcharge) are ignored, so nothing is charged here.
-   */
-  | { readonly kind: "retarget-split"; readonly itemId: string }
-  /**
-   * rule 752.1 / 753 — the answer is the re-chosen target GROUP of stolen chain
-   * item `itemId`: one card per caster-chosen slot of a multi-slot spell
-   * ("Return a friendly unit and an enemy unit …"). An empty answer keeps the
-   * existing choices; rule 755 ignores any cost the new choices incur.
-   */
-  | { readonly kind: "retarget-slots"; readonly itemId: string }
   | { readonly kind: "none"; readonly tag?: string };
 
 /** One entry of an `order` / `pick-many` prompt. */

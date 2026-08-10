@@ -73,6 +73,29 @@ describe("Effect: Take Control", () => {
     });
   });
 
+  // rule 751–755 — the standalone "new choices" instruction names the spell an
+  // earlier "Choose …" step picked (no printed card yet; parser + engine ready).
+  describe("new choices for a chosen spell", () => {
+    it("should parse 'Choose an enemy spell. You may choose new targets for it.' as ONE new-choices effect on the chosen spell", () => {
+      const result = parseAbilities("Choose an enemy spell. You may choose new targets for it.");
+
+      expect(result.success).toBe(true);
+      expect(result.abilities).toEqual([
+        expect.objectContaining({
+          effect: { target: { controller: "enemy", type: "spell" }, type: "new-choices" },
+          type: "spell",
+        }),
+      ]);
+    });
+
+    it("keeps 'Gain control of a spell. You may make new choices for it.' as a single gain-control-of-spell (not a sequence)", () => {
+      const result = parseAbilities("Gain control of a spell. You may make new choices for it.");
+      expect(result.abilities?.[0]).toEqual(
+        expect.objectContaining({ effect: { newChoices: true, type: "gain-control-of-spell" } }),
+      );
+    });
+  });
+
   describe("take control of gear", () => {
     it("should parse 'Move an enemy gear to your base. You control it until I leave the board.'", () => {
       const result = parseAbilities(

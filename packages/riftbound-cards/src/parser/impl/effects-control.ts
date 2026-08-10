@@ -6,6 +6,7 @@ import type {
   CounterEffect,
   Effect,
   GainControlOfSpellEffect,
+  NewChoicesEffect,
   SequenceEffect,
 } from "@tcg/riftbound-types/abilities/effect-types";
 import type { AnyTarget, Filter, Location } from "@tcg/riftbound-types/targeting";
@@ -73,6 +74,29 @@ export function parseGainControlOfSpellEffect(text: string): GainControlOfSpellE
   return match[1]
     ? { newChoices: true, type: "gain-control-of-spell" }
     : { type: "gain-control-of-spell" };
+}
+
+/**
+ * rule 751–755 — "[You may] choose new targets for it|that spell." / "make new
+ * choices for that spell." standing on its own (the spell it names was chosen
+ * by an earlier step — "it" is that pending value): the named chain item's
+ * finalization choices are re-offered to this effect's controller, each one
+ * keep-or-change (753). "Gain control of a spell. You may make new choices for
+ * it." stays ONE `gain-control-of-spell {newChoices}` (parsed above), so the
+ * bare "… new choices for it" is deliberately not claimed here.
+ */
+export function parseNewChoicesEffect(text: string): NewChoicesEffect | undefined {
+  const match = text.match(
+    /^(?:You may )?(?:choose (?:a )?new targets? for (it|that spell|the spell)|make new choices for (that spell|the spell))\.?$/i,
+  );
+  if (!match) {
+    return undefined;
+  }
+  const named = match[1] ?? match[2] ?? "";
+  return {
+    target: /spell/i.test(named) ? { type: "spell" } : { type: "pending-value" },
+    type: "new-choices",
+  } as NewChoicesEffect;
 }
 
 /**

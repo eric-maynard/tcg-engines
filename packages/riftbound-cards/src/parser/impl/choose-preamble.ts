@@ -19,10 +19,12 @@ export function isPronounTarget(t: unknown): boolean {
   if (t === "self") {
     return true;
   }
+  // A bare "it" — `{type:"unit"}` — or an explicit back-reference to the value
+  // the preamble chose (`pending-value`, e.g. "… choose new targets for IT").
   return (
     typeof t === "object" &&
     t !== null &&
-    (t as { type?: string }).type === "unit" &&
+    ((t as { type?: string }).type === "unit" || (t as { type?: string }).type === "pending-value") &&
     Object.keys(t).length === 1
   );
 }

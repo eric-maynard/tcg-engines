@@ -268,6 +268,35 @@ export interface PickOption {
   readonly value?: unknown;
   /** rule 809.1.c — the [Deflect] surcharge (Power of any Domain) picking this option incurs. */
   readonly deflect?: number;
+  /** rule 751.1 — in a `newChoices` slot: the value the item currently holds (naming it again keeps it). */
+  readonly current?: boolean;
+  /** rule 754 / 755 — in a `newChoices` slot: the [Deflect] surcharge newly choosing this object incurs and that is IGNORED. */
+  readonly deflectIgnored?: number;
+}
+
+/** rule 751–755 — one re-choosable slot of a finalized chain item, as the harness reports it. */
+export interface NewChoiceSlotView {
+  readonly key: string;
+  readonly kind: "mode" | "target" | "source" | "targets" | "destination";
+  readonly label: string;
+  readonly parent?: string;
+  readonly current: readonly string[];
+  readonly status?: "open" | "kept" | "renamed" | "changed" | "settled" | "skipped";
+}
+
+/**
+ * rule 751–755 — present on the pick that asks one slot of a NEW CHOICES
+ * dialog ("gain control of a spell … you may make new choices for it"): the
+ * item, the slot on offer and the whole slot list with what became of each.
+ * Answer with `pick(...)` (a new value, or the current one to keep it and still
+ * be asked about what depends on it), `decline()` / `keepChoices()` (keep), or
+ * `rechoose({...})` for several slots at once.
+ */
+export interface NewChoicesView {
+  readonly itemId: string;
+  readonly grantedBy?: CardRef;
+  readonly slot: NewChoiceSlotView;
+  readonly slots: readonly NewChoiceSlotView[];
 }
 
 export type PickSemantics =
@@ -298,6 +327,8 @@ export interface PickDecision extends DecisionBase {
    * "up to N" / "any number of" group (zero picks keep the item, 355.13).
    */
   readonly targeting?: "split-targets" | "up-to";
+  /** rule 751–755 — set when this pick is one slot of a finalized item's NEW CHOICES dialog. */
+  readonly newChoices?: NewChoicesView;
   /** Extra engine facts (onPicked / onRest for reveal-and-pick, field name for follow-ups). */
   readonly meta?: Readonly<Record<string, unknown>>;
   /**

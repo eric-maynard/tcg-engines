@@ -45,20 +45,27 @@ function targetTuples(game: Game): string[][] {
   return (field?.options ?? []).map((v) => (Array.isArray(v) ? [...(v as string[])] : [v as string]));
 }
 
-/** Answer any resolution-time "assign damage" prompts by feeding one point at a time to `order` (cycled). */
+/**
+ * Answer the resolution-time division (355.14.e/f — ONE `distribute` over the locked recipients, each
+ * bucket ≥ 1, summing to the pool): every recipient takes its mandatory point and the discretionary
+ * remainder goes to `order` (cycled, one point at a time).
+ */
 async function distributeTo(game: Game, order: readonly string[]): Promise<void> {
-  let n = 0;
-  for (let i = 0; i < 12; i++) {
-    const r = await game.settle();
-    const d = game.decision();
-    if (r.reason !== "unanswered" || d?.kind !== "distribute") {
-      return;
-    }
-    expect(d.seat).toBe(P1);
-    const key = order[n++ % order.length] as string;
-    expect(d.buckets.map((b) => b.key)).toContain(key);
-    await game.p1.distribute({ [key]: 1 });
+  const r = await game.settle();
+  const d = game.decision();
+  if (r.reason !== "unanswered" || d?.kind !== "distribute") {
+    return;
   }
+  expect(d.seat).toBe(P1);
+  const allocation: Record<string, number> = Object.fromEntries(d.buckets.map((b) => [b.key, b.min]));
+  let left = d.total - d.buckets.reduce((sum, b) => sum + b.min, 0);
+  for (let n = 0; left > 0; n++, left--) {
+    const key = order[n % order.length] as string;
+    expect(d.buckets.map((b) => b.key)).toContain(key);
+    allocation[key] = (allocation[key] ?? 0) + 1;
+  }
+  await game.p1.distribute(allocation);
+  await game.settle();
 }
 
 describe("Ruling 6b3effc73787ce91 — how Alpha Strike's targets are chosen", () => {
@@ -121,18 +128,14 @@ describe("Ruling 6b3effc73787ce91 — how Alpha Strike's targets are chosen", ()
     await game.p1.passPriority();
     expect(game.actingSeat()).toBe(P2);
     await game.p2.passPriority();
-    for (let i = 0; i < 8; i++) {
-      const d = game.decision();
-      if (!d || d.kind === "action") {
-        break;
-      }
-      expect(d.kind).toBe("distribute"); // never a fresh target pick
-      if (d.kind !== "distribute") {
-        break;
-      }
+    const d = game.decision();
+    expect(d?.kind).toBe("distribute"); // never a fresh target pick — one division of the 4 among the locked three
+    if (d?.kind === "distribute") {
       expect(d.buckets.map((b) => b.key).sort()).toEqual(["e1", "e3", "e5"]);
-      await game.p1.distribute({ e3: 1 });
+      expect(d.total).toBe(4);
+      await game.p1.distribute({ e1: 1, e3: 2, e5: 1 });
     }
+    expect(game.decision()?.kind).toBe("action");
     expect(game.state("e2").damage).toBe(0);
     expect(game.state("e4").damage).toBe(0);
     expect(game.zoneOf("e2")).toBe("battlefield-bf1");
