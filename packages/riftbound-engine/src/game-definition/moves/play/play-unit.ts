@@ -2103,7 +2103,12 @@ export const playUnit: Defs["playUnit"] = {
           paidAdditionalCostActual = true;
         }
       } else if (optional?.kind === "kill" && sacrificeId) {
-        const owner = context.cards.getCardOwner(sacrificeId as CoreCardId);
+        // rule 740.1.a: "friendly" is same CONTROLLER — a unit stolen with
+        // Conscription is a legal cost-kill for its new controller even though
+        // its owner (and its trash, rule 127.1) is still the other player.
+        const controller =
+          (context.cards.getCardController?.(sacrificeId as CoreCardId) as string | undefined) ??
+          (context.cards.getCardOwner(sacrificeId as CoreCardId) as string | undefined);
         const zone = context.zones.getCardZone(sacrificeId as CoreCardId);
         const inPlay =
           zone === "base" ||
@@ -2113,7 +2118,7 @@ export const playUnit: Defs["playUnit"] = {
           !optional.kill?.type ||
           optional.kill.type === "permanent" ||
           optional.kill.type === kind;
-        if (owner === playerId && inPlay && sacrificeId !== cardId && okType) {
+        if (controller === playerId && inPlay && sacrificeId !== cardId && okType) {
           // rule 428.1: the cost-kill is a real kill — Deathknell and "when a
           // friendly unit dies" triggers fire and a die-replacement may apply.
           // rule 357.2.a: a cost replaced this way still counts as paid.
