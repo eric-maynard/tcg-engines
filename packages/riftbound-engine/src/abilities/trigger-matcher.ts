@@ -964,9 +964,17 @@ function triggerMatchesEvent(
     if (filters.includes("buffed") && (event.type !== "die" || event.wasBuffed !== true)) {
       return false;
     }
+    // rule 428.5.b (ruling ecd5b45a6a2afcc4) — "when YOU kill a unit with a
+    // spell" needs YOUR spell to do the killing: both the seat performing the
+    // kill and the controller of the spell holding the Kill instruction must be
+    // this card's owner. Picking which of your own units dies to an OPPONENT's
+    // "each player kills one of their units" satisfies only the first.
     if (
       filters.includes("killed-by-spell") &&
-      (event.type !== "die" || event.killSource !== "spell" || event.killedBy !== card.owner)
+      (event.type !== "die" ||
+        event.killSource !== "spell" ||
+        event.killedBy !== card.owner ||
+        (event.killedBySource ?? event.killedBy) !== card.owner)
     ) {
       return false;
     }

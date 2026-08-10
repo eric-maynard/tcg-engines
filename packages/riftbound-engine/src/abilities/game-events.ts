@@ -106,6 +106,8 @@ export type GameEvent =
       /** rule 428.1.a.1.b: the zone the unit occupied as it died (last known information). */
       diedAt?: string;
       killedBy?: string;
+      /** rule 428.5.b: controller of the spell/ability that held the Kill instruction. */
+      killedBySource?: string;
       killSource?: "spell" | "ability" | "combat";
       wasStunned?: boolean;
       /** rule 702: the unit carried a buff as it died ("a buffed friendly unit dies"). */

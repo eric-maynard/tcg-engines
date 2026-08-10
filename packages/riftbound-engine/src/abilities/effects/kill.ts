@@ -449,6 +449,11 @@ export function killUnits(
     getGlobalCardRegistry().getCardType(ctx.sourceCardId) === "spell" ? "spell" : "ability";
   const cause: LeaveCause = {
     by: ctx.playerId,
+    // rule 428.5.b (ruling ecd5b45a6a2afcc4) — the spell/ability holding the
+    // Kill instruction is responsible too, so note ITS controller: under a
+    // per-player instruction ("each player kills one of their units") the seat
+    // that picks a victim is not the one who cast the spell.
+    bySource: controllerOf(ctx.sourceCardId, ctx) || ctx.playerId,
     kind: causeKind,
     source: ctx.sourceCardId,
     sourceKind: killSource,

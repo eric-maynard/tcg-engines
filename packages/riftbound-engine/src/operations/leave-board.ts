@@ -57,6 +57,12 @@ export interface LeaveCause {
   readonly kind: LeaveCauseKind;
   /** rule 428.5: the player responsible (kill instruction's controller / lethal damage dealer / discarder). */
   readonly by?: string;
+  /**
+   * rule 428.5.b — controller of the spell/ability holding the Kill instruction,
+   * which is attributed the kill alongside `by`. Differs from `by` only when a
+   * per-player instruction lets another seat pick the victim. Defaults to `by`.
+   */
+  readonly bySource?: string;
   /** Card whose text caused it. */
   readonly source?: string;
   readonly sourceKind?: "spell" | "ability" | "combat";
@@ -853,6 +859,8 @@ export function buildLeaveEvent(result: LeaveResult, batchIndex?: number): GameE
       diedAt: lki.zone,
       killSource: cause.sourceKind ?? lki.lastDamageSource,
       killedBy: cause.by ?? lki.lastDamagedBy,
+      // rule 428.5.b — the responsible spell/ability's controller.
+      killedBySource: cause.bySource ?? cause.by ?? lki.lastDamagedBy,
       owner: lki.owner,
       type: "die",
       wasAlone: lki.wasAlone,
