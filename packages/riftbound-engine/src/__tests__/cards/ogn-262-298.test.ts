@@ -88,19 +88,21 @@ describe("Zenith Blade (ogn-262-298)", () => {
     expect(game.locationOf("ally")).toBe("bf1");
   });
 
-  test("'You may move' is optional — the spell is castable for the stun alone (e.g. with no friendly unit at all)", async () => {
-    // Expected: with zero friendly units P1 can still Zenith Blade the foe (stun only).
-    // Actual: the friendly unit is a mandatory second target, so the cast is not legal.
+  // rule 355.4 / 355.10 / 355.8 (ruling 61cc92b5da603de0) — the "may" governs only whether the MOVE
+  // happens; the friendly unit is still a target named as the spell is played, so with no friendly
+  // unit on the board Zenith Blade has no legal target set and cannot be played at all.
+  test("'You may move' still TARGETS the friendly unit — with no friendly unit at all the spell is unplayable", async () => {
     const game = await scenario()
       .resources(P1, { energy: 3, power: { calm: 1, order: 1 } })
       .battlefield("bf1", { controller: P2 })
       .unit(P2, "bf1", { might: 4 }, "foe")
       .hand(P1, CARD, "zb")
       .build();
-    expect(game.p1.can("cast", "zb")).toBe(true);
-    await game.p1.cast("zb", { targets: "foe" });
-    await game.settle();
-    expect(game.state("foe").isStunned).toBe(true);
+    expect(game.p1.can("cast", "zb")).toBe(false);
+    const r = await game.p1.try((p) => p.cast("zb", { targets: "foe" }));
+    expect(r.ok).toBe(false);
+    expect(game.zoneOf("zb")).toBe("hand");
+    expect(game.state("foe").isStunned).toBe(false);
   });
 
   test("a stunned defender deals no combat damage — the 2-Might ally attacks the stunned 4-Might foe and survives (423.1.b)", async () => {

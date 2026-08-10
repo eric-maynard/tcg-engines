@@ -888,7 +888,9 @@ export const playSpell: Defs["playSpell"] = {
       }
       for (let i = 0; i < supplied.length; i += perExecution) {
         const group = supplied.slice(i, i + perExecution);
-        if (new Set(group).size !== group.length) {
+        // rule 355.8 — every execution must name the FULL count; a short group
+        // (too few legal units on the board) is not a legal play.
+        if (group.length !== perExecution || new Set(group).size !== group.length) {
           return false;
         }
       }
@@ -1740,8 +1742,12 @@ export const playSpell: Defs["playSpell"] = {
         // many DISTINCT units, all locked on the chain item at play time.
         const exactN = !splitDesc && typeof qty === "number" && qty >= 2 ? qty : undefined;
         if (exactN !== undefined) {
-          const size = Math.min(exactN, subsetPool.length);
-          for (const subset of enumerateSubsetsUpTo(subsetPool, size)) {
+          // rule 355.8 — with fewer legal candidates than the printed count no
+          // legal set exists: offer NO variant instead of a short one.
+          const size = exactN;
+          for (const subset of subsetPool.length < exactN
+            ? []
+            : enumerateSubsetsUpTo(subsetPool, size)) {
             if (subset.length !== size) {
               continue;
             }
@@ -2639,14 +2645,50 @@ export const playSpell: Defs["playSpell"] = {
               targets?.length === perExecution * (1 + repeatN)
             ? perExecution
             : 0;
+      // rule 820.3.a (rule-id: sfd-080-221) — "Deal 1 to up to three units at
+      // the SAME location", Repeated: the whole spell is played once, but each
+      // execution owns its own group of up to N units sharing ONE location.
+      // The flat play-time list is partitioned by the chosen units' locations
+      // so execution i only affects its own group.
+      const spellTarget = (
+        spellEffect as {
+          target?: { quantity?: unknown; location?: unknown };
+        }
+      ).target;
+      const upToN = (spellTarget?.quantity as { upTo?: number } | undefined)?.upTo;
+      let locationGroups: string[][] | undefined;
+      if (
+        groupSize === 0 &&
+        targets !== undefined &&
+        targets.length > 1 &&
+        upToN !== undefined &&
+        spellTarget?.location === "here"
+      ) {
+        const byZone = new Map<string, string[]>();
+        for (const id of targets as string[]) {
+          const zone = String(zones.getCardZone(id as CoreCardId) ?? "");
+          const group = byZone.get(zone);
+          if (group) {
+            group.push(id);
+          } else {
+            byZone.set(zone, [id]);
+          }
+        }
+        const groups = [...byZone.values()];
+        if (groups.length === 1 + repeatN && groups.every((g) => g.length <= upToN)) {
+          locationGroups = groups;
+        }
+      }
       // rule 820.2 — every execution owns its choices, so each copy must be a
       // DISTINCT object: a mode locked in for one execution must not leak into
       // the others.
       const copy = () => structuredClone(spellEffect) as typeof spellEffect;
       const repeatedEffects = Array.from({ length: 1 + repeatN }, (_unused, i) =>
-        groupSize > 0
+        groupSize > 0 || locationGroups !== undefined
           ? {
-              boundTargetsOverride: (targets as string[]).slice(i * groupSize, (i + 1) * groupSize),
+              boundTargetsOverride:
+                locationGroups?.[i] ??
+                (targets as string[]).slice(i * groupSize, (i + 1) * groupSize),
               effects: [copy()],
               type: "sequence",
             }

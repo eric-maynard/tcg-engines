@@ -724,9 +724,17 @@ export function spellEffectHasLegalTargets(
   if (!effect) {
     return true;
   }
-  // rule-id: ogn-262-298 (rule 355.13) — a "You may move …" instruction may
-  // always be declined, so its target never gates whether the spell is playable.
-  if (effect.type === "move" && (effect as { optional?: boolean }).optional === true) {
+  // rule-id: ogn-262-298 (rules 355.4 / 355.10) — a "You may move a friendly
+  // unit …" instruction still NAMES its object as the spell is played: the
+  // "may" governs only whether the move happens on resolution. A described
+  // play-time object therefore gates castability like any other target
+  // (355.8); only a mover chosen as the instruction is carried out
+  // (`chooseAtResolution`) is exempt, and that is filtered by the callers.
+  if (
+    effect.type === "move" &&
+    (effect as { optional?: boolean }).optional === true &&
+    effect.target === undefined
+  ) {
     return true;
   }
   // rule 402.3 / 355.8 (sfd-193-221) — "Attach a detached Equipment you control
@@ -1035,7 +1043,12 @@ export function targetDescriptorIsSatisfiable(
   );
   // rule 809.1.b (rule-id: sfd-077-221) — candidates whose Deflect surcharge
   // the caster cannot pay are not legal choices.
-  return (affordable ? resolved.filter((id) => affordable(id as string)) : resolved).length > 0;
+  const legal = affordable ? resolved.filter((id) => affordable(id as string)) : resolved;
+  // rule 355.8 (rule-id: ogn-206-298) — "Give TWO friendly units each +2
+  // [Might]" names that many DISTINCT objects at play time; too few legal
+  // candidates means the spell cannot be played at all.
+  const needed = typeof qty === "number" && qty >= 2 ? qty : 1;
+  return legal.length >= needed;
 }
 
 /**
