@@ -756,6 +756,15 @@ function triggerMatchesEvent(
       return false;
     }
   } else if (on === "controller" || on === "controller-or-allies") {
+    // rule 187.6.c / 190.6.d — on a battlefield card "you" IS its controller, so
+    // an UNCONTROLLED battlefield's "when you …" names no one and can never
+    // trigger (a unit arriving mid-showdown establishes no control, 187.4.c).
+    if (card.zone === "battlefieldRow" && state?.battlefields !== undefined) {
+      const bf = state.battlefields[card.id];
+      if (bf !== undefined && (bf.controller === null || bf.controller === undefined)) {
+        return false;
+      }
+    }
     // Player-scoped event must be for this card's controller.
     if ("playerId" in event && event.playerId !== card.owner) {
       return false;

@@ -377,8 +377,15 @@ function stillHoldsBattlefield(
   io: PlayIO | undefined,
   playerId: string,
   bfId: string,
+  sourceCardId?: string,
 ): boolean {
   if (draft.battlefields?.[bfId]?.controllerOccupied !== true) {
+    return true;
+  }
+  // rule 808 / 734.1.d.2 (ruling 6b62dd3994a5ac1f) — a [Deathknell] plays FROM
+  // the dead unit itself, so the battlefield it just vacated is still a legal
+  // destination even though nothing of its controller's is left there.
+  if (sourceCardId !== undefined && sourceCardId === draft.lastKilledUnitId) {
     return true;
   }
   // rule 309.1 / 323.6 — outside an Open State the recorded control normally
@@ -419,6 +426,8 @@ export function playDestinationOptions(
     readonly extra?: readonly string[];
     /** Supplied by `locationOptionsFor`; enables the 323.6 vacancy check above. */
     readonly io?: PlayIO;
+    /** The instructing card, for the Deathknell exception in the same check. */
+    readonly sourceCardId?: string;
   },
 ): string[] {
   const type = getGlobalCardRegistry().getCardType(cardId);
@@ -435,7 +444,11 @@ export function playDestinationOptions(
   const out = [
     "base",
     ...Object.entries(draft.battlefields ?? {})
-      .filter(([bfId, bf]) => bf.controller === playerId && stillHoldsBattlefield(draft, spec?.io, playerId, bfId))
+      .filter(
+        ([bfId, bf]) =>
+          bf.controller === playerId &&
+          stillHoldsBattlefield(draft, spec?.io, playerId, bfId, spec?.sourceCardId),
+      )
       .map(([bfId]) => `battlefield-${bfId}`),
   ];
   for (const zone of spec?.extra ?? []) {
@@ -929,6 +942,7 @@ function locationOptionsFor(io: PlayIO, spec: EffectPlaySpec): string[] {
       ...playDestinationOptions(draft, spec.playerId, spec.cardId, {
         extra: selfGrantedPlayLocations(io, spec),
         io,
+        sourceCardId: spec.sourceCardId,
       }),
       ...affordableRedirectDestinations(io, spec),
     ];
@@ -943,6 +957,7 @@ function locationOptionsFor(io: PlayIO, spec: EffectPlaySpec): string[] {
     ...playDestinationOptions(draft, spec.playerId, spec.cardId, {
       extra: [...loc.extra, ...selfGrantedPlayLocations(io, spec)],
       io,
+      sourceCardId: spec.sourceCardId,
     }),
     ...affordableRedirectDestinations(io, spec),
   ];
