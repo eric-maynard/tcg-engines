@@ -268,7 +268,12 @@ describe("Deceiver (unl-199-219)", () => {
     await untilPrompt(game);
     await accept(game, ["fodder0", "brute"]);
     await game.settle();
-    await accept(game, ["brute"]).catch(() => undefined);
+    // rule 359.2: "It becomes a copy of another unit there" is reflexive — the source is named as that
+    // instruction RESOLVES, so the pick lands after the trigger's cost, not with it.
+    const copyPick = game.decision();
+    if (copyPick?.kind === "pick" && copyPick.seat === P1) {
+      await game.p1.pick("brute");
+    }
     await game.settle();
     const toks = tokensAt(game, "bf1");
     expect(toks).toHaveLength(1);

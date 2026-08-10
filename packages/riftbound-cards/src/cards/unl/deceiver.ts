@@ -19,12 +19,17 @@ const abilities: Ability[] = [
     // cannot be taken at all when either half is unpayable.
     condition: { cost: { discard: 1, exhaust: true }, type: "pay-cost" },
     effect: {
+      // rule 387 / 359.2: "It becomes a copy of another unit there" is a
+      // REFLEXIVE follow-up sentence, so its object is named only as that
+      // instruction RESOLVES — it is not one of the item's finalization-time
+      // choices (383.3.b). The opponent gets priority first and may change
+      // what is standing there before the copy happens.
+      chooseAtResolution: true,
       // "there" = the battlefield that was conquered/held.
       location: "here",
       // rule 184.1: "ready" overrides the enter-exhausted default.
       ready: true,
-      // rule 477.1.b: "a copy of ANOTHER unit there" — the copy source is this
-      // effect's own caster-chosen target, picked as the trigger finalizes.
+      // rule 477.1.b: "a copy of ANOTHER unit there".
       target: { excludeSelf: true, location: "here", type: "unit" },
       token: {
         // rule 477.1.b.1: `CopyOnPlay` makes the minted instance take the

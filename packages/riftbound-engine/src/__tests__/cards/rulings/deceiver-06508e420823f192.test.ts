@@ -160,23 +160,26 @@ describe("Ruling 06508e420823f192 — Deceiver is a conquer/hold TRIGGER with an
     expect(tokensAt(game, "base")).toEqual([]);
   });
 
-  // RULING-CONFLICT: riftjudge 06508e420823f192 says the copy source is reflexive — chosen only when the copy
-  // instruction resolves, after P2's priority window; CR 355 ("make relevant choices") puts every choice the
-  // ability needs into the finalization steps, before the item sits Pending on the Closed chain (383.3.b.1),
-  // and the engine's green unl-199-219 coverage is built on that. Engine follows CR: the walker-vs-brute pick
-  // is offered at finalization alongside the discard, and both are locked in before P2 may React.
-  test("copy source is chosen at FINALIZATION (CR 355), together with the discard and before P2's priority window", async () => {
+  // rule 359.2 / 387 — "It becomes a copy of another unit there" is a REFLEXIVE follow-up sentence, so its
+  // object is named only as that instruction resolves; 383.3.b.1 finalization locks in the base cost (the
+  // discard) and nothing else, and P2 gets its React window in between (ruling 40ecc1be71f6fc76 covers what
+  // happens when P2 removes the intended source in that window).
+  test("copy source is chosen at RESOLUTION (359.2) — finalization asks only the discard, and P2 Reacts before the pick", async () => {
     const game = await conquerBoard().unit(P1, "base", { might: 5, name: "Brute" }, "brute").build();
     await game.p1.move(["walker", "brute"], "bf1");
     await untilPrompt(game);
-    const asked = await accept(game, ["fodder0", "brute"]);
-    // rule 355: at trigger finalization P1 answers the discard AND the copy source.
-    expect(asked.some((a) => a.includes("walker") && a.includes("brute"))).toBe(true);
+    const asked = await accept(game, ["fodder0"]);
+    expect(asked.some((a) => a.includes("walker") && a.includes("brute"))).toBe(false);
     if (game.decision()?.kind === "action" && game.decision()?.seat === P1) {
       await game.p1.pass();
     }
     expect(game.decision()).toMatchObject({ context: "chain", kind: "action", seat: P2 });
-    await game.settle({ policy: "first" });
+    await game.settle();
+    const copyPick = game.decision();
+    expect(copyPick).toMatchObject({ kind: "pick", seat: P1 });
+    expect(copyPick?.kind === "pick" ? copyPick.options.map((o) => o.card ?? o.key).sort() : []).toEqual(["brute", "walker"]);
+    await game.p1.pick("brute");
+    await game.settle();
     const toks = tokensAt(game, "bf1");
     expect(toks).toHaveLength(1);
     expect(game.state(toks[0] as string)).toMatchObject({ isReady: true, might: 5, name: "Brute" });
