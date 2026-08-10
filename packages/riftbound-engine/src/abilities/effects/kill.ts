@@ -6,10 +6,12 @@ import {
   type LKISnapshot,
   type LeaveCause,
   type LeaveResult,
+  combatMightBonus,
   emitLeaveEvents,
   leaveBoard,
   snapshotBatch,
 } from "../../operations/leave-board";
+import type { RiftboundCardMeta } from "../../types";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import { resolveTarget } from "../target-resolver";
 import { type EffectHelpers, getTargetIds } from "./_helpers";
@@ -443,6 +445,18 @@ export function killUnits(
   const results: LeaveResult[] = [];
   // rule 370.1.a.2 / 740.2.a — note every target before the first one moves.
   const snaps = snapshotBatch(ctx, targets);
+  // rule 807.1.c — while a combat role is stamped, Assault/Shield is part of the
+  // unit's CURRENT Might, so a linked "equal to its Might" (Deathgrip) carries it.
+  // The LKI `might` is role-blind, so note the role bonus while metas are intact.
+  const roleBonuses = new Map<string, number>(
+    targets.map((id) => [
+      id,
+      combatMightBonus(
+        id,
+        ctx.cards.getCardMeta?.(id as CoreCardId) as Partial<RiftboundCardMeta> | undefined,
+      ),
+    ]),
+  );
   // rules 370–373 — die replacements for the whole simultaneous batch (one
   // Zhonya's Hourglass saves ONE of several units killed together; several
   // shields on one unit are ordered by its controller). A replaced death never
@@ -471,7 +485,9 @@ export function killUnits(
   for (const targetId of targets) {
     // rule-id: unl-186-219 — "if it had N [Might] or less" reads the unit's
     // Might as it last existed on the board (last-known information).
-    const killedMight = snaps.get(targetId)?.might ?? h.getEffectiveMight(targetId, ctx);
+    const killedMight =
+      (snaps.get(targetId)?.might ?? h.getEffectiveMight(targetId, ctx)) +
+      (roleBonuses.get(targetId) ?? 0);
     if (plan.replaced.includes(targetId) || (onBoard.includes(targetId) && !plan.dying.includes(targetId))) {
       results.push({ cardId: targetId, cause, left: false, lki: snaps.get(targetId) as LKISnapshot, replacedBy: "replacement" });
       continue;

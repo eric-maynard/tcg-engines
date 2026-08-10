@@ -323,6 +323,18 @@ function holdsChainPriority(state: RiftboundGameState, playerId: string): boolea
  *  - a Neutral Open state → only the turn player (rule 316.5.b: nobody else
  *    holds priority there, so [Reaction] opens no window).
  */
+/**
+ * rule 347 / 355.2 (unl-120-219, ruling 581f4d14f9876f8a) — "I can be played to a
+ * battlefield where there are enemy units" rides on Ambush's Reaction timing, so
+ * in a plain chain window ANY battlefield holding enemy units is open (it need not
+ * already be contested). A Showdown narrows every action to its own battlefield,
+ * so while one is running only that battlefield qualifies (ven-179-166).
+ */
+function ambushEnemyBattlefieldOpen(state: RiftboundGameState, bfId: string | undefined): boolean {
+  const showdown = getActiveShowdown(state.interaction ?? createInteractionState());
+  return showdown?.active !== true || showdown.battlefieldId === bfId;
+}
+
 function reactionWindowOpen(state: RiftboundGameState, playerId: string): boolean {
   if (holdsChainPriority(state, playerId)) {
     return true;
@@ -712,13 +724,15 @@ export const playUnit: Defs["playUnit"] = {
       Boolean(targetBfId) &&
       // rule 822.1.d (unl-120-219): on a card that also has Ambush this
       // permission extends Ambush itself, so it carries Ambush's Reaction
-      // timing — but only into the contested battlefield whose showdown is
-      // open, never as a free window at some quiet battlefield (310.1.a).
+      // timing into any battlefield holding enemy units — contested or not
+      // (ruling 581f4d14f9876f8a) — but never outside a running Showdown's own
+      // battlefield. rule 310.1.a still applies: the player must be in a window
+      // they may act in, which `reactionWindowOpen` enforces.
       (standardTimingOk ||
         reactionTimingOk ||
         (hasAmbush &&
           reactionWindowOpen(state, context.params.playerId as string) &&
-          targetBf?.contested === true)) &&
+          ambushEnemyBattlefieldOpen(state, targetBfId as string))) &&
       canPlayToEnemyOccupiedBattlefield(context.params.cardId as string) &&
       battlefieldHasEnemyUnits(
         context.zones,
@@ -1475,10 +1489,12 @@ export const playUnit: Defs["playUnit"] = {
             context.playerId as CorePlayerId,
           );
           // rule 822.1.d / 355.2 (unl-120-219): a card whose text extends
-          // Ambush to battlefields holding enemy units may be Ambushed into
-          // the contested battlefield even with no friendly unit there.
+          // Ambush to battlefields holding enemy units may be Ambushed into any
+          // such battlefield with no friendly unit there — it need not already
+          // be contested (ruling 581f4d14f9876f8a) — but a running Showdown
+          // narrows the offer to its own battlefield (ven-179-166).
           const enemyBfOk =
-            state.battlefields?.[bfId]?.contested === true &&
+            ambushEnemyBattlefieldOpen(state, bfId) &&
             canPlayToEnemyOccupiedBattlefield(cardId as string) &&
             battlefieldHasEnemyUnits(
               context.zones,
