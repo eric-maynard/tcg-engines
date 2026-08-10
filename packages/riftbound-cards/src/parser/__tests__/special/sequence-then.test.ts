@@ -91,7 +91,11 @@ describe("Parser: parseIfYouDoEffect()", () => {
     expect(cond.else?.amount).toBe(1);
   });
 
-  it("parses 'pay [rune]. If you do, Y' inside a trigger", () => {
+  // rule 158.1 / 383.3.b (ruling 1bed529c1618f01c, sfd-020-221) — "you may pay [X]. If you do, Y"
+  // is a payment made INSIDE the instructions, so it becomes a `conditional` in the effect body
+  // (asked on resolution), NOT the trigger's own `pay-cost` condition (which is settled when the
+  // item is put on the Chain, as "you may pay [X] to Y" is).
+  it("parses 'pay [rune]. If you do, Y' inside a trigger as a resolution-time payment", () => {
     const result = parseAbilities(
       "When I attack or defend, you may pay [fury]. If you do, give me +2 [Might] this turn.",
     );
@@ -100,12 +104,14 @@ describe("Parser: parseIfYouDoEffect()", () => {
       type: string;
       optional?: boolean;
       condition?: { type: string };
-      effect: { type: string };
+      effect: { type: string; condition?: { type: string; cost?: unknown }; then?: { type: string } };
     };
     expect(a.type).toBe("triggered");
-    expect(a.optional).toBe(true);
-    expect(a.condition?.type).toBe("pay-cost");
-    expect((a.condition as { cost?: unknown }).cost).toEqual({ power: ["fury"] });
-    expect(a.effect.type).toBe("modify-might");
+    expect(a.optional).toBeUndefined();
+    expect(a.condition).toBeUndefined();
+    expect(a.effect.type).toBe("conditional");
+    expect(a.effect.condition?.type).toBe("pay-cost");
+    expect(a.effect.condition?.cost).toEqual({ power: ["fury"] });
+    expect(a.effect.then?.type).toBe("modify-might");
   });
 });

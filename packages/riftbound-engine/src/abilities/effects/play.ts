@@ -205,6 +205,13 @@ export function handle_play(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
   // instruction explicitly hands the play to this effect's controller.
   const targets = from === "hand" ? boundInHand : getTargetIds(effect, ctx);
   for (const targetId of targets) {
+    // rule 186.1 / 359.3.e — an earlier step of this same instruction may have
+    // put the object into a non-board zone where it CEASED TO EXIST (a token
+    // banished by "Banish a friendly unit, then its owner plays it"). It is in
+    // no zone any more, so there is nothing left to play: do as much as you can.
+    if (ctx.zones.getCardZone(targetId as CoreCardId) === undefined) {
+      continue;
+    }
     const type = registry.getCardType(targetId);
     if (type !== "unit" && type !== "gear" && type !== "equipment" && type !== "spell") {
       continue;

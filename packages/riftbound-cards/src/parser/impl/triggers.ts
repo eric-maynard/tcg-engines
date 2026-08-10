@@ -135,18 +135,27 @@ export function parseTriggeredAbilityInner(text: string): TriggeredAbility | und
     const payIfYouDoMatch = effectText.match(
       /^pay\s+((?::rb_(?:energy_\d+|rune_(?:fury|calm|mind|body|chaos|order|rainbow)):)+)\.\s+if you do,\s*/i,
     );
+    let payAtResolution: Record<string, unknown> | undefined;
     if (payIfYouDoMatch) {
-      optional = true;
-      // rule 383.3.b (rule-id: sfd-020-221): "you may pay [X]. If you do, Y" is
-      // an opt-in cost charged when the trigger resolves — the same shape as
-      // "you may pay [X] to Y". It is NOT `paid-additional-cost`, which reads a
-      // flag set while PLAYING a card and is always false for attack/defend.
-      condition = {
-        cost: parseCost(payIfYouDoMatch[1]!),
-        type: "pay-cost",
-      } as unknown as { type: string };
+      // rule 158.1 / 383.3.b (rule-id: sfd-020-221): "you may pay [X]. If you
+      // do, Y" is a payment written INSIDE the instructions, not the trigger's
+      // base cost. The item goes on the Chain charging and asking nothing; the
+      // controller decides only as it RESOLVES, so they first see everything
+      // that resolved above it. (Contrast "you may pay [X] to Y", which IS the
+      // trigger's cost and is settled at finalization.)
+      optional = false;
+      payAtResolution = parseCost(payIfYouDoMatch[1]!) as unknown as Record<string, unknown>;
       effectText = effectText.slice(payIfYouDoMatch[0].length);
     }
+    /** Wrap the parsed body so the "you may pay" is asked while it resolves. */
+    const withPayAtResolution = (e: Effect): Effect =>
+      payAtResolution === undefined
+        ? e
+        : ({
+            condition: { cost: payAtResolution, type: "pay-cost" },
+            then: e,
+            type: "conditional",
+          } as unknown as Effect);
 
     // Check for conditional "if you paid the additional cost," or "if you do,"
     // (both indicate the remainder only resolves if the prior "you may" cost
@@ -232,7 +241,7 @@ export function parseTriggeredAbilityInner(text: string): TriggeredAbility | und
       }
 
       const ability: TriggeredAbility = {
-        effect,
+        effect: withPayAtResolution(effect),
         trigger: trigger as TriggeredAbility["trigger"],
         type: "triggered",
       };
@@ -376,7 +385,7 @@ export function parseTriggeredAbilityInner(text: string): TriggeredAbility | und
     }
 
     const ability: TriggeredAbility = {
-      effect,
+      effect: withPayAtResolution(effect),
       trigger: trigger as TriggeredAbility["trigger"],
       type: "triggered",
     };
