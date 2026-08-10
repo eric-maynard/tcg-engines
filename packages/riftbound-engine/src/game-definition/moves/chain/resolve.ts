@@ -19,6 +19,7 @@ import { executeEffect } from "../../../abilities/effect-executor";
 import { raiseChoosePerLocationChoice } from "../../../abilities/effects/choose-per-location";
 import { findSpendableBuff } from "../../../abilities/effects/spend-buff";
 import { canSpendXp } from "../../../abilities/effects/spend-xp";
+import { replacementTargetIsClassFilter } from "../../../abilities/replacement-effects";
 import type { TargetDescriptor } from "../../../abilities/target-resolver";
 import {
   isAllAtOneBattlefield,
@@ -1018,6 +1019,10 @@ export function executeResolvedItem(
     target.type !== "player" &&
     target.type !== "battlefield" &&
     target.quantity !== "all" &&
+    // rule 355.10.c (ogn-021-298 Sun Disc / ogn-032-298 Ravenborn Tome) — a
+    // class-filter replacement describes the FUTURE object its replacement will
+    // match, so nothing on the board is chosen for it.
+    !replacementTargetIsClassFilter(effect) &&
     // rule 387 / 359.2 (rule-id: unl-199-219 Deceiver) — a REFLEXIVE follow-up
     // sentence ("… play a Reflection token there. It becomes a copy of another
     // unit there.") names its object only as that instruction resolves, so it

@@ -41,6 +41,7 @@ import {
   findSequenceLeadTarget,
   offBoardPlayIsCasterChosen,
   offBoardPlayZone,
+  replacementTargetIsClassFilter,
   spellEffectHasLegalTargets,
 } from "../play/targeting";
 import { buildEffectContext, canAffordPower } from "./effect-context";
@@ -458,6 +459,9 @@ function exhaustedAllyForcedPayer(
 }
 
 function activationChosenTarget(effect: unknown): TargetDescriptor | undefined {
+  if (replacementTargetIsClassFilter(effect)) {
+    return undefined;
+  }
   let t = (effect as { target?: unknown } | undefined)?.target;
   // rule 355.7/355.8: a sequence ability ("Kill a friendly unit. Look at the
   // top 5 …") still declares its one caster-chosen target at finalization, so
@@ -1409,9 +1413,13 @@ export const activateAbility: Defs["activateAbility"] = {
         return false;
       }
     }
-    // rule 812.1.c (ogn-253-298): a [Legion] activated ability is only usable
-    // once you have played a card this turn — the count resets every turn.
-    if (abilityCondition?.type === "legion" && !evaluateLegionCondition(state, playerId)) {
+    // rule 812.1.c (ogn-253-298 / ogn-021-298): a [Legion] activated ability is
+    // only usable once you have played a DIFFERENT card this turn — the host's
+    // own play does not switch on its own Legion. Resets every turn.
+    if (
+      abilityCondition?.type === "legion" &&
+      !evaluateLegionCondition(state, playerId, cardId as string)
+    ) {
       return false;
     }
     // rule 828.1.b.1 (rule-id: ven-194-166) — "[Empowered][>] <ability>" is an
@@ -1918,9 +1926,13 @@ export const activateAbility: Defs["activateAbility"] = {
             continue;
           }
         }
-        // rule 812.1.c (ogn-253-298): [Legion] gates the activation itself —
-        // skip it until a card has been played this turn.
-        if (abilityCondition?.type === "legion" && !evaluateLegionCondition(state, playerId)) {
+        // rule 812.1.c (ogn-253-298 / ogn-021-298): [Legion] gates the
+        // activation itself — skip it until a DIFFERENT card has been played
+        // this turn.
+        if (
+          abilityCondition?.type === "legion" &&
+          !evaluateLegionCondition(state, playerId, cardId as string)
+        ) {
           continue;
         }
         // rule 828.1.b.1 (rule-id: ven-194-166) — an "[Empowered][>] <ability>"

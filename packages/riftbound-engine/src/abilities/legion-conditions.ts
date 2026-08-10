@@ -16,6 +16,7 @@
  * (channel) are not main-deck plays and do not count.
  */
 
+import { playedIdsThisTurn } from "../operations/plays-this-turn";
 import type { PlayerId, RiftboundGameState } from "../types";
 
 /**
@@ -31,7 +32,24 @@ import type { PlayerId, RiftboundGameState } from "../types";
  * @param playerId - Player to evaluate
  * @returns `true` if `state.cardsPlayedThisTurn[playerId] >= 1`
  */
-export function evaluateLegionCondition(state: RiftboundGameState, playerId: PlayerId): boolean {
+export function evaluateLegionCondition(
+  state: RiftboundGameState,
+  playerId: PlayerId,
+  sourceCardId?: string,
+): boolean {
   const played = state.cardsPlayedThisTurn?.[playerId] ?? 0;
-  return played >= 1;
+  if (played < 1) {
+    return false;
+  }
+  // rule 812.1.c (rule-id: ogn-021-298) — the card that must have been played
+  // is a DIFFERENT one, so a gear played this turn does not switch on its own
+  // Legion ability. Only checked when the caller names the host and the
+  // per-card ledger is populated.
+  if (sourceCardId !== undefined) {
+    const ids = playedIdsThisTurn(state, playerId);
+    if (ids.length > 0) {
+      return ids.some((id) => id !== sourceCardId);
+    }
+  }
+  return true;
 }

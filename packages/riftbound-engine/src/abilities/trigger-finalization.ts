@@ -59,6 +59,7 @@ import { type LeaveBoardContext, type LKISnapshot, snapshotLKI } from "../operat
 import type { RiftboundGameState } from "../types";
 import { getBonusDamage } from "./bonus-damage";
 import { executeEffect, type EffectContext, type ExecutableEffect } from "./effect-executor";
+import { replacementTargetIsClassFilter } from "./replacement-effects";
 import { resolveAmount } from "./effects/_helpers";
 import type { TargetDescriptor } from "./target-resolver";
 import { resolveTarget } from "./target-resolver";
@@ -84,6 +85,11 @@ export interface FinalizationContext {
  */
 export function casterChosenTarget(effect: unknown): TargetDescriptor | undefined {
   if (typeof effect !== "object" || effect === null) {
+    return undefined;
+  }
+  // rule 355.10.c — a class-filter replacement ("the next unit you play this
+  // turn enters ready") names no object as it is finalized.
+  if (replacementTargetIsClassFilter(effect)) {
     return undefined;
   }
   const e = effect as {

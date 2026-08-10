@@ -324,6 +324,26 @@ function replacementApplies(
 }
 
 /**
+ * rule 355.10.c (rule-id: ogn-021-298 Sun Disc / ogn-032-298 Ravenborn Tome) —
+ * a single-fire replacement set up on a FUTURE event ("the next unit you play
+ * this turn enters ready", "the next spell you play deals 1 Bonus Damage")
+ * names no object on the board: its `target` is the CLASS the replacement
+ * matches when it fires, not a caster-chosen pick, so nothing is chosen as the
+ * ability is activated or finalized. Only replacements the engine binds to
+ * specific board objects (`die` / `take-damage` riders — see
+ * `effects/replacement.ts handle_replacement`) choose one.
+ */
+export function replacementTargetIsClassFilter(effect: unknown): boolean {
+  const e = effect as { type?: string; duration?: string; replaces?: string } | undefined;
+  return (
+    e?.type === "replacement" &&
+    e.duration === "next" &&
+    e.replaces !== "die" &&
+    e.replaces !== "take-damage"
+  );
+}
+
+/**
  * Build the consumed-next key for a replacement ability.
  *
  * Single-fire `"next"`-duration replacements are keyed by
