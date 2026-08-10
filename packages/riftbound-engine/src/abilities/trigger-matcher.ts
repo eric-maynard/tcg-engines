@@ -76,6 +76,16 @@ export function turnEventCountKeys(event: GameEvent): string[] {
       keys.push(`play-${event.cardType}|p:${pid}`);
     }
   }
+  // rule 359.2 (rule-id: ogn-292-298) — "a player chooses a friendly unit here"
+  // is about the CHOOSER, so a choose tally is scoped to them too: one player
+  // naming an opponent's object here does not spend the opponent's own "first
+  // time each turn".
+  const chooser = (event as { chooserId?: unknown }).chooserId;
+  if (event.type === "choose" && typeof chooser === "string") {
+    for (const key of [...keys]) {
+      keys.push(`${key}|ch:${chooser}`);
+    }
+  }
   // rule 471.2.a (rule-id: ogn-292-298) — a "first time each turn … HERE"
   // trigger counts per LOCATION: each battlefield keeps its own tally, so one
   // spell choosing units at two Dreaming Trees is the first choice at each.
@@ -116,14 +126,17 @@ function turnEventCountKeyFor(
     trigger.event.split("-or-").includes(`play-${event.cardType}`)
       ? `play-${event.cardType}`
       : event.type;
+  // rule 359.2 — see `turnEventCountKeys`: a choose tally is per chooser.
+  const chooser = (event as { chooserId?: unknown }).chooserId;
+  const ch = event.type === "choose" && typeof chooser === "string" ? `|ch:${chooser}` : "";
   if (on === "any" || on === "any-player" || on === "any-unit") {
-    return `${eventType}${bf}`;
+    return `${eventType}${ch}${bf}`;
   }
   if (on === "self" && "cardId" in event && typeof event.cardId === "string") {
-    return `${eventType}|c:${event.cardId}${bf}`;
+    return `${eventType}|c:${event.cardId}${ch}${bf}`;
   }
   const pid = "owner" in event ? event.owner : "playerId" in event ? event.playerId : card.owner;
-  return `${eventType}|p:${pid}${bf}`;
+  return `${eventType}|p:${pid}${ch}${bf}`;
 }
 
 /**
@@ -932,10 +945,15 @@ function triggerMatchesEvent(
     ) {
       return false;
     }
-    // rule-id: sfd-148-221 (rule 428.1) — "When I die IN COMBAT": the death
-    // must be attributed to combat damage (`killSource: "combat"`), not to a
-    // spell/ability kill.
-    if (filters.includes("in-combat") && (event.type !== "die" || event.killSource !== "combat")) {
+    // rule-id: sfd-148-221 (rule 466.7.a / 428.1) — "When I die IN COMBAT": the
+    // unit must have been IN a combat as it died, not necessarily killed BY
+    // combat damage. A designated attacker/defender finished off mid-combat by
+    // a spell or a Deathknell died in combat (`wasInCombat`); a unit killed
+    // after the designations were removed did not.
+    if (
+      filters.includes("in-combat") &&
+      (event.type !== "die" || (event.killSource !== "combat" && event.wasInCombat !== true))
+    ) {
       return false;
     }
     if (filters.includes("stunned") && event.type === "die" && event.wasStunned !== true) {

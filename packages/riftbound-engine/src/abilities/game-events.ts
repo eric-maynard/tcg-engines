@@ -118,6 +118,8 @@ export type GameEvent =
       // kill path produced the death.
       controller?: string;
       wasAlone?: boolean;
+      /** rule 466.7.a — it still held an Attacker/Defender designation as it died. */
+      wasInCombat?: boolean;
       attachments?: string[];
       cause?: "kill" | "sba" | "temporary" | "cost";
       // rule 423.1 (sfd-203-221) — position among the deaths of ONE

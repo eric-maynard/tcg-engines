@@ -86,6 +86,12 @@ export interface LKISnapshot {
   /** rule 740.2.a: no other friendly unit shared its location. */
   readonly wasAlone: boolean;
   /**
+   * rule 466.7.a / 440.1.b — it still held an Attacker/Defender designation as
+   * it left, so it died "in combat" whatever caused the death (combat damage,
+   * a spell, a Deathknell). Designations are removed only at the end of combat.
+   */
+  readonly wasInCombat: boolean;
+  /**
    * rule 708/710 + 807.1.d.1 — effective Might ≥ 5 as it left, including the
    * combat-only bonus (Assault while attacking / Shield while defending),
    * which is still in place when a combat death happens.
@@ -431,6 +437,9 @@ export function snapshotLKI(ctx: LeaveBoardContext, cardId: string): LKISnapshot
     triggerDoubler: hasTriggerDouble(cardId),
     unitsHere,
     wasAlone: !unitsHere.some((u) => u.controller === controller),
+    // rule 466.7.a — designations survive until combat ends, so a unit that
+    // still has one died "in combat" no matter what killed it.
+    wasInCombat: meta.combatRole === "attacker" || meta.combatRole === "defender",
     // rule 708/710 — Mighty reads effective Might; rule 807.1.d.1 keeps the
     // attacker/defender bonus alive through a combat death.
     wasMighty: baseMight > 0 && might + combatMightBonus(cardId, meta) >= 5,
@@ -824,6 +833,7 @@ export function buildLeaveEvent(result: LeaveResult, batchIndex?: number): GameE
       owner: lki.owner,
       type: "die",
       wasAlone: lki.wasAlone,
+      wasInCombat: lki.wasInCombat,
       wasBuffed: lki.buffed,
       wasMighty: lki.wasMighty,
       wasStunned: lki.stunned,
