@@ -59,6 +59,7 @@ export function applyMightModifierDelta(
   cardId: string,
   delta: number,
   ctx: EffectContext,
+  opts?: { chosen?: boolean },
 ): boolean {
   const zone = ctx.zones.getCardZone?.(cardId as CoreCardId) as string | undefined;
   if (zone !== undefined && OFF_BOARD_ZONES.has(zone)) {
@@ -66,7 +67,9 @@ export function applyMightModifierDelta(
   }
   const mightBefore = getEffectiveMight(cardId, ctx);
 
-  if (delta < 0) {
+  // rule 366-372 (ven-181-166) — the replacement only reads "a spell or ability
+  // that CHOOSES me"; a board-wide sweep ("give enemy units -3") chooses nobody.
+  if (delta < 0 && opts?.chosen !== false) {
     const owner = ctx.cards.getCardOwner?.(cardId as CoreCardId) ?? "";
     const replacementCtx = {
       cards: {

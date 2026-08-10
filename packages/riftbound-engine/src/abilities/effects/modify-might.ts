@@ -4,6 +4,7 @@ import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import { type EffectHelpers, getTargetIds, getEffectiveMightInRole, resolveAmount } from "./_helpers";
 import { applyMightModifierDelta } from "./might-modifier";
+import { effectChoosesTarget } from "./_replacement-gate";
 
 /**
  * rule-id: sfd-001-221 — "+N Might for each enemy unit THERE": the tally is
@@ -127,7 +128,8 @@ export function handle_modifyMight(effect: ExecutableEffect, ctx: EffectContext,
     }
     // rules 366-372 (ven-181-166 Gangplank, Naval) — a Might DECREASE handed
     // out by a spell or ability can be replaced; the shared write path is the
-    // only one that consults "might-decrease" replacements.
-    applyMightModifierDelta(targetId, amount, ctx);
+    // only one that consults "might-decrease" replacements — and only for a
+    // unit the effect CHOOSES (a criteria sweep chooses nobody).
+    applyMightModifierDelta(targetId, amount, ctx, { chosen: effectChoosesTarget(effect) });
   }
 }

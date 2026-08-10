@@ -16,6 +16,20 @@ import {
   type ReplacementEvent,
 } from "../replacement-effects";
 
+/**
+ * rule 366-372 / 355.10 — does this effect CHOOSE the objects it affects?
+ * A criteria sweep (`quantity: "all"` — "give enemy units -3 [Might]", "stun all
+ * units") chooses nobody, so "if a spell or ability that chooses me would …"
+ * replacements must not fire on it.
+ */
+export function effectChoosesTarget(effect: { target?: unknown } | undefined): boolean {
+  const target = effect?.target as { quantity?: unknown } | undefined;
+  if (!target || typeof target !== "object") {
+    return true;
+  }
+  return target.quantity !== "all";
+}
+
 /** rule 366-372: does this matched replacement's gating condition hold right now? */
 export function replacementConditionHolds(
   condition: unknown,
