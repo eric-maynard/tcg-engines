@@ -10,6 +10,7 @@
 // paid and the Equipment attached. That resolution half is this handler.
 import type { CardId as CoreCardId, PlayerId as CorePlayerId, ZoneId as CoreZoneId } from "@tcg/core";
 import { deductAbilityCost } from "../../game-definition/moves/chain/activate-ability";
+import { printedEquipCost } from "../../game-definition/moves/equip-cost";
 import {
   canPayWeaponmasterEquip,
   weaponmasterEquipCost,
@@ -38,10 +39,24 @@ export function handle_weaponmasterAttach(
 
   // rule 821.1.c.2 / 206.1: the Equip cost is priced as though [Equip] were
   // activated choosing the Weaponmaster unit, then reduced by [A].
-  const equipCost = weaponmasterEquipCost(equipmentId, unitId, getMeta);
+  const priced = weaponmasterEquipCost(equipmentId, unitId, getMeta);
+  // rule 821.1.c.3 / 730.2 (unl-158-219 Shepherd's Heirloom): "Spend N XP" is not
+  // an [A] cost, so Weaponmaster never waives it — it rides along in full.
+  const printedXp = printedEquipCost(equipmentId)?.xp;
+  const equipCost =
+    priced === undefined
+      ? undefined
+      : printedXp !== undefined && printedXp > 0
+        ? { ...priced, xp: printedXp }
+        : priced;
   // rule 821.1.c.5 — re-checked HERE, not at the pick: responses made while the
-  // item was on the chain can drain the pool, and then nothing attaches.
-  if (!equipCost || !canPayWeaponmasterEquip(draft, playerId, equipmentId, ctx, unitId, getMeta)) {
+  // item was on the chain can drain the pool, and then nothing attaches. Below
+  // N XP the XP half is unpayable, so the Equipment stays where it is.
+  if (
+    !equipCost ||
+    !canPayWeaponmasterEquip(draft, playerId, equipmentId, ctx, unitId, getMeta) ||
+    (printedXp !== undefined && printedXp > 0 && (draft.players[playerId]?.xp ?? 0) < printedXp)
+  ) {
     return;
   }
   deductAbilityCost(draft, playerId, equipCost, ctx.zones, ctx.counters);

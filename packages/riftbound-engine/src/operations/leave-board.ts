@@ -543,6 +543,20 @@ export function resetObjectState(ctx: LeaveBoardContext, cardId: string): void {
     staticMightBonus: undefined,
     stunned: false,
   });
+  // rule 106 / 359.2 — the card that comes back is a NEW game object, so the
+  // designation record of the old one must not suppress its attack / defend
+  // event when it joins a combat already in progress (rule 464.5).
+  const interaction = ctx.draft?.interaction;
+  if (interaction?.showdownStack?.some((sd) => sd.designatedCardIds?.includes(cardId))) {
+    ctx.draft.interaction = {
+      ...interaction,
+      showdownStack: interaction.showdownStack.map((sd) =>
+        sd.designatedCardIds?.includes(cardId)
+          ? { ...sd, designatedCardIds: sd.designatedCardIds.filter((c) => c !== cardId) }
+          : sd,
+      ),
+    };
+  }
   const owner = ownerOf(ctx, cardId);
   if (owner !== undefined && ctx.cards?.setCardController && controllerOf(ctx, cardId) !== owner) {
     ctx.cards.setCardController(id, owner as CorePlayerId);
