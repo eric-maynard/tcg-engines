@@ -4,7 +4,12 @@ import type { RiftboundGameState } from "../../types";
 import type { TargetDescriptor } from "../target-resolver";
 import { resolveTarget } from "../target-resolver";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
-import { type EffectHelpers, getTargetIds, getEffectiveMight } from "./_helpers";
+import {
+  type EffectHelpers,
+  getTargetIds,
+  getEffectiveMight,
+  raiseTotalMightSubsetRepick,
+} from "./_helpers";
 import { isBlockedByTwoOtherPlayers } from "../../game-definition/moves/movement/helpers";
 import {
   clearCombatRoleAfterRelocation,
@@ -592,6 +597,13 @@ export function handle_move(effect: ExecutableEffect, ctx: EffectContext, h: Eff
     effect.target !== null &&
     (effect.target as { quantity?: unknown }).quantity === "any";
   if (anyNumber && targets.length === 0) {
+    return;
+  }
+  // rule 355.11.b (rule-id: unl-054-219, ruling 8268edd613173038) — the group
+  // was chosen under an aggregate "total Might 8 or less" cap; a reaction that
+  // pumped one of them puts the bound group over it, so its controller re-picks
+  // a subset of the ORIGINAL targets that fits and only that subset moves.
+  if (raiseTotalMightSubsetRepick(effect, ctx)) {
     return;
   }
   // rule-id: ogn-262-298 (rule 355.13) — "You may move a friendly unit …": an

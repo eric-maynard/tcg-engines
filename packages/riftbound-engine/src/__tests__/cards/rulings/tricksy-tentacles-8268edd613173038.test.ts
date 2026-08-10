@@ -97,7 +97,7 @@ describe("Ruling 8268edd613173038 — Tricksy Tentacles: targets AND destination
   // BUG: expected (ruling step 5 / CR 355.11.b) — with the bound group now totalling 9 (> 8) the spell still resolves but
   // P1 must re-pick a subset of the ORIGINAL targets that fits (like the engine already does for Fox-Fire's kill cap).
   // Actual: effects/move.ts performs no aggregate re-check — both Four (4) and the pumped Three (5) are moved to base.
-  test.failing("BUG: ruling 8268edd613173038 — engine moves the whole over-cap group with no 355.11.b subset re-pick. Reaction changes Might: P2 Disciplines Three (+2 → group total 9 > 8); on resolution P1 must choose a SUBSET of the ORIGINAL targets that fits — Five is never offered; picking Four moves only Four", async () => {
+  test("ruling 8268edd613173038 — subset re-pick under the 355.11.b aggregate cap. Reaction changes Might: P2 Disciplines Three (+2 → group total 9 > 8); on resolution P1 must choose a SUBSET of the ORIGINAL targets that fits — Five is never offered; picking Four moves only Four", async () => {
     const game = await board().build();
     await castFourThreeToBase(game);
     await game.p1.passPriority();
