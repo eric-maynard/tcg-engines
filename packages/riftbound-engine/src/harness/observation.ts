@@ -319,10 +319,21 @@ export function observe(
 
   // rule 128.4 — the shared state travels in every seat's Observation, so the
   // pending prompt's card ids get the same redaction as the zones above.
+  // rule 424.1.a.3 — the `publicReveals` history is the omniscient log; once a
+  // reveal window has closed the cards are private again where they sit, so a
+  // seat's Observation must not keep naming them either.
   const visibleState =
-    viewer === SPECTATOR || state.pendingChoice === undefined
+    viewer === SPECTATOR
       ? state
-      : { ...state, pendingChoice: redactPrivateCardIds(engine, viewer, state.pendingChoice) as typeof state.pendingChoice };
+      : {
+          ...state,
+          ...(state.pendingChoice === undefined
+            ? {}
+            : { pendingChoice: redactPrivateCardIds(engine, viewer, state.pendingChoice) as typeof state.pendingChoice }),
+          ...(state.publicReveals === undefined
+            ? {}
+            : { publicReveals: redactPrivateCardIds(engine, viewer, state.publicReveals) as typeof state.publicReveals }),
+        };
 
   return {
     actingSeat: getActingSeat(state),

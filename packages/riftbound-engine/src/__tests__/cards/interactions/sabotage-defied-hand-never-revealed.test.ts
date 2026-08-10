@@ -234,7 +234,7 @@ describe("(c) contrast — P2 passes and Sabotage resolves", () => {
 });
 
 describe("(d) after Sabotage finishes resolving the Revealed state ends (424.1.a.3)", () => {
-  test.failing("BUG: Defy and U are anonymous again in P1's live view; no P1 payload names any of defy / gearG / unitU any more", async () => {
+  test("Defy and U are anonymous again in P1's live view; no P1 payload names any of defy / gearG / unitU any more", async () => {
     const game = await sabotageResolving();
     expect(p2HandSeenBy(game, P1).sort()).toEqual(["defy", "gearG", "unitU"]); // during
     await game.p1.pick("gearG");
