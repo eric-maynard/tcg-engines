@@ -1034,3 +1034,50 @@ export function tokenEntersReadyFromStaticGrant(
   }
   return false;
 }
+/**
+ * rule 355.11 / 355.11.b — a group chosen under an aggregate "total Might N or
+ * less" requirement that no longer meets it as the effect resolves: its
+ * controller picks a SUBSET of the ORIGINAL targets that does (never a unit
+ * that was not chosen), and only that subset is affected. Raises a
+ * `pick-many {semantics:"subset"}` whose answer re-enters the same handler with
+ * the subset bound. Returns true when the prompt was parked.
+ * Shared so every aggregate-constrained effect (kill, bounce, …) behaves alike.
+ */
+export function raiseTotalMightSubsetRepick(
+  effect: ExecutableEffect,
+  ctx: EffectContext,
+  mightOf: (cardId: string) => number = (id) => getEffectiveMight(id, ctx),
+): boolean {
+  const cap = (effect.target as { totalMight?: { lte?: number; lt?: number } } | undefined)?.totalMight;
+  const limit = cap?.lte ?? (cap?.lt !== undefined ? cap.lt - 1 : undefined);
+  const bound = ctx.boundTargets;
+  if (limit === undefined || !bound || bound.length === 0 || ctx.draft.pendingChoice) {
+    return false;
+  }
+  if ((effect as { _subsetChecked?: boolean })._subsetChecked === true) {
+    return false;
+  }
+  const total = bound.reduce((sum, id) => sum + mightOf(id), 0);
+  if (total <= limit) {
+    return false;
+  }
+  ctx.draft.pendingChoice = {
+    constraint: { totalMightAtMost: limit },
+    max: bound.length,
+    min: 0,
+    // A unit that alone breaks the cap can be in no legal subset.
+    options: bound.filter((id) => mightOf(id) <= limit).map((id) => ({ cardId: id, key: id })),
+    playerId: ctx.playerId,
+    prompt: `Choose original targets with total Might ${limit} or less to affect`,
+    resume: {
+      effect: { ...effect, _subsetChecked: true },
+      kind: "subset-repick",
+      playerId: ctx.playerId,
+      sourceCardId: ctx.sourceCardId,
+    },
+    semantics: "subset",
+    sourceCardId: ctx.sourceCardId,
+    type: "pick-many",
+  };
+  return true;
+}

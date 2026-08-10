@@ -3,7 +3,7 @@ import type { CardId as CoreCardId } from "@tcg/core";
 import { removeFromBoard } from "../../operations/leave-board";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import { tryReplaceCardEvent } from "./_replacement-gate";
-import { type EffectHelpers, getTargetIds } from "./_helpers";
+import { type EffectHelpers, getTargetIds, raiseTotalMightSubsetRepick } from "./_helpers";
 
 /**
  * rule-id: ogn-172-298 / sfd-044-221 / sfd-202-221 / ogn-181-298 — a card
@@ -59,6 +59,13 @@ function bounceToHand(cardIds: readonly string[], ctx: EffectContext): void {
 }
 
 export function handle_returnToHand(effect: ExecutableEffect, ctx: EffectContext, _h: EffectHelpers): void {
+  // rule 355.11.b (ven-107-166 Decree of Discord) — "units with total Might N or
+  // less" binds the GROUP, not each target: if a response pushes the chosen
+  // group over the cap, the caster re-picks a legal subset of the ORIGINAL
+  // targets instead of bouncing everything that is still individually legal.
+  if (raiseTotalMightSubsetRepick(effect, ctx)) {
+    return;
+  }
   const targets = getTargetIds(effect, ctx);
   // Only fall back to the source card when the ability has NO target
   // descriptor (i.e. "return me to hand"). A targeted return that finds
