@@ -98,10 +98,9 @@ describe("Ruling 211635a4cca0ac5a — Sacrifice the Assault-Mighty Phoenix in re
     expect(field?.options ?? []).toContain("phoenix");
   });
 
-  test.failing("BUG: ruling 211635a4cca0ac5a — with the Void Burrower item on the chain the Phoenix still has Assault (5) and P1 can react with Sacrifice killing it; Sacrifice resolves first (draw 2, channel 1 exhausted), then the reveal; engine has already run Combat Cleanup (Phoenix 3, not Mighty) so Sacrifice is illegal", async () => {
-    // Expected: phoenix.might 5 / castable Sacrifice at P1's priority on the legend item; chain [reksai, sac]; after
-    // Sacrifice: hand +2 (d1,d2), +1 exhausted rune, phoenix in trash; then the legend reveals d3,d4.
-    // Actual: phoenix.might is 3 with combatRole null at that point and cast(sac) is not legal.
+  // rule 466.7 / 807.1.d.1 — Combat Cleanup is the LAST step of the combat, so while the conquer trigger sits on
+  // the chain the Phoenix is still an Attacker and its [Assault 2] is still real Might: 5, i.e. [Mighty].
+  test("ruling 211635a4cca0ac5a — with the Void Burrower item on the chain the Phoenix still has Assault (5) and P1 can react with Sacrifice killing it; Sacrifice resolves first (draw 2, channel 1 exhausted), then the reveal", async () => {
     const game = await conquerWithPhoenix();
     await game.p1.yes();
     expect(game.decision()).toMatchObject({ context: "chain", kind: "action", seat: P1 });
@@ -109,6 +108,10 @@ describe("Ruling 211635a4cca0ac5a — Sacrifice the Assault-Mighty Phoenix in re
     const runesBefore = game.p1.runes().length;
     await game.p1.cast("sac", { sacrifice: "phoenix" });
     expect(game.zoneOf("phoenix")).toBe("trash"); // cost paid on play
+    // rule 428.5 — the cost kill is attributed to Sacrifice, so the Phoenix's own "when you kill a unit with a
+    // spell, you may pay [1][fury] to play me from your trash" triggers on top (the printed Sacrifice synergy).
+    expect(game.chain().map((c) => c.cardId)).toEqual(["reksai", "sac", "phoenix"]);
+    await game.p1.no(); // decline the recursion — the ruling's line is about Sacrifice itself
     expect(game.chain().map((c) => c.cardId)).toEqual(["reksai", "sac"]);
     await game.p1.passPriority();
     await game.p2.passPriority(); // Sacrifice resolves first

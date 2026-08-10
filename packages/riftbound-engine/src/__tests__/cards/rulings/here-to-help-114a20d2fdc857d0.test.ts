@@ -68,9 +68,12 @@ async function playBlitzToBfBAndHook(game: Game): Promise<void> {
   expect(d?.kind === "pick" ? d.options.map((o) => o.key) : []).toEqual(["blitz"]);
   await game.p1.pick("blitz");
   d = game.decision();
-  expect(d).toMatchObject({ kind: "pick", seat: P1 });
-  expect(d?.kind === "pick" ? d.options.map((o) => o.key).sort() : []).toEqual(["battlefield-bfA", "battlefield-bfB"]); // only battlefields P1 controls
-  await game.p1.pick("battlefield-bfB");
+  // Cast from hand P1 chooses between the battlefields it controls; played from HIDDEN, rule 811.1.d.3
+  // (ruling 248dec2f9fd0302c) leaves bfB as the only legal location, so it is locked in with no prompt.
+  if (d?.kind === "pick" && d.seat === P1 && d.options.some((o) => o.key.startsWith("battlefield-"))) {
+    expect(d.options.map((o) => o.key).sort()).toEqual(["battlefield-bfA", "battlefield-bfB"]); // only battlefields P1 controls
+    await game.p1.pick("battlefield-bfB");
+  }
   expect(game.zoneOf("blitz")).toBe("battlefield-bfB");
   d = game.decision();
   expect(d).toMatchObject({ kind: "yes-no", seat: P1 }); // "you may move an enemy unit to here"

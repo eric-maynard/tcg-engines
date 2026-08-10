@@ -32,6 +32,7 @@ import { getGlobalCardRegistry } from "../operations/card-lookup";
 import { getDamage } from "../operations/damage-store";
 import { collectAnyDamageLethalPlayers } from "../operations/lethal-damage";
 import { combatRoleMightBonus } from "../operations/combat-role-might";
+import { flushPendingCombatDesignations } from "../operations/combat-designations";
 import { hiddenCapacityAt } from "../operations/hidden-capacity";
 import {
   type LeaveResult,
@@ -166,6 +167,14 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
 
   // Step 0 — rule-id: 186.1: tokens that left the board cease to exist.
   if (sweepOffBoardTokens(ctx)) {
+    stateChanged = true;
+  }
+
+  // Step 0b — rule 466.7 / 807.1.d.1: a combat parks its Cleanup while the
+  // triggers it produced are on the chain, so the Attacker/Defender designation
+  // (and with it [Assault] / [Shield] Might and "this combat" effects) is still
+  // real for anything played in response. Run it now that the chain has drained.
+  if (flushPendingCombatDesignations(ctx.draft, ctx.cards as never)) {
     stateChanged = true;
   }
 

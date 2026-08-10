@@ -76,8 +76,40 @@ export function costModeOfPlayEffect(
   }
 }
 
+/**
+ * rule 811.1.d.3 / 811.1.d.1 — a card played from Hidden may only play a unit
+ * "here": the battlefield it was facedown at. That restriction narrows the
+ * instruction's own destination words (rule 105 — can't beats can), so a
+ * free choice collapses to that one battlefield and an offer that excludes it
+ * leaves no legal location at all.
+ */
+function restrictToHiddenBattlefield(
+  spec: PlayLocationSpec | undefined,
+  ctx: EffectContext,
+): PlayLocationSpec | undefined {
+  const hidden = (ctx as { hiddenZone?: string }).hiddenZone;
+  if (hidden === undefined || !hidden.startsWith("battlefield-")) {
+    return spec;
+  }
+  if (spec === "prompt") {
+    return { only: [hidden] };
+  }
+  if (typeof spec === "object" && spec !== null && "only" in spec) {
+    return { only: spec.only.filter((zone) => zone === hidden) };
+  }
+  return spec;
+}
+
 /** rule 355.2 / 355.2.b — the instruction's destination words as a location spec. */
 function locationSpecOf(toLocation: unknown, ctx: EffectContext, performer: string): PlayLocationSpec | undefined {
+  return restrictToHiddenBattlefield(printedLocationSpecOf(toLocation, ctx, performer), ctx);
+}
+
+function printedLocationSpecOf(
+  toLocation: unknown,
+  ctx: EffectContext,
+  performer: string,
+): PlayLocationSpec | undefined {
   if (toLocation === undefined) {
     return "prompt";
   }

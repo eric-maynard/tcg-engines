@@ -117,6 +117,9 @@ describe("Brush (unl-t03)", () => {
     await game.settle();
     expect(game.zoneOf("guard")).toBe("trash");
     expect(game.zoneOf("poro")).toBe("battlefield-brush");
+    // rule 466.7 — Combat Cleanup is the LAST step of the combat, so the conquer's own score trigger is still on
+    // the chain here and the Poro keeps its Attacker designation (with Assault) until that item is answered.
+    await game.p1.no(); // decline the Brush's score trigger → the chain drains and the combat ends
     expect(game.state("poro").might).toBe(3); // combat over: Assault off, Brush still on
     expect(game.gameState.battlefields.brush?.controller).toBe(P1);
     expect(game.p1.points()).toBe(1);

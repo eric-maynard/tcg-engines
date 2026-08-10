@@ -407,20 +407,21 @@ export interface BattlefieldState {
   combatCleanupSuspended?: boolean;
 
   /**
+   * rule 466.7 / 807.1.d.1 — the cards whose Attacker/Defender designation (and
+   * with it [Assault] / [Shield] Might and every "this combat" effect) has not
+   * ended yet, because the combat's own triggers are on the chain and both
+   * players may still react to them. `flushPendingCombatDesignations` runs the
+   * parked cleanup at the first Cleanup that sees an empty chain.
+   */
+  combatDesignationsPending?: readonly string[];
+
+  /**
    * rule 466.4 — the combat result (466.3) has been determined and the
    * "win a combat" triggers it produced are on the chain. The Resolution Step
    * is parked until they resolve; only then does 466.5 Establish Control (and
    * its Conquer) run. Stops the re-run from reading the result twice.
    */
   combatWinTriggersFired?: boolean;
-
-  /**
-   * rule 466.1.a.1 / ruling 0f232f2b69b24f47 — the Combat Cleanup's "Heal all
-   * Units" step is owed: it runs only after the chain the combat deaths put up
-   * (Deathknell) has resolved, so survivors keep their combat damage while that
-   * chain is live.
-   */
-  combatHealPending?: boolean;
 
   /**
    * rule 465.2.c.3 — the attacking player's chosen assignment of its combat

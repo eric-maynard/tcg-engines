@@ -463,6 +463,40 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
       [...attackerUnits, ...defenderUnits].map((u) => u.id as string),
     );
 
+    // rule 466.1.a.1: the Combat Cleanup's step 3c is "Heal all Units" — it has
+    // no location qualifier, so damage on units outside this combat (in a base
+    // or at another battlefield) is cleared too. Lethally damaged units are left
+    // alone: they are killed by the cleanup before any healing. `alreadySettled`
+    // are the combatants whose own damage the damage step just settled (killed
+    // ones marked lethal, survivors healed).
+    const healAllUnits = (alreadySettled: ReadonlySet<string>): void => {
+      const healZoneIds: string[] = [];
+      for (const playerId of Object.keys(draft.players ?? {})) {
+        for (const id of zones.getCardsInZone("base" as CoreZoneId, playerId as CorePlayerId)) {
+          if (!alreadySettled.has(id as string)) {
+            healZoneIds.push(id as string);
+          }
+        }
+      }
+      for (const bfId of Object.keys(draft.battlefields ?? {})) {
+        for (const id of zones.getCardsInZone(`battlefield-${bfId}` as CoreZoneId)) {
+          if (!alreadySettled.has(id as string)) {
+            healZoneIds.push(id as string);
+          }
+        }
+      }
+      for (const id of healZoneIds) {
+        const dmg = getDamage(context, id as string);
+        if (dmg <= 0) {
+          continue;
+        }
+        if (dmg >= getCardEffectiveMight(id as string, (cid) => cards.getCardMeta(cid) as Partial<RiftboundCardMeta> | undefined)) {
+          continue;
+        }
+        clearDamage(context, id as string);
+      }
+    };
+
     // rule 465.1: the Combat Damage Step only happens if both Attacking and
     // Defending units remain here when the showdown closes. If one side left
     // during the showdown (e.g. the lone defender was killed by a spell), skip
@@ -661,36 +695,7 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
       }
     }
 
-    // rule 466.1.a.1: the Combat Cleanup's step 3c is "Heal all Units" — it has
-    // no location qualifier, so damage on units outside this combat (in a base
-    // or at another battlefield) is cleared too. Lethally damaged bystanders are
-    // left alone: they are killed by the cleanup below before any healing.
-    const combatantIds = new Set<string>([...attackerUnits, ...defenderUnits].map((u) => u.id));
-    const healZoneIds: string[] = [];
-    for (const playerId of Object.keys(draft.players ?? {})) {
-      for (const id of zones.getCardsInZone("base" as CoreZoneId, playerId as CorePlayerId)) {
-        if (!combatantIds.has(id as string)) {
-          healZoneIds.push(id as string);
-        }
-      }
-    }
-    for (const bfId of Object.keys(draft.battlefields ?? {})) {
-      for (const id of zones.getCardsInZone(`battlefield-${bfId}` as CoreZoneId)) {
-        if (!combatantIds.has(id as string)) {
-          healZoneIds.push(id as string);
-        }
-      }
-    }
-    for (const id of healZoneIds) {
-      const dmg = getDamage(context, id as string);
-      if (dmg <= 0) {
-        continue;
-      }
-      if (dmg >= getCardEffectiveMight(id as string, (cid) => cards.getCardMeta(cid) as Partial<RiftboundCardMeta> | undefined)) {
-        continue;
-      }
-      clearDamage(context, id as string);
-    }
+    healAllUnits(new Set<string>([...attackerUnits, ...defenderUnits].map((u) => u.id)));
 
     cleanupAndFireDeaths(draft, context as unknown as PostMoveCleanupContext);
 
@@ -728,6 +733,12 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
       battlefield.combatNoDefendersAtCleanup = noDefendersAtCleanup;
       return;
     }
+    } else if (!damageAlreadyDone) {
+      // rule 465.1 → 466.1.a.1: one side was gone before the showdown closed, so
+      // there is no Combat Damage Step — but the Resolution Step still performs
+      // a Combat Cleanup, and its "3c. Heal all Units" clears damage dealt
+      // earlier in the combat (an attack/defend trigger's ping) all the same.
+      healAllUnits(new Set<string>());
     }
 
     // rule 466.3: the combat result is read off who still has units HERE after
@@ -887,15 +898,24 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
         });
       }
     }
-    // rule 466.7.a: remove the Attacker/Defender designation from every unit
-    // that was in this combat — those still here and those recalled to base.
+    // rule 466.7.a / 466.7.c: the Attacker/Defender designation and every "this
+    // combat" bonus end for every unit that was in this combat — those still
+    // here and those recalled to base.
+    // rule 807.1.d.1 (ruling 211635a4cca0ac5a): [Assault] / [Shield] Might is
+    // real for as long as the designation is, so the cleanup is PARKED while the
+    // triggers this combat is about to produce (the conquer below, combat-end,
+    // deaths) sit on the chain with both players still holding priority.
+    // `flushPendingCombatDesignations` runs it at the first Cleanup with an
+    // empty chain — which, when nothing triggers, is the one at the tail of this
+    // very move.
     const remainingUnits = zones.getCardsInZone(battlefieldZoneId);
-    for (const unitId of [...remainingUnits, ...recalledUnits]) {
-      cards.updateCardMeta(unitId, {
-        combatRole: null,
-      } as Partial<RiftboundCardMeta>);
-    }
-    expireCombatMight();
+    battlefield.combatDesignationsPending = [
+      ...new Set<string>([
+        ...(unitIds as readonly string[]),
+        ...(remainingUnits as readonly string[]),
+        ...(recalledUnits as readonly string[]),
+      ]),
+    ];
 
     // Rule 466.5.b (Vendetta): if there are no Units remaining here
     // controlled by any player, the Battlefield becomes Uncontrolled.
