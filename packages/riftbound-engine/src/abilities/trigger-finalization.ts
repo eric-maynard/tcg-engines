@@ -1000,7 +1000,20 @@ function raiseTriggerOrderPrompt(
     const sourceBound =
       /"self"|"trigger-source"|"here"|"source"|"same"/.test(json) ||
       (kind !== undefined && IMPLICIT_SELF_EFFECTS.has(kind));
-    return `${sourceBound ? it.cardId : ""}|${json}`;
+    // Underscore-prefixed keys are engine bookkeeping (`_modeInstance` records WHICH
+    // copy of a text produced the effect — e.g. Svellsongur's 718.3 copy of its
+    // wearer's trigger). They don't change what a fixed effect DOES, so two otherwise
+    // identical source-independent instances stay interchangeable (rule-id:
+    // ven-046a-166 × sfd-059-221 — two "you score 1 point" triggers). Source-bound
+    // effects keep the full JSON (their provenance picks their target), and so do
+    // modal ones: each instance carries its own "not chosen this turn" memory and
+    // may still resolve to a different mode (rule-id: sfd-049-221 Aphelios).
+    const modal = (it.effect as { type?: string } | undefined)?.type === "choice";
+    const identity =
+      sourceBound || modal
+        ? json
+        : JSON.stringify(it.effect ?? null, (k, v) => (k.startsWith("_") ? undefined : v));
+    return `${sourceBound ? it.cardId : ""}|${identity}`;
   };
   // rule 383.3.d — only abilities that triggered SIMULTANEOUSLY are ordered by
   // their controller. Items carrying different `triggerBatch` stamps entered the
@@ -1200,6 +1213,28 @@ export function finalizePendingItems(draftLike: unknown, ctx: FinalizationContex
         };
         return;
       }
+    }
+
+    // Step 1e — rule 402.2 / 411.4 (rule-id: ven-133-166 Glowstone) — "Choose a
+    // player" is one of the choices made as an ability is ACTIVATED: the seat is
+    // named before anyone receives Priority, not when the item resolves. The
+    // answer rides on the item's effect as `ownerId`.
+    if (
+      item.type === "ability" &&
+      item.triggered !== true &&
+      (item.effect as { player?: string } | undefined)?.player === "choose" &&
+      (item.effect as { ownerId?: string } | undefined)?.ownerId === undefined
+    ) {
+      draft.pendingChoice = {
+        effect: item.effect,
+        finalizationChainItemId: item.id,
+        options: Object.keys(draft.players),
+        playerId: item.controller,
+        prompt: "Choose a player",
+        sourceCardId: item.cardId,
+        type: "choose-player",
+      } as typeof draft.pendingChoice;
+      return;
     }
 
     // Step 2 — rule 402.2 targets.

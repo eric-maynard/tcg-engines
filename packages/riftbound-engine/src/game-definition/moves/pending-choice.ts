@@ -2194,6 +2194,24 @@ export const pendingChoiceMoves: Partial<
         // THEY play …": the named seat owns/controls whatever the effect makes.
         draft.pendingChoice = undefined;
         const picked = context.params.pickedPlayerId as string;
+        // rule 402.2 (ven-133-166 Glowstone) — the seat was named while the
+        // ability was being ACTIVATED: record it on the Pending Item and let
+        // finalization carry on; the effect runs with that seat at resolution.
+        const finPlayerItemId = (choice as { finalizationChainItemId?: string })
+          .finalizationChainItemId;
+        if (finPlayerItemId !== undefined) {
+          const chainItems = draft.interaction?.chain?.items as
+            | { id: string; effect?: unknown }[]
+            | undefined;
+          const idx = chainItems?.findIndex((it) => it.id === finPlayerItemId) ?? -1;
+          if (chainItems && idx >= 0) {
+            chainItems[idx] = {
+              ...chainItems[idx],
+              effect: { ...(chainItems[idx]?.effect as object), ownerId: picked },
+            } as (typeof chainItems)[number];
+          }
+          return;
+        }
         const playerCtx = buildEffectContext(
           draft,
           choice.playerId,

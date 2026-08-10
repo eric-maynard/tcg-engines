@@ -261,22 +261,54 @@ export function handle_reveal(effect: ExecutableEffect, ctx: EffectContext, _h: 
   }
   if (revEff.until && (revEff.from ?? "deck") === "deck") {
     const revealRegistry = getGlobalCardRegistry();
-    const revealDeck = ctx.zones.getCardsInZone(
-      "mainDeck" as CoreZoneId,
-      actor as CorePlayerId,
-    );
+    const revealDeck = ctx.zones
+      .getCardsInZone("mainDeck" as CoreZoneId, actor as CorePlayerId)
+      .map((c) => c as string);
+    // rule 354.2 / 354.3 (ogn-160-298 Dazzling Aurora × ogn-194-298 Nocturne) —
+    // the scan stops at the FIRST card of the named type: on re-entry (after a
+    // revealed card answered its own "as you … reveal me" replacement) it still
+    // ranges over exactly the cards it turned over, so a card that banished
+    // itself simply drops out and the search never digs deeper.
+    const carriedScan = (revEff as { revealedIds?: readonly string[] }).revealedIds;
+    const scan = carriedScan ? carriedScan.filter((id) => revealDeck.includes(id)) : revealDeck;
     const rest: string[] = [];
     let hit: string | undefined;
-    for (const cardId of revealDeck) {
-      const id = cardId as string;
+    for (const id of scan) {
       if (revealRegistry.get(id)?.cardType === revEff.until) {
         hit = id;
         break;
       }
       rest.push(id);
     }
-    // rule 424.1 — every card turned over by the scan was revealed, hit or not.
-    recordPublicReveal(ctx, actor, hit ? [...rest, hit] : rest);
+    const revealedNow = hit ? [...rest, hit] : rest;
+    if (carriedScan === undefined) {
+      // rule 424.1 — every card turned over by the scan was revealed, hit or not.
+      recordPublicReveal(ctx, actor, revealedNow);
+      // rule 424 / 429.2 — mandatory "as I'm revealed from your deck" abilities
+      // resolve at once, before the reveal's own banish/play/recycle follow-up.
+      fireMandatoryRevealAbilities(revealedNow, actor, ctx, _h);
+    }
+    // rule 369.1 / 370.1 / 356.1.a (ogn-194-298 Nocturne) — an OPTIONAL "as you
+    // look at or reveal me from the top of your deck, you may banish me … play
+    // me for [rainbow]" is offered while the card is still in the deck, before
+    // the revealing effect acts on it.
+    if (
+      offerAsYouRevealChoice(
+        ctx,
+        revealedNow,
+        actor,
+        (nowOffered) => ({
+          ...(effect as object),
+          asPlayer: actor,
+          revealedIds: revealedNow,
+          revealOffered: nowOffered,
+        }),
+        (revEff as { revealOffered?: readonly string[] }).revealOffered ?? [],
+        ctx.sourceCardId,
+      )
+    ) {
+      return;
+    }
     if (hit) {
       ctx.zones.moveCard({
         cardId: hit as CoreCardId,

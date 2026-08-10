@@ -1104,6 +1104,12 @@ export interface ChoosePlayerChoice {
   readonly sourceCardId?: CardId;
   /** Human-readable prompt text. */
   readonly prompt?: string;
+  /**
+   * rule 402.2 (ven-133-166) — set when the seat is named while the ability is
+   * being ACTIVATED: the answer is recorded on this Chain Item's effect instead
+   * of running it, and finalization carries on.
+   */
+  readonly finalizationChainItemId?: string;
 }
 
 /**
