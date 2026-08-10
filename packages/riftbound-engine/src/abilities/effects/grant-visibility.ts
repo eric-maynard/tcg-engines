@@ -12,6 +12,28 @@ import { type EffectHelpers } from "./_helpers";
  * zones?: ("hand" | "facedown")[], duration?: "turn" | "permanent" }`.
  * Turn-scoped grants are cleared with the rest of the turn state.
  */
+/**
+ * Whose private zone an information effect names. A bound player target wins;
+ * otherwise "opponent" (the default) resolves to the other player — "Choose an
+ * opponent" is forced in a two-player game. Shared with the one-shot
+ * `reveal-zone` handler so both halves of "Choose an opponent. They reveal
+ * their hand. You can look at their facedown cards this turn." name the same
+ * player.
+ */
+export function resolveInformationTarget(
+  spec: { player?: string },
+  ctx: EffectContext,
+): string | undefined {
+  const viewer = ctx.playerId;
+  const bound = ctx.boundTargets?.find((id) => ctx.draft.players[id] !== undefined);
+  return (
+    bound ??
+    (spec.player === "self"
+      ? viewer
+      : (Object.keys(ctx.draft.players).find((p) => p !== viewer) ?? viewer))
+  );
+}
+
 export function handle_grantVisibility(
   effect: ExecutableEffect,
   ctx: EffectContext,
@@ -23,14 +45,7 @@ export function handle_grantVisibility(
     duration?: "turn" | "permanent";
   };
   const viewer = ctx.playerId;
-  // A bound player target wins; otherwise "opponent" (the default) resolves to
-  // the other player — "Choose an opponent" is forced in a two-player game.
-  const bound = ctx.boundTargets?.find((id) => ctx.draft.players[id] !== undefined);
-  const owner =
-    bound ??
-    (spec.player === "self"
-      ? viewer
-      : (Object.keys(ctx.draft.players).find((p) => p !== viewer) ?? viewer));
+  const owner = resolveInformationTarget(spec, ctx);
   if (owner === undefined) {
     return;
   }

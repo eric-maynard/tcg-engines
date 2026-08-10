@@ -143,10 +143,11 @@ describe("Scuttle Crab (unl-053-219)", () => {
     expect(game.gameState.battlefields.bf1?.controller).toBe(P2);
   });
 
-  test("Deathknell information effects — the chosen opponent's hand and their facedown cards become visible to P1 this turn only", async () => {
-    // Expected: after the Deathknell resolves P1's view of P2's hand / facedown zone shows real
-    // cards (not redacted); after the turn passes the facedown card is private again.
-    // Actual: no Deathknell exists (and no reveal/peek grant is recorded), so P1 sees hidden views.
+  test("Deathknell information effects — the hand REVEAL is one-shot (public record, then redacted again); only the facedown LOOK lasts the turn", async () => {
+    // rule 424.1 / 424.1.a.3: "They reveal their hand" presents those cards to every player for
+    // the Deathknell's resolution — they land on the public reveal record and P1's live view of
+    // P2's hand is redacted again afterwards. Only "look at their facedown cards this turn" is a
+    // turn-scoped private grant.
     const game = await scenario()
       .active(P2)
       .resources(P2, { energy: 4, power: { order: 2 } })
@@ -162,9 +163,11 @@ describe("Scuttle Crab (unl-053-219)", () => {
     await game.p2.cast("vengeance", { targets: "crab" });
     await game.settle();
     expect(game.zoneOf("crab")).toBe("trash");
+    const revealedIds = (game.gameState.publicReveals ?? []).flatMap((r) => [...r.cardIds]);
+    expect(revealedIds).toContain("secret");
     const p2HandSeenByP1 = (game.p1.view().zones.hand ?? []).filter((c) => c.owner === P2);
     expect(p2HandSeenByP1.length).toBeGreaterThan(0);
-    expect(p2HandSeenByP1.every((c) => !isHiddenView(c))).toBe(true);
+    expect(p2HandSeenByP1.every((c) => isHiddenView(c))).toBe(true);
     const facedownSeenByP1 = game.p1.view().zones["facedown-bf1"] ?? [];
     expect(facedownSeenByP1).toHaveLength(1);
     expect(isHiddenView(facedownSeenByP1[0]!)).toBe(false);

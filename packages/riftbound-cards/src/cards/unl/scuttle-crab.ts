@@ -20,16 +20,20 @@ const abilities: Ability[] = [
   },
   // rule 808.1: Deathknell is a triggered ability that fires on death for the
   // dying unit's controller, whoever killed it and on whosever turn.
-  // rule 127: the reveal + "look at their facedown cards this turn" are
-  // information effects — a turn-scoped visibility grant on the opponent.
+  // rule 127: both halves are information effects, but their lifetimes differ.
+  // rule 424.1 / 424.1.a.3 — "They reveal their hand" is a one-shot Reveal:
+  // public to every player while the Deathknell resolves, redacted again after
+  // (and rule 424.3.a.1 — a card drawn later was never revealed). Only "look at
+  // their facedown cards THIS TURN" is a turn-scoped private grant for me.
   {
     effect: {
       effects: [
+        { player: "opponent", type: "reveal-zone", zone: "hand" },
         {
           duration: "turn",
           player: "opponent",
           type: "grant-visibility",
-          zones: ["hand", "facedown"],
+          zones: ["facedown"],
         },
         { amount: 1, type: "gain-xp" },
       ],

@@ -66,6 +66,7 @@ import { handle_look } from "./look";
 import { handle_mill } from "./mill";
 import { handle_reveal } from "./reveal";
 import { handle_revealHand } from "./reveal-hand";
+import { handle_revealZone } from "./reveal-zone";
 import { handle_preventDamage } from "./prevent-damage";
 import { handle_takeControl } from "./take-control";
 import { handle_linkedBanishedToTrash } from "./linked-banished-to-trash";
@@ -171,6 +172,8 @@ export const EFFECT_HANDLERS: Record<string, EffectHandler> = {
   "burn": handle_mill,
   "reveal": handle_reveal,
   "reveal-hand": handle_revealHand,
+  // rule 424.1 / 424.1.a.3 — a bare "They reveal their hand" with no pick.
+  "reveal-zone": handle_revealZone,
   "prevent-damage": handle_preventDamage,
   "take-control": handle_takeControl,
   "linked-banished-to-trash": handle_linkedBanishedToTrash,
