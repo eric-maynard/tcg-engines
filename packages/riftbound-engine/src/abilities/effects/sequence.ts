@@ -242,7 +242,19 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
     /** The play-time pick of a positional slot step, or undefined when it cannot be told. */
     const slotIdOfStep = (stepIdx: number): string | undefined => {
       if (!indepSlots) {
-        return undefined;
+        // rule 355.8 (sfd-023-221 Piercing Light) — a sequence whose steps own
+        // DISTINCT descriptor slots ("Deal 2 to a unit at a battlefield, then
+        // deal 2 to up to one other unit") knows each step's pick too; without
+        // this every step reads as "target unknown" and each damage step would
+        // force its own Cleanup.
+        const subTarget = (seq.effects?.[stepIdx] as { target?: SubTarget } | undefined)?.target;
+        if (!seqSlots || typeof subTarget !== "object" || subTarget === null) {
+          return undefined;
+        }
+        const j = seqSlots.slots.findIndex((s) =>
+          isRestatementOf(s as { type: string }, subTarget as unknown as { type: string }),
+        );
+        return j >= 0 ? seqSlots.bound[j] : undefined;
       }
       const k = indepSlots.findIndex((s) => s.index === stepIdx);
       if (k < 0) {
@@ -388,7 +400,28 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
     // hand the enemy to the friendly step). Re-align each surviving id with the
     // slot whose descriptor it still satisfies and skip the vacated slot's step.
     const vacatedSlots = new Set<number>();
-    if (seqSlots !== undefined && seqSlots.bound.length < seqSlots.slots.length) {
+    // rule 359.3.e.5 / 355.13 (rule-id: sfd-023-221 Piercing Light) — when the
+    // chain item recorded WHICH positions lost their pick, position still
+    // identifies the slot: re-expand the compacted list instead of guessing by
+    // descriptor, so "then deal 2 to up to one other unit" keeps its own pick
+    // after the first target left the board.
+    const droppedPositions = ctx.vacatedTargetSlots;
+    if (
+      seqSlots !== undefined &&
+      droppedPositions !== undefined &&
+      droppedPositions.length > 0 &&
+      seqSlots.bound.length + droppedPositions.length === seqSlots.slots.length
+    ) {
+      const remaining = [...seqSlots.bound];
+      const expanded = seqSlots.slots.map((_slot, slotIdx) => {
+        if (droppedPositions.includes(slotIdx)) {
+          vacatedSlots.add(slotIdx);
+          return undefined;
+        }
+        return remaining.shift();
+      });
+      seqSlots = { bound: expanded, slots: seqSlots.slots };
+    } else if (seqSlots !== undefined && seqSlots.bound.length < seqSlots.slots.length) {
       const remaining = [...seqSlots.bound];
       const aligned = seqSlots.slots.map((slot, slotIdx) => {
         // rule 355.13 / 359.3.e.5 (ruling ce58ba980937bea3, sfd-023-221 Piercing

@@ -941,9 +941,19 @@ export function executeResolvedItem(
       hiddenScopeExempt ||
       draft.battlefields?.[id] !== undefined ||
       baseCtx.zones.getCardZone(id as CoreCardId) === hiddenZone;
+    // rule 425.1.a / 355.9.a.2 (sfd-045-221 Not So Fast × ogn-169-298 Gust) — a
+    // counter names a CHAIN ITEM, not a card standing in a zone. The item is
+    // independent of its source (383.3), so bouncing the ability's source in
+    // response leaves the item — and the counter's choice — perfectly intact.
+    const countersLiveChainItem = (id: string): boolean =>
+      effect.type === "counter" &&
+      (draft.interaction?.chain?.items ?? []).some(
+        (it) => it !== undefined && it.cardId === id && it.countered !== true,
+      );
     const legal = boundTargets.filter(
       (id) =>
-        stillSameObject(id) &&
+        countersLiveChainItem(id) ||
+        (stillSameObject(id) &&
         hiddenStillMatches(id) &&
         stillOnBoard(id) &&
         locationStillMatches(id) &&
@@ -953,7 +963,7 @@ export function executeResolvedItem(
         !(
           controllerOf(id) !== resolved.controller &&
           (isUntargetable(id, resolverCtx) || isProtectedFromEnemyChoice(id, resolverCtx))
-        ),
+        )),
     );
     if (legal.length !== boundTargets.length) {
       // rule 359.3.e.5 (unl-110-219) — "choose two units. They deal damage
@@ -969,10 +979,12 @@ export function executeResolvedItem(
       // unit."), and the compacted list below would slide a later pick into an
       // earlier instruction and leave the last one begging for a fresh target.
       // Record which slots lost their pick so the sequence skips exactly those.
-      if (
-        effect.type === "sequence" &&
-        (effect as { independentTargets?: boolean }).independentTargets === true
-      ) {
+      // rule 359.3.e.5 / 355.13 (sfd-023-221 Piercing Light) — the same holds
+      // for a sequence whose steps own DISTINCT descriptor slots ("Deal 2 to a
+      // unit at a battlefield, then deal 2 to up to one other unit"): position
+      // is the only thing tying a locked pick to its instruction, so record the
+      // dropped positions rather than letting the compaction blur them.
+      if (effect.type === "sequence") {
         const stillLegal = new Set(legal);
         vacatedTargetSlots = boundTargets.flatMap((id, at) =>
           stillLegal.has(id) ? [] : [at],
