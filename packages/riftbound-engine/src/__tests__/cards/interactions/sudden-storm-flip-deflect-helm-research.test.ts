@@ -261,9 +261,8 @@ describe("(d) the HAND copy at the Poro in the same open showdown (Helm empowere
 
   // Expected (356.3 → 356.4.d): at an UNTAXED target the hand copy is 3 +[1][A] Helm −[1][A] Researchers = 3 energy
   // flat, so with {3 energy, no power} the Researchers and the Bystander are still offered (only the Deflect Poro is
-  // not). Actual: nothing is offered — the engine's [rainbow] discount only ever cancels a printed pip or the Deflect
-  // pip, never the Helm's added [A], so it demands 1 power for every target.
-  test.failing("BUG: with {3, no power} the untaxed Researchers / Bystander are still legal targets for the hand copy (3 + [1][A] − [1][A] = 3 energy, 0 power); engine offers none", async () => {
+  // not).
+  test("with {3, no power} the untaxed Researchers / Bystander are still legal targets for the hand copy (3 + [1][A] − [1][A] = 3 energy, 0 power); engine offers none", async () => {
     const game = await p1HasFocus({ energy: 3, helm: "empowered", power: { rainbow: 0 } });
     expect(game.p1.can("cast", "stormHand")).toBe(true);
     expect(targetsOffered(game, "stormHand")).toEqual(["by", "res"]);

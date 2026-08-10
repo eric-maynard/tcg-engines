@@ -3862,14 +3862,21 @@ export function computePlayResourceCost(
   // join the total cost BEFORE a total-cost discount is applied, so pip
   // waivers the printed cost did not consume spill onto them, exactly as
   // `applyDiscountOverflowToAdditionalCost` does for the Energy half.
-  const spillPower = reducePowerCost(
-    additionalCostPower(extras),
-    unusedPowerWaivers(deflect.waived, baseCost.power, basePower),
+  const spillWaivers = unusedPowerWaivers(deflect.waived, baseCost.power, basePower);
+  const additionalPower = additionalCostPower(extras);
+  const spillPower = reducePowerCost(additionalPower, spillWaivers, pool?.power ?? {});
+  // rule 356.4.d / 356.4.f (rule-id: ven-055-166 × ven-045-166) — a total-cost
+  // discount is measured against the INCREASED total (356.3 increases are part
+  // of it), so a pip waiver the printed cost and the additional costs did not
+  // consume also cancels a pip an opponent's static ADDED.
+  const increasePower = reducePowerCost(
+    boardIncrease.power,
+    unusedPowerWaivers(spillWaivers, additionalPower, spillPower),
     pool?.power ?? {},
   );
   // rule 356.3 — an enemy static's [rainbow] surcharge is an added pip, not a
   // printed one, so it is never covered by a hybrid/domain restriction.
-  const extraPower = mergePower(spillPower, boardIncrease.power);
+  const extraPower = mergePower(spillPower, increasePower);
   const powerDomains = new Set([
     ...Object.keys(basePower),
     ...Object.keys(repeatPower),
@@ -3911,12 +3918,21 @@ export function computePlayResourceCost(
   const ignoresBaseEnergy = extras.ignoreEnergyCost === true;
   // rule 356.1.b.3 / 356.3 — increases are applied AFTER the base is zeroed and
   // can lift the total back above zero, so the waiver never swallows them.
-  const waivedEnergy = additionalEnergy + boardIncrease.energy + runtimeIncrease;
+  // rule 820.1.c.1 (rule-id: sfd-080-221 × sfd-140-221) — an elected [Repeat]
+  // is an ADDITIONAL cost of this play, so it survives the waiver too.
+  const waivedEnergy = additionalEnergy + boardIncrease.energy + runtimeIncrease + repeatSurcharge;
+  // rule 356.4.e / 356.4.f — what the waiver left is still a Total Cost a
+  // discount may eat, bounded by that discount's own minimum: a floor never
+  // RAISES a total that the waiver already brought to 0.
+  const waivedAfterDiscount = Math.max(
+    0,
+    applyStaticCostReduction(waivedEnergy, boardReduction) - interactive - selfScaled - nextPlayEnergy,
+  );
   return {
     any,
-    energy: ignoresBaseEnergy ? waivedEnergy : energy,
+    energy: ignoresBaseEnergy ? waivedAfterDiscount : energy,
     free: false,
-    ignoreEnergy: ignoresBaseEnergy && waivedEnergy === 0,
+    ignoreEnergy: ignoresBaseEnergy && waivedAfterDiscount === 0,
     named,
     ...(hybridDomains && hybridNeed > 0 ? { hybrid: { domains: hybridDomains, n: hybridNeed } } : {}),
   };
