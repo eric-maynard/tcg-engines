@@ -31,6 +31,7 @@ import { openPendingContestedShowdown } from "./chain/showdown";
 import { hasTrashToBanishReplacement } from "../../abilities/replacement-effects";
 import { resolveTarget } from "../../abilities/target-resolver";
 import { bindTargetSlot } from "../../abilities/target-slots";
+import { removeUnfinalizedItem } from "../../abilities/trigger-finalization";
 import * as triggerRunner from "../../abilities/trigger-runner";
 import { fireTriggers } from "../../abilities/trigger-runner";
 import { continueRevealSlotLock } from "./play/reveal-target-lock";
@@ -45,7 +46,11 @@ import type { PostMoveCleanupContext } from "../../cleanup/post-move-cleanup";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import { matchesRevealPickFilter } from "../../operations/reveal-pick-filter";
 import { recordPublicReveal } from "../../operations/public-reveal";
-import { leaveBoard, snapshotLKI } from "../../operations/leave-board";
+import {
+  leaveBoard,
+  orderBatchTriggersByTurnOrder,
+  snapshotLKI,
+} from "../../operations/leave-board";
 import type {
   OrderChoice,
   PendingChoice,
@@ -87,6 +92,19 @@ import { isLegalMultiTargetSet, spellEffectHasLegalTargets } from "./play/target
 import type { SpellEffectTargetShape } from "./play/targeting";
 
 const isBoardZone = (z: string): boolean => z === "base" || z.startsWith("battlefield-");
+
+/**
+ * rule 416.5 — two or more cards recycled to a Main Deck at the same time go to
+ * the bottom in a random order (no player picks or learns it).
+ */
+function randomizedOrder(
+  ids: readonly string[],
+  rng: { shuffle: <T>(array: readonly T[]) => T[] } | undefined,
+): string[] {
+  // The game's seeded RNG keeps a transcript replayable (same seed + same
+  // answers ⇒ same deck bottom).
+  return ids.length < 2 || rng === undefined ? [...ids] : rng.shuffle(ids);
+}
 
 /**
  * rule 809.1.c / 809.1.c.1 (356.2.a.2) — the [Deflect] surcharge for choosing an
@@ -1475,17 +1493,34 @@ function fireRecycleEvent(
   if (typeof context.zones?.getCardsInZone !== "function" || !context.cards) {
     return;
   }
-  // "to YOUR Main Deck": only cards that went to the recycler's own deck count.
-  const own = cardIds.filter(
-    (id) => (context.cards.getCardOwner?.(id as CoreCardId) ?? playerId) === playerId,
-  );
-  if (own.length === 0) {
+  // rule 416.1.c (rule-id: ogn-212-298) — a card always recycles to ITS OWNER's
+  // Main Deck, whoever was instructed to recycle it, and that owner is the
+  // player who "recycles" it for trigger purposes. So one instruction touching
+  // several players' cards is one recycle per owner: each owner's "when you
+  // recycle one or more cards to your Main Deck" fires exactly once.
+  const byOwner = new Map<string, string[]>();
+  for (const id of cardIds) {
+    const owner = String(context.cards.getCardOwner?.(id as CoreCardId) ?? playerId);
+    const bucket = byOwner.get(owner);
+    if (bucket) {
+      bucket.push(id);
+    } else {
+      byOwner.set(owner, [id]);
+    }
+  }
+  if (byOwner.size === 0) {
     return;
   }
-  fireTriggers(
-    { cardIds: own, playerId, type: "recycle" },
-    { cards: context.cards, counters: context.counters, draft, zones: context.zones },
-  );
+  const chainLenBefore = draft.interaction?.chain?.items?.length ?? 0;
+  for (const [owner, own] of byOwner) {
+    fireTriggers(
+      { cardIds: own, playerId: owner, type: "recycle" },
+      { cards: context.cards, counters: context.counters, draft, zones: context.zones },
+    );
+  }
+  // rule 383.3.d.1 — the recycle happened all at once, so the triggers it caused
+  // are simultaneous: the turn player's go on the Chain first.
+  orderBatchTriggersByTurnOrder(draft, chainLenBefore);
 }
 
 export const pendingChoiceMoves: Partial<
@@ -2693,6 +2728,15 @@ export const pendingChoiceMoves: Partial<
         // rule 402.2 (ogn-289-298) — an "up to N" finalization pick accumulates
         // first (below) and binds the whole set at once.
         if (choice.bindToChainItemId !== undefined && choice.anyNumber !== true) {
+          // rule 402.1 (ven-114-166 Kharox) — declining the "you may" this pick
+          // IS: the item never finalizes, so it leaves the Chain instead of
+          // waiting to resolve into nothing.
+          if (choice.optional === true && context.params.accept === false) {
+            draft.pendingChoice = undefined;
+            removeUnfinalizedItem(draft, choice.bindToChainItemId);
+            postChoiceCleanup(draft, context);
+            return;
+          }
           if (!choice.options.includes(picked)) {
             return;
           }
@@ -3748,8 +3792,14 @@ export const pendingChoiceMoves: Partial<
       // Rule 435 (ogn-174-298): look/Vision recycles the unpicked cards.
       const recycledIds: string[] = choice.onPicked === "recycle" ? [...picks] : [];
       if (choice.onRest === "recycle") {
-        for (const restId of revealed) {
-          if (restId === pickedCardId) continue;
+        // rule 416.5 — the unpicked cards are recycled SIMULTANEOUSLY, so they
+        // go under the deck in a RANDOM order: the looker must not learn (or
+        // choose) the bottom order from the order they were revealed in.
+        const rest = randomizedOrder(
+          revealed.filter((id) => id !== pickedCardId),
+          (context as { rng?: { shuffle: <T>(array: readonly T[]) => T[] } }).rng,
+        );
+        for (const restId of rest) {
           context.zones.moveCard({
             cardId: restId as CoreCardId,
             position: "bottom",

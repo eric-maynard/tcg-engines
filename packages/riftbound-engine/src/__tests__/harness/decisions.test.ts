@@ -263,7 +263,9 @@ describe("pending-choice decisions (one per engine PendingChoice type)", () => {
     expect(game.p1.legal()).toEqual([]);
     await game.p1.pick("d1");
     expect(game.p1.hand()).toEqual(["d1"]);
-    expect(game.p1.deck().slice(-2)).toEqual(["d0", "d2"]);
+    // rule 416.5 — the two unpicked cards are recycled simultaneously, so they
+    // sit at the bottom in a random order.
+    expect([...game.p1.deck().slice(-2)].sort()).toEqual(["d0", "d2"]);
     expect(game.violations()).toEqual([]);
   });
 
