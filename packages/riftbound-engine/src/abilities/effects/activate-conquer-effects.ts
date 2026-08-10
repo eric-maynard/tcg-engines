@@ -28,6 +28,31 @@ interface ConquerAbility {
 }
 
 /**
+ * rule 136.2.d / 718 (rule-id: sfd-030-221 Skyfall of Areion) — "My hold
+ * effects are also conquer effects, and vice versa": a `hold-conquer-equivalence`
+ * static on the unit or on any Equipment it wears.
+ */
+function hasHoldConquerEquivalence(unitId: string, equipped: readonly string[]): boolean {
+  const registry = getGlobalCardRegistry();
+  for (const id of [unitId, ...equipped]) {
+    for (const a of registry.getAbilities(id) ?? []) {
+      const effect = (a as { effect?: { type?: string } }).effect;
+      if (a.type === "static" && effect?.type === "hold-conquer-equivalence") {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+/** The conquer-effect copies Skyfall makes of the wearer's hold triggers. */
+function holdTriggersAsConquer(abilities: readonly ConquerAbility[]): ConquerAbility[] {
+  return abilities
+    .filter((a) => a.type === "triggered" && a.trigger?.event === "hold")
+    .map((a) => ({ ...a, trigger: { ...a.trigger, event: "conquer" } }));
+}
+
+/**
  * rule 383.2.a.1: extra conditions ("after an attack", "if you assigned 5 or
  * more excess damage", "a battlefield that WAS UNCONTROLLED") are part of the
  * trigger condition and are NOT treated as fulfilled — only the conquer itself
@@ -65,6 +90,15 @@ export function handle_activateConquerEffects(
       ...((registry.getAbilities(unitId) ?? []) as ConquerAbility[]),
       ...(attachedEffectTextAbilities(meta as never) as unknown as ConquerAbility[]),
     ];
+    // rule 136.2.d / 718 (rule-id: sfd-030-221 Skyfall of Areion, ruling
+    // be6bb893a652ef83) — Skyfall makes the wearer's hold effects conquer
+    // effects too, so those copies are among "the conquer effects of units
+    // here" the Arena activates.
+    const equipped = ((meta as { equippedWith?: readonly string[] } | undefined)?.equippedWith ??
+      []) as readonly string[];
+    if (hasHoldConquerEquivalence(unitId as string, equipped)) {
+      abilities.push(...holdTriggersAsConquer(abilities));
+    }
     for (const ability of abilities) {
       if (!isPlainConquerTrigger(ability)) {
         continue;
