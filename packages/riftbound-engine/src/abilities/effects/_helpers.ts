@@ -832,6 +832,42 @@ export function evaluateEffectCondition(
       if (cmp?.eq !== undefined && n !== cmp.eq) return false;
       return true;
     }
+    // rule 359 (rule-id: unl-097-219, Kinkou Initiate) — "draw 1 if your other
+    // units have total Might 5 or more": the clause follows the instruction, so
+    // it is read as the ability RESOLVES. Sum the current Might of the units
+    // this effect's controller has across base and every battlefield; the
+    // source itself is excluded for the "other" scope, enemies never count.
+    case "total-might-at-least": {
+      const needed = (condition.amount as number) ?? 0;
+      const excludeSelf = ((condition.scope as string | undefined) ?? "other-units") !== "units";
+      const registry = getGlobalCardRegistry();
+      const ids: string[] = ctx.zones
+        .getCardsInZone("base" as CoreZoneId, ctx.playerId as CorePlayerId)
+        .map((x) => x as string);
+      for (const bfId of Object.keys(ctx.draft.battlefields ?? {})) {
+        ids.push(
+          ...ctx.zones.getCardsInZone(`battlefield-${bfId}` as CoreZoneId).map((x) => x as string),
+        );
+      }
+      let total = 0;
+      for (const id of ids) {
+        if (excludeSelf && id === ctx.sourceCardId) {
+          continue;
+        }
+        const def = registry.get(id) as { cardType?: string } | undefined;
+        if (def?.cardType !== undefined && def.cardType !== "unit") {
+          continue;
+        }
+        const owner =
+          ctx.cards.getCardController?.(id as CoreCardId) ??
+          (ctx.cards.getCardOwner(id as CoreCardId) as string | undefined);
+        if (owner !== ctx.playerId) {
+          continue;
+        }
+        total += getEffectiveMight(id, ctx);
+      }
+      return total >= needed;
+    }
     case "target-controller": {
       const want = condition.controller as "friendly" | "enemy" | undefined;
       const bound = ctx.boundTargets?.[0];
