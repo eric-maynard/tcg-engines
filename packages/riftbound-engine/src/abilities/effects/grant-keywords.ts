@@ -43,6 +43,13 @@ function expandSelfKeywords(kws: readonly string[], ctx: EffectContext): Keyword
     | Partial<RiftboundCardMeta>
     | undefined;
   for (const granted of meta?.grantedKeywords ?? []) {
+    // rule 718.3 / 719.1 — a keyword conferred by an attached Equipment (or any other
+    // continuous effect) is stored with `duration: "static"`: it exists only while that
+    // effect applies to THIS card. "Give … my keywords" copies the keywords the source
+    // itself has, not another object's continuous grant, so static entries are skipped.
+    if (granted.duration === "static") {
+      continue;
+    }
     if (typeof granted.keyword === "string" && granted.keyword !== SELF_KEYWORDS) {
       const value = (granted as { value?: unknown }).value;
       own.push(typeof value === "number" ? { keyword: granted.keyword, value } : { keyword: granted.keyword });
