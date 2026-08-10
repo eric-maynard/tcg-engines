@@ -119,6 +119,8 @@ export type UnitPlayOrigin =
       readonly from?: string;
       /** Set false to never elect an OPTIONAL additional cost (a caller that asked already). */
       readonly offerOptionalCosts?: boolean;
+      /** The optional cost ids the caller's dialog can ask about; others are left unelected. */
+      readonly optionalCostIds?: readonly string[];
     };
 
 /** The board accessors every caller has (move context / effect context / prompt context). */
@@ -651,6 +653,14 @@ function resourceCostSpecs(env: Env, entry: AdditionalCost): { energy: number; p
 /** Per additional cost: the values a selection may take (`undefined` = not paid). */
 function choicesFor(env: Env, entry: AdditionalCost, offerOptional: boolean): (PaidValue | undefined)[] {
   if (!entry.mandatory && !offerOptional) {
+    return [undefined];
+  }
+  if (
+    !entry.mandatory &&
+    env.origin.kind === "effect" &&
+    env.origin.optionalCostIds !== undefined &&
+    !env.origin.optionalCostIds.includes(entry.id)
+  ) {
     return [undefined];
   }
   const none: (PaidValue | undefined)[] = entry.mandatory ? [] : [undefined];

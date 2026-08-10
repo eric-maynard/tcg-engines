@@ -2961,6 +2961,37 @@ export const activateAbility: Defs["activateAbility"] = {
       }
     }
 
+    // rule 355.5 / 355.10.a / 402.2 (unl-148-219 Cursed Sarcophagus) — "Play a
+    // unit banished with this" names a card in a PUBLIC pile, so that card is a
+    // TARGET chosen while the ability is finalized — before anyone receives
+    // Priority — and locked on the item (offered even when it is the only
+    // candidate: which card to play is its controller's choice alone, 355.10).
+    // Resolution plays THAT card (`effects/play.ts`, bound-in-pile) or, if it
+    // left the pile meanwhile, nothing (359.3.e.7) — never a substitute.
+    if (!draft.pendingChoice && !(targets && targets.length > 0)) {
+      const item = [...(draft.interaction?.chain?.items ?? [])]
+        .reverse()
+        .find((it) => it?.cardId === cardId && it?.type === "ability" && it?.triggered !== true);
+      const pileTargets =
+        item?.id !== undefined
+          ? pilePlayCandidateIds(
+              item.effect as ExecutableEffect | undefined,
+              buildEffectContext(draft as never, playerId as string, cardId as string, context as never),
+            )
+          : undefined;
+      if (item?.id !== undefined && pileTargets !== undefined && pileTargets.length > 0) {
+        draft.pendingChoice = {
+          bindToChainItemId: item.id as string,
+          effect: item.effect as never,
+          options: [...pileTargets] as never,
+          playerId: playerId as never,
+          remaining: 1,
+          sourceCardId: cardId as never,
+          type: "choose-target",
+        };
+      }
+    }
+
     // rule 824.1.d: a Dependent ability becomes inactive "as soon as" its
     // condition stops holding — paying an XP/buff/exhaust cost can flip one off
     // while the ability is still on the chain, so re-evaluate statics now

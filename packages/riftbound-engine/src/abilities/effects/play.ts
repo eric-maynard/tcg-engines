@@ -424,10 +424,17 @@ function offerPileCandidates(eff: PlayEffectShape, ctx: EffectContext, pile: "tr
     }
     return;
   }
-  // rule 359.3.e.7 (rule-id: sfd-140-221 Fizz) — the card was NAMED as the item
-  // was finalized; an opponent who recycled it out of the pile in response
-  // makes the instruction do nothing. Its controller never picks a replacement.
-  if (playNamesPublicPile(eff) && (ctx.boundTargets?.length ?? 0) > 0) {
+  // rule 359.3.e.7 (rule-id: sfd-140-221 Fizz, unl-148-219 Cursed Sarcophagus) —
+  // the card was NAMED as the item was finalized; an opponent who moved it out
+  // of the pile in response makes the instruction do nothing. Its controller
+  // never picks a replacement. (A binding that names a BOARD object belongs to
+  // another step of the instruction and says nothing about this pile.)
+  const boundOffBoard =
+    ctx.boundTargets?.filter((id) => {
+      const zone = ctx.zones.getCardZone(id as CoreCardId) as string | undefined;
+      return !(zone === "base" || (typeof zone === "string" && zone.startsWith("battlefield-")));
+    }) ?? [];
+  if ((playNamesPublicPile(eff) && (ctx.boundTargets?.length ?? 0) > 0) || boundOffBoard.length > 0) {
     return;
   }
   if (candidates.length === 0 || ctx.draft.pendingChoice) {

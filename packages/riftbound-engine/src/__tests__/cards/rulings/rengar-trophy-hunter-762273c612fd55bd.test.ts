@@ -93,25 +93,23 @@ describe("Ruling 762273c612fd55bd — Cursed Sarcophagus can only replay Rengar 
     expect(game.chain()).toEqual([expect.objectContaining({ cardId: "sarc", controller: P1, triggered: false })]);
   });
 
-  // Expected (ruling): on resolution the Sarcophagus plays "a unit banished with this" — Rengar — with P1 paying his full
-  // [5][body]; per Rengar's own text a battlefield with enemy units (bf2) is a legal destination. Actual (engine): the
-  // resolution prompt "Choose a target for Cursed Sarcophagus" lists units ON THE BOARD (Raider/Holder/Camper) instead of
-  // the linked banished Rengar, so Rengar can never be played from banishment this way.
-  test("ruling 762273c612fd55bd — Sarcophagus resolution offers board units, not the unit banished with it; Rengar is never played", async () => {
+  // Ruling: the Sarcophagus plays "a unit banished with this" — Rengar, named as the ability is activated — with P1 paying
+  // his full [5][body]; per Rengar's own text a battlefield with enemy units (bf2) is a legal destination.
+  test("ruling 762273c612fd55bd — the Sarcophagus names Rengar (banished with it) at activation and plays him for [5][body]; bf2 (enemy units) is offered", async () => {
     const game = await sarcophagusDown();
     await game.advanceTurn();
     await game.advanceTurn();
     await game.p1.do("addResources", { energy: 5, power: { body: 1 } });
     const before = game.p1.resources();
     await game.p1.activate("sarc");
-    await game.p1.passPriority();
-    await game.p2.passPriority();
-    // If a choice is asked, it must be among units banished with the Sarcophagus.
+    // The unit banished with the Sarcophagus is a TARGET named as the ability is activated (355.5 / 402.2).
     const d = game.decision();
     if (d?.kind === "pick" && d.seat === P1 && d.options.some((o) => o.card !== undefined)) {
       expect(d.options.map((o) => o.card ?? o.key)).toEqual(["rengar"]);
       await game.p1.pick("rengar");
     }
+    await game.p1.passPriority();
+    await game.p2.passPriority();
     // Destination: bf2 (enemy units there) must be offered alongside base / bf1.
     const dest = game.decision();
     expect(dest).toMatchObject({ kind: "pick", seat: P1, semantics: "destination" });

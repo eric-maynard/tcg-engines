@@ -94,9 +94,9 @@ async function activateToPick(game: Game, card: string): Promise<Decision | null
 
 /**
  * Like `activateToPick`, but walks on to the Sarcophagus's actual "play a unit banished with this"
- * pick (`semantics: "from-revealed"`). With two or more units on the board the engine first raises a
- * spurious "Choose a target" prompt over BOARD units that does nothing (see the BUG test in (d)); it is
- * answered with its first option here so the pool assertions can still be made.
+ * pick — a TARGET named as the ability is activated (355.5 / 402.2: a pick over BANISHED cards, timing
+ * FIN), or the older resolution-time `from-revealed` pick. Any other P1 target prompt (over board units)
+ * would be spurious; it is answered with its first option so the pool assertions can still be made.
  */
 async function activateToPlayPick(game: Game, card: string): Promise<Decision | null> {
   await game.p1.activate(card);
@@ -105,7 +105,11 @@ async function activateToPlayPick(game: Game, card: string): Promise<Decision | 
     if (!d) {
       break;
     }
-    if (d.kind === "pick" && d.semantics === "from-revealed") {
+    if (
+      d.kind === "pick" &&
+      (d.semantics === "from-revealed" ||
+        (d.seat === P1 && d.options.length > 0 && d.options.every((o) => game.zoneOf(String(o.card ?? o.key)) === "banishment")))
+    ) {
       return d;
     }
     if (d.kind === "pick" && d.semantics === "target" && d.seat === P1 && d.options[0]) {
@@ -321,13 +325,13 @@ describe("The Zero Drive × Cursed Sarcophagus — 'banished with THIS' keeps se
   test("(d) Sarcophagus #2 [Exhaust] offers only R; Sarcophagus #1 [Exhaust] still offers only T — same-named cards keep separate 'banished with this' pools (427.3.a); neither offers V", async () => {
     const game = await twoSarcophagi();
     const d2 = await activateToPlayPick(game, "sarc2");
-    expect(d2).toMatchObject({ kind: "pick", seat: P1, semantics: "from-revealed" });
+    expect(d2).toMatchObject({ kind: "pick", seat: P1, timing: "FIN" });
     expect(pickCards(d2)).toEqual(["r"]);
     await game.p1.pick("r");
     await game.settle();
     expect(game.state("r")).toMatchObject({ isExhausted: true, zone: "base" });
     const d1 = await activateToPlayPick(game, "sarc");
-    expect(d1).toMatchObject({ kind: "pick", seat: P1, semantics: "from-revealed" });
+    expect(d1).toMatchObject({ kind: "pick", seat: P1, timing: "FIN" });
     expect(pickCards(d1)).toEqual(["t"]);
     await game.p1.pick("t");
     await game.settle();
@@ -349,19 +353,16 @@ describe("The Zero Drive × Cursed Sarcophagus — 'banished with THIS' keeps se
     expect(game.p1.banishment()).toEqual(["v"]);
   });
 
-  // Expected: the [Exhaust] ability chooses nothing on the board — its only decision is WHICH linked
-  // exile to play, so with R (just replayed by #2) and P2's bystander on the board, activating #1 must
-  // resolve straight into the "play a unit banished with this" pick offering T.
-  // Actual: with two or more units on the board the engine first asks "Choose a target for Cursed
-  // Sarcophagus" over the BOARD units (R, Bystander) — an effect-less prompt — and only then shows the
-  // real pick. (With a single board unit it silently auto-binds, which is why (a) is unaffected.)
-  test("(d) after #2 replayed R, activating #1 goes straight to the play-from-banishment pick [T] — no spurious 'choose a target' over board units first", async () => {
+  // The [Exhaust] ability chooses nothing on the board — its only decision is WHICH linked exile to play, a
+  // target named as it is activated (355.5 / 402.2): with R (just replayed by #2) and P2's bystander on the
+  // board, activating #1 asks for T at once and never raises a prompt over board units.
+  test("(d) after #2 replayed R, activating #1 goes straight to the banished-unit pick [T] (FIN) — no spurious 'choose a target' over board units", async () => {
     const game = await twoSarcophagi();
     await activateToPlayPick(game, "sarc2");
     await game.p1.pick("r");
     await game.settle();
     const d1 = await activateToPick(game, "sarc");
-    expect(d1).toMatchObject({ kind: "pick", seat: P1, semantics: "from-revealed" });
+    expect(d1).toMatchObject({ kind: "pick", seat: P1, timing: "FIN" });
     expect(pickCards(d1)).toEqual(["t"]);
   });
 

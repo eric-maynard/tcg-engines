@@ -54,7 +54,6 @@ import { buildEffectContext } from "../chain/effect-context";
 import { executeResolvedItem } from "../chain/resolve";
 import {
   type CostExtras,
-  type OptionalPlayCost,
   battlefieldHasEnemyUnits,
   battlefieldIsAttackedBy,
   battlefieldIsOccupiedEnemy,
@@ -69,19 +68,22 @@ import {
   computePlayResourceCost,
   consumeEntersReadyReplacement,
   createMetaAccessor,
-  discountOptionalPlayCost,
   getEffectiveSpellRepeatCost,
-  getGrantedAcceleratePlayCost,
   getOptionalPlayCost,
   getSacrificeCostDiscount,
   hasStaticEffect,
   opponentsRestrictedToBase,
-  optionalPlayCostOffered,
   payResourceCost,
   playOnlyToConqueredBattlefield,
   staticEnterReadyApplies,
 } from "./cost";
-import { collectBoardCards, recordAdditionalCostsPaid } from "./cost-model";
+import { ADDITIONAL_COST_IDS, recordAdditionalCostsPaid } from "./cost-model";
+import {
+  type UnitPlayOption,
+  type UnitPlayOrigin,
+  computeUnitPlayOptions,
+  payUnitPlayCosts,
+} from "./play-options";
 import { spellEffectHasLegalTargets } from "./targeting";
 import { applyPlayBattlefieldToken } from "./battlefield-token";
 import { offerWeaponmasterEquip } from "./weaponmaster";
@@ -922,13 +924,28 @@ export function canPerformEffectPlay(io: PlayIO, spec: EffectPlaySpec): boolean 
     }
   } else if (cardType !== "unit" && cardType !== "gear" && cardType !== "equipment") {
     return false;
-  } else if (locationOptionsFor(io, spec).length === 0) {
-    // rule 358.3.a — nowhere the unit may legally enter: impossible, skipped.
-    return false;
-  }
-  const mandatory = mandatoryAdditionalCost(spec.cardId);
-  if (mandatory && mandatoryCostCandidates(io, spec, mandatory).length === 0) {
-    return false;
+  } else {
+    // rule 355–358 / 419.2.a — a PERMANENT: the one play-options model decides
+    // (a legal location left after restrictions, a mandatory cost payable, the
+    // total — optional elections included — affordable from the pool).
+    const from = (io.zones.getCardZone?.(spec.cardId as CoreCardId) as string | undefined) ?? "hand";
+    if (typeof io.zones?.getCardsInZone !== "function") {
+      // A caller without board readers (unit-test stubs): default locations, pool check only.
+      const { extras, free } = instructionCost(spec);
+      return (
+        free ||
+        draft.runePools[spec.playerId] === undefined ||
+        canPayResourceCost(draft, spec.playerId, spec.cardId, computePlayResourceCost(draft, spec.playerId, spec.cardId, extras as CostExtras, undefined, false))
+      );
+    }
+    if (permanentEffectPlayOptions(io, spec, from).length > 0) {
+      return true;
+    }
+    // rule 429.3.a / 444.2.c (ruling cac9ff02562631c6, ogn-194-298 Nocturne) — a
+    // DECLINABLE instructed play opens a confirm prompt that is itself the play's
+    // Pay step, and rune [Add] abilities stay usable inside it: a rune the
+    // performer could recycle right then is Power they can bring.
+    return spec.declinable === true && permanentEffectPlayOptions(io, spec, from, withRecyclableRunes(io, spec.playerId)).length > 0;
   }
   const { extras, free } = costExtrasFor(io, spec);
   if (free || draft.runePools[spec.playerId] === undefined) {
@@ -939,21 +956,125 @@ export function canPerformEffectPlay(io: PlayIO, spec: EffectPlaySpec): boolean 
   if (canPayResourceCost(draft, spec.playerId, spec.cardId, cost)) {
     return true;
   }
-  // rule 356.2.b / 419.3.b — a play that only becomes affordable by electing
-  // its optional kill cost is still a play the performer can complete.
-  const optionalKill = optionalKillCost(spec);
-  if (optionalKill && payableKillVictims(io, spec, optionalKill).length > 0) {
-    return true;
-  }
-  // rule 429.3.a / 444.2.c (ruling cac9ff02562631c6, ogn-194-298 Nocturne) — a
-  // DECLINABLE instructed play opens a confirm prompt that is itself the play's
-  // Pay step, and rune [Add] abilities stay usable inside it
-  // (`resources.ts runeAddAllowedDuringChoice`): a rune the performer could
-  // recycle right then is Power they can bring, so it must not be pre-judged
-  // unaffordable and skipped unasked. Mandatory instructed plays have no such
-  // window and stay pool-only.
+  // rule 429.3.a / 444.2.c (ruling cac9ff02562631c6) — a DECLINABLE instructed
+  // play's confirm prompt is its Pay step; recyclable runes count (see above).
   return spec.declinable === true && canPayResourceCost(withRecyclableRunes(io, spec.playerId), spec.playerId, spec.cardId, cost);
 }
+
+// ---------------------------------------------------------------------------
+// Permanents an effect plays — the play-options model (origin "effect")
+// ---------------------------------------------------------------------------
+
+/** rule 356.2.b — the optional-cost elections the instructed-play dialog can ask its performer about. */
+const EFFECT_DIALOG_OPTIONAL_IDS: readonly string[] = [
+  ADDITIONAL_COST_IDS.accelerate,
+  ADDITIONAL_COST_IDS.accelerateGranted,
+  ADDITIONAL_COST_IDS.pay,
+  ADDITIONAL_COST_IDS.kill,
+];
+const RESOURCE_OPTIONAL_IDS: readonly string[] = [
+  ADDITIONAL_COST_IDS.accelerate,
+  ADDITIONAL_COST_IDS.accelerateGranted,
+  ADDITIONAL_COST_IDS.pay,
+];
+
+/** rule 356.1.a / 356.1.b / 356.5.a — the instruction's base-cost overrides for the model. */
+function instructionCost(spec: EffectPlaySpec): { extras: Partial<CostExtras>; free: boolean } {
+  const mode = spec.costMode;
+  switch (mode.kind) {
+    case "ignore-any-and-all":
+      return { extras: {}, free: true };
+    case "ignore-all":
+      return { extras: { altCost: { energy: 0, power: [] } }, free: false };
+    case "ignore-energy":
+      return { extras: { ignoreEnergyCost: true }, free: false };
+    case "ignore-power":
+      return { extras: { altCost: { energy: getGlobalCardRegistry().getEnergyCost(spec.cardId) ?? 0, power: [] } }, free: false };
+    case "reduce":
+      return {
+        extras: {
+          additionalCost: { energy: -(mode.energy ?? 0) },
+          ...(mode.power ? { waivePower: { ...mode.power } } : {}),
+        },
+        free: false,
+      };
+    case "fixed":
+      return { extras: { altCost: { energy: mode.energy ?? 0, power: [...(mode.power ?? [])] } }, free: false };
+    default:
+      return { extras: {}, free: false };
+  }
+}
+
+/**
+ * rule 355.2 — every location the INSTRUCTION allows for this permanent (a fixed
+ * zone, a restricted list, or the defaults plus the card's own granted
+ * locations plus battlefields that sell themselves as a destination —
+ * ven-157-166); restrictions and prices are the model's business.
+ */
+function locationCandidatesFor(io: PlayIO, spec: EffectPlaySpec): string[] {
+  const { draft, cards } = io;
+  const loc = spec.location ?? "prompt";
+  if (loc === "same-as-lki") {
+    const lki = (cards.getCardMeta?.(spec.cardId as CoreCardId) as { banishedFrom?: string } | undefined)?.banishedFrom;
+    return lki && isBoardZoneId(lki) ? playDestinationOptions(draft, spec.playerId, spec.cardId, { io, only: [lki] }) : [];
+  }
+  if (loc !== "prompt" && "fixed" in loc) {
+    return playDestinationOptions(draft, spec.playerId, spec.cardId, { io, only: [loc.fixed] });
+  }
+  if (loc !== "prompt" && "only" in loc) {
+    return playDestinationOptions(draft, spec.playerId, spec.cardId, { io, only: loc.only });
+  }
+  const out = playDestinationOptions(draft, spec.playerId, spec.cardId, {
+    extra: [...(loc === "prompt" ? [] : loc.extra), ...selfGrantedPlayLocations(io, spec)],
+    io,
+    sourceCardId: spec.sourceCardId,
+  });
+  if (getGlobalCardRegistry().getCardType(spec.cardId) === "unit") {
+    for (const bfId of Object.keys(draft.battlefields ?? {})) {
+      const zone = `battlefield-${bfId}`;
+      if (!out.includes(zone) && battlefieldRedirectPowerFor(bfId, spec.cardId)) {
+        out.push(zone);
+      }
+    }
+  }
+  return out;
+}
+
+function effectPlayOrigin(io: PlayIO, spec: EffectPlaySpec, from: string): UnitPlayOrigin {
+  const { extras, free } = instructionCost(spec);
+  return {
+    destinations: locationCandidatesFor(io, spec),
+    extras,
+    free,
+    from,
+    kind: "effect",
+    optionalCostIds: EFFECT_DIALOG_OPTIONAL_IDS,
+    ...(spec.offerOptionalCosts === false ? { offerOptionalCosts: false } : {}),
+  };
+}
+
+/** Every legal, payable (location × cost election) of this instructed permanent play. */
+function permanentEffectPlayOptions(
+  io: PlayIO,
+  spec: EffectPlaySpec,
+  from: string,
+  state: RiftboundGameState = io.draft,
+): UnitPlayOption[] {
+  if (typeof io.zones?.getCardsInZone !== "function") {
+    return [];
+  }
+  return computeUnitPlayOptions(state, io, spec.playerId, spec.cardId, effectPlayOrigin(io, spec, from));
+}
+
+function objectOf(option: UnitPlayOption, id: string): string | undefined {
+  const v = option.selection.paid?.[id];
+  return v === undefined || v === true ? undefined : (v.objects ?? [])[0];
+}
+
+function pays(option: UnitPlayOption, id: string): boolean {
+  return option.selection.paid?.[id] !== undefined;
+}
+
 
 /** The Power half of a play cost as opt-in pips (named Domains first, then any-Domain). */
 function powerPipsOf(cost: ReturnType<typeof computePlayResourceCost>): string[] {
@@ -992,148 +1113,11 @@ function withRecyclableRunes(io: PlayIO, playerId: string): RiftboundGameState {
   return { ...draft, runePools: { ...draft.runePools, [playerId]: { ...pool, power } } } as RiftboundGameState;
 }
 
-/**
- * rule 356.2.b — the card's OPTIONAL "kill a friendly unit as an additional
- * cost" (unl-170-219 Atakhan), if any. A play an EFFECT instructs runs every
- * normal step of Play (419.3.b), so the election is offered there too.
- */
-function optionalKillCost(spec: EffectPlaySpec): OptionalPlayCost | undefined {
-  if (spec.offerOptionalCosts === false) {
-    return undefined;
-  }
-  const printed = getOptionalPlayCost(spec.cardId);
-  return printed?.kind === "kill" && printed.mandatory !== true ? printed : undefined;
-}
 
-/** Can the performer still pay this play (with `killVictim`'s discount, if elected)? */
-function canPayEffectPlay(
-  io: PlayIO,
-  spec: EffectPlaySpec,
-  location?: string,
-  killVictim?: string,
-): boolean {
-  const { draft } = io;
-  const { extras, free } = costExtrasFor(io, spec, undefined, location, killVictim);
-  if (free || draft.runePools[spec.playerId] === undefined) {
-    return true;
-  }
-  const meta = typeof io.cards?.getCardMeta === "function" ? createMetaAccessor(io.cards) : undefined;
-  return canPayResourceCost(
-    draft,
-    spec.playerId,
-    spec.cardId,
-    computePlayResourceCost(draft, spec.playerId, spec.cardId, extras, meta, false),
-  );
-}
 
-/**
- * rule 357.3 — the victims the performer may elect for the optional kill cost:
- * only those that leave the rest of the play payable (a payment that strands
- * the play is never offered).
- */
-function payableKillVictims(
-  io: PlayIO,
-  spec: EffectPlaySpec,
-  cost: OptionalPlayCost,
-  location?: string,
-): string[] {
-  return mandatoryCostCandidates(io, spec, cost).filter((id) =>
-    canPayEffectPlay(io, spec, location, id),
-  );
-}
 
-/** rule 356.2.a.1 — the card's MANDATORY additional cost (kill / return-to-hand), if any. */
-function mandatoryAdditionalCost(cardId: string): OptionalPlayCost | undefined {
-  const printed = getOptionalPlayCost(cardId);
-  return printed?.mandatory === true && (printed.kind === "kill" || printed.kind === "return-to-hand")
-    ? printed
-    : undefined;
-}
 
-/** Board objects that can pay `cost` for the performer (friendly units to kill / friendly gear to return). */
-function mandatoryCostCandidates(
-  io: PlayIO,
-  spec: EffectPlaySpec,
-  cost: OptionalPlayCost,
-): string[] {
-  const { draft, zones, cards } = io;
-  if (typeof zones?.getCardsInZone !== "function") {
-    return [];
-  }
-  const registry = getGlobalCardRegistry();
-  const zoneIds = ["base", ...Object.keys(draft.battlefields ?? {}).map((bf) => `battlefield-${bf}`)];
-  const out: string[] = [];
-  for (const zoneId of zoneIds) {
-    for (const seat of Object.keys(draft.players ?? {})) {
-      for (const raw of zones.getCardsInZone(zoneId as CoreZoneId, seat as CorePlayerId)) {
-        const id = raw as string;
-        if (id === spec.cardId || out.includes(id)) {
-          continue;
-        }
-        const controller =
-          (cards.getCardController?.(id as CoreCardId) as string | undefined) ??
-          (cards.getCardOwner?.(id as CoreCardId) as string | undefined) ??
-          seat;
-        if (controller !== spec.playerId) {
-          continue;
-        }
-        const type = registry.getCardType(id);
-        const isGear = type === "gear" || type === "equipment";
-        if (cost.kind === "kill") {
-          const want = (cost.kill as { type?: string } | undefined)?.type ?? "unit";
-          const ok = want === "permanent" ? type === "unit" || isGear : want === "gear" ? isGear : type === want;
-          if (!ok) {
-            continue;
-          }
-        } else if (!isGear) {
-          continue;
-        }
-        out.push(id);
-      }
-    }
-  }
-  return out;
-}
 
-/** rule 355.2 — the legal entry zones for this instructed play. */
-function locationOptionsFor(io: PlayIO, spec: EffectPlaySpec): string[] {
-  const { draft, cards } = io;
-  if (getGlobalCardRegistry().getCardType(spec.cardId) === "spell") {
-    return ["chain"];
-  }
-  const loc = spec.location ?? "prompt";
-  if (loc === "same-as-lki") {
-    // rule 354.2 / 355.2 (ven-066-166) — "to the same location": where the OLD
-    // object was (last-known information), never a choice.
-    const lki = (cards.getCardMeta?.(spec.cardId as CoreCardId) as { banishedFrom?: string } | undefined)
-      ?.banishedFrom;
-    return lki && isBoardZoneId(lki) ? playDestinationOptions(draft, spec.playerId, spec.cardId, { io, only: [lki] }) : [];
-  }
-  if (loc === "prompt") {
-    return [
-      ...playDestinationOptions(draft, spec.playerId, spec.cardId, {
-        extra: selfGrantedPlayLocations(io, spec),
-        io,
-        sourceCardId: spec.sourceCardId,
-      }),
-      ...affordableRedirectDestinations(io, spec),
-    ];
-  }
-  if ("fixed" in loc) {
-    return playDestinationOptions(draft, spec.playerId, spec.cardId, { io, only: [loc.fixed] });
-  }
-  if ("only" in loc) {
-    return playDestinationOptions(draft, spec.playerId, spec.cardId, { io, only: loc.only });
-  }
-  return [
-    ...playDestinationOptions(draft, spec.playerId, spec.cardId, {
-      extra: [...loc.extra, ...selfGrantedPlayLocations(io, spec)],
-      io,
-      sourceCardId: spec.sourceCardId,
-    }),
-    ...affordableRedirectDestinations(io, spec),
-  ];
-}
 
 /**
  * rule 355.2.b (ogn-161-298 Deadbloom Predator) — "You may play me to an
@@ -1179,102 +1163,7 @@ function selfGrantedPlayLocations(io: PlayIO, spec: EffectPlaySpec): string[] {
   return out;
 }
 
-/**
- * rule 355.2.b / 356.2 (ven-157-166) — battlefields that make THEMSELVES Valid
- * destinations for this play in exchange for an optional additional cost, kept
- * only while the performer can still pay the whole cost (357.3 — never offer an
- * election that makes the play illegal).
- */
-function affordableRedirectDestinations(io: PlayIO, spec: EffectPlaySpec): string[] {
-  const { draft } = io;
-  const out: string[] = [];
-  for (const bfId of Object.keys(draft.battlefields ?? {})) {
-    const zone = `battlefield-${bfId}`;
-    if (!redirectPipsFor(draft, spec, zone) || battlefieldForbidsUnitPlays(bfId)) {
-      continue;
-    }
-    const { extras, free } = costExtrasFor(io, spec, undefined, zone);
-    if (!free && draft.runePools[spec.playerId] !== undefined) {
-      const meta = typeof io.cards?.getCardMeta === "function" ? createMetaAccessor(io.cards) : undefined;
-      if (
-        !canPayResourceCost(
-          draft,
-          spec.playerId,
-          spec.cardId,
-          computePlayResourceCost(draft, spec.playerId, spec.cardId, extras, meta, false),
-        )
-      ) {
-        continue;
-      }
-    }
-    out.push(zone);
-  }
-  return out;
-}
 
-/**
- * rule 355.1.a / 356.2.b / 805.2 — the OPTIONAL additional resource cost the
- * performer may still elect on an instructed play (printed Accelerate / "you
- * may pay …", or Accelerate granted to non-hand plays — sfd-029-221), already
- * discounted by "optional additional costs cost less" statics (356.4.c).
- * `undefined` when the card has none, its gate is unmet, or it is unpayable
- * together with the rest of the cost.
- */
-function payableOptionalCost(
-  io: PlayIO,
-  spec: EffectPlaySpec,
-  location?: string,
-): OptionalCostOffer | undefined {
-  const { draft, cards, zones } = io;
-  const board =
-    typeof zones?.getCardsInZone === "function" && typeof cards?.getCardOwner === "function"
-      ? { cards, zones }
-      : undefined;
-  const printed = getOptionalPlayCost(spec.cardId);
-  let id: string;
-  let raw: { energy?: number; power?: readonly string[]; xp?: number } | undefined;
-  let entersReady = false;
-  if (printed && (printed.kind === "accelerate" || printed.kind === "pay")) {
-    if (!optionalPlayCostOffered(printed, draft, spec.playerId, spec.cardId) || (printed.cost?.xp ?? 0) > 0) {
-      return undefined;
-    }
-    id = printed.kind;
-    raw = printed.cost;
-    entersReady = printed.kind === "accelerate" || printed.entersReadyIfPaid === true;
-  } else if (!printed && board) {
-    const granted = getGrantedAcceleratePlayCost(
-      spec.cardId,
-      spec.playerId,
-      collectBoardCards(draft, board),
-      spec.via === "hand",
-    );
-    if (!granted) {
-      return undefined;
-    }
-    id = "accelerate-granted";
-    raw = granted;
-    entersReady = true;
-  } else {
-    return undefined;
-  }
-  const discounted = discountOptionalPlayCost(draft, spec.playerId, raw, board) ?? {
-    energy: raw?.energy ?? 0,
-    power: raw?.power ?? [],
-  };
-  const optional = { energy: discounted.energy, entersReady, id, power: [...discounted.power] };
-  const { extras, free } = costExtrasFor(io, spec, optional, location);
-  if (free || draft.runePools[spec.playerId] === undefined) {
-    return optional;
-  }
-  const meta = typeof cards?.getCardMeta === "function" ? createMetaAccessor(cards) : undefined;
-  const affordable = canPayResourceCost(
-    draft,
-    spec.playerId,
-    spec.cardId,
-    computePlayResourceCost(draft, spec.playerId, spec.cardId, extras, meta, false),
-  );
-  return affordable ? optional : undefined;
-}
 
 /**
  * rule 419.3.b / 820.1.c.1 / 356.2.b.1 (rule-id: sfd-080-221 Bellows Breath ×
@@ -1454,208 +1343,98 @@ export function continueEffectPlay(io: PlayIO, item: PendingPlayItem): "prompted
     return "done";
   }
 
-  // rule 355.2 — location.
-  let location = progress.location;
-  if (!isSpell && location === undefined) {
-    const options = locationOptionsFor(io, spec);
-    if (options.length === 0) {
-      abortEffectPlay(io, item);
-      return "done";
+  let enteredAt: string | undefined;
+  if (!isSpell) {
+    // rule 355–358 — a PERMANENT: every remaining question of the dialog is a
+    // FILTER over the one play-options model (origin "effect"): the legal
+    // locations are its distinct destinations, the objects that may pay a
+    // mandatory / optional kill are the objects its options name there, an
+    // optional resource cost is offered iff an option pays it, and what is paid
+    // is the surviving option's own total (357) — never a separate computation.
+    const outcome = continuePermanentEffectPlay(io, item);
+    if (outcome !== "entered") {
+      return outcome;
     }
-    if (options.length > 1) {
-      draft.pendingChoice = {
-        cardId: spec.cardId,
-        options,
-        playItemId: item.id,
-        playerId: spec.playerId,
-        sourceCardId: spec.sourceCardId ?? spec.cardId,
-        type: "choose-destination",
-      } as unknown as RiftboundGameState["pendingChoice"];
-      return "prompted";
-    }
-    location = options[0] as string;
-    patchPlayItem(draft, item.id, { location });
-  }
-
-  // rule 356.2.a.1 — a MANDATORY additional cost is required whatever the cost
-  // mode (356.1.b only zeroes base costs); the performer picks the object.
-  const mandatory = mandatoryAdditionalCost(spec.cardId);
-  let mandatoryObjects = progress.mandatoryObjects;
-  if (mandatory && mandatoryObjects === undefined) {
-    const candidates = mandatoryCostCandidates(io, spec, mandatory);
-    if (candidates.length === 0) {
-      abortEffectPlay(io, item);
-      return "done";
-    }
-    if (candidates.length > 1 && progress.mandatoryAsked !== true) {
-      patchPlayItem(draft, item.id, { mandatoryAsked: true });
-      draft.pendingChoice = {
-        effect: { type: "noop" },
-        options: candidates,
-        playCostId: mandatory.kind,
-        playItemId: item.id,
-        playerId: spec.playerId,
-        remaining: 1,
-        sourceCardId: spec.cardId,
-        type: "choose-target",
-      } as unknown as RiftboundGameState["pendingChoice"];
-      return "prompted";
-    }
-    mandatoryObjects = [candidates[0] as string];
-    patchPlayItem(draft, item.id, { mandatoryObjects });
-  }
-
-  // rule 355.1.a / 356.2.b / 419.3.b — the OPTIONAL "kill a friendly unit"
-  // additional cost is elected on an instructed play exactly as on a hand play;
-  // the victim is named here and killed below, before the unit enters (357.2).
-  const optionalKill = optionalKillCost(spec);
-  let killObjects = progress.killObjects;
-  if (!isSpell && optionalKill && killObjects === undefined) {
-    const candidates = payableKillVictims(io, spec, optionalKill, location);
-    if (candidates.length > 0 && progress.killAsked !== true) {
-      patchPlayItem(draft, item.id, { killAsked: true });
-      draft.pendingChoice = {
-        effect: { type: "noop" },
-        options: candidates,
-        // rule 357.3 — declining is offered only while the play stays payable
-        // without the discount; otherwise the election is mandatory in fact.
-        optional: canPayEffectPlay(io, spec, location),
-        playCostId: "kill",
-        playCostOptional: true,
-        playItemId: item.id,
-        playerId: spec.playerId,
-        remaining: 1,
-        sourceCardId: spec.cardId,
-        type: "choose-target",
-      } as unknown as RiftboundGameState["pendingChoice"];
-      return "prompted";
-    }
-    killObjects = null;
-    patchPlayItem(draft, item.id, { killObjects: null });
-  }
-
-  // rule 355.1.a / 356.2.b — the OPTIONAL additional cost is still the
-  // performer's to elect (for a spell that election is its [Repeat]; its other
-  // riders are play params of a hand cast).
-  let optional = progress.optional;
-  if (optional === undefined) {
-    const offer = isSpell
-      ? // rule 419.3.b / 820.1.c.1 — a spell's own riders are play params on a
-        // hand cast, but the ONE election an instructed play still owes its
-        // performer is its [Repeat] additional cost.
-        payableRepeatCost(io, spec)
-      : spec.offerOptionalCosts === false
-        ? undefined
-        : payableOptionalCost(io, spec, location);
-    if (offer && progress.offered === undefined) {
-      patchPlayItem(draft, item.id, { offered: offer });
-      const free = spec.costMode.kind === "ignore-any-and-all";
-      // rule 356.4.f — gate on what the election really costs on top of the
-      // (already discounted) play, not on the printed amount.
-      const owedEnergy = free ? 0 : optionalCostIncrementEnergy(io, spec, offer, location);
-      draft.pendingChoice = {
-        playCostId: offer.id,
-        playItemId: item.id,
-        playerId: spec.playerId,
-        resolved: {
-          cardId: spec.cardId,
-          controller: spec.playerId,
-          // rule 356.5.a — under "any and all costs" the amount is zero; the
-          // decision still counts as paying it (356.4.f.1).
-          ...(free || (owedEnergy === 0 && offer.power.length === 0)
-            ? {}
-            : { optInCost: { energy: owedEnergy, power: [...offer.power] } }),
-          type: "ability",
-        },
-        sourceCardId: spec.cardId,
-        type: "opt-in",
-      } as unknown as RiftboundGameState["pendingChoice"];
-      return "prompted";
-    }
-    optional = null;
-    patchPlayItem(draft, item.id, { optional: null });
-  }
-
-  // rule 357 — pay: resources through the ONE cost computation, then the
-  // mandatory object cost through its effect (a real kill / bounce — 357.2.a).
-  const { extras, free } = costExtrasFor(io, spec, optional ?? undefined, location, killObjects?.[0]);
-  const meta = typeof io.cards?.getCardMeta === "function" ? createMetaAccessor(io.cards) : undefined;
-  if (!free && draft.runePools[spec.playerId] !== undefined) {
-    const cost = computePlayResourceCost(draft, spec.playerId, spec.cardId, extras, meta, false);
-    if (!canPayResourceCost(draft, spec.playerId, spec.cardId, cost)) {
-      // rule 357.1.a / 429.3.a (ruling cac9ff02562631c6, ogn-194-298 Nocturne) —
-      // the Pay step of an instructed play is a window for the performer's rune
-      // [Add] abilities: an empty pool with a rune still recyclable is not
-      // "unaffordable", it is unpaid. Ask (the prompt keeps the rune moves
-      // legal, `resources.ts runeAddAllowedDuringChoice`) instead of silently
-      // undoing the play; accept is offered only once the pool covers it.
-      if (
-        progress.confirmed !== true &&
-        canPayResourceCost(withRecyclableRunes(io, spec.playerId), spec.playerId, spec.cardId, cost)
-      ) {
+    enteredAt = (io.zones.getCardZone?.(spec.cardId as CoreCardId) as string | undefined) ?? undefined;
+  } else {
+    // rule 355.1.a / 820.1.c.1 — a spell's own riders are play params on a hand
+    // cast, but the ONE election an instructed play still owes its performer is
+    // its [Repeat] additional cost.
+    let optional = progress.optional;
+    if (optional === undefined) {
+      const offer = payableRepeatCost(io, spec);
+      if (offer && progress.offered === undefined) {
+        patchPlayItem(draft, item.id, { offered: offer });
+        const free = spec.costMode.kind === "ignore-any-and-all";
+        // rule 356.4.f — gate on what the election really costs on top of the
+        // (already discounted) play, not on the printed amount.
+        const owedEnergy = free ? 0 : optionalCostIncrementEnergy(io, spec, offer);
         draft.pendingChoice = {
-          playConfirm: true,
+          playCostId: offer.id,
           playItemId: item.id,
           playerId: spec.playerId,
           resolved: {
             cardId: spec.cardId,
             controller: spec.playerId,
-            optInCost: { energy: cost.energy, power: powerPipsOf(cost) },
+            ...(free || (owedEnergy === 0 && offer.power.length === 0)
+              ? {}
+              : { optInCost: { energy: owedEnergy, power: [...offer.power] } }),
             type: "ability",
           },
-          sourceCardId: spec.sourceCardId ?? spec.cardId,
+          sourceCardId: spec.cardId,
           type: "opt-in",
         } as unknown as RiftboundGameState["pendingChoice"];
         return "prompted";
       }
-      // rule 419.2.a / 358.5 — no longer affordable: the play is undone.
-      abortEffectPlay(io, item);
-      return "done";
+      optional = null;
+      patchPlayItem(draft, item.id, { optional: null });
     }
-    payResourceCost(
-      draft,
-      spec.playerId,
-      spec.cardId,
-      computePlayResourceCost(draft, spec.playerId, spec.cardId, extras, meta, true),
-    );
-  }
-  // rule 357.2 / 428.1 — the elected kill is a real kill, paid before the unit
-  // enters, and routed through the kill effect so Deathknell / die replacements
-  // apply (a replaced cost-kill still counts as paid — 357.2.a).
-  for (const objectId of killObjects ?? []) {
-    executeEffect({ target: { type: "unit" }, type: "kill" } as never, {
-      ...buildEffectContext(draft, spec.playerId, spec.cardId, io as never),
-      boundTargets: [objectId],
-    });
-  }
-  for (const objectId of mandatoryObjects ?? []) {
-    executeEffect(
-      {
-        target: { type: mandatory?.kind === "return-to-hand" ? "gear" : "unit" },
-        type: mandatory?.kind === "return-to-hand" ? "return-to-hand" : "kill",
-      } as never,
-      {
-        ...buildEffectContext(draft, spec.playerId, spec.cardId, io as never),
-        boundTargets: [objectId],
-      },
-    );
-  }
 
-  // rule 359 — the item leaves the Chain: a permanent becomes a Game Object at
-  // the chosen location (337.2 — immediately), a spell becomes a spell item —
-  // in the SLOT the pending play occupied (337.1.b / 340.1: finalizing never
-  // reorders the Chain, so items appended after it still resolve before it).
-  const slot = (draft.interaction?.chain?.items ?? []).findIndex((it) => it.id === item.id);
-  if (draft.interaction) {
-    (draft as { interaction?: RiftboundGameState["interaction"] }).interaction = removeChainItem(draft.interaction, item.id);
-  }
-  const paidIds = [
-    ...(optional ? [optional.id] : []),
-    ...(killObjects && killObjects.length > 0 ? ["kill"] : []),
-    ...(mandatoryObjects && mandatoryObjects.length > 0 && mandatory ? [mandatory.kind] : []),
-  ];
-  let enteredAt: string | undefined;
-  if (isSpell) {
+    // rule 357 — pay through the ONE cost computation.
+    const { extras, free } = costExtrasFor(io, spec, optional ?? undefined);
+    const meta = typeof io.cards?.getCardMeta === "function" ? createMetaAccessor(io.cards) : undefined;
+    if (!free && draft.runePools[spec.playerId] !== undefined) {
+      const cost = computePlayResourceCost(draft, spec.playerId, spec.cardId, extras, meta, false);
+      if (!canPayResourceCost(draft, spec.playerId, spec.cardId, cost)) {
+        // rule 357.1.a / 429.3.a (ruling cac9ff02562631c6) — recyclable runes:
+        // ask instead of silently undoing; accept only once the pool covers it.
+        if (
+          progress.confirmed !== true &&
+          canPayResourceCost(withRecyclableRunes(io, spec.playerId), spec.playerId, spec.cardId, cost)
+        ) {
+          draft.pendingChoice = {
+            playConfirm: true,
+            playItemId: item.id,
+            playerId: spec.playerId,
+            resolved: {
+              cardId: spec.cardId,
+              controller: spec.playerId,
+              optInCost: { energy: cost.energy, power: powerPipsOf(cost) },
+              type: "ability",
+            },
+            sourceCardId: spec.sourceCardId ?? spec.cardId,
+            type: "opt-in",
+          } as unknown as RiftboundGameState["pendingChoice"];
+          return "prompted";
+        }
+        // rule 419.2.a / 358.5 — no longer affordable: the play is undone.
+        abortEffectPlay(io, item);
+        return "done";
+      }
+      payResourceCost(
+        draft,
+        spec.playerId,
+        spec.cardId,
+        computePlayResourceCost(draft, spec.playerId, spec.cardId, extras, meta, true),
+      );
+    }
+
+    // rule 359.3 — the spell becomes a spell item in the SLOT the pending play
+    // occupied (337.1.b / 340.1: finalizing never reorders the Chain).
+    const slot = (draft.interaction?.chain?.items ?? []).findIndex((it) => it.id === item.id);
+    if (draft.interaction) {
+      (draft as { interaction?: RiftboundGameState["interaction"] }).interaction = removeChainItem(draft.interaction, item.id);
+    }
     putPlayedSpellOnChain(io, {
       cardId: spec.cardId,
       playerId: spec.playerId,
@@ -1674,19 +1453,6 @@ export function continueEffectPlay(io: PlayIO, item: PendingPlayItem): "prompted
         chain: { ...chain, items },
       } as RiftboundGameState["interaction"];
     }
-  } else {
-    enteredAt = enterPlayedPermanent(io, {
-      cardId: spec.cardId,
-      entersReady: optional?.entersReady === true,
-      entryZone: location as string,
-      from: progress.from,
-      paidAdditionalCost: paidIds.length > 0,
-      paidIds,
-      playerId: spec.playerId,
-      via: spec.via,
-      ...(spec.stagedBy ? { stagedBy: spec.stagedBy } : {}),
-      ...(spec.stun ? { stun: true } : {}),
-    });
   }
 
   // "…play it. Then / If you do, …" — the follow-up sees the played card.
@@ -1704,6 +1470,210 @@ export function continueEffectPlay(io: PlayIO, item: PendingPlayItem): "prompted
     cleanupAndFireDeaths(draft, io as unknown as PostMoveCleanupContext);
   }
   return "done";
+}
+
+/**
+ * rules 355–359 for a PERMANENT an effect plays, as filters over the
+ * play-options model: location (355.2) → mandatory cost object (356.2.a.1) →
+ * optional "kill a friendly unit" (356.2.b) → optional resource cost
+ * (Accelerate printed/granted, "you may pay …", XP-for-discount — 355.1.a) →
+ * pay the surviving option's total (357) → enter (359.2, 337.2). Returns
+ * "entered" once the card is on the board (the caller runs `then` + Cleanup).
+ */
+function continuePermanentEffectPlay(io: PlayIO, item: PendingPlayItem): "prompted" | "done" | "entered" {
+  const { draft } = io;
+  const spec = item.play;
+  const progress = spec.progress;
+  let options = permanentEffectPlayOptions(io, spec, progress.from);
+
+  if (options.length === 0) {
+    // rule 357.1.a / 429.3.a (ruling cac9ff02562631c6, ogn-194-298 Nocturne) — an
+    // empty pool with a rune still recyclable is not "unaffordable", it is unpaid:
+    // ask (rune moves stay legal while the prompt is open) instead of undoing.
+    const projected =
+      progress.confirmed !== true ? permanentEffectPlayOptions(io, spec, progress.from, withRecyclableRunes(io, spec.playerId)) : [];
+    const cheapest = projected.toSorted((a, b) => a.quote.energy + a.quote.any - (b.quote.energy + b.quote.any))[0];
+    if (cheapest) {
+      const pips: string[] = [];
+      for (const [d, n] of Object.entries(cheapest.quote.power)) {
+        for (let i = 0; i < n; i++) {
+          pips.push(d);
+        }
+      }
+      for (let i = 0; i < cheapest.quote.any; i++) {
+        pips.push("rainbow");
+      }
+      draft.pendingChoice = {
+        playConfirm: true,
+        playItemId: item.id,
+        playerId: spec.playerId,
+        resolved: {
+          cardId: spec.cardId,
+          controller: spec.playerId,
+          optInCost: { energy: cheapest.quote.energy, power: pips },
+          type: "ability",
+        },
+        sourceCardId: spec.sourceCardId ?? spec.cardId,
+        type: "opt-in",
+      } as unknown as RiftboundGameState["pendingChoice"];
+      return "prompted";
+    }
+    // rule 419.2.a / 358.3.a / 358.5 — nowhere legal or not payable: the play is undone.
+    abortEffectPlay(io, item);
+    return "done";
+  }
+
+  // rule 355.2 — location: the distinct destinations of the options.
+  let location = progress.location;
+  if (location === undefined) {
+    const destinations = [...new Set(options.map((o) => o.destination))];
+    if (destinations.length > 1) {
+      draft.pendingChoice = {
+        cardId: spec.cardId,
+        options: destinations,
+        playItemId: item.id,
+        playerId: spec.playerId,
+        sourceCardId: spec.sourceCardId ?? spec.cardId,
+        type: "choose-destination",
+      } as unknown as RiftboundGameState["pendingChoice"];
+      return "prompted";
+    }
+    location = destinations[0] as string;
+    patchPlayItem(draft, item.id, { location });
+  }
+  options = options.filter((o) => o.destination === location);
+  if (options.length === 0) {
+    abortEffectPlay(io, item);
+    return "done";
+  }
+
+  // rule 356.2.a.1 — a MANDATORY object cost (kill a friendly unit / return a gear):
+  // the performer names the object among those the options can pay with here.
+  const printedCost = getOptionalPlayCost(spec.cardId);
+  const mandatoryId =
+    printedCost?.mandatory === true && (printedCost.kind === "kill" || printedCost.kind === "return-to-hand")
+      ? printedCost.kind
+      : undefined;
+  if (mandatoryId) {
+    let chosen = progress.mandatoryObjects?.[0];
+    if (chosen === undefined) {
+      const candidates = [...new Set(options.map((o) => objectOf(o, mandatoryId)).filter((x): x is string => x !== undefined))];
+      if (candidates.length > 1 && progress.mandatoryAsked !== true) {
+        patchPlayItem(draft, item.id, { mandatoryAsked: true });
+        draft.pendingChoice = {
+          effect: { type: "noop" },
+          options: candidates,
+          playCostId: mandatoryId,
+          playItemId: item.id,
+          playerId: spec.playerId,
+          remaining: 1,
+          sourceCardId: spec.cardId,
+          type: "choose-target",
+        } as unknown as RiftboundGameState["pendingChoice"];
+        return "prompted";
+      }
+      chosen = candidates[0] as string;
+      patchPlayItem(draft, item.id, { mandatoryObjects: [chosen] });
+    }
+    options = options.filter((o) => objectOf(o, mandatoryId) === chosen);
+  } else if (options.some((o) => pays(o, ADDITIONAL_COST_IDS.kill))) {
+    // rule 355.1.a / 356.2.b (unl-170-219) — the OPTIONAL "kill a friendly unit":
+    // offered while an option pays it; declinable while one does not (357.3).
+    let killObjects = progress.killObjects;
+    if (killObjects === undefined) {
+      const candidates = [...new Set(options.map((o) => objectOf(o, ADDITIONAL_COST_IDS.kill)).filter((x): x is string => x !== undefined))];
+      if (candidates.length > 0 && progress.killAsked !== true) {
+        patchPlayItem(draft, item.id, { killAsked: true });
+        draft.pendingChoice = {
+          effect: { type: "noop" },
+          optional: options.some((o) => !pays(o, ADDITIONAL_COST_IDS.kill)),
+          options: candidates,
+          playCostId: ADDITIONAL_COST_IDS.kill,
+          playCostOptional: true,
+          playItemId: item.id,
+          playerId: spec.playerId,
+          remaining: 1,
+          sourceCardId: spec.cardId,
+          type: "choose-target",
+        } as unknown as RiftboundGameState["pendingChoice"];
+        return "prompted";
+      }
+      killObjects = null;
+      patchPlayItem(draft, item.id, { killObjects: null });
+    }
+    const victim = killObjects?.[0];
+    options = options.filter((o) => objectOf(o, ADDITIONAL_COST_IDS.kill) === victim);
+  }
+
+  // rule 355.1.a / 356.2.b — the OPTIONAL resource cost (one id per card): offered
+  // iff some remaining option pays it; the prompt shows what it adds on top.
+  const resourceId = RESOURCE_OPTIONAL_IDS.find((id) => options.some((o) => pays(o, id)));
+  let optional = progress.optional;
+  if (resourceId !== undefined && optional === undefined) {
+    const withIt = options.filter((o) => pays(o, resourceId));
+    const without = options.filter((o) => !pays(o, resourceId));
+    if (withIt.length > 0 && progress.offered === undefined) {
+      const paid = withIt[0] as UnitPlayOption;
+      const base = without[0];
+      const spec0 = (paid.selection.paid?.[resourceId] as { spec?: { energy?: number; power?: readonly string[]; xp?: number } } | true | undefined);
+      const shape = spec0 === true || spec0 === undefined ? undefined : spec0.spec;
+      const owedEnergy = Math.max(0, paid.quote.energy - (base?.quote.energy ?? 0));
+      const owedPower = [...(shape?.power ?? [])];
+      const offer: OptionalCostOffer = { energy: owedEnergy, entersReady: paid.total.entersReady, id: resourceId, power: owedPower };
+      patchPlayItem(draft, item.id, { offered: offer });
+      draft.pendingChoice = {
+        playCostId: resourceId,
+        playItemId: item.id,
+        playerId: spec.playerId,
+        resolved: {
+          cardId: spec.cardId,
+          controller: spec.playerId,
+          // rule 356.5.a / 356.4.f.1 — an election that costs nothing (any-and-all,
+          // fully discounted) is still made and still counts as paid.
+          ...(paid.quote.free || (owedEnergy === 0 && owedPower.length === 0 && (shape?.xp ?? 0) === 0)
+            ? {}
+            : { optInCost: { energy: owedEnergy, power: owedPower, ...((shape?.xp ?? 0) > 0 ? { xp: shape?.xp } : {}) } }),
+          type: "ability",
+        },
+        sourceCardId: spec.cardId,
+        type: "opt-in",
+      } as unknown as RiftboundGameState["pendingChoice"];
+      return "prompted";
+    }
+    optional = null;
+    patchPlayItem(draft, item.id, { optional: null });
+  }
+  if (resourceId !== undefined) {
+    options = options.filter((o) => pays(o, resourceId) === (optional !== null && optional !== undefined));
+  }
+  const option = options[0];
+  if (!option) {
+    // The elected combination stopped being payable meanwhile (419.2.a / 358.5).
+    abortEffectPlay(io, item);
+    return "done";
+  }
+
+  // rule 357 — pay the option's own total (resources as ONE assignment, XP, the
+  // cost-kill / returned gear through their effects — 357.2.a).
+  const paid = payUnitPlayCosts(draft, io, option);
+
+  // rule 359.2 / 337.2 — the item leaves the Chain and the permanent enters at once.
+  if (draft.interaction) {
+    (draft as { interaction?: RiftboundGameState["interaction"] }).interaction = removeChainItem(draft.interaction, item.id);
+  }
+  enterPlayedPermanent(io, {
+    cardId: spec.cardId,
+    entersReady: paid.entersReady,
+    entryZone: option.destination,
+    from: progress.from,
+    paidAdditionalCost: paid.paidAdditionalCost,
+    paidIds: paid.paidIds,
+    playerId: spec.playerId,
+    via: spec.via,
+    ...(spec.stagedBy ? { stagedBy: spec.stagedBy } : {}),
+    ...(spec.stun ? { stun: true } : {}),
+  });
+  return "entered";
 }
 
 /**

@@ -86,9 +86,15 @@ async function ready(energy: number, o: Opts & { conquerB?: boolean } = {}): Pro
   return game;
 }
 
-/** Activate the [Exhaust] ability and pass priority until P1's "which banished unit" pick (or the chain is gone). */
+/** Activate the [Exhaust] ability: the "which banished unit" pick is asked AT ONCE (a target chosen at finalization, 355.5 / 402.2). */
 async function activateToUnitPick(game: Game): Promise<Decision | null> {
   await game.p1.activate("sarc");
+  return game.decision();
+}
+
+/** Name the banished unit (locks it on the chain item), then let the ability resolve: everyone passes and the play of THAT card begins. */
+async function pickUnit(game: Game, unit: string): Promise<void> {
+  await game.p1.pick(unit);
   for (let i = 0; i < 6; i++) {
     const d = game.decision();
     if (!d || d.kind !== "action" || d.context === "main") {
@@ -96,7 +102,6 @@ async function activateToUnitPick(game: Game): Promise<Decision | null> {
     }
     await game.acting().pass();
   }
-  return game.decision();
 }
 
 const pickKeys = (d: Decision | null): string[] => (d?.kind === "pick" ? d.options.map((o) => o.card ?? o.key).sort() : []);
@@ -135,11 +140,9 @@ describe("Cursed Sarcophagus [Exhaust] — only activatable when a unit banished
     expect(game.p1.energy()).toBe(4); // the unit's cost is not paid yet
   });
 
-  // Expected: banishment is public (108.6.e), so "a unit banished with this" is a specific object chosen while
-  // the ability is being activated (355.5 / 355.9.a / 402.2, Decision timing FIN) — before anyone gets priority.
-  // Actual: activation asks nothing; the unit is picked only when the ability RESOLVES (a `reveal-and-pick`,
-  // timing RES) after both players pass.
-  test.failing("BUG: (b) the banished unit is a TARGET named at activation — right after activate() P1 faces a FIN pick offering exactly [Sergeant], not a priority window (355.5, 402.2)", async () => {
+  // Banishment is public (108.6.e), so "a unit banished with this" is a specific object chosen while the ability
+  // is being activated (355.5 / 355.9.a / 402.2, Decision timing FIN) — before anyone gets priority.
+  test("(b) the banished unit is a TARGET named at activation — right after activate() P1 faces a FIN pick offering exactly [Sergeant], not a priority window (355.5, 402.2)", async () => {
     const game = await ready(4);
     await game.p1.activate("sarc");
     const d = game.decision();
@@ -158,7 +161,7 @@ describe("Cursed Sarcophagus [Exhaust] — only activatable when a unit banished
   test("(b) Sergeant → destinations offered are exactly {base, bfA (held)}; bfB/bfC (P2's) are not (355.2.a)", async () => {
     const game = await ready(4);
     await activateToUnitPick(game);
-    await game.p1.pick("sarge");
+    await pickUnit(game, "sarge");
     const d = game.decision();
     expect(d).toMatchObject({ kind: "pick", seat: P1, semantics: "destination" });
     expect(pickKeys(d)).toEqual(["base", "battlefield-bfA"]);
@@ -167,7 +170,7 @@ describe("Cursed Sarcophagus [Exhaust] — only activatable when a unit banished
   test("(b) → base: pays exactly 4 ('you must pay its costs'), Sergeant enters base EXHAUSTED at 4 Might; the Sarcophagus stays exhausted; Grimwyrm remains in banishment; back to the open main phase", async () => {
     const game = await ready(4);
     await activateToUnitPick(game);
-    await game.p1.pick("sarge");
+    await pickUnit(game, "sarge");
     await game.p1.pick("base");
     expect(game.zoneOf("sarge")).toBe("base");
     expect(game.state("sarge")).toMatchObject({ controller: P1, isExhausted: true, might: 4 });
@@ -184,7 +187,7 @@ describe("Cursed Sarcophagus [Exhaust] — only activatable when a unit banished
   test("(b) → bfA is equally fine (a held battlefield is a normal unit destination): Sergeant lands at bfA exhausted for 4", async () => {
     const game = await ready(4);
     await activateToUnitPick(game);
-    await game.p1.pick("sarge");
+    await pickUnit(game, "sarge");
     await game.p1.pick("battlefield-bfA");
     expect(game.zoneOf("sarge")).toBe("battlefield-bfA");
     expect(game.state("sarge").isExhausted).toBe(true);
@@ -194,7 +197,7 @@ describe("Cursed Sarcophagus [Exhaust] — only activatable when a unit banished
   test("(b) Grimwyrm stays linked: two turns later, after P1 conquers bfB and has 4 energy, the readied Sarcophagus offers Grimwyrm and it lands on bfB", async () => {
     const game = await ready(4);
     await activateToUnitPick(game);
-    await game.p1.pick("sarge");
+    await pickUnit(game, "sarge");
     await game.p1.pick("base");
     await game.settle();
     await game.advanceTurn(); // P2
@@ -208,7 +211,7 @@ describe("Cursed Sarcophagus [Exhaust] — only activatable when a unit banished
     await game.p1.do("addResources", { energy: Math.max(0, 4 - pool) });
     const d = await activateToUnitPick(game);
     expect(pickKeys(d)).toContain("wyrm");
-    await game.p1.pick("wyrm");
+    await pickUnit(game, "wyrm");
     if (game.decision()?.kind === "pick") {
       await game.p1.pick("battlefield-bfB");
     }
@@ -223,7 +226,7 @@ describe("Cursed Sarcophagus [Exhaust] — only activatable when a unit banished
     expect(game.p1.can("activate", "sarc")).toBe(true);
     const d = await activateToUnitPick(game);
     expect(pickKeys(d)).toEqual(["sarge"]);
-    await game.p1.pick("sarge");
+    await pickUnit(game, "sarge");
     expect(game.decision()).toMatchObject({ context: "main", kind: "action", seat: P1 }); // base was forced
     expect(game.zoneOf("sarge")).toBe("base");
     expect(game.state("sarge").isExhausted).toBe(true);
@@ -235,7 +238,7 @@ describe("Cursed Sarcophagus [Exhaust] — only activatable when a unit banished
     const game = await ready(4, { conquerB: true, warden: "base" });
     const d = await activateToUnitPick(game);
     expect(pickKeys(d)).toEqual(["sarge", "wyrm"]);
-    await game.p1.pick("sarge");
+    await pickUnit(game, "sarge");
     const dest = game.decision();
     expect(dest).toMatchObject({ kind: "pick", seat: P1, semantics: "destination" });
     expect(pickKeys(dest)).toEqual(["base", "battlefield-bfA", "battlefield-bfB"]);
@@ -247,7 +250,7 @@ describe("Cursed Sarcophagus [Exhaust] — only activatable when a unit banished
   test("(c) Warden in base, choosing Grimwyrm: its ONLY legal location is bfB (conquered this turn) — not base, not the merely-held bfA (469.1 vs 469.2) — so it lands there with no destination prompt, exhausted, 5 Might, 4 paid; Sergeant stays banished", async () => {
     const game = await ready(4, { conquerB: true, warden: "base" });
     await activateToUnitPick(game);
-    await game.p1.pick("wyrm");
+    await pickUnit(game, "wyrm");
     expect(game.decision()).toMatchObject({ context: "main", kind: "action", seat: P1 }); // bfB was forced
     expect(game.zoneOf("wyrm")).toBe("battlefield-bfB");
     expect(game.state("wyrm")).toMatchObject({ controller: P1, isExhausted: true, location: "bfB", might: 5 });
@@ -261,7 +264,7 @@ describe("Cursed Sarcophagus [Exhaust] — only activatable when a unit banished
     const game = await ready(4, { conquerB: true });
     const d = await activateToUnitPick(game);
     expect(pickKeys(d)).toEqual(["sarge", "wyrm"]);
-    await game.p1.pick("wyrm");
+    await pickUnit(game, "wyrm");
     expect(game.zoneOf("wyrm")).toBe("battlefield-bfB");
   });
 
@@ -283,7 +286,7 @@ describe("Cursed Sarcophagus [Exhaust] — only activatable when a unit banished
     // a single legal card may be auto-taken or asked; accept either
     if (d?.kind === "pick") {
       expect(pickKeys(d)).toEqual(["wyrm"]);
-      await game.p1.pick("wyrm");
+      await pickUnit(game, "wyrm");
     }
     expect(game.zoneOf("wyrm")).toBe("battlefield-bfB");
     expect(game.p1.energy()).toBe(0);

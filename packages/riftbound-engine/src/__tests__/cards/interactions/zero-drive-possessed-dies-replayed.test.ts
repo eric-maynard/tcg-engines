@@ -288,12 +288,13 @@ describe("(d) no-sides: other objects' pools never contain the Sergeant", () => 
     expect(game.p2.banishment()).toEqual(["sarge"]);
     expect(game.state("sarc").meta.exiledByThis).toEqual(["corpse"]);
     await game.p1.activate("sarc");
-    await game.p1.passPriority();
-    await game.p2.passPriority();
+    // The unit "banished with this" is a TARGET named as the ability is activated (355.5 / 402.2, FIN).
     const d = game.decision();
-    expect(d).toMatchObject({ kind: "pick", seat: P1, semantics: "from-revealed" });
+    expect(d).toMatchObject({ kind: "pick", seat: P1, timing: "FIN" });
     expect(d?.kind === "pick" ? d.options.map((o) => o.card ?? o.key) : []).toEqual(["corpse"]);
     await game.p1.pick("corpse");
+    await game.p1.passPriority();
+    await game.p2.passPriority();
     expect((await game.settle()).reason).toBe("open");
     expect(triple(game, "corpse")).toEqual([P1, P1, "base"]);
     expect(game.zoneOf("sarge")).toBe("banishment");

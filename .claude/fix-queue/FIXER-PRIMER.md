@@ -445,9 +445,22 @@ Recipe — timing wrong: spell → card `rulesText`/`normalizeSpellTiming`; abil
   on the chain; ledros/cruel-patron facets carry RULING-CONFLICT); an [Ambush] REACTION play whose cost empties its
   destination is not (822.3). HARNESS: `seat.legal()/option()` variants carry `params.quote`; a unit play offered at several
   destinations goes to BASE when `play(card,{…})` names no `to` (every cost line is offered at every destination now).
-  TODO(a7c4dc7d481b): effect plays (`play-pipeline.ts continueEffectPlay` dialog) still price through their own
-  `costExtrasFor`; spells are not modelled here — [Repeat] needs PER-EXECUTION target sets (`executions:[{targets…}]`,
-  820.2.a) when they are.
+  EFFECT PLAYS of permanents (`play-pipeline.ts continuePermanentEffectPlay`, also serving `playFromZone` and
+  activated abilities that play a card): the dialog is a sequence of FILTERS over `computeUnitPlayOptions(…, {kind:
+  "effect", destinations: locationCandidatesFor(spec), extras: instructionCost(spec) (356.1.a/b: for [cost] / ignoring
+  … / reduced by), free (356.5.a), from, optionalCostIds: accelerate|accelerate-granted|pay|kill})`: no option ⇒
+  abort (419.2.a; a DECLINABLE play first re-asks with recyclable runes credited — Nocturne cac9ff02); location prompt =
+  distinct destinations; mandatory kill/return object = the objects the options name there (>1 ⇒ prompt); optional kill
+  offered iff an option pays it (declinable iff one does not — 357.3); optional resource cost (incl. the XP shape and
+  GRANTED Accelerate) offered iff an option pays it, `optInCost` = its increment; the survivor is paid via
+  `payUnitPlayCosts` and entered. `canPerformEffectPlay` for a permanent = "≥1 option exists". Spells an effect plays
+  keep `costExtrasFor` + the [Repeat] offer. PILE PLAYS by an ACTIVATED ability ("[Exhaust]: Play a unit banished with
+  this", unl-148-219): the pile card is a TARGET named at activation — `activate-ability.ts` raises `choose-target
+  {bindToChainItemId}` over `pilePlayCandidateIds` right after the item is added (offered even for one candidate,
+  355.10; harness: `activate(gear)` → `pick(unit)` (timing FIN) → pass/settle → the play's own destination prompt);
+  resolution plays THAT card (`effects/play.ts` bound-in-pile) or nothing if it left the pile (359.3.e.7).
+  TODO(a7c4dc7d481b): spells are not modelled in play-options — [Repeat] needs PER-EXECUTION target sets
+  (`executions:[{targets…}]`, 820.2.a) when they are; effect plays of spells must ask the same per-execution choices.
 - `getOptionalPlayCost(cardId)` (cost.ts) is still the per-shape reader behind the model: kinds `accelerate|pay|kill|
   discard|exhaust|spend-buff|return-to-hand` (+`mandatory`, `energyDiscount`, `ignoresBaseCost`, `entersReadyIfPaid`,
   `condition`); `getBuffSpendCost` / `getKillAnyNumberCost` / `getSacrificeCostDiscount` / `getGrantedAcceleratePlayCost`
@@ -703,12 +716,14 @@ prompt — reuse the `opt-in` pattern (`die-replacement-batch.ts offerOptionalSh
     on the chain (`type:"permanent"|"spell"`, `status:"pending"`, `play:{…progress}`; a card from a PRIVATE zone waits in
     the `chain` zone, one in trash/banishment waits there) → the move wrapper's `trigger-finalization.ts
     finalizePendingItems` (oldest pending first, 337.1.b; items blocked by `finalizeAfter` are skipped) calls
-    `continueEffectPlay`: location prompt to the PERFORMER (`choose-destination {playItemId}`; a single legal location is
-    auto) → mandatory additional cost object (`choose-target {playItemId, playCostId}`, 356.2.a.1 — required under ANY
-    cost mode) → optional additional resource cost offer (`opt-in {playItemId, playCostId, resolved.optInCost}` —
-    printed/granted Accelerate or "you may pay", 355.1.a / 356.1.b.3; free under any-and-all 356.5.a) → pay
-    (`computePlayResourceCost`+`payResourceCost`, then the cost kill/bounce via its effect) → item leaves the chain →
-    `enterPlayedPermanent` / `putPlayedSpellOnChain` → `then` (played card bound, `triggerSourceId`) → `cleanupAndFireDeaths`.
+    `continueEffectPlay`: for a PERMANENT every step is a filter over the play-options model (§7 PLAY OPTIONS — EFFECT
+    PLAYS): location prompt to the PERFORMER (`choose-destination {playItemId}`; a single legal location is auto) →
+    mandatory additional cost object (`choose-target {playItemId, playCostId}`, 356.2.a.1 — required under ANY cost mode)
+    → optional kill (`choose-target {playCostOptional}`) → optional additional resource cost offer (`opt-in {playItemId,
+    playCostId, resolved.optInCost}` — printed/granted Accelerate, "you may pay", XP-for-discount, 355.1.a / 356.1.b.3;
+    free under any-and-all 356.5.a) → pay the surviving option (`payUnitPlayCosts`) → item leaves the chain →
+    `enterPlayedPermanent`; a spell: [Repeat] offer → `computePlayResourceCost`+`payResourceCost` →
+    `putPlayedSpellOnChain`; then `then` (played card bound, `triggerSourceId`) → `cleanupAndFireDeaths`.
     Answers are written back by `pending-choice.ts` (`recordEffectPlayAnswer`) and the wrapper re-enters. `{immediate:true}`
     continues at once when nothing older is pending (used by permission plays / accepted confirms); default = after the
     enclosing effect finishes (354.3).

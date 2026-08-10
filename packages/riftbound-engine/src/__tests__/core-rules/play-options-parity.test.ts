@@ -46,6 +46,31 @@ const REKSAI = "sfd-029-221"; // friendly units played from anywhere other than 
 const STALKING_WOLF = "unl-166-219"; // Ambush · MANDATORY kill a friendly Pet
 const PORO = "ogn-013-298"; // Pet (Poro) 2 Might [Deflect]
 
+
+/** Action spell: "Banish a friendly unit. You may play it from your banishment this turn." (permission → effect-play pipeline). */
+const EXILE = {
+  abilities: [
+    {
+      effect: {
+        effects: [
+          { target: { controller: "friendly", type: "unit" }, type: "banish" },
+          { duration: "turn", target: { type: "pending-value" }, type: "grant-play-permission" },
+        ],
+        pendingValue: { source: 0 },
+        type: "sequence",
+      },
+      timing: "action",
+      type: "spell",
+    },
+  ],
+  cardType: "spell",
+  domain: "chaos",
+  energyCost: 0,
+  name: "Exile (test)",
+  powerCost: [],
+  timing: "action",
+};
+
 const PLAY_MOVES = ["playUnit", "playFromChampionZone", "revealHidden"] as const;
 type PlayMove = (typeof PLAY_MOVES)[number];
 
@@ -538,5 +563,53 @@ describe("play-options — targeted rules", () => {
     await game.p1.reveal("sneak", { payOptional: true });
     expect(game.state("sneak")).toMatchObject({ isReady: true, zone: "battlefield-bf1" });
     expect(game.p1.resources()).toEqual({ energy: 8, power: { body: 2, fury: 1 } });
+  });
+  test("419.3 / 366.1 — a play an EFFECT (permission) performs walks the SAME options as a dialog: destinations = the model's (own bf, base, and the enemy Dragon Roost that sells itself), the granted [Accelerate] is offered as a yes/no, and the pool is charged the option's own total (Rek'Sai + Eclipse Dragon from banishment)", async () => {
+    const game = await scenario()
+      .resources(P1, { energy: 9, power: { calm: 2, fury: 1 } })
+      .battlefield("roost", { controller: P2, def: DRAGON_ROOST, inert: false, owner: P2 })
+      .battlefield("bf1", { controller: P1 })
+      .unit(P2, "roost", { might: 3, name: "Keeper" }, "k")
+      .unit(P1, "bf1", { might: 1, name: "Holder" }, "holder")
+      .unit(P1, "base", REKSAI, "reksai")
+      .unit(P1, "base", ECLIPSE_DRAGON, "dragon")
+      .hand(P1, EXILE, "exile")
+      .build();
+    await game.p1.cast("exile", { targets: "dragon" });
+    await game.settle();
+    expect(game.zoneOf("dragon")).toBe("banishment");
+    expect(game.p1.can("playFrom", "dragon")).toBe(true);
+    await game.p1.playFrom("dragon");
+    // 355.2 — the destinations of the model: base, own bf1, and the Roost (2 any-Domain pips buy it).
+    const d = game.decision();
+    expect(d).toMatchObject({ kind: "pick", seat: P1, semantics: "destination" });
+    expect((d?.kind === "pick" ? d.options.map((o) => String(o.key)) : []).sort()).toEqual(["base", "battlefield-bf1", "battlefield-roost"]);
+    await game.p1.pick("battlefield-roost");
+    // 805.2 — played from banishment (not the hand): Rek'Sai's Accelerate is offered; with {9, calm 2, fury 1} the only
+    // assignment is fury→Accelerate, calm×2→Roost — accept: 8 + 1 energy, all three pips, READY at the Roost.
+    expect(game.decision()).toMatchObject({ kind: "yes-no", seat: P1, canAccept: true });
+    await game.p1.yes();
+    expect(game.zoneOf("dragon")).toBe("battlefield-roost");
+    expect(game.state("dragon")).toMatchObject({ isReady: true });
+    expect(game.p1.resources()).toEqual({ energy: 0, power: { calm: 0, fury: 0 } });
+    // With one calm fewer the Accelerate election is not even asked at the Roost (357.3) — the play just costs 8 + 2 pips.
+    const tight = await scenario()
+      .resources(P1, { energy: 9, power: { calm: 1, fury: 1 } })
+      .battlefield("roost", { controller: P2, def: DRAGON_ROOST, inert: false, owner: P2 })
+      .battlefield("bf1", { controller: P1 })
+      .unit(P2, "roost", { might: 3, name: "Keeper" }, "k")
+      .unit(P1, "bf1", { might: 1, name: "Holder" }, "holder")
+      .unit(P1, "base", REKSAI, "reksai")
+      .unit(P1, "base", ECLIPSE_DRAGON, "dragon")
+      .hand(P1, EXILE, "exile")
+      .build();
+    await tight.p1.cast("exile", { targets: "dragon" });
+    await tight.settle();
+    await tight.p1.playFrom("dragon");
+    await tight.p1.pick("battlefield-roost");
+    expect(tight.decision()?.kind).not.toBe("yes-no");
+    expect(tight.zoneOf("dragon")).toBe("battlefield-roost");
+    expect(tight.state("dragon")).toMatchObject({ isExhausted: true });
+    expect(tight.p1.resources()).toEqual({ energy: 1, power: { calm: 0, fury: 0 } });
   });
 });
