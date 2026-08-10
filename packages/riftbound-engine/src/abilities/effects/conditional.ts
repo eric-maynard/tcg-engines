@@ -1,7 +1,7 @@
 // Effect handler: "conditional"
 import { canAffordPower } from "../../game-definition/moves/chain/effect-context";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
-import { type EffectHelpers, evaluateEffectCondition } from "./_helpers";
+import { type EffectHelpers, evaluateEffectCondition, getTargetIds } from "./_helpers";
 
 /**
  * rule 356.1 / 429.3 (ven-152-166 Rebuttal) — whether the effect's controller
@@ -44,6 +44,15 @@ export function handle_conditional(effect: ExecutableEffect, ctx: EffectContext,
   const { condition } = effect as unknown as { condition?: Record<string, unknown> };
   const thenEffect = (effect as unknown as { then?: ExecutableEffect }).then;
   const elseEffect = (effect as unknown as { else?: ExecutableEffect }).else;
+
+  // rule 359.3.e.5 / 359.3.e.7 (unl-134-219 Existential Dread × [Repeat]) — a
+  // branch whose subject is the chosen target does nothing at all once that
+  // target is illegal: neither branch runs, and the condition is never read
+  // off a card that is no longer the object that was chosen.
+  const subject = (effect as unknown as { target?: unknown }).target;
+  if (subject !== undefined && (ctx.boundTargets?.length ?? 0) > 0 && getTargetIds(effect, ctx).length === 0) {
+    return;
+  }
 
   // rule 356.1 (ven-152-166) — "You may pay [rainbow]. If you do, X.
   // Otherwise, Y." is a cost paid WITHIN the instructions: the controller is

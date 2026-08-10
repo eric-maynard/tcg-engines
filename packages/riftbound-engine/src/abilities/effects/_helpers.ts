@@ -115,6 +115,22 @@ function filterBoundByLocation(bound: string[], tgt: unknown, ctx: EffectContext
     });
   }
   if (location !== "battlefield" && location !== "base") {
+    // rule 359.3.e.2 (unl-134-219 Existential Dread × [Repeat]) — an object
+    // returned to a hand or deck is a NEW object, so a descriptor naming board
+    // objects ("an attacking enemy unit") stops matching it even when it named
+    // no explicit location. Other zones (facedown, champion, banishment, runes)
+    // are reachable by effects that name no location, so they are left alone.
+    const targetType =
+      typeof tgt === "object" && tgt !== null ? (tgt as { type?: string }).type : undefined;
+    if (
+      location === undefined &&
+      (targetType === "unit" || targetType === "gear" || targetType === "permanent")
+    ) {
+      return bound.filter((id) => {
+        const zone = ctx.zones.getCardZone(id as CoreCardId);
+        return zone !== "hand" && zone !== "mainDeck";
+      });
+    }
     return bound;
   }
   return bound.filter((id) => {
