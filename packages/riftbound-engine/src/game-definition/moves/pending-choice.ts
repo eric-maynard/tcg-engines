@@ -3549,7 +3549,13 @@ export const pendingChoiceMoves: Partial<
         // says "Recycle the remaining cards" still recycles every revealed
         // card; only Vision-like looks (no onRest) leave them on top.
         if (choice.onRest === "recycle") {
-          for (const restId of choice.revealed) {
+          // rule 416.5 — the declined cards are recycled SIMULTANEOUSLY too, so
+          // they go under the deck in a RANDOM order, not the reveal order.
+          const declinedRest = randomizedOrder(
+            choice.revealed as readonly string[],
+            (context as { rng?: { shuffle: <T>(array: readonly T[]) => T[] } }).rng,
+          );
+          for (const restId of declinedRest) {
             context.zones.moveCard({
               cardId: restId as CoreCardId,
               position: "bottom",
