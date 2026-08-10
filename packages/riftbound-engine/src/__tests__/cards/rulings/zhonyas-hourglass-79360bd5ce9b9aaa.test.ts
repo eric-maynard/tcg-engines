@@ -95,7 +95,7 @@ describe("Ruling 79360bd5ce9b9aaa — a Zhonya's flipped at bf1 saves units dyin
     expect(game.zoneOf("yak")).toBe("trash");
   });
 
-  test.failing("BUG: combat variant: Brute (8) attacks bf2 defended by Yak (4) + a 2-Might Calf; P2 flips the bf1 Hourglass with Focus; combat damage kills both defenders SIMULTANEOUSLY → again P2 chooses which one Zhonya's recalls", async () => {
+  test("combat variant: Brute (8) attacks bf2 defended by Yak (4) + a 2-Might Calf; P2 flips the bf1 Hourglass with Focus; combat damage kills both defenders SIMULTANEOUSLY → again P2 chooses which one Zhonya's recalls", async () => {
     const game = await board().unit(P2, "bf2", { might: 2, name: "Calf" }, "calf").build();
     await game.p1.move("brute", "bf2");
     await game.p1.passFocus();
@@ -103,6 +103,8 @@ describe("Ruling 79360bd5ce9b9aaa — a Zhonya's flipped at bf1 saves units dyin
     await game.p2.reveal("zh");
     expect(game.zoneOf("zh")).toBe("base");
     game.script(P1, [(d) => (d.kind === "distribute" ? { allocation: { calf: 4, yak: 4 }, kind: "distribute" } : undefined)]);
+    // rule 347.1.b — P2's Focus action closing its chain passes Focus back to P1, so P1 acts first again.
+    await game.p1.passFocus();
     await game.p2.passFocus();
     if (game.decision()?.kind === "action") {
       await game.settle();
