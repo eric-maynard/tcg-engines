@@ -14,6 +14,7 @@ import type { RiftboundGameState } from "../types";
 import type { TargetDescriptor } from "./target-resolver";
 import { EFFECT_HANDLERS } from "./effects";
 import { handle_delayedTrigger } from "./effects/delayed-trigger";
+import { offerRevealTopChoices } from "./effects/look";
 import type { EffectHelpers } from "./effects/_helpers";
 import {
   checkBecomesMighty,
@@ -225,6 +226,13 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
       ...ctx,
       playerId: ownerId as string,
     });
+    return;
+  }
+  // rule 424 / 370.1 (rule-id: ogn-121-298 Teemo, Strategist × ogn-194-298
+  // Nocturne) — an effect whose AMOUNT reveals cards from a deck performs a real
+  // reveal: the revealed cards' own on-reveal abilities happen before the effect
+  // that counts them runs.
+  if (!ctx.draft.pendingChoice && offerRevealTopChoices(effect, ctx, EFFECT_HELPERS)) {
     return;
   }
   // rule-id: unl-095-219 — "delayed-trigger" installs a triggered ability on a

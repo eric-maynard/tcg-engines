@@ -3,7 +3,7 @@ import type { CardId as CoreCardId, PlayerId as CorePlayerId, ZoneId as CoreZone
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import { findAllReplacements } from "../replacement-effects";
-import { type EffectHelpers, resolveAmount } from "./_helpers";
+import { type EffectHelpers, recordPublicReveal, resolveAmount } from "./_helpers";
 
 /**
  * rule 369.1 / 424 (sfd-018-221 Void Hatchling) — "If you would reveal cards
@@ -122,6 +122,8 @@ export function offerAsYouRevealChoice(
   owner: string,
   continuation: (offered: readonly string[]) => unknown,
   alreadyOffered: readonly string[] = [],
+  /** Source the CONTINUATION runs under; the prompt itself belongs to the revealed card. */
+  thenSourceCardId?: string,
 ): boolean {
   for (const revealedId of revealedIds) {
     if (alreadyOffered.includes(revealedId)) {
@@ -137,9 +139,65 @@ export function offerAsYouRevealChoice(
       playerId: owner as CorePlayerId,
       sourceCardId: revealedId as CoreCardId,
       then: continuation([...alreadyOffered, revealedId]),
+      ...(thenSourceCardId !== undefined && thenSourceCardId !== revealedId
+        ? { thenSourceCardId }
+        : {}),
       type: "confirm",
       // biome-ignore lint/suspicious/noExplicitAny: branded id types
     } as any;
+    return true;
+  }
+  return false;
+}
+
+/**
+ * rule 424 / 370.1 (rule-id: ogn-121-298 Teemo, Strategist × ogn-194-298
+ * Nocturne) — some effects reveal cards inside their AMOUNT ("deal 1 for each
+ * card with [Hidden] among the top 5 of your Main Deck revealed this way").
+ * That is a real public reveal, so the revealed cards' own on-reveal abilities
+ * happen FIRST: mandatory ones resolve (429.2) and an optional "as you look at
+ * or reveal me from the top of your deck" is offered, before the effect that
+ * counts them runs. The cards turned over are frozen onto the effect
+ * (`revealedIds`), so a card that banished itself simply drops out and no fresh
+ * card pulled up behind it joins the count (354.3).
+ * Returns true when the effect was suspended (a prompt is open) or re-entered
+ * with the reveal recorded — either way the caller must not run it now.
+ */
+export function offerRevealTopChoices(
+  effect: ExecutableEffect,
+  ctx: EffectContext,
+  h: EffectHelpers,
+): boolean {
+  const amount = (effect as { amount?: Record<string, unknown> }).amount;
+  if (typeof amount !== "object" || amount === null || !("revealTop" in amount)) {
+    return false;
+  }
+  const owner = ctx.playerId as string;
+  const deck = ctx.zones
+    .getCardsInZone("mainDeck" as CoreZoneId, owner as CorePlayerId)
+    .map((c) => c as string);
+  const carried = amount.revealedIds as readonly string[] | undefined;
+  const topN = carried
+    ? carried.filter((id) => deck.includes(id))
+    : deck.slice(0, Math.max(0, (amount.revealTop as number) ?? 0));
+  if (topN.length === 0) {
+    return false;
+  }
+  const offered = (amount.revealOffered as readonly string[] | undefined) ?? [];
+  const continuation = (nowOffered: readonly string[]): unknown => ({
+    ...(effect as object),
+    amount: { ...amount, revealOffered: nowOffered, revealedIds: topN },
+  });
+  if (carried === undefined) {
+    // rule 424.1 — present the cards before anything can move them.
+    recordPublicReveal(ctx, owner, topN);
+    fireMandatoryRevealAbilities(topN, owner, ctx, h);
+  }
+  if (offerAsYouRevealChoice(ctx, topN, owner, continuation, offered, ctx.sourceCardId)) {
+    return true;
+  }
+  if (carried === undefined) {
+    h.executeEffect(continuation(offered) as ExecutableEffect, ctx);
     return true;
   }
   return false;
