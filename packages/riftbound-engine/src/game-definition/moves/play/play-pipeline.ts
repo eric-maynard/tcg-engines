@@ -56,6 +56,7 @@ import { executeResolvedItem } from "../chain/resolve";
 import {
   type CostExtras,
   type OptionalPlayCost,
+  battlefieldHasEnemyUnits,
   battlefieldIsAttackedBy,
   battlefieldIsOccupiedEnemy,
   battlefieldIsOpen,
@@ -63,6 +64,7 @@ import {
   boardEntersReadyGrantApplies,
   canPayResourceCost,
   canPlayToAttackedBattlefield,
+  canPlayToEnemyOccupiedBattlefield,
   canPlayToOccupiedEnemyBattlefield,
   canPlayToOpenBattlefield,
   computePlayResourceCost,
@@ -982,15 +984,23 @@ function selfGrantedPlayLocations(io: PlayIO, spec: EffectPlaySpec): string[] {
   }
   const openOk = canPlayToOpenBattlefield(draft, zones, spec.cardId, spec.playerId);
   const enemyOk = canPlayToOccupiedEnemyBattlefield(spec.cardId);
+  // rule 355.2 (unl-120-219 Rengar, Trophy Hunter) — "I can be played to a
+  // battlefield where there are enemy units" needs no enemy CONTROL of the
+  // battlefield, so it is a separate permission from `enemyOk`.
+  const enemyUnitsOk = canPlayToEnemyOccupiedBattlefield(spec.cardId);
   const attackedOk = canPlayToAttackedBattlefield(spec.cardId);
-  if (!openOk && !enemyOk && !attackedOk) {
+  if (!openOk && !enemyOk && !enemyUnitsOk && !attackedOk) {
     return [];
   }
+  const getController = (id: CoreCardId): string | undefined =>
+    (io.cards.getCardController?.(id) as string | undefined) ??
+    (io.cards.getCardOwner?.(id) as string | undefined);
   const out: string[] = [];
   for (const bfId of Object.keys(draft.battlefields ?? {})) {
     if (
       (openOk && battlefieldIsOpen(draft, zones, bfId)) ||
       (enemyOk && battlefieldIsOccupiedEnemy(draft, zones, bfId, spec.playerId)) ||
+      (enemyUnitsOk && battlefieldHasEnemyUnits(zones, getController, bfId, spec.playerId)) ||
       (attackedOk && battlefieldIsAttackedBy(draft, bfId, spec.playerId))
     ) {
       out.push(`battlefield-${bfId}`);
@@ -1094,6 +1104,34 @@ function payableOptionalCost(
     computePlayResourceCost(draft, spec.playerId, spec.cardId, extras, meta, false),
   );
   return affordable ? optional : undefined;
+}
+
+/**
+ * rule 356.4.f — what electing `offer` ACTUALLY adds to this play's Total Cost.
+ * Additional costs join the total BEFORE discounts, so a discount that
+ * overflowed the printed Energy cost (Reinforce's "reducing its cost by [5]")
+ * keeps eating the optional Energy half. The opt-in prompt must gate on that
+ * INCREMENTAL Energy, not on the printed [1]: an optional cost discounted to
+ * nothing is still electable and still counts as paid (rule 356.4.f.1).
+ */
+function optionalCostIncrementEnergy(
+  io: PlayIO,
+  spec: EffectPlaySpec,
+  offer: OptionalCostOffer,
+  location?: string,
+): number {
+  const { draft, cards } = io;
+  if (offer.energy <= 0 || draft.runePools[spec.playerId] === undefined) {
+    return offer.energy;
+  }
+  const meta = typeof cards?.getCardMeta === "function" ? createMetaAccessor(cards) : undefined;
+  const priced = (opt?: OptionalCostOffer): number => {
+    const { extras, free } = costExtrasFor(io, spec, opt, location);
+    return free
+      ? 0
+      : computePlayResourceCost(draft, spec.playerId, spec.cardId, extras, meta, false).energy;
+  };
+  return Math.max(0, Math.min(offer.energy, priced(offer) - priced()));
 }
 
 /**
@@ -1261,6 +1299,9 @@ export function continueEffectPlay(io: PlayIO, item: PendingPlayItem): "prompted
     if (offer && progress.offered === undefined) {
       patchPlayItem(draft, item.id, { offered: offer });
       const free = spec.costMode.kind === "ignore-any-and-all";
+      // rule 356.4.f — gate on what the election really costs on top of the
+      // (already discounted) play, not on the printed amount.
+      const owedEnergy = free ? 0 : optionalCostIncrementEnergy(io, spec, offer, location);
       draft.pendingChoice = {
         playCostId: offer.id,
         playItemId: item.id,
@@ -1270,9 +1311,9 @@ export function continueEffectPlay(io: PlayIO, item: PendingPlayItem): "prompted
           controller: spec.playerId,
           // rule 356.5.a — under "any and all costs" the amount is zero; the
           // decision still counts as paying it (356.4.f.1).
-          ...(free || (offer.energy === 0 && offer.power.length === 0)
+          ...(free || (owedEnergy === 0 && offer.power.length === 0)
             ? {}
-            : { optInCost: { energy: offer.energy, power: [...offer.power] } }),
+            : { optInCost: { energy: owedEnergy, power: [...offer.power] } }),
           type: "ability",
         },
         sourceCardId: spec.cardId,
