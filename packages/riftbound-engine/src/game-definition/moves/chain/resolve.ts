@@ -36,6 +36,7 @@ import { withChainItemResolution } from "../../../chain/resolution-guard";
 import { cleanupAndFireDeaths } from "../../../cleanup/post-move-cleanup";
 import { newObjectTargetsFor } from "../../../operations/leave-board";
 import { checkVictory } from "../../../operations/points";
+import { areAllies } from "../../../operations/teams";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../../types";
 import { getCardEffectiveMight, getDeflectSurcharge, xCostIsPower } from "../play/cost";
@@ -46,6 +47,7 @@ import {
   findSequenceLeadTarget,
   hiddenChoiceIsPulledIn,
   isLegalMultiTargetSet,
+  pairEffectRoles,
   type SpellEffectTargetShape,
 } from "../play/targeting";
 import { isPendingPlayItem } from "../play/play-pipeline";
@@ -855,9 +857,9 @@ export function executeResolvedItem(
       if (who === "") {
         return true;
       }
-      return lockedController === "friendly"
-        ? who === resolved.controller
-        : who !== resolved.controller;
+      // rule 489.8.e / 740.1.a — in team modes a teammate's object is friendly.
+      const allied = areAllies(draft, resolved.controller as string, who);
+      return lockedController === "friendly" ? allied : !allied;
     };
     // rule 359.3.e.4–5 / 359.3.f.2 — a trigger finalized through the dialog
     // chose its Game Objects against the descriptor as it read THEN; on
@@ -990,8 +992,15 @@ export function executeResolvedItem(
           stillLegal.has(id) ? [] : [at],
         );
       }
+      // rule 433 / 359.3.e.6 (sfd-145-221 Switcheroo × unl-184-219 Thrill of the
+      // Hunt) — a two-role effect (swap-might / swap-locations /
+      // increase-might-to) names ONE locked pair: losing either member leaves no
+      // performable instruction, and the surviving pick must never be paired
+      // with a fresh bystander at resolution.
+      const linkedPair =
+        pairEffectRoles(effect as unknown as SpellEffectTargetShape) !== undefined;
       boundTargets = legal;
-      mistargeted = legal.length === 0 || linkedFight;
+      mistargeted = legal.length === 0 || linkedFight || linkedPair;
     }
   }
   // rule-id: unl-119-219 (rule 355.10) — a `sequence` ("spend 3 XP, then deal
@@ -1394,7 +1403,22 @@ export function executeResolvedItem(
           typeof loc === "string" &&
           ["trash", "banishment"].includes(loc) &&
           owner?.from === loc;
-        return boardChoice || namesPublicPile ? { remove: true } : {};
+        // rule 402.2 / 402.4 (rule-id: ven-113-166 Kennen, ruling
+        // e6943fb0d5a7f848) — a card in the TRASH or BANISHMENT is a Game Object
+        // in a PUBLIC pile, so a mandatory single target there is named as the
+        // item is finalized just like a board choice ("give a spell in your
+        // trash [Flow]"). An empty pile is then a choice with no legal option:
+        // the item is removed now instead of re-aiming at resolution at whatever
+        // an earlier item on the Chain put there in the meantime.
+        const publicPileTarget =
+          upTo === undefined &&
+          (target as { optional?: boolean }).optional !== true &&
+          typeof loc === "string" &&
+          ["trash", "banishment"].includes(loc) &&
+          owner?.type !== "play" &&
+          owner?.from === undefined &&
+          owner?.player === undefined;
+        return boardChoice || namesPublicPile || publicPileTarget ? { remove: true } : {};
       }
       boundTargets = options;
       if (deflectTax && boundTargets.length > 0) {
