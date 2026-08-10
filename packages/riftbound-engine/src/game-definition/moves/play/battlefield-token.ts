@@ -82,9 +82,13 @@ export function applyPlayBattlefieldToken(args: {
   if (typeof zones.createCardInZone !== "function" || typeof zones.createZone !== "function") {
     return undefined;
   }
-  const tokenId = `token-bf-${spec.battlefield.defId}`;
-  if (draft.battlefields[tokenId]) {
-    return undefined;
+  // rule 439.4.b: "if it's not there already" is the NAME check above — a fresh
+  // token is a brand new object. A slot key can survive the token that minted it
+  // (rule 438.1, a Replace re-uses the slot), so take the next free id instead of
+  // treating that stale key as the battlefield still being on the board.
+  let tokenId = `token-bf-${spec.battlefield.defId}`;
+  for (let n = 2; draft.battlefields[tokenId] !== undefined; n++) {
+    tokenId = `token-bf-${spec.battlefield.defId}-${n}`;
   }
   zones.createCardInZone({
     cardId: tokenId as CoreCardId,

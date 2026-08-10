@@ -72,14 +72,26 @@ export function handle_replaceBattlefield(
   }
   const owner = ctx.cards.getCardOwner(battlefieldId as CoreCardId) ?? ctx.playerId;
 
-  // rule 438.5: the printed battlefield leaves the slot for Banishment as its
-  // own object, so it can be swapped back later.
-  const replacedId = `replaced-${battlefieldId}-${replacedSeq++}`;
-  ctx.createCardInZone?.(replacedId, "banishment", owner);
-  registry.register(replacedId, { ...replacedDef, id: replacedId });
+  // rule 438.5 / 438.6 / 186.1: the replaced object heads for Banishment, but a
+  // TOKEN put anywhere but the board ceases to exist — it never waits there, so
+  // a later Swap Back has nothing to swap to (438.7.c). 438.6.a: that does not
+  // undo or invalidate the replacement.
+  let replacedId: string | null = null;
+  if (!registry.isToken(battlefieldId)) {
+    // rule 438.5.a: a replaced CARD persists in Banishment "as Replaced" as its
+    // own object, so it can be swapped back later.
+    replacedId = `replaced-${battlefieldId}-${replacedSeq++}`;
+    ctx.createCardInZone?.(replacedId, "banishment", owner);
+    registry.register(replacedId, { ...replacedDef, id: replacedId });
+  }
 
   // rule 438.1: the token takes the slot itself — same id, so the units there
   // and the battlefield's controller/points state need no rewriting.
+  // rule 439.4 / 183: it is a NEW object OWNED by the player whose effect
+  // created it, not a re-skin of the replaced object, so the slot's card
+  // instance is minted fresh under that owner.
+  ctx.zones.removeCardFromGame?.({ cardId: battlefieldId as CoreCardId });
+  ctx.createCardInZone?.(battlefieldId, "battlefieldRow", ctx.playerId);
   registry.register(battlefieldId, {
     abilities: [...tokenDef.abilities] as never,
     cardType: "battlefield",
