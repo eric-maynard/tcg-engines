@@ -83,7 +83,7 @@ export {
 export type { DecisionContext, NarrowResult } from "./decision";
 export { applyMove, endTurn, nextPlayerAfter, PROCEDURE_MOVES, runProcedures } from "./turn-driver";
 export type { ApplyMoveOptions, ApplyMoveResult, EndTurnResult, ProcedureRun } from "./turn-driver";
-export { observe, listZoneSummaries, isPrivateZone, canSee } from "./observation";
+export { observe, listZoneSummaries, isPrivateZone, isSecretZone, canSee } from "./observation";
 export { getInternalState, hashEngine, takeSnapshot } from "./internal";
 export type { FullSnapshot, HarnessEngine } from "./internal";
 export type { ExpirationPassTrace, TurnTrace } from "../game-definition/flow/expiration-step";
