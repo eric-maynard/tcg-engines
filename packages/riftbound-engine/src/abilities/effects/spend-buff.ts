@@ -20,7 +20,9 @@ export function findAllSpendableBuffs(effect: ExecutableEffect, ctx: EffectConte
   // ogn-269-298, `trigger-source`) never falls back to the source card.
   const namesSubject = (descriptor as { type?: string }).type === "trigger-source";
   const candidates = [
-    ...resolveTarget(descriptor, {
+    // "spend any number of buffs" must see EVERY buffed candidate, so the
+    // descriptor's own quantity never narrows the pool here.
+    ...resolveTarget({ ...descriptor, quantity: "all" } as TargetDescriptor, {
       cards: ctx.cards,
       draft: ctx.draft,
       playerId: ctx.playerId,
@@ -30,13 +32,34 @@ export function findAllSpendableBuffs(effect: ExecutableEffect, ctx: EffectConte
       zones: ctx.zones,
     }),
     ...(namesSubject ? [] : [ctx.sourceCardId]),
-  ].filter((id) => {
-    const meta = ctx.cards.getCardMeta?.(id as CoreCardId) as
-      | Partial<RiftboundCardMeta>
-      | undefined;
-    return meta?.buffed === true;
-  });
+  ].filter((id) => buffCountOf(ctx, id) > 0);
   return [...new Set(candidates)];
+}
+
+/**
+ * rule 702.2.b / 703 — every Buff on an object is its OWN counter (each +1
+ * Might); the first is tracked by `meta.buffed`, the rest by `extraBuffs`.
+ */
+export function buffCountOf(ctx: EffectContext, id: string): number {
+  const meta = ctx.cards.getCardMeta?.(id as CoreCardId) as Partial<RiftboundCardMeta> | undefined;
+  return (meta?.buffed === true ? 1 : 0) + (meta?.extraBuffs ?? 0);
+}
+
+/** rule 702.2.b / 745.1 — spending a buff removes a SINGLE Buff counter. */
+function removeOneBuff(ctx: EffectContext, id: string): boolean {
+  const meta = ctx.cards.getCardMeta?.(id as CoreCardId) as Partial<RiftboundCardMeta> | undefined;
+  const extra = meta?.extraBuffs ?? 0;
+  if (extra > 0) {
+    ctx.cards.updateCardMeta?.(id as CoreCardId, { extraBuffs: extra - 1 } as unknown as Record<string, unknown>);
+    return true;
+  }
+  if (meta?.buffed !== true) {
+    return false;
+  }
+  ctx.counters.setFlag(id as CoreCardId, "buffed", false);
+  // Mirror handle_buff: Might readers check top-level meta.buffed.
+  ctx.cards.updateCardMeta?.(id as CoreCardId, { buffed: false } as unknown as Record<string, unknown>);
+  return true;
 }
 
 export function findSpendableBuff(effect: ExecutableEffect, ctx: EffectContext): string | undefined {
@@ -48,7 +71,15 @@ export function handle_spendBuff(effect: ExecutableEffect, ctx: EffectContext, h
   // to ready it" is a per-unit choice, not one all-or-nothing yes/no — park a
   // `pick-many` subset prompt over every unit that could spend, min 0 (spend
   // none) to all. The prompt is skipped when nothing could be spent.
-  if ((effect as { optional?: boolean }).optional === true && !ctx.boundTargets) {
+  // rule 702.2.b (ogn-230-298) — "spend ANY NUMBER of buffs" is likewise a
+  // per-counter subset pick, not one pick per buffed unit.
+  const anyNumberOfBuffs =
+    ((effect as { target?: { quantity?: unknown } }).target as { quantity?: unknown } | undefined)
+      ?.quantity === "any";
+  if (
+    ((effect as { optional?: boolean }).optional === true || anyNumberOfBuffs) &&
+    !ctx.boundTargets
+  ) {
     if (ctx.draft.pendingChoice) {
       return;
     }
@@ -57,10 +88,18 @@ export function handle_spendBuff(effect: ExecutableEffect, ctx: EffectContext, h
       return;
     }
     const { optional: _optional, ...rest } = effect as ExecutableEffect & { optional?: boolean };
+    // rule 702.2.b — one option per Buff COUNTER, so a unit carrying several can
+    // have some (not all) of them spent.
+    const options = spendable.flatMap((id) =>
+      Array.from({ length: buffCountOf(ctx, id) }, (_v, i) => ({
+        cardId: id,
+        key: i === 0 ? id : `${id}#${i + 1}`,
+      })),
+    );
     ctx.draft.pendingChoice = {
-      max: spendable.length,
+      max: options.length,
       min: 0,
-      options: spendable.map((id) => ({ cardId: id, key: id })),
+      options,
       playerId: ctx.playerId,
       prompt: "Spend which buffs?",
       resume: {
@@ -105,20 +144,16 @@ export function handle_spendBuff(effect: ExecutableEffect, ctx: EffectContext, h
   // `then` resolves once PER buff spent. Without bound targets this stays the
   // single-buff cost of ogn-147-298.
   const bound = ctx.boundTargets;
-  const hasBuff = (id: string): boolean =>
-    (ctx.cards.getCardMeta?.(id as CoreCardId) as Partial<RiftboundCardMeta> | undefined)
-      ?.buffed === true;
+  // A card may appear once per counter it is spending (702.2.b), so the "has a
+  // buff left" check is re-made inside the loop instead of filtering up front.
   const spentIds = bound
-    ? bound.filter((id) => hasBuff(id as string)).map((id) => id as string)
+    ? bound.map((id) => id as string)
     : [findSpendableBuff(effect, ctx)].filter((id): id is string => id !== undefined);
   const then = (effect as { then?: ExecutableEffect }).then;
   for (const spent of spentIds) {
-    ctx.counters.setFlag(spent as CoreCardId, "buffed", false);
-    // Mirror handle_buff: Might readers check top-level meta.buffed.
-    ctx.cards.updateCardMeta?.(
-      spent as CoreCardId,
-      { buffed: false } as unknown as Record<string, unknown>,
-    );
+    if (!removeOneBuff(ctx, spent)) {
+      continue;
+    }
     // rule 702.2.b: a "spend a buff to …" instruction is a spend too — fire the
     // event once per buff removed, before the nested effect resolves.
     ctx.fireTriggers?.({

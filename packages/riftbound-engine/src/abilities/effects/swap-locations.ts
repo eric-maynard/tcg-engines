@@ -6,6 +6,7 @@ import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import type { EffectHelpers } from "./_helpers";
 import { hasKeyword } from "../../game-definition/moves/movement/helpers";
 import { arriveByEffect, moveCardWithEvent } from "./move";
+import { collapseTriggerBatch } from "../../chain";
 
 /**
  * rule-id: unl-083-219 (Smoke and Mirrors) — rule 355.8 / 433: "Choose a unit
@@ -63,10 +64,16 @@ export function handle_swapLocations(
   // rule 450: Contested is attributed to the CONTROLLER of the arriving unit
   // (the shared arrival helper reads it); both land before either is staged.
   if (a && b && zoneA && zoneB && zoneA !== zoneB && gateMet) {
+    // rule 383.3.d / 449 — "move each to the other's location" is ONE
+    // simultaneous movement: the move triggers and the combat designations the
+    // two arrivals hand out are simultaneous, so they form a single batch their
+    // controller may order (383.3.d), not a fixed sequence.
+    const chainLenBefore = ctx.draft.interaction?.chain?.items.length ?? 0;
     const aLanded = moveCardWithEvent(ctx, a, zoneB);
     const bLanded = moveCardWithEvent(ctx, b, zoneA);
     arriveByEffect(ctx, [a], aLanded);
     arriveByEffect(ctx, [b], bLanded);
+    collapseTriggerBatch(ctx.draft.interaction, chainLenBefore);
   }
 
   if (spec.then) {

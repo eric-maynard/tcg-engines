@@ -1006,6 +1006,11 @@ export function executeResolvedItem(
         ((effect as { from?: unknown }).from === "trash" &&
           (target as { location?: unknown }).location !== "trash"))
     ) &&
+    // rule 702.2.b (ogn-230-298) — "spend any number of buffs" names BUFF
+    // COUNTERS, not objects: several may come off one unit, so the spend-buff
+    // handler raises its own per-counter subset prompt instead of this
+    // one-pick-per-object target prompt.
+    !(effect.type === "spend-buff" && (target as { quantity?: unknown }).quantity === "any") &&
     // rule 355.14 (ogn-041-298): split damage picks its targets together with
     // the distribution in the damage handler, not as a single-target prompt.
     !(effect.type === "damage" && (effect as { split?: boolean }).split === true) &&
