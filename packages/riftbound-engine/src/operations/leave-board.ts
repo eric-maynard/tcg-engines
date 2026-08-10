@@ -741,8 +741,7 @@ export function leaveBoard(
   // anywhere other than your Main Deck, banish it instead". Every departure
   // routed through leaveBoard comes from the board, the hand or the chain —
   // never from the Main Deck — so a trash destination is always replaceable.
-  let finalTo = to;
-  if (to === "trash" && ctx.zones.getCardsInZone !== undefined) {
+  let finalTo = to;  if (to === "trash" && ctx.zones.getCardsInZone !== undefined) {
     const getCardsInZone = ctx.zones.getCardsInZone.bind(ctx.zones);
     const getCardOwner = ctx.cards?.getCardOwner?.bind(ctx.cards);
     if (replacementEffects.hasTrashToBanishReplacement(ctx.draft, { getCardOwner, getCardsInZone }, lki.owner)) {
@@ -800,6 +799,22 @@ export function leaveBoard(
 // ---------------------------------------------------------------------------
 // Events
 // ---------------------------------------------------------------------------
+
+/**
+ * rule 374 / 370.2 (rule-id: ven-022-166) — the `banish` event for a departure a
+ * blanket "goes to YOUR trash → banish it instead" replacement rerouted. The
+ * replacement's source is controlled by the card's own owner (it only ever
+ * matches "your" trash), so that player is the banisher for rule 411.4.
+ */
+export function buildTrashReplacedBanishEvent(cardId: string, lki: LKISnapshot): GameEvent {
+  return {
+    cardId,
+    owner: lki.owner,
+    playerId: lki.owner,
+    type: "banish",
+    ...(lki.zone !== undefined ? { from: lki.zone } : {}),
+  } as GameEvent;
+}
 
 /** Build the unified event for one leave result (payload keeps kill.ts's field names). */
 export function buildLeaveEvent(result: LeaveResult, batchIndex?: number): GameEvent | undefined {
@@ -944,6 +959,14 @@ export function emitLeaveEvents(
       const event = buildLeaveEvent(r, batchIndex);
       if (event && fire) {
         const n = fire(event);
+        total += typeof n === "number" ? n : 0;
+      }
+      // rule 374 / 370.2 (rule-id: ven-022-166 × ven-191-166) — a trash→banish
+      // replacement is a BANISH performed by the controller of the replacement's
+      // source, which for "YOUR trash" is the departing card's own owner, so
+      // "when you banish a card you own" sees it like an instructed banish.
+      if (r.trashReplaced === true && fire) {
+        const n = fire(buildTrashReplacedBanishEvent(r.cardId, r.lki));
         total += typeof n === "number" ? n : 0;
       }
     }

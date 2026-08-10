@@ -41,6 +41,7 @@ import {
   type LeaveCause,
   type LeaveDestination,
   buildReplacementEffectContext,
+  buildTrashReplacedBanishEvent,
   emitLeaveEvents,
   leaveBoard,
   snapshotBatch,
@@ -54,6 +55,7 @@ import {
   findAllReplacements,
   markReplacementConsumed,
 } from "./replacement-effects";
+import { fireTriggers } from "./trigger-runner";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -366,7 +368,14 @@ function applyCandidate(ctx: Ctx, cardId: string, c: DieReplacementCandidate): b
   if (c.banishInstead) {
     // rule 427.2.a — banishment is not a kill: no `die` event, no Deathknell.
     clearDamage(ctx, cardId);
-    leaveBoard(ctx, cardId, "banishment", { kind: "replaced" });
+    const res = leaveBoard(ctx, cardId, "banishment", { kind: "replaced" });
+    // rule 374 / 370.2 — a replacement's actions are performed by the controller
+    // of its source, and "if a card would go to YOUR trash …" only ever matches
+    // the card's own owner, so this IS a banish that player performed: "when you
+    // banish a card you own" (ven-191-166) must see it.
+    if (res.left) {
+      fireTriggers(buildTrashReplacedBanishEvent(cardId, res.lki), ctx as never);
+    }
     return true;
   }
   const match = c.match as MatchedReplacement;

@@ -1305,6 +1305,11 @@ function queueDelayedEntersReadyTrigger(
       controller: playerId as PlayerId,
       effect: (effects.length === 1 ? effects[0] : { effects, type: "sequence" }) as never,
       status: "pending",
+      // rule 355.10 (rule-id: unl-052-219 × sfd-057-221) — the payoff applies to
+      // "the next unit you play", an object the ability never chooses. Binding
+      // the unit here keeps finalization from re-planning (and thus from raising
+      // a `choose` event): an Irelia readied this way gets +1 for the ready only.
+      targets: [enteringCardId],
       triggered: true,
       type: "ability",
     } as never,
