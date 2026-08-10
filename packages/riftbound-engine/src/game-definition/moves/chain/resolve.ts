@@ -1519,8 +1519,19 @@ export function executeResolvedItem(
     mistargeted &&
     effect.type === "damage" &&
     typeof (effect.amount as { revealTop?: unknown } | undefined)?.revealTop === "number";
+  // rule 359.3.e.5 (rule-id: dadac78067b2950e, ogn-008-298 Get Excited!) — a
+  // discard whose only target belongs to its `then` clause ("Discard 1. Deal
+  // its Energy cost as damage to a unit at a battlefield") is its own
+  // instruction: losing the unit skips only the damage, the discard is still
+  // mandatory. Dropping the `then` also stops it from re-aiming at a bystander.
+  const discardRider =
+    mistargeted &&
+    effect.type === "discard" &&
+    (effect as { then?: unknown }).then !== undefined;
   if (splashRider || revealAmountRider) {
     executeEffect({ ...(effect as object), _splashOnly: true } as ExecutableEffect, effectCtx);
+  } else if (discardRider) {
+    executeEffect({ ...(effect as object), then: undefined } as ExecutableEffect, effectCtx);
   } else if (
     !mistargeted ||
     effect.type === "create-token" ||
