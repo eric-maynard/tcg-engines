@@ -79,6 +79,16 @@ async function deceiverCopiesS1(): Promise<Game> {
   if (game.decision()?.kind === "pick" && (game.decision() as { semantics?: string }).semantics === "from-revealed") {
     await game.p1.pick("fodder"); // the "discard 1" half of the cost
   }
+  // rule 387 / 359.2 — "It becomes a copy of another unit there" is REFLEXIVE: its object
+  // is named only as that instruction RESOLVES, so both players hold priority on the
+  // finalized trigger first and the copy-source pick comes after.
+  for (let i = 0; i < 4; i++) {
+    const d = game.decision();
+    if (d?.kind !== "action" || d.context !== "chain") {
+      break;
+    }
+    await game.seat(d.seat).passPriority();
+  }
   expect(game.decision()).toMatchObject({ kind: "pick", seat: P1, semantics: "target" });
   await game.p1.pick("s1"); // "another unit there" to copy
   const r = await game.settle();
@@ -112,7 +122,7 @@ describe("(a) Deceiver's hold trigger plays a Reflection at bf1 that becomes a c
     expect(d?.kind === "pick" ? d.options.map((o) => o.card ?? o.key).sort() : []).toEqual(["s1", "s2"]);
   });
 
-  test.failing("BUG: after it resolves: fodder discarded, legend exhausted, and a READY P1-controlled unit TOKEN named 'Spiderling' stands at bf1 (477.1.b.1.a, 182)", async () => {
+  test("after it resolves: fodder discarded, legend exhausted, and a READY P1-controlled unit TOKEN named 'Spiderling' stands at bf1 (477.1.b.1.a, 182)", async () => {
     const game = await deceiverCopiesS1();
     expect(game.zoneOf("fodder")).toBe("trash");
     expect(game.state("leblanc").isExhausted).toBe(true);
@@ -121,7 +131,7 @@ describe("(a) Deceiver's hold trigger plays a Reflection at bf1 that becomes a c
     expect(game.p1.units("bf1")).toHaveLength(3);
   });
 
-  test.failing("BUG: all THREE are 3 Might: each real Spiderling sees two other friendly Spiderlings here (1+2), and the copy has the same passive (1+2)", async () => {
+  test("all THREE are 3 Might: each real Spiderling sees two other friendly Spiderlings here (1+2), and the copy has the same passive (1+2)", async () => {
     const game = await deceiverCopiesS1();
     const tok = tokenOf(game, P1);
     expect(game.state("s1").might).toBe(3);
@@ -130,7 +140,7 @@ describe("(a) Deceiver's hold trigger plays a Reflection at bf1 that becomes a c
     expect(game.violations()).toEqual([]);
   });
 
-  test.failing("BUG: (d) the copy carries Spiderling's printed Hidden (a copiable characteristic, 811.5) plus the granted Temporary (477.2.a) — Hidden does nothing for a unit already on the board", async () => {
+  test("(d) the copy carries Spiderling's printed Hidden (a copiable characteristic, 811.5) plus the granted Temporary (477.2.a) — Hidden does nothing for a unit already on the board", async () => {
     const game = await deceiverCopiesS1();
     const tok = tokenOf(game, P1);
     expect(game.state(tok).keywords).toEqual(expect.arrayContaining(["Hidden", "Temporary"]));
@@ -140,7 +150,7 @@ describe("(a) Deceiver's hold trigger plays a Reflection at bf1 that becomes a c
     expect(game.p1.can("hide", tok)).toBe(false); // 811.1.b: Hide works from hand / Champion Zone only
   });
 
-  test.failing("BUG: (d) Temporary: at the start of P1's NEXT Beginning Phase the token is killed BEFORE the hold scores — then it is gone, the real Spiderlings are back to 2 / 2, and only afterwards the hold scores and Deceiver asks again (816.1.b)", async () => {
+  test("(d) Temporary: at the start of P1's NEXT Beginning Phase the token is killed BEFORE the hold scores — then it is gone, the real Spiderlings are back to 2 / 2, and only afterwards the hold scores and Deceiver asks again (816.1.b)", async () => {
     const game = await deceiverCopiesS1();
     const tok = tokenOf(game, P1);
     await game.advanceTurn(); // → P2's turn 4: token still there
