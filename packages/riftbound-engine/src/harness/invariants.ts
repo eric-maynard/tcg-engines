@@ -6,6 +6,7 @@
  */
 
 import type { PlayerId } from "@tcg/core";
+import { isPaymentPromptFor } from "../game-definition/moves/chain/activate-ability";
 import { getGlobalCardRegistry } from "../operations/card-lookup";
 import { getActingSeat, getPendingChoiceChooser } from "../views/acting-seat";
 import { isTokenInstance } from "./card-state";
@@ -130,6 +131,14 @@ export const pendingChoiceGatesMoves: Invariant = {
           pc.type === "opt-in" ||
           (pc.type === "reveal-and-pick" && (pc as { onPicked?: string }).onPicked === "play");
         if ((m.moveId === "exhaustRune" || m.moveId === "recycleRune") && payWindow && pid === chooser) {
+          continue;
+        }
+        // rule 444.2.c / 429.3.a — a payment prompt (the [X] pay, or a resolving
+        // spell's "unless its controller pays" ransom) is a Pay step: the payer
+        // may also crack NON-rune Reaction [Add] abilities (a legend's "[E]:
+        // Add") to fund it. `chain/activate-ability.ts isPaymentPromptFor`
+        // enumerates exactly those, so this is not a gating violation.
+        if (m.moveId === "activateAbility" && pid === chooser && isPaymentPromptFor(pc, pid)) {
           continue;
         }
         if (m.moveId !== "resolvePendingChoice") {
