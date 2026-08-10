@@ -69,6 +69,7 @@ import {
   findSequenceLeadTarget,
   findSplitDamageEffect,
   enumerateSubsetsUpTo,
+  isPerPlayerInstruction,
   paidModeTarget,
   offBoardPlayIsCasterChosen,
   offBoardPlayZone,
@@ -2758,7 +2759,20 @@ export const playSpell: Defs["playSpell"] = {
     // rule-id: sfd-142-221 (rule 359.2 / 383.4.b.2) — "when you choose me"
     // triggers become pending once the choosing spell is Finalized on the
     // chain (targets locked at play time), not when it later resolves.
-    if (targets && targets.length > 0) {
+    // rule 355.10.e (rule-id: ogn-209-298 Cull the Weak × ogn-292-298 The
+    // Dreaming Tree) — EXCEPT a per-player instruction ("Each player kills one
+    // of their units"): every player merely picks among their OWN cards as the
+    // spell resolves, so nothing is CHOSEN with the spell and no `choose` event
+    // is raised — however the caster's own pick was collected.
+    if (
+      targets &&
+      targets.length > 0 &&
+      !isPerPlayerInstruction(
+        registry.getAbilities(cardId)?.find((a) => a.type === "spell")?.effect as
+          | Parameters<typeof isPerPlayerInstruction>[0]
+          | undefined,
+      )
+    ) {
       const trigCtx = { cards: context.cards, counters: context.counters, draft, zones };
       // rule 820.1.d / 820.2 — [Repeat] executes the instructions an additional
       // time and the choices for EVERY execution are made while playing the

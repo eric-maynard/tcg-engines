@@ -219,6 +219,18 @@ export function findSequenceLeadTarget(
   return undefined;
 }
 
+/**
+ * rule 355.10.e/f (rule-id: ogn-209-298 Cull the Weak) — "Each player kills one of
+ * their units" is a PER-PLAYER instruction, not targeting: every player picks among
+ * their OWN cards, so nothing is CHOSEN with the spell even where the caster's own
+ * pick is collected up front. Mirrors `abilities/trigger-finalization.ts
+ * casterChosenTarget`, which already drops these for triggered items.
+ */
+export function isPerPlayerInstruction(effect: SpellEffectTargetShape | undefined): boolean {
+  const player = (effect as { player?: unknown } | undefined)?.player;
+  return player === "each" || player === "each-other";
+}
+
 type SlotDescriptor = Exclude<SpellEffectTargetDescriptor, string>;
 
 /** True when `slot` is only ever named by a `for-each` step (a counted pool). */
