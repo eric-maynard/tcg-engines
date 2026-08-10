@@ -1,10 +1,47 @@
 // Effect handler: "mill" — the [Burn N] keyword action.
 import type { CardId as CoreCardId, PlayerId as CorePlayerId, ZoneId as CoreZoneId } from "@tcg/core";
+import { addToChain, createInteractionState } from "../../chain/chain-state";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import { refillDeckOrBurnOut } from "../../operations/points";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
-import { executeEffect } from "../effect-executor";
 import { type EffectHelpers, resolveAmount } from "./_helpers";
+
+/**
+ * rule 387 / 388.1 — a "do this:" clause is a REFLEXIVE TRIGGER: it does not run
+ * inline inside the burn, it adds a NEW Pending item to the Chain. Its target is
+ * therefore chosen when that item is finalized (402.2) and every player gets a
+ * window before it resolves (so the recipient can be removed in between —
+ * 359.3.e.2, the item then does nothing rather than retargeting). The burned
+ * card's Might is fixed now and rides on the item as `_variables`.
+ */
+function queueReflexiveItem(
+  then: ExecutableEffect,
+  burnedMight: number,
+  ctx: EffectContext,
+): void {
+  const draft = ctx.draft as unknown as {
+    interaction?: unknown;
+    players?: Record<string, unknown>;
+  };
+  if (!draft.interaction) {
+    draft.interaction = createInteractionState();
+  }
+  // The recipient is now the item's declared target, picked at finalization —
+  // drop the resolution-time `chooseTarget` prompt so it is not asked twice.
+  const { chooseTarget: _chooseTarget, ...body } = then as unknown as Record<string, unknown>;
+  draft.interaction = addToChain(
+    draft.interaction as never,
+    {
+      cardId: ctx.sourceCardId,
+      controller: ctx.playerId,
+      effect: { ...body, _variables: { ...(ctx.variables ?? {}), burnedMight } },
+      status: "pending",
+      triggered: true,
+      type: "ability",
+    } as never,
+    Object.keys(draft.players ?? {}),
+  ) as never;
+}
 
 /**
  * rule 440.1 — "[Burn N]" puts the top N cards of a player's Main Deck into
@@ -51,10 +88,9 @@ export function handle_mill(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
   if (burned.length > 0) {
     ctx.fireTriggers?.({ cardIds: burned, playerId: ctx.playerId, type: "burn" } as never);
   }
-  // rule 440.1.a — "When you burn a unit this way, do this: …". The follow-up is
-  // reflexive (part of THIS burn, not a new trigger), fires once per burned UNIT,
-  // and exposes that card's PRINTED Might as the `burnedMight` variable — the card
-  // is in the trash, so no modifiers apply.
+  // rule 440.1.a — "When you burn a unit this way, do this: …" fires once per
+  // burned UNIT and exposes that card's PRINTED Might as the `burnedMight`
+  // variable (the card is in the trash, so no modifiers apply).
   const then = (effect as { then?: ExecutableEffect }).then;
   if (then !== undefined) {
     const registry = getGlobalCardRegistry();
@@ -62,11 +98,7 @@ export function handle_mill(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
       if (registry.getCardType(cardId) !== "unit") {
         continue;
       }
-      executeEffect(then, {
-        ...ctx,
-        boundTargets: undefined,
-        variables: { ...ctx.variables, burnedMight: registry.getMight(cardId) },
-      });
+      queueReflexiveItem(then, registry.getMight(cardId) ?? 0, ctx);
     }
   }
 }
