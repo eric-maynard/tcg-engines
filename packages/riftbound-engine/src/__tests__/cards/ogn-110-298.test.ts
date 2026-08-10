@@ -125,10 +125,11 @@ describe("Ekko, Recurrent (ogn-110-298)", () => {
       .battlefield("bf1", { controller: P1 })
       .unit(P1, "bf1", CARD, "ekko")
       .runes(P1, "mind", 1)
-      .rune(P2, "fury", { alias: "theirs" })
+      // rule 316.5.b — P2 cannot tap during P1's Neutral Open state, so seed
+      // the exhausted rune instead of exhausting it mid-test.
+      .rune(P2, "fury", { alias: "theirs", exhausted: true })
       .hand(P1, BOLT, "bolt")
       .build();
-    await game.p2.do("exhaustRune", { runeId: "theirs" });
     expect(game.state("theirs").isExhausted).toBe(true);
     await game.p1.tapRunes(1);
     await game.p1.cast("bolt", { targets: "ekko" });

@@ -13,6 +13,7 @@ import type {
 } from "@tcg/core";
 import type { Domain, RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../types";
 import { fireTriggers } from "../../abilities/trigger-runner";
+import { getActiveShowdown } from "../../chain/chain-state";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import { withPostMoveCleanup } from "../../cleanup/post-move-cleanup";
 
@@ -21,14 +22,12 @@ import { withPostMoveCleanup } from "../../cleanup/post-move-cleanup";
  * are [Reaction] Add abilities, so only a player who currently holds Priority
  * may use them. While a chain is open Priority sits with `chain.activePlayer`
  * (rule 429.3's pay-costs window only ever opens for the player taking the
- * action, who holds Priority by definition). Outside a chain the rune abilities
- * stay freely usable so a player can bank resources for a Reaction.
+ * action, who holds Priority by definition). Outside a chain Priority still is
+ * not free-floating: in a Showdown it sits with the Focus holder, and in a
+ * Neutral Open state (rule 316.5.b / 310.1.a) only the turn player may act, so
+ * an opponent may not bank resources on someone else's Open turn.
  */
 function holdsRunePriority(state: RiftboundGameState, playerId: string): boolean {
-  const chain = state.interaction?.chain;
-  if (!chain?.active) {
-    return true;
-  }
   // rule 444.2.c — while a prompt raised by a RESOLVING item waits on this
   // player, the game is stopped on them; the Chain's `activePlayer` bookkeeping
   // (still the last player to pass) does not deny them a Reaction [Add]. Which
@@ -37,7 +36,17 @@ function holdsRunePriority(state: RiftboundGameState, playerId: string): boolean
   if (pending && (pending.playerId === playerId || pending.prompter === playerId)) {
     return true;
   }
-  return chain.activePlayer === playerId;
+  const chain = state.interaction?.chain;
+  if (chain?.active) {
+    return chain.activePlayer === playerId;
+  }
+  // rule 338.1.b.1 — a Showdown is a Closed State: only the Focus holder acts.
+  const showdown = state.interaction ? getActiveShowdown(state.interaction) : null;
+  if (showdown?.active) {
+    return showdown.focusPlayer === playerId;
+  }
+  // rule 316.5.b / 310.1.a — Neutral Open state: the turn player holds Priority.
+  return state.turn?.activePlayer === undefined || state.turn.activePlayer === playerId;
 }
 
 /**

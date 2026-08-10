@@ -279,10 +279,15 @@ describe("Rule 515.3 / 606.1: Channel phase moves runes from the top of the rune
 
 describe("Rule 594 / 154.2.b: Recycled runes go to the bottom of the rune deck (not main deck)", () => {
   it("recycleRune moves a runePool card out of runePool and adds 1 power (no energy)", () => {
-    // Use P2 as current player so P1's empty runeDeck isn't re-channeled by
-    // The flow manager's post-move cascade (which would cycle our recycled
-    // Rune back to P1's runePool and break the zone assertion).
-    const engine = createMinimalGameState({ currentPlayer: P2, phase: "main" });
+    // rule 316.5.b — the recycling player must be the turn player in an Open
+    // state, so P1 is current here; the runeDeck is stocked so the flow
+    // manager's post-move cascade channels those instead of cycling our
+    // recycled rune (which lands on the BOTTOM) back into P1's runePool.
+    const engine = createMinimalGameState({ currentPlayer: P1, phase: "main" });
+    createDeck(engine, P1, "runeDeck", [
+      { cardType: "rune", domain: "fury", id: "spare-1" },
+      { cardType: "rune", domain: "fury", id: "spare-2" },
+    ]);
     createCard(engine, "rune-fury", {
       cardType: "rune",
       domain: "fury",
