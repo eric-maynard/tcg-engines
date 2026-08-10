@@ -449,6 +449,10 @@ export function beginShowdownAt(io: ArrivalIO, battlefieldId: string, opts: Begi
     isCombat,
     attacker,
     defender,
+    // rule 347.2.b — Focus passes in TURN ORDER to every player, not only
+    // between the two participants (462): a bystander in a multiplayer game
+    // gets Focus in the showdown too, and may act in it, before it closes.
+    playerIds,
   );
   draft.interaction = opts.autoBegun
     ? {

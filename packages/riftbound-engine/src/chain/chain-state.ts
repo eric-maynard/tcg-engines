@@ -210,8 +210,16 @@ export interface ShowdownState {
   /** Player who has Focus */
   readonly focusPlayer: string;
 
-  /** Relevant players for this showdown */
+  /** Relevant players for this showdown — the PARTICIPANTS (rule 462) */
   readonly relevantPlayers: string[];
+
+  /**
+   * rule 347.2.b — the players Focus cycles through, in turn order. Every
+   * player in the game gets Focus during a showdown, not only its
+   * participants, so a bystander in a multiplayer game may act before the
+   * showdown closes. Absent ⇒ falls back to `relevantPlayers`.
+   */
+  readonly focusOrder?: string[];
 
   /** Players who have passed Focus since last action */
   readonly passedPlayers: string[];
@@ -693,12 +701,15 @@ export function startShowdown(
   isCombat: boolean,
   attackingPlayer?: string,
   defendingPlayer?: string,
+  /** rule 347.2.b — every player, in turn order; defaults to the participants. */
+  focusOrder?: string[],
 ): TurnInteractionState {
   const newShowdown: ShowdownState = {
     active: true,
     attackingPlayer,
     battlefieldId,
     defendingPlayer,
+    focusOrder,
     focusPlayer,
     isCombatShowdown: isCombat,
     passedPlayers: [],
@@ -722,7 +733,10 @@ export function passFocus(state: TurnInteractionState): TurnInteractionState {
     return state;
   }
 
-  const { focusPlayer, relevantPlayers, passedPlayers } = activeShowdown;
+  const { focusPlayer, passedPlayers } = activeShowdown;
+  // rule 347.2.b — Focus cycles every player in turn order, not only the
+  // showdown's participants (rule 462).
+  const relevantPlayers = activeShowdown.focusOrder ?? activeShowdown.relevantPlayers;
 
   const newPassed = [...passedPlayers, focusPlayer];
 

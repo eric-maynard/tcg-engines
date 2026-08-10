@@ -23,25 +23,38 @@ export function handle_fight(effect: ExecutableEffect, ctx: EffectContext, h: Ef
     let defenderId: string | undefined = attackerFixed
       ? ctx.boundTargets?.[0]
       : ctx.boundTargets?.[1];
+    const resolverCtx = {
+      cards: ctx.cards,
+      draft: ctx.draft,
+      playerId: ctx.playerId,
+      // rule-id: ogn-258-298 (rule 387) — a reflexive fight scoped to "at its
+      // destination" needs `sameZone`, else `location:"same"` matches the
+      // whole board and picks a unit standing somewhere else.
+      sameZone: ctx.sameZone,
+      sourceCardId: ctx.sourceCardId,
+      sourceZone: ctx.sourceZone,
+      zones: ctx.zones,
+    };
     if (!attackerId || !defenderId) {
-      const resolverCtx = {
-        cards: ctx.cards,
-        draft: ctx.draft,
-        playerId: ctx.playerId,
-        // rule-id: ogn-258-298 (rule 387) — a reflexive fight scoped to "at its
-        // destination" needs `sameZone`, else `location:"same"` matches the
-        // whole board and picks a unit standing somewhere else.
-        sameZone: ctx.sameZone,
-        sourceCardId: ctx.sourceCardId,
-        sourceZone: ctx.sourceZone,
-        zones: ctx.zones,
-      };
       attackerId ??= resolveTarget(attackerTarget, resolverCtx)[0];
       defenderId ??= resolveTarget(defenderTarget, resolverCtx).filter(
         (id) => id !== attackerId,
       )[0];
     }
-    if (attackerId && defenderId) {
+    // rule 359.3.e.2 / 359.3.e.5 — a target chosen at play time is re-checked
+    // against its descriptor as the spell resolves; "they deal damage to each
+    // other" cannot be performed with only one legal party, so an illegal
+    // attacker OR defender (e.g. the enemy unit Flashed out of "at a
+    // battlefield") makes the whole exchange do nothing.
+    const stillLegal = (id: string, tgt: TargetDescriptor | string): boolean =>
+      typeof tgt === "string" ||
+      resolveTarget({ ...tgt, quantity: "all" }, { ...resolverCtx, choosing: true }).includes(id);
+    if (
+      attackerId &&
+      defenderId &&
+      stillLegal(attackerId, attackerTarget) &&
+      stillLegal(defenderId, defenderTarget)
+    ) {
       // rule-id: ven-083-166 (Rampage) — "If you paid the additional cost,
       // give the friendly unit +2 Might this turn" resolves against the
       // chosen attacker only, BEFORE damage is exchanged; run the optional
