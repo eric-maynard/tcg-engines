@@ -1857,7 +1857,26 @@ export interface RiftboundGameState {
     spent?: string[];
     /** A Kill instruction / cost / Temporary batch to finish on resume (SBA batches re-detect themselves). */
     kill?: { to: string; cause: unknown; playerId: string; sourceCardId: string };
+    /**
+     * rule 321 / 323.5 — this batch is the DAMAGE-TIME pass run between two
+     * damage instances of ONE resolving item: only costed "you may pay …
+     * instead" shields (ogn-269-298 The Boss) are consulted and nothing dies.
+     * Death-class replacements ("if this would die" — Zhonya's Hourglass,
+     * Guardian Angel, Highlander) wait for the single Cleanup after the item
+     * leaves the chain. Persisted so a resume after the shield's prompt keeps
+     * the same restriction.
+     */
+    shieldsOnly?: boolean;
   };
+
+  /**
+   * rule 371.2.b — costed shields already offered (and declined) during the
+   * DAMAGE-TIME pass between two damage instances of one resolving item: the
+   * payer is asked once per event, so the Cleanup that finally kills the unit
+   * does not repeat the question. Seeded into the next die batch and consumed
+   * there.
+   */
+  damageTimeShieldsAsked?: Record<string, string[]>;
 
   /**
    * rule 383.3.d — simultaneous triggered items one player controls, offered

@@ -130,7 +130,7 @@ describe("Piercing Light + Repeat under Marai Spire, Eager Apprentice and a Defl
     expect(game.p1.resources()).toEqual({ energy: 0, power: { fury: 0, rainbow: 0 } });
   });
 
-  test.failing("BUG: (a) on resolution the effect runs twice with its OWN choices per execution (820.2.a, 356.4.f.1): Poro takes 2 and dies, then the repeat deals exactly 2 to Grunt — Grunt ends on 2 damage", async () => {
+  test("(a) on resolution the effect runs twice with its OWN choices per execution (820.2.a, 356.4.f.1): Poro takes 2 and dies, then the repeat deals exactly 2 to Grunt — Grunt ends on 2 damage", async () => {
     // Expected: execution 1 = (Poro, no second unit), execution 2 = (Grunt, no second unit) → Grunt 2 damage.
     // Actual: the engine charges the list as one Poro choice (1 Deflect pip) yet resolves it as the SHARED pair
     // (Poro, then Grunt) executed twice, so Grunt takes 4 — cost and resolution disagree about what was chosen.

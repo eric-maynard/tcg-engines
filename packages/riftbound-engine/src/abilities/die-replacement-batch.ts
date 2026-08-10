@@ -101,6 +101,13 @@ export interface DieBatchOptions {
    * (`continueKillBatch`). Absent for the lethal-damage pass.
    */
   readonly kill?: { readonly to: string; readonly cause: LeaveCause; readonly playerId: string; readonly sourceCardId: string };
+  /**
+   * rule 321 / 323.5 — the DAMAGE-TIME pass between two damage instances of one
+   * resolving item: consult ONLY costed "you may pay … instead" shields
+   * (ogn-269-298 The Boss) and kill nothing. Death-class replacements are a
+   * Cleanup event and are left to the single Cleanup after the item resolves.
+   */
+  readonly shieldsOnly?: boolean;
 }
 
 export interface DieBatchResult {
@@ -507,6 +514,7 @@ function freshState(ids: readonly string[], opts: DieBatchOptions): BatchState {
     queue: [...ids],
     replaced: [],
     ...(opts.kill ? { kill: { ...opts.kill } } : {}),
+    ...(opts.shieldsOnly === true ? { shieldsOnly: true } : {}),
   };
 }
 
@@ -568,9 +576,22 @@ export function runDieBatch(ctx: Ctx, ids: readonly string[], opts: DieBatchOpti
   DEPTH += 1;
   try {
     const state = nested ? freshState(ids, opts) : loadState(ctx, ids, opts);
-    const result = processBatch(ctx, state, { ...opts, canPrompt: opts.canPrompt && !nested });
+    // rule 371.2.b — a costed shield declined during the damage-time pass is
+    // not offered again by the Cleanup that kills the unit (same event).
+    const carried = draft.damageTimeShieldsAsked;
+    if (!nested && carried !== undefined) {
+      state.asked = { ...carried, ...(state.asked ?? {}) };
+      draft.damageTimeShieldsAsked = undefined;
+    }
+    // A batch that started as the damage-time pass stays restricted when it is
+    // resumed after its shield prompt (321 / 323.5).
+    const shieldsOnly = opts.shieldsOnly === true || state.shieldsOnly === true;
+    const result = processBatch(ctx, state, { ...opts, canPrompt: opts.canPrompt && !nested, shieldsOnly });
     if (!nested) {
       draft.dieBatch = result.suspended ? state : undefined;
+      if (shieldsOnly && !result.suspended && state.asked !== undefined) {
+        draft.damageTimeShieldsAsked = { ...state.asked };
+      }
     }
     return result;
   } finally {
@@ -627,7 +648,7 @@ function processBatch(ctx: Ctx, state: BatchState, opts: DieBatchOptions): DieBa
 
   // rule 373.1 — batch-wide ordering of order-sensitive deaths, asked before
   // any replacement of the batch is applied.
-  if (state.batchOrdered !== true) {
+  if (state.batchOrdered !== true && opts.shieldsOnly !== true) {
     const question = batchOrderQuestion(ctx, state);
     if (question && canPrompt()) {
       draft.pendingChoice = {
@@ -668,6 +689,11 @@ function processBatch(ctx: Ctx, state: BatchState, opts: DieBatchOptions): DieBa
     // a later replacement moved its source somewhere it would now match again
     // (Soraka recalled by Guardian Angel does not save a second unit).
     let cands = collectDieCandidates(ctx, cardId).filter((c) => state.spent?.includes(c.id) !== true);
+    // rule 321 / 323.5 — damage-time pass: only costed shields are consulted;
+    // "if this would die" replacements belong to the Cleanup after the item.
+    if (opts.shieldsOnly === true) {
+      cands = cands.filter((c) => c.optional !== undefined);
+    }
 
     // rule 372 — several replacements for ONE death: its controller orders them.
     const chosenOrder = state.orders[cardId];
@@ -810,7 +836,10 @@ function processBatch(ctx: Ctx, state: BatchState, opts: DieBatchOptions): DieBa
   }
 
   return {
-    dying: state.dying.filter((id) => stillOnBoard(ctx, id)),
+    // rule 321 / 323.5 — the damage-time pass never kills: units the shields did
+    // not save stay standing until the Cleanup after the resolving item, which
+    // re-detects them and consults the death-class replacements then.
+    dying: opts.shieldsOnly === true ? [] : state.dying.filter((id) => stillOnBoard(ctx, id)),
     replaced: [...state.replaced],
     suspended: false,
   };

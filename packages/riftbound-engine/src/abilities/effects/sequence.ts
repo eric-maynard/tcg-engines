@@ -4,6 +4,7 @@ import {
   cleanupAndFireDeaths,
   type PostMoveCleanupContext,
 } from "../../cleanup/post-move-cleanup";
+import { type CleanupContext, performCleanup } from "../../cleanup/state-based-checks";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import type { TargetDescriptor } from "../target-resolver";
 import { isAllAtOneBattlefield, resolveTarget } from "../target-resolver";
@@ -328,7 +329,14 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
     // the i-th execution instead of handing every execution the whole list.
     // An execution owning SEVERAL slots ("Deal 2 to a unit at a battlefield,
     // then deal 2 to up to one other unit", sfd-023-221) enumerates its own
-    // picks in the same flat list, so only a one-slot execution qualifies.
+    // picks in the same flat list — but a mandatory lead slot means an
+    // execution never names ZERO ids, so a flat list exactly as long as the
+    // execution count is still one pick each, however many optional slots
+    // ("up to one other unit") follow in the same execution.
+    // rule 359.3.e.5 (sfd-023-221 × ogn-169-298) — an execution whose pick left
+    // the board is compacted out of `boundTargets` and recorded here, so count
+    // the vacated slots back in before matching picks to executions.
+    const repeatVacated = ctx.vacatedTargetSlots ?? [];
     const repeatedSubSequences =
       indepSlots !== undefined &&
       indepSlots.length === 0 &&
@@ -336,9 +344,9 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
       seq.effects.length > 1 &&
       seq.effects.every((e) => e.type === "sequence") &&
       ctx.boundTargets !== undefined &&
-      ctx.boundTargets.length === seq.effects.length &&
+      ctx.boundTargets.length + repeatVacated.length === seq.effects.length &&
       (collectSequenceTargetSlots(seq.effects[0] as unknown as SpellEffectTargetShape) ?? [])
-        .length === 1;
+        .length >= 1;
     let seqSlots = (ctx as { sequenceSlots?: SequenceSlots }).sequenceSlots;
     if (!seqSlots && !indepSlots && ctx.boundTargets && sameIdx < 0) {
       const slots = collectSequenceTargetSlots(seq as unknown as SpellEffectTargetShape);
@@ -569,7 +577,15 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
       // descriptor, so it owns no descriptor slot: route the caster's i-th
       // locked chain item to the i-th execution.
       if (repeatedCounterTargets || repeatedSubSequences) {
-        const id = ctx.boundTargets?.[i];
+        // rule 359.3.e.5 / 359.3.e.7 — this execution's only pick is no longer
+        // a legal target (it left the board): its instructions are not
+        // followed, and no fresh choice is made for it (355.15).
+        if (repeatedSubSequences && repeatVacated.includes(i)) {
+          continue;
+        }
+        const id = repeatedSubSequences
+          ? ctx.boundTargets?.[i - repeatVacated.filter((v) => v < i).length]
+          : ctx.boundTargets?.[i];
         const { boundTargets: _drop, ...rest } = ctx;
         subCtx = id !== undefined ? { ...rest, boundTargets: [id] } : rest;
       }
@@ -960,25 +976,15 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
       if (playedSink !== undefined && playedSink.ids.length > 0) {
         pending = playedSink.ids;
       }
-      // rule 359.3.e.8 (ogn-248-298 Icathian Rain) — each instruction is followed
-      // by its consequences before the next one runs: a damage step's deaths (and
-      // the die replacements they offer) resolve now, so a replacement-saved unit
-      // is still the same legal target for the instances that follow instead of
-      // the whole spell landing as one batched lethal check. Only between two
-      // DAMAGE instructions: a following clause that talks about this step's
-      // kill ("If this kills it, banish it instead", "Then for each unit this
-      // kills …") is part of the same instruction's consequences and must still
-      // see the death happen after it.
-      // rule 370.1.a.2 (ruling bc39688295f5c3ce, Falling Star × Zhonya's
-      // Hourglass) — when the later instructions hit OTHER units, nothing about
-      // this step's death can change what they do, and the deaths one spell
-      // deals belong to ONE Cleanup so a single-use die replacement's controller
-      // is asked which of the simultaneous deaths it saves. Only a unit this
-      // step may have killed and a LATER damage step names again forces the
-      // early Cleanup; an unresolvable step keeps the old behaviour.
-      // rule 820 / 428 (ruling 87d4521ad1764eb1) — the executions of a [Repeat]ed
-      // spell are ONE spell, not successive printed instructions: no Cleanup runs
-      // between them, so a die replacement is consulted once, after the spell.
+      // rule 321 / 321.1 / 323.5 (ogn-248-298 Icathian Rain, ogn-029-298 Falling
+      // Star; rulings 3afdd260 / 501859c8 / bc39688295f5c3ce / 87d4521ad1764eb1)
+      // — the instances of one resolving item are dealt one after another with
+      // NO Cleanup in between: nothing dies and no "if this would die"
+      // replacement (Zhonya's Hourglass, Guardian Angel, Highlander) is
+      // consulted until the item has left the chain, so a saved unit is never
+      // re-killed by a later instance. Only the DAMAGE-time shields — the
+      // costed "you may pay … instead" ones (ogn-269-298 The Boss) — are
+      // consulted per instance, as the damage that would be lethal is dealt.
       if (
         sub.type === "damage" &&
         seq.effects[i + 1]?.type === "damage" &&
@@ -989,7 +995,7 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
         ctx.zones !== undefined &&
         damageStepHitAgainLater(i)
       ) {
-        cleanupAndFireDeaths(ctx.draft, ctx as unknown as PostMoveCleanupContext);
+        performCleanup(ctx as unknown as CleanupContext, { shieldsOnly: true });
       }
       // rule 355.8 / 820.2 (unl-182-219) — a step that parked a modal prompt
       // suspends the rest of the sequence: the later Repeat executions must

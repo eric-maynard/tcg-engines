@@ -117,7 +117,7 @@ describe("Icathian Rain × The Boss × Zhonya's Hourglass — damage-time shield
   // Rain leaves the chain finds U lethal and Zhonya's replaces that single death → U alive in base, 0 damage,
   // exhausted, buff KEPT (5 Might). Actual: the engine runs a Cleanup after every "Deal 2" that a later instance
   // re-hits, so Zhonya's fires at instance 3 (U recalled, still buffed) and instances 4-6 (6 ≥ 5) kill U for good.
-  test.failing("BUG: (b) Zhonya's must be consulted ONCE at the post-resolution Cleanup (321 / 323.5) — U survives in base, exhausted, 0 damage, still buffed (5 Might); the engine applies it at instance 3 and U then dies", async () => {
+  test("(b) Zhonya's must be consulted ONCE at the post-resolution Cleanup (321 / 323.5) — U survives in base, exhausted, 0 damage, still buffed (5 Might); the engine applies it at instance 3 and U then dies", async () => {
     const game = await board({ boss: false, zhonyas: true }).build();
     await rainOnU(game);
     await game.settle();
@@ -134,7 +134,7 @@ describe("Icathian Rain × The Boss × Zhonya's Hourglass — damage-time shield
   // 6 damage; Zhonya's (Cleanup-class) is not a candidate yet, so there is nothing to order. Actual: the engine's
   // instance-3 Cleanup finds BOTH as die replacements and raises a rule-372 "order the replacement effects" pick
   // (zh | boss) — and keeps dealing instances 4-6 while that prompt is open, so U shows 12 damage when P2 is asked.
-  test.failing("BUG: (a) both — at instance 3 P2 gets The Boss yes/no (U at bf1, exactly 6 damage, Rain resolving), not a Zhonya's-vs-Boss ordering pick over 12 damage", async () => {
+  test("(a) both — at instance 3 P2 gets The Boss yes/no (U at bf1, exactly 6 damage, Rain resolving), not a Zhonya's-vs-Boss ordering pick over 12 damage", async () => {
     const game = await board({ boss: true, zhonyas: true }).build();
     await rainOnU(game);
     const d = game.decision();
@@ -150,7 +150,7 @@ describe("Icathian Rain × The Boss × Zhonya's Hourglass — damage-time shield
   // in base, unbuffed; Boss exhausted, P2 power 0; bf1 no longer P2's. Actual: the first prompt is the ordering
   // pick above, so `yes()` is not even a legal answer; navigating it Boss-first heals all 12 at once and Zhonya's is
   // never consumed (stays in base).
-  test.failing("BUG: (a) both, P2 accepts The Boss at instance 3 → 4-6 re-hit U in base → Zhonya's is consumed at the Cleanup: U alive in base (0 damage, 4 Might, exhausted), Boss exhausted, power 0, Zhonya's in trash, bf1 lost", async () => {
+  test("(a) both, P2 accepts The Boss at instance 3 → 4-6 re-hit U in base → Zhonya's is consumed at the Cleanup: U alive in base (0 damage, 4 Might, exhausted), Boss exhausted, power 0, Zhonya's in trash, bf1 lost", async () => {
     const game = await board({ boss: true, zhonyas: true }).build();
     await rainOnU(game);
     await game.p2.yes(); // The Boss at instance 3

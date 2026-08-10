@@ -96,9 +96,11 @@ describe("Ruling 501859c86f8d2b1e — Icathian Rain's instances resolve one by o
     expect(game.state("rock")).toMatchObject({ damage: 2, location: "bf1" });
   });
 
-  // Expected: a 3-Might Ward with Zhonya's out: instances 1+2 are lethal → Zhonya's is killed instead, Ward healed/exhausted/
-  // recalled; it "didn't die", so instances 3+4 still hit it in base (4 ≥ 3) and it dies for real. Actual: batched → saved once, alive.
-  test("ruling 501859c86f8d2b1e — Zhonya's-saved unit remains the target of the remaining instances and dies to them; engine batches", async () => {
+  // rule 321 / 323.5 (adjudicated multi-instance model) — the six Deals are instances of ONE resolving item and no
+  // Cleanup runs between them: the Ward takes all four (12 marked, no death check in between) and the single Cleanup
+  // after the Rain leaves the chain consults Zhonya's ONCE — Zhonya's is killed instead and the Ward is healed,
+  // exhausted and recalled to base. It is not saved-then-rekilled.
+  test("ruling 501859c86f8d2b1e — the Ward's death is a Cleanup event: Zhonya's is consulted once after the Rain and the Ward survives in base", async () => {
     const game = await scenario()
       .active(P2)
       .resources(P2, { energy: 7, power: { rainbow: 3 } })
@@ -110,8 +112,9 @@ describe("Ruling 501859c86f8d2b1e — Icathian Rain's instances resolve one by o
       .build();
     await game.p2.cast("rain", { targets: ["ward", "ward", "ward", "ward", "rock", "rock"] });
     await resolveSayingYes(game);
-    expect(game.zoneOf("zhonyas")).toBe("trash"); // spent on the first death
-    expect(game.zoneOf("ward")).toBe("trash"); // died to instances 3+4 after the save
+    expect(game.zoneOf("zhonyas")).toBe("trash"); // spent on the one death the Cleanup found
+    expect(game.zoneOf("ward")).toBe("base"); // healed, exhausted and recalled — one death, one replacement
+    expect(game.state("ward")).toMatchObject({ damage: 0, isExhausted: true });
     expect(game.state("rock").damage).toBe(4);
   });
 

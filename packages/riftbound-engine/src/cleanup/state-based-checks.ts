@@ -159,7 +159,20 @@ function cleanupTriggerContext(ctx: CleanupContext): TriggerRunnerContext {
  *
  * Returns what changed so callers can fire appropriate triggers.
  */
-export function performCleanup(ctx: CleanupContext): CleanupResult {
+export interface CleanupOptions {
+  /**
+   * rule 321 / 323.5 — run only the DAMAGE-TIME pass: consult costed "you may
+   * pay … instead" shields (ogn-269-298 The Boss) for units that damage has
+   * just made lethal and stop there. NOTHING dies and no death-class
+   * replacement ("if this would die": Zhonya's Hourglass, Guardian Angel,
+   * Highlander) is consulted — those belong to the single Cleanup that follows
+   * the resolving item, so no death check runs between two damage instances of
+   * one item.
+   */
+  readonly shieldsOnly?: boolean;
+}
+
+export function performCleanup(ctx: CleanupContext, opts: CleanupOptions = {}): CleanupResult {
   const killed: string[] = [];
   const deaths: CleanupDeath[] = [];
   const hiddenRemoved: string[] = [];
@@ -297,6 +310,17 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
       openPrompt.resume?.kind === "die-order" ||
       openPrompt.resume?.kind === "die-batch-order" ||
       openPrompt.resume?.kind === "die-assign");
+  if (opts.shieldsOnly === true) {
+    // rule 321 / 323.5 — between two damage instances of one resolving item:
+    // offer the damage-time shields and leave every lethal unit standing.
+    if (lethalIds.length > 0 && !batchWaiting) {
+      const outcome = runDieBatch(ctx, lethalIds, { canPrompt: true, shieldsOnly: true });
+      if (outcome.suspended || outcome.replaced.length > 0) {
+        stateChanged = true;
+      }
+    }
+    return { combatPending, hiddenRemoved, killed, stateChanged };
+  }
   if (lethalIds.length > 0 && !batchWaiting) {
     const outcome = runDieBatch(ctx, lethalIds, { canPrompt: true });
     if (outcome.suspended || outcome.replaced.length > 0) {

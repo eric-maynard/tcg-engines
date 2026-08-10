@@ -141,7 +141,7 @@ describe("(a) Highlander in response, no Boss — the shield fires ONCE, at the 
   // instance 2's 3 damage on the 3-Might U kills it for good (U ends in P2's trash). Expected (321 / 142.4.a / 323.5,
   // FIXER-PRIMER multi-instance model): 3 + 3 = 6 is marked with no death check in between; the ONE Cleanup after the
   // spell finds U lethal once and Highlander replaces that single death.
-  test.failing("BUG: outcome — U survives: in P2's base, 0 damage, exhausted, buff KEPT (3 Might); it is NOT saved-then-rekilled", async () => {
+  test("outcome — U survives: in P2's base, 0 damage, exhausted, buff KEPT (3 Might); it is NOT saved-then-rekilled", async () => {
     const game = await board({ boss: false, highlander: true }).build();
     await starOnU(game, { highlander: true });
     await game.settle();
@@ -217,7 +217,7 @@ describe("(c) BOTH Highlander on U and The Boss; P2 declines The Boss whenever o
   // pick (hl | boss) raised with U already at 6 damage — i.e. it treats The Boss as a Cleanup-class candidate here.
   // Expected (FIXER-PRIMER model, as in (b)): The Boss is offered as its own yes/no at instance 1 (U at bf1, 3 damage,
   // Falling Star still resolving); Highlander is not a candidate until the Cleanup, so there is nothing to order yet.
-  test.failing("BUG: the first prompt P2 sees is The Boss yes/no at instance 1 (U at bf1 with exactly 3 damage, spell on the chain) — not a replacement-order pick", async () => {
+  test("the first prompt P2 sees is The Boss yes/no at instance 1 (U at bf1 with exactly 3 damage, spell on the chain) — not a replacement-order pick", async () => {
     const game = await board({ boss: true, highlander: true }).build();
     await starOnU(game, { highlander: true });
     await resolveStar(game);

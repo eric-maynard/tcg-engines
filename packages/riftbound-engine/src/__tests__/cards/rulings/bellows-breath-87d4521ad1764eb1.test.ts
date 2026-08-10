@@ -58,7 +58,7 @@ describe("Ruling 87d4521ad1764eb1 — a Repeated Bellows Breath on one unit: the
   // Expected: both hits land, one Cleanup after the spell, Zhonya's dies instead, Wisp survives in base (healed, exhausted).
   // Actual: the engine checks lethal damage between the two Repeat executions — Zhonya's fires after the FIRST hit (Wisp
   // recalled), then the second hit kills the now-unprotected Wisp: both Zhonya's and the Wisp end in the trash.
-  test.failing("BUG: ruling 87d4521ad1764eb1 — no death check between the Repeat executions: one post-spell Cleanup, Zhonya's dies instead and the Wisp survives (820, 428, 369)", async () => {
+  test("ruling 87d4521ad1764eb1 — no death check between the Repeat executions: one post-spell Cleanup, Zhonya's dies instead and the Wisp survives (820, 428, 369)", async () => {
     const game = await board("zhonyas").build();
     await game.p2.cast("bb", { repeat: 1, targets: ["wisp"] });
     await game.settle({ policy: "first" }); // accept a replacement prompt if one is surfaced
@@ -73,7 +73,7 @@ describe("Ruling 87d4521ad1764eb1 — a Repeated Bellows Breath on one unit: the
   });
 
   // Same engine behaviour with Guardian Angel: GA is consumed after the first (already lethal) hit and the second hit kills the Wisp.
-  test.failing("BUG: ruling 87d4521ad1764eb1 — Guardian Angel is likewise consulted only in the single post-spell Cleanup: GA is killed instead and the Wisp stays in base", async () => {
+  test("ruling 87d4521ad1764eb1 — Guardian Angel is likewise consulted only in the single post-spell Cleanup: GA is killed instead and the Wisp stays in base", async () => {
     const game = await board("ga").build();
     expect(game.state("wisp")).toMatchObject({ attachments: ["ga"], damage: 1, might: 2 });
     await game.p2.cast("bb", { repeat: 1, targets: ["wisp"] });
