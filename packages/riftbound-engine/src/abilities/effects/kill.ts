@@ -28,10 +28,12 @@ function candidatesFor(
   effect: ExecutableEffect,
   ctx: EffectContext,
   playerId: string,
+  chooserId?: string,
 ): string[] {
   return resolveTarget({ ...(effect.target as object), quantity: "all" } as never, {
     cards: ctx.cards,
     choosing: true,
+    chooserId: chooserId ?? playerId,
     draft: ctx.draft,
     playerId,
     sourceCardId: ctx.sourceCardId,
@@ -145,10 +147,14 @@ function handleEachOtherChoosesKill(
   }
   while (queue.length > 0) {
     const pid = queue.shift() as string;
+    // rule 757 / 758 — the pool is described from the CASTER's seat ("a unit
+    // you don't control"), but `pid` makes the choice, so a unit that can't be
+    // chosen by ENEMY spells is still choosable by its own controller here.
     const options = candidatesFor(
       { ...effect, target: (effect as { chooserTarget?: unknown }).chooserTarget } as ExecutableEffect,
       ctx,
       caster,
+      pid,
     ).filter((id) => !chosen.includes(id));
     if (options.length === 0) {
       continue;

@@ -74,6 +74,13 @@ export type TargetFilter = string | Record<string, unknown>;
  */
 export interface TargetResolverContext {
   readonly playerId: string;
+  /**
+   * rule 757 / 758 (ogn-237-298) — the player actually making the choice, when
+   * that is not the seat the descriptor is written from ("each other player
+   * chooses a unit YOU don't control"). Only "can't be chosen by enemy spells
+   * and abilities" is measured against it; defaults to `playerId`.
+   */
+  readonly chooserId?: string;
   readonly sourceCardId: string;
   readonly sourceZone?: string;
   /**
@@ -442,10 +449,15 @@ export function resolveTarget(
   // (any non-"all" quantity, or an explicit choosing-pool enumeration).
   // Programmatic `quantity:"all"` selections ("all enemy units") don't choose.
   if (target.quantity !== "all" || ctx.choosing) {
+    // rule 757 / 758 (ogn-237-298 × unl-147-219) — "enemy" is measured from the
+    // seat of whoever makes the CHOICE, which is not always the seat the pool
+    // is described from ("each other player chooses a unit you don't control"):
+    // a unit is never shielded from its own controller's choice.
+    const chooser = ctx.chooserId ?? ctx.playerId;
     filtered = filtered.filter(
       (id) =>
         !(
-          controllerOf(id) !== ctx.playerId &&
+          controllerOf(id) !== chooser &&
           (isUntargetable(id, ctx) || isProtectedFromEnemyChoice(id, ctx))
         ),
     );

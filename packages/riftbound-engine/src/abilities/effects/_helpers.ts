@@ -97,6 +97,22 @@ function hiddenScopeFor(effect: ExecutableEffect, ctx: EffectContext): string | 
  */
 function filterBoundByLocation(bound: string[], tgt: unknown, ctx: EffectContext): string[] {
   const location = typeof tgt === "object" && tgt !== null ? (tgt as { location?: string }).location : undefined;
+  // rule 359.3.e.2 / 359.3.e.4 (ven-103-166 Shadows of the Past × unl-103-219
+  // Disposal Order) — a NAMED non-board zone is just as absolute: a card
+  // chosen "from trashes" that was recycled out of its trash in response is a
+  // new object in a different zone, so it is an illegal target and unaffected.
+  const NAMED_ZONES: Record<string, readonly string[]> = {
+    deck: ["mainDeck"],
+    hand: ["hand"],
+    trash: ["trash"],
+  };
+  const namedZones = typeof location === "string" ? NAMED_ZONES[location] : undefined;
+  if (namedZones !== undefined) {
+    return bound.filter((id) => {
+      const zone = ctx.zones.getCardZone(id as CoreCardId);
+      return zone === undefined || namedZones.includes(zone);
+    });
+  }
   if (location !== "battlefield" && location !== "base") {
     return bound;
   }
