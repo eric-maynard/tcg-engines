@@ -980,13 +980,11 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
                 // so a printed [Temporary] on equipment does not trigger while it
                 // is attached ("if this is unattached"). A granted [Temporary]
                 // comes from an active outside effect and still applies.
-                if (hasTemp && meta?.attachedTo) {
-                  continue;
-                }
                 const grantedTemp = (meta?.grantedKeywords ?? []).some(
                   (gk: { keyword: string }) => gk.keyword === "Temporary",
                 );
-                if (hasTemp || grantedTemp) {
+                const printedTempActive = hasTemp && meta?.attachedTo === undefined;
+                if (printedTempActive || grantedTemp) {
                   const fromBattlefield = battlefieldOfCard.get(cardId as string);
                   if (fromBattlefield && suppressedBattlefields.has(fromBattlefield)) {
                     continue;
