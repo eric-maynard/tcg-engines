@@ -42,6 +42,7 @@ import type {
   OrderDecision,
   PickDecision,
   PickOption,
+  PickSemantics,
   PlayArgs,
   Seat,
   YesNoDecision,
@@ -592,6 +593,48 @@ export function deriveFromPendingChoice(ctx: DecisionContext, pc: PendingChoice)
       };
       return d;
     }
+    // rule 751–755 — one slot of a finalized item's NEW CHOICES dialog: shown
+    // as a pick over that slot (semantics by slot kind, the current value marked)
+    // with the whole dialog on `newChoices`; `decline` keeps the slot.
+    case "new-choices": {
+      const nc = pc;
+      const slot = nc.slots[nc.cursor];
+      const kind = slot?.kind ?? "target";
+      const semantics: PickSemantics = kind === "mode" ? "mode" : kind === "destination" ? "destination" : "target";
+      const d: PickDecision = {
+        ...base,
+        allowDecline: nc.keepable,
+        id: decisionId(ctx.seq, seat, "pick"),
+        kind: "pick",
+        max: nc.max,
+        min: nc.keepable ? 0 : nc.min,
+        newChoices: {
+          grantedBy: nc.grantedBy,
+          itemId: nc.itemId,
+          slot: slot ? { current: [...slot.current], key: slot.key, kind: slot.kind, label: slot.label, ...(slot.parent ? { parent: slot.parent } : {}) } : { current: [], key: "?", kind: "target", label: "?" },
+          slots: nc.slots.map((s) => ({ current: [...s.current], key: s.key, kind: s.kind, label: s.label, ...(s.parent ? { parent: s.parent } : {}), status: s.status })),
+        },
+        options: nc.options.map((o) => ({
+          ...(o.cardId ? { card: o.cardId } : {}),
+          ...(o.zone ? { zone: o.zone } : {}),
+          ...(o.mode !== undefined ? { mode: o.mode } : {}),
+          ...(o.current ? { current: true } : {}),
+          ...(o.deflectIgnored ? { deflectIgnored: o.deflectIgnored } : {}),
+          key: o.key,
+          // rule 355.3 — a mode reads as its printed bullet; rule 755 — a card notes the surcharge it would incur (ignored).
+          label:
+            (o.cardId ? ctx.label(o.cardId) : (o.label ?? o.key)) +
+            (o.current && kind !== "mode" ? " (current)" : "") +
+            (o.deflectIgnored ? ` (+${o.deflectIgnored} [Deflect] — ignored, 755)` : ""),
+        })),
+        prompt: nc.prompt,
+        semantics,
+        source: { ...base.source, cardId: nc.sourceCardId, chainItemId: nc.itemId, pendingChoiceType: nc.type },
+        ...(nc.slotSemantics === "split" ? { targeting: "split-targets" as const } : nc.slotSemantics === "upTo" ? { targeting: "up-to" as const } : {}),
+        timing: "RES",
+      };
+      return d;
+    }
     case "reveal-and-pick": {
       const allowDecline = flat.some((m) => m.params.accept === false);
       const options: PickOption[] = flat
@@ -698,6 +741,14 @@ export function deriveFromPendingChoice(ctx: DecisionContext, pc: PendingChoice)
         options: pc.options.map((id) => ({ card: id, key: id, label: ctx.label(id) })),
         prompt: pc.boundTargets ? "Choose a target to drop" : `Choose a target for ${source.cardId ? ctx.label(source.cardId) : "the effect"}`,
         semantics: pc.boundTargets ? "drop-target" : "target",
+        // rule 402.1 / 402.2 — a declinable choice made while an item is
+        // FINALIZED is the controller's announced choice: hand it back to the
+        // caller instead of letting the passive policy decline it silently.
+        ...(pc.optional === true &&
+        pc.anyNumber !== true &&
+        (pc as { bindToChainItemId?: string }).bindToChainItemId !== undefined
+          ? { targeting: "up-to" as const }
+          : {}),
       };
       return d;
     }
@@ -1025,6 +1076,34 @@ export function resolvePendingAnswer(ctx: DecisionContext, decision: Decision, a
       return err("ILLEGAL_ARGS", "Not a permutation of the offered items", {
         items: pc.items.map((i) => i.key),
         keys,
+      });
+    }
+    return { move: { moveId: "resolvePendingChoice", params, playerId: seat }, type: "move" };
+  }
+  // rule 751–755 — a NEW CHOICES slot: `decline` keeps it; keys may be card
+  // ids, bare battlefield ids or mode numbers; validated by the engine condition.
+  if (pc.type === "new-choices") {
+    if (answer.kind === "decline" || (answer.kind === "yes-no" && answer.value === false)) {
+      params.keep = true;
+    } else if (answer.kind === "pick" || answer.kind === "order") {
+      if (pc.max <= 1 && answer.keys.length !== 1) {
+        return err("ILLEGAL_ARGS", "This slot takes exactly one value (decline to keep it)", { keys: answer.keys });
+      }
+      params.pickedKeys = answer.keys.map((k) => {
+        const s = String(k);
+        return (
+          pc.options.find((o) => o.key === s || o.cardId === s || o.zone === s || o.zone === `battlefield-${s}` || (o.mode !== undefined && String(o.mode) === s))?.key ?? s
+        );
+      });
+    } else if (answer.kind === "integer") {
+      params.pickedKeys = [String(answer.value)];
+    } else {
+      return err("WRONG_ANSWER_KIND", "A new-choices slot needs a pick (or decline to keep it)");
+    }
+    if (ctx.canExecute && !ctx.canExecute(seat, "resolvePendingChoice", params)) {
+      return err("ILLEGAL_ARGS", params.keep ? "This slot must be re-chosen — its previous value no longer exists (753.1)" : "Not a legal new choice for this slot (753.1)", {
+        options: pc.options.map((o) => o.key),
+        wanted: params,
       });
     }
     return { move: { moveId: "resolvePendingChoice", params, playerId: seat }, type: "move" };

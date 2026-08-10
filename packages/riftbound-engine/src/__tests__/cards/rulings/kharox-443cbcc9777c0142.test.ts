@@ -88,6 +88,9 @@ describe("Ruling 443cbcc9777c0142 — Kharox is empowered only by an empowering 
     const d = game.decision();
     expect(d).toMatchObject({ kind: "pick", seat: P1 });
     await game.p1.pick("deadguy");
+    // rule 387.1 / 388.1 — the pick finalizes the reflexive item; it resolves
+    // (and asks where the unit is played) after the priority window.
+    await resolveTop(game);
     await game.p1.pick("base");
     await game.settle();
     expect(game.zoneOf("deadguy")).toBe("base");
@@ -137,6 +140,7 @@ describe("Ruling 443cbcc9777c0142 — Kharox is empowered only by an empowering 
     expect(offered).toContain("deadguy");
     expect(offered).not.toContain("deadspell");
     await game.p1.pick("deadguy");
+    await resolveTop(game); // rule 388.1 — the reflexive item resolves after its priority window
     // Normal play rules for the destination: P1's base or a battlefield P1 controls — bf1 yes, P2's bf2 no.
     const dest = game.decision();
     expect(dest).toMatchObject({ kind: "pick", seat: P1 });

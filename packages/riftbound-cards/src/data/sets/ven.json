@@ -3701,15 +3701,21 @@
                 "type": "mill"
               },
               {
-                "_rule": "356.1.b / 359.3.e.6 — 'Then you MAY do this' play a unit from THEIR trash, ignoring its cost; the 'you may' makes the trash pick declinable",
-                "from": "trash",
-                "ignoreCost": true,
-                "optional": true,
-                "target": {
-                  "controller": "enemy",
-                  "type": "unit"
+                "_rule": "387.1 / 388.1 — 'Then you may do this:' is a Reflexive Trigger: once the Burn finishes a NEW pending Kharox item goes on the Chain, and the 'you may' / trash pick are that item's finalization choices (402.1–402.2)",
+                "effect": {
+                  "_rule": "356.1.b / 359.3.e.6 — play a unit from THEIR trash, ignoring its cost; the 'you may' makes the trash pick declinable",
+                  "from": "trash",
+                  "ignoreCost": true,
+                  "optional": true,
+                  "target": {
+                    "controller": "enemy",
+                    "location": "trash",
+                    "promptWhenSingle": true,
+                    "type": "unit"
+                  },
+                  "type": "play"
                 },
-                "type": "play"
+                "type": "reflexive"
               }
             ],
             "type": "sequence"
