@@ -9,6 +9,7 @@
 // criteria-based (rule 355.5.a).
 import { addToChain, createInteractionState } from "../../chain/chain-state";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
+import { attachedEffectTextAbilities } from "../trigger-runner";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import type { EffectHelpers } from "./_helpers";
 
@@ -56,7 +57,14 @@ export function handle_activateConquerEffects(
   const registry = getGlobalCardRegistry();
   const turnOrder = Object.keys(ctx.draft.players);
   for (const unitId of h.getTargetIds(effect, ctx)) {
-    const abilities = (registry.getAbilities(unitId) ?? []) as ConquerAbility[];
+    // rule 136 / 718.3 (rule-id: sfd-124-221 Doran's Ring) — an Equipment's
+    // Effect Text is part of the WEARER's text, so a conquer effect it confers
+    // is one of "the conquer effects of units here" too.
+    const meta = ctx.cards.getCardMeta?.(unitId as Parameters<EffectContext["cards"]["getCardOwner"]>[0]);
+    const abilities = [
+      ...((registry.getAbilities(unitId) ?? []) as ConquerAbility[]),
+      ...(attachedEffectTextAbilities(meta as never) as unknown as ConquerAbility[]),
+    ];
     for (const ability of abilities) {
       if (!isPlainConquerTrigger(ability)) {
         continue;

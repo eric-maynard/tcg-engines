@@ -217,7 +217,7 @@ function stampLinkTo(effect: unknown, equipId: string): unknown {
   };
 }
 
-function attachedEffectTextAbilities(
+export function attachedEffectTextAbilities(
   meta: Partial<RiftboundCardMeta> | undefined,
 ): TriggerableAbility[] {
   const equipped = meta?.equippedWith;
