@@ -439,6 +439,44 @@ function payFinalizationCostSteps(
   }
 }
 
+/** Where a self-referential cost step would put the source card (rule 383.3.b). */
+const SELF_COST_STEP_DESTINATION: Record<string, string> = {
+  banish: "banishment",
+  kill: "trash",
+  recycle: "mainDeck",
+  "return-to-hand": "hand",
+};
+
+/**
+ * rule 383.3.b — "[do X to me] to [get Y]" can only be paid while the source
+ * card is still somewhere the step could move it FROM. Already sitting in the
+ * step's destination zone means the payment is impossible — an earlier copy of
+ * the same trigger already made it.
+ */
+function selfCostStepState(
+  ctx: FinalizationContext,
+  live: ChainItem,
+  step: Record<string, unknown>,
+): { key: string; payable: boolean } | undefined {
+  if (step.target !== "self") {
+    return undefined;
+  }
+  const destination = SELF_COST_STEP_DESTINATION[String(step.type)];
+  if (destination === undefined) {
+    return undefined;
+  }
+  const zone = ctx.zones.getCardZone?.(live.cardId as CoreCardId);
+  return { key: `${live.cardId}|${String(step.type)}`, payable: zone !== destination };
+}
+
+/** Blank a Chain Item's remaining instruction: it resolves and does nothing. */
+function neuterItem(draft: RiftboundGameState, itemId: string): void {
+  patchItem(draft, itemId, {
+    effect: { effects: [], type: "sequence" } as never,
+    targets: undefined,
+  });
+}
+
 function payFinalizationCostStepsInner(
   draft: RiftboundGameState,
   ctx: FinalizationContext,
@@ -456,6 +494,30 @@ function payFinalizationCostStepsInner(
     const step = steps[i] as Record<string, unknown>;
     if (step?.costStep !== true) {
       break;
+    }
+    // rule 383.3.b / 404.1 (ruling 64125a9762390e3e) — a cost step written into
+    // the instruction ("Recycle me to ready your runes") is a CONDITION of the
+    // effect, not a cost that can be waived: the card can only be moved once,
+    // so when Karthus doubles Ekko's Deathknell exactly ONE of the two items
+    // gets its payoff and the other resolves doing nothing. The payment belongs
+    // to the item that RESOLVES first (the newest on the Chain), so a later
+    // copy takes the payoff over from the earlier sibling that moved the card.
+    const selfCost = selfCostStepState(ctx, live, step);
+    if (selfCost !== undefined && !selfCost.payable) {
+      const sibling = chainItems(draft)?.find(
+        (it) =>
+          it.id !== itemId &&
+          (it as { selfCostPaidKey?: string }).selfCostPaidKey === selfCost.key,
+      );
+      if (sibling === undefined) {
+        neuterItem(draft, itemId);
+        return false;
+      }
+      patchItem(draft, sibling.id, { selfCostPaidKey: undefined } as never);
+      neuterItem(draft, sibling.id);
+      patchItem(draft, itemId, { selfCostPaidKey: selfCost.key } as never);
+      paid += 1;
+      continue;
     }
     const descriptor = step.target as TargetDescriptor | undefined;
     const ownsSlot =
@@ -510,6 +572,9 @@ function payFinalizationCostStepsInner(
       draft,
       toResolveContext(ctx),
     );
+    if (selfCost !== undefined) {
+      patchItem(draft, itemId, { selfCostPaidKey: selfCost.key } as never);
+    }
     paid += 1;
   }
   if (paid > 0) {
