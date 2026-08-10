@@ -239,6 +239,45 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
       (seq as { independentTargets?: boolean }).independentTargets === true
         ? collectIndependentTargetSlots(seq as unknown as SpellEffectTargetShape)
         : undefined;
+    /** The play-time pick of a positional slot step, or undefined when it cannot be told. */
+    const slotIdOfStep = (stepIdx: number): string | undefined => {
+      if (!indepSlots) {
+        return undefined;
+      }
+      const k = indepSlots.findIndex((s) => s.index === stepIdx);
+      if (k < 0) {
+        return undefined;
+      }
+      const vacated = ctx.vacatedTargetSlots;
+      if (vacated?.includes(k) === true) {
+        return undefined;
+      }
+      return ctx.boundTargets?.[
+        vacated === undefined ? k : k - vacated.filter((v) => v < k).length
+      ];
+    };
+    /**
+     * rule 370.1.a.2 — does a LATER damage instruction of this sequence name
+     * the same unit this one just damaged? Only then do its deaths have to be
+     * processed before the sequence goes on (rule 359.3.e.8, Icathian Rain);
+     * otherwise they join the one Cleanup that follows the whole spell.
+     */
+    const damageStepHitAgainLater = (stepIdx: number): boolean => {
+      const mine = slotIdOfStep(stepIdx);
+      if (mine === undefined) {
+        return true;
+      }
+      for (let j = stepIdx + 1; j < (seq.effects?.length ?? 0); j++) {
+        if (seq.effects?.[j]?.type !== "damage") {
+          continue;
+        }
+        const other = slotIdOfStep(j);
+        if (other === undefined || other === mine) {
+          return true;
+        }
+      }
+      return false;
+    };
     // rule 820.2.a (ogn-213-298 Hidden Blade) — a [Repeat]ed spell whose
     // instructions are themselves a sequence ("Kill a unit at a battlefield.
     // Its controller draws 2.") keeps the caster's choice on an INNER step, so
@@ -838,13 +877,21 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
       // kill ("If this kills it, banish it instead", "Then for each unit this
       // kills …") is part of the same instruction's consequences and must still
       // see the death happen after it.
+      // rule 370.1.a.2 (ruling bc39688295f5c3ce, Falling Star × Zhonya's
+      // Hourglass) — when the later instructions hit OTHER units, nothing about
+      // this step's death can change what they do, and the deaths one spell
+      // deals belong to ONE Cleanup so a single-use die replacement's controller
+      // is asked which of the simultaneous deaths it saves. Only a unit this
+      // step may have killed and a LATER damage step names again forces the
+      // early Cleanup; an unresolvable step keeps the old behaviour.
       if (
         sub.type === "damage" &&
         seq.effects[i + 1]?.type === "damage" &&
         ctx.draft.pendingChoice === undefined &&
         ctx.cards !== undefined &&
         ctx.counters !== undefined &&
-        ctx.zones !== undefined
+        ctx.zones !== undefined &&
+        damageStepHitAgainLater(i)
       ) {
         cleanupAndFireDeaths(ctx.draft, ctx as unknown as PostMoveCleanupContext);
       }
