@@ -88,14 +88,19 @@ export function handle_spendBuff(effect: ExecutableEffect, ctx: EffectContext, h
       return;
     }
     const { optional: _optional, ...rest } = effect as ExecutableEffect & { optional?: boolean };
-    // rule 702.2.b — one option per Buff COUNTER, so a unit carrying several can
-    // have some (not all) of them spent.
-    const options = spendable.flatMap((id) =>
-      Array.from({ length: buffCountOf(ctx, id) }, (_v, i) => ({
-        cardId: id,
-        key: i === 0 ? id : `${id}#${i + 1}`,
-      })),
-    );
+    // rule 702.2.b — "spend any number of buffs" offers one option per Buff
+    // COUNTER, so a unit carrying several can have some (not all) of them spent.
+    // rule 355.13 ("for each friendly unit, you may spend ITS buff to …") is one
+    // option per UNIT: a unit spends at most one buff for itself, however many
+    // counters it carries.
+    const options = anyNumberOfBuffs
+      ? spendable.flatMap((id) =>
+          Array.from({ length: buffCountOf(ctx, id) }, (_v, i) => ({
+            cardId: id,
+            key: i === 0 ? id : `${id}#${i + 1}`,
+          })),
+        )
+      : spendable.map((id) => ({ cardId: id, key: id }));
     ctx.draft.pendingChoice = {
       max: options.length,
       min: 0,
