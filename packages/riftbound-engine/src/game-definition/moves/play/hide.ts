@@ -1344,6 +1344,7 @@ export const revealHidden: Defs["revealHidden"] = {
     // (811.1.c.3), so during a Showdown it is a Focus action just like a play
     // from hand: Focus passes once it has landed (settled at the tail).
     const preInteraction = draft.interaction;
+    const chainLenBeforeFlip = preInteraction?.chain?.items.length ?? 0;
     const wasFocusAction =
       !preInteraction?.chain?.items.length &&
       getActiveShowdown(preInteraction ?? createInteractionState())?.focusPlayer === playerId;
@@ -1512,6 +1513,32 @@ export const revealHidden: Defs["revealHidden"] = {
         playerId as string,
         draft.pendingChoice !== undefined && draft.pendingChoice !== null,
       ) as typeof draft.interaction;
+    }
+
+    // rule 337.2 / 340.4 (ruling 5ca148dd1d06db74) — a permanent flipped from
+    // [Hidden] resolves at once and never occupies the Chain, so it does not
+    // consume the round of Priority already under way on the items sitting
+    // there: it is a new game action, the passes collected before it are void
+    // and the controller of the NEWEST Chain item receives Priority again.
+    // Only when the flip queued nothing of its own — otherwise those Pending
+    // items are the newest and the finalization sweep seats Priority.
+    const chainAfterFlip = draft.interaction?.chain;
+    if (
+      chainLenBeforeFlip > 0 &&
+      chainAfterFlip &&
+      chainAfterFlip.items.length === chainLenBeforeFlip &&
+      !draft.pendingChoice
+    ) {
+      const top = chainAfterFlip.items[chainAfterFlip.items.length - 1];
+      if (
+        top &&
+        (chainAfterFlip.activePlayer !== top.controller || chainAfterFlip.passedPlayers.length > 0)
+      ) {
+        draft.interaction = {
+          ...draft.interaction,
+          chain: { ...chainAfterFlip, activePlayer: top.controller, passedPlayers: [] },
+        } as typeof draft.interaction;
+      }
     }
   },
 };
