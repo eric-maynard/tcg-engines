@@ -96,7 +96,7 @@ describe("Call to Glory vs Wallop — spend-a-buff 'ignore cost' under Mystic Vo
   // Expected (356.1.b → 356.3, 356.1.b.3): "ignore this spell's cost" zeroes only the BASE cost; the Vortex's
   // [rainbow] increase is applied afterwards and must still be paid → pool 0/0. Actual: the buff route waives
   // the surcharge too — the rainbow is left in the pool (the un-buffed route IS taxed, see (d)).
-  test.failing("BUG: (a) Call to Glory via the buff during the Vortex showdown = 0 energy + 1 [rainbow] + the buff: pool 0/1 → 0/0 (356.1.b, 356.3, 356.1.b.3)", async () => {
+  test("(a) Call to Glory via the buff during the Vortex showdown = 0 energy + 1 [rainbow] + the buff: pool 0/1 → 0/0 (356.1.b, 356.3, 356.1.b.3)", async () => {
     const game = await showdownAt("mv");
     expect(buffRoutesOffered(game, "ctg")).toEqual([true]); // 0 energy: only the buff route exists
     await game.p1.cast("ctg", { payOptional: true, targets: "a" });
@@ -154,7 +154,7 @@ describe("Call to Glory vs Wallop — spend-a-buff 'ignore cost' under Mystic Vo
 
   // Expected: with 0 power neither route of Call to Glory is payable at the Vortex showdown. Actual: the engine
   // offers (and accepts) the buff route for free — same root cause as (a).
-  test.failing("BUG: (b) … but Call to Glory is NOT: the buff route still owes the Vortex's [rainbow] and the plain route owes 3 + [rainbow] — not offered, cast rejected, buff kept (356.1.b.3, 358.4)", async () => {
+  test("(b) … but Call to Glory is NOT: the buff route still owes the Vortex's [rainbow] and the plain route owes 3 + [rainbow] — not offered, cast rejected, buff kept (356.1.b.3, 358.4)", async () => {
     const game = await showdownAt("mv", { power: 0 });
     expect(game.p1.can("cast", "ctg")).toBe(false);
     expect(buffRoutesOffered(game, "ctg")).toEqual([]);
@@ -164,7 +164,7 @@ describe("Call to Glory vs Wallop — spend-a-buff 'ignore cost' under Mystic Vo
   });
 
   // Expected/actual as above: the buff route is wrongly offered tax-free.
-  test.failing("BUG: (b) even 3 energy + 0 power does not unlock Call to Glory at the Vortex showdown — every route needs the [rainbow] (356.3)", async () => {
+  test("(b) even 3 energy + 0 power does not unlock Call to Glory at the Vortex showdown — every route needs the [rainbow] (356.3)", async () => {
     const game = await showdownAt("mv", { energy: 3, power: 0 });
     expect(game.p1.can("cast", "ctg")).toBe(false);
     expect(game.p1.can("cast", "wallop")).toBe(true);

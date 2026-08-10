@@ -40,6 +40,7 @@ import type { PlayCostSelection } from "@tcg/riftbound-types";
 import type { SpellEffectTargetShape } from "../play/targeting";
 import {
   findConditionalBranchTarget,
+  costRiderTargetIsClassFilter,
   findSequenceLeadTarget,
   offBoardPlayIsCasterChosen,
   offBoardPlayZone,
@@ -461,7 +462,7 @@ function exhaustedAllyForcedPayer(
 }
 
 function activationChosenTarget(effect: unknown): TargetDescriptor | undefined {
-  if (replacementTargetIsClassFilter(effect)) {
+  if (replacementTargetIsClassFilter(effect) || costRiderTargetIsClassFilter(effect)) {
     return undefined;
   }
   let t = (effect as { target?: unknown } | undefined)?.target;

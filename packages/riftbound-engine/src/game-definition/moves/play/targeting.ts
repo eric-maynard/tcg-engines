@@ -3,13 +3,16 @@
  * Leaf module: must not import move defs.
  */
 
-import { replacementTargetIsClassFilter } from "../../../abilities/replacement-effects";
+import {
+  costRiderTargetIsClassFilter,
+  replacementTargetIsClassFilter,
+} from "../../../abilities/replacement-effects";
 import { isAllAtOneBattlefield, resolveTarget } from "../../../abilities/target-resolver";
 import { type CounterTargetContext, isLegalCounterTarget } from "../../../chain/counter-target";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
 import { getCardEffectiveMight, getDeflectSurcharge } from "./cost";
 
-export { replacementTargetIsClassFilter };
+export { costRiderTargetIsClassFilter, replacementTargetIsClassFilter };
 
 export type SpellEffectTargetDescriptor =
   | string
@@ -945,6 +948,11 @@ export function spellEffectHasLegalTargets(
   // rule 355.10.c (rule-id: ogn-021-298) — a class-filter replacement names no
   // object now, so an empty board is no obstacle to setting it up.
   if (replacementTargetIsClassFilter(effect)) {
+    return true;
+  }
+  // rule 356.3 (unl-219-219) — a play-scoped cost rider names no object now, so
+  // an empty board is no obstacle to installing it.
+  if (costRiderTargetIsClassFilter(effect)) {
     return true;
   }
   // rule-id: ogn-198-298 (rule 355.10.a) — an off-board play ("play a unit

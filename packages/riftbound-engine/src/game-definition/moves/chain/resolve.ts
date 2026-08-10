@@ -19,7 +19,10 @@ import { executeEffect } from "../../../abilities/effect-executor";
 import { raiseChoosePerLocationChoice } from "../../../abilities/effects/choose-per-location";
 import { findSpendableBuff } from "../../../abilities/effects/spend-buff";
 import { canSpendXp } from "../../../abilities/effects/spend-xp";
-import { replacementTargetIsClassFilter } from "../../../abilities/replacement-effects";
+import {
+  costRiderTargetIsClassFilter,
+  replacementTargetIsClassFilter,
+} from "../../../abilities/replacement-effects";
 import type { TargetDescriptor } from "../../../abilities/target-resolver";
 import {
   isAllAtOneBattlefield,
@@ -1033,6 +1036,9 @@ export function executeResolvedItem(
     // class-filter replacement describes the FUTURE object its replacement will
     // match, so nothing on the board is chosen for it.
     !replacementTargetIsClassFilter(effect) &&
+    // rule 356.3 (unl-219-219) — a play-scoped cost rider surcharges a CLASS of
+    // future plays; nothing on the board is chosen for it.
+    !costRiderTargetIsClassFilter(effect) &&
     // rule 387 / 359.2 (rule-id: unl-199-219 Deceiver) — a REFLEXIVE follow-up
     // sentence ("… play a Reflection token there. It becomes a copy of another
     // unit there.") names its object only as that instruction resolves, so it

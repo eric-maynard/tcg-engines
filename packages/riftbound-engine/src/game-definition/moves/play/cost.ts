@@ -3710,6 +3710,40 @@ export interface PlayResourceCost {
 const FREE_PLAY: PlayResourceCost = { any: 0, energy: 0, free: true, ignoreEnergy: false, named: {} };
 
 /**
+ * rule 356.1.b.1 / 356.1.b.3 — the total cost of a play whose BASE cost is
+ * ignored ("If you do, ignore this spell's cost"): nothing but the increases
+ * that apply after the base is zeroed (an enemy static's [rainbow], a
+ * turn-scoped runtime surcharge). No discount rider is read or consumed —
+ * there is no base left for one to reduce.
+ */
+function ignoredBaseCost(
+  state: RiftboundGameState,
+  playerId: string,
+  cardId: string,
+  extras: CostExtras,
+): PlayResourceCost {
+  const boardIncrease = getBoardCostIncrease(state, playerId, cardId, extras);
+  const energy = boardIncrease.energy + getRuntimePlayCostIncrease(state, playerId, cardId);
+  const named: Partial<Record<string, number>> = {};
+  let any = 0;
+  for (const [domain, n] of Object.entries(boardIncrease.power)) {
+    if (!n || n <= 0) {
+      continue;
+    }
+    // rule 356.3 — an added [rainbow] pip is payable with Power of any Domain.
+    if (domain === "rainbow") {
+      any += n;
+    } else {
+      named[domain] = (named[domain] ?? 0) + n;
+    }
+  }
+  if (energy === 0 && any === 0 && Object.keys(named).length === 0) {
+    return FREE_PLAY;
+  }
+  return { any, energy, free: false, ignoreEnergy: false, named };
+}
+
+/**
  * rule 356 — Determine Total Cost (resources). The ONE computation behind
  * both the affordability gate (`canAffordCard`) and the payment
  * (`deductCost`); `consume` spends one-shot "next card costs N less" riders
@@ -3723,9 +3757,12 @@ export function computePlayResourceCost(
   getCardMeta?: (cardId: CoreCardId) => Partial<RiftboundCardMeta> | undefined,
   consume = false,
 ): PlayResourceCost {
-  // rule 356.5 — the elected additional cost waives the card's cost entirely.
+  // rule 356.1.b.1 — the elected additional cost waives the card's BASE cost
+  // (Energy and Power alike). rule 356.1.b.3 / 356.3 (ven-160-166 Mystic
+  // Vortex × ogn-207-298 Call to Glory) — increases are applied AFTER the base
+  // is zeroed, so an ignored base never shields the play from them.
   if (extras.ignoreBaseCost) {
-    return FREE_PLAY;
+    return ignoredBaseCost(state, playerId, cardId, extras);
   }
   const pool = state.runePools[playerId];
   const modifier = getCostModifier(cardId, getCardMeta);
@@ -4023,10 +4060,11 @@ export function deductCost(
   if (!draft.runePools[playerId]) {
     return;
   }
-  // rule 356.5 — an ignored cost pays nothing and consumes no rider.
-  if (extras.ignoreBaseCost) {
+  const cost = computePlayResourceCost(draft, playerId, cardId, extras, getCardMeta, true);
+  // rule 356.5 / 356.1.b.3 — an ignored base pays nothing and consumes no
+  // rider, but the increases stacked on top of it are still paid.
+  if (cost.free) {
     return;
   }
-  const cost = computePlayResourceCost(draft, playerId, cardId, extras, getCardMeta, true);
   payResourceCost(draft, playerId, cardId, cost);
 }

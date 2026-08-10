@@ -344,6 +344,18 @@ export function replacementTargetIsClassFilter(effect: unknown): boolean {
 }
 
 /**
+ * rule 356.3 (rule-id: unl-219-219 Vaults of Helia / ven-160-166 Mystic Vortex)
+ * — a `scope: "play"` cost rider ("your non-token units cost [1] more to play
+ * this turn") is a blanket surcharge on FUTURE plays: its `target` is the CLASS
+ * of cards the rider matches when one of them is played, not a board object
+ * chosen as the ability is activated, finalized or resolved.
+ */
+export function costRiderTargetIsClassFilter(effect: unknown): boolean {
+  const e = effect as { type?: string; scope?: string } | undefined;
+  return (e?.type === "cost-increase" || e?.type === "cost-reduction") && e.scope === "play";
+}
+
+/**
  * Build the consumed-next key for a replacement ability.
  *
  * Single-fire `"next"`-duration replacements are keyed by
