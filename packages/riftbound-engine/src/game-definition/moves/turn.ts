@@ -146,6 +146,9 @@ export const turnMoves: Partial<
         draft.status = "finished";
         draft.winner = opponentId;
         (draft as { removedPlayers?: string[] }).removedPlayers = [playerId];
+        // rule 651.3 / 196 — the game ends at once: any prompt that was open
+        // (either seat's) is abandoned rather than left owed an answer.
+        draft.pendingChoice = undefined;
         // rule 421.4 — the game ending reveals every facedown card to all players.
         revealFacedownCardsAtGameEnd(draft, { cards: context.cards, zones: context.zones });
 
@@ -174,6 +177,8 @@ export const turnMoves: Partial<
         const winnerId = remaining[0];
         draft.status = "finished";
         draft.winner = winnerId;
+        // rule 651.3 / 196 — see above: no prompt survives the end of the game.
+        draft.pendingChoice = undefined;
         // rule 421.4 — the game ending reveals every facedown card to all players.
         revealFacedownCardsAtGameEnd(draft, { cards: context.cards, zones: context.zones });
 

@@ -923,7 +923,23 @@ export class SeatHandle {
     );
   }
 
+  /**
+   * rule 650 — conceding is legal "at any time", including while the only open
+   * Decision belongs to the other seat (so this seat has no menu at all). The
+   * engine's own enumerator is the authority; the harness menu is not.
+   */
+  private concedeIsValid(): boolean {
+    const rows = this.game.engine.enumerateMoves(this.seat as PlayerId, {
+      moveIds: ["concede"],
+      validOnly: false,
+    }) as readonly { isValid?: boolean; moveId?: string }[];
+    return rows.some((r) => r.moveId === "concede" && r.isValid === true);
+  }
+
   can(verbOrMove: string, card?: CardRef): boolean {
+    if (verbOrMove === "concede" && card === undefined) {
+      return this.concedeIsValid();
+    }
     // `play(card)` dispatches on the card's type (spell → playSpell, gear or
     // equipment → playGear, else playUnit), and those moves surface under their
     // own verbs ("cast", "equip"). `can("play", card)` must ask about the very
@@ -1192,9 +1208,15 @@ export class SeatHandle {
     return this.verb("endTurn", undefined, {}, "endTurn()", opts, () => true);
   }
 
-  /** Forfeit. */
+  /** Forfeit. rule 650: legal at any time, menu or no menu. */
   async concede(): Promise<Extract<ActResult, { ok: true }>> {
-    return this.verb("concede", undefined, {}, "concede()", {}, () => true);
+    if (this.legal().some((o) => o.moveId === "concede")) {
+      return this.verb("concede", undefined, {}, "concede()", {}, () => true);
+    }
+    if (!this.concedeIsValid()) {
+      throw this.explainMissing("concede", undefined, "concede()");
+    }
+    return this.do("concede");
   }
 
   forfeit = this.concede.bind(this);

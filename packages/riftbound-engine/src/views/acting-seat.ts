@@ -28,6 +28,11 @@ export function getPendingChoiceChooser(choice: PendingChoice): PlayerId {
  * with no turn player recorded.
  */
 export function getActingSeat(state: RiftboundGameState): PlayerId | undefined {
+  // rule 196 / 651.3 — a finished game asks nobody for anything: any prompt
+  // that was open when it ended is abandoned, not still owed an answer.
+  if (state.status === "finished") {
+    return undefined;
+  }
   if (state.pendingChoice) {
     return getPendingChoiceChooser(state.pendingChoice);
   }
