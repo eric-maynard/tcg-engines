@@ -858,7 +858,7 @@ export function finalizePendingItems(draftLike: unknown, ctx: FinalizationContex
         removeUnfinalizedItem(draft, item.id);
         continue;
       }
-      if (!optInIsPerformable(item, draft, context)) {
+      if (!optInIsPerformable(item, draft, context, { atFinalization: true })) {
         removeUnfinalizedItem(draft, item.id);
         continue;
       }
