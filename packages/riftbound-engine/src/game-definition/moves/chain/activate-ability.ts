@@ -2765,10 +2765,19 @@ export const activateAbility: Defs["activateAbility"] = {
     if (costPayerId !== undefined) {
       context.counters.setFlag(costPayerId as CoreCardId, "exhausted", true);
     }
+    // rule 718.3 (sfd-059-221 Svellsongur) — text copied onto an Equipment from
+    // the unit it is attached to IS the WEARER's text: "me"/self inside that
+    // copy resolves to the wearer, not to the gear. Every other shape (own,
+    // inherited, granted) keeps the host as self.
+    const selfCardId = exhaustPayerCardId(
+      cardId as string,
+      sourceCardId as string | undefined,
+      (m) => context.cards.getCardMeta(m),
+    );
     draft.interaction = addToChain(
       interaction,
       {
-        cardId,
+        cardId: selfCardId,
         controller: playerId,
         // rule 429.1: carry the paid X to resolution for `{variable:"x"}`.
         effect:
