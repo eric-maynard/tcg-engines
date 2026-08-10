@@ -115,11 +115,9 @@ describe("The Ruination × Soraka, Wanderer wearing Guardian Angel × two Recrui
     expect(game.zoneOf("ruin")).toBe("trash");
   });
 
-  test.failing("BUG: (b)/(d) Branch X — Recruit B (in base, not 'here' when Soraka's effect had its ONE sequence) is killed and ceases to exist; the engine re-applies Soraka's replacement from her new location and saves B too (373.2 / 373.2.a, 186.1)", async () => {
-    // Expected: Soraka's effect was applied while she stood at bf1 (saving A); GA then recalls her, but her effect may not
+  test("(b)/(d) Branch X — Recruit B (in base, not 'here' when Soraka's effect had its ONE sequence) is killed and ceases to exist (373.2 / 373.2.a, 186.1)", async () => {
+    // Soraka's effect was applied while she stood at bf1 (saving A); GA then recalls her, but her effect may not
     // start a second sequence for the base Recruit → B dies → token gone; exactly ONE Recruit survives.
-    // Actual: after GA recalls Soraka the engine evaluates her replacement again with 'here' = base and heals/exhausts/
-    // 'recalls' B as well — both Recruits end in base exhausted.
     const game = await board().build();
     await resolveWith(game, "soraka");
     expect(game.zoneOf("rB")).toBe("gone");

@@ -663,7 +663,11 @@ function processBatch(ctx: Ctx, state: BatchState, opts: DieBatchOptions): DieBa
       continue;
     }
 
-    let cands = collectDieCandidates(ctx, cardId);
+    // rule 373.2 / 373.2.a — a replacement effect gets ONE uninterrupted
+    // sequence per batch: one that already ran is done for this batch, even if
+    // a later replacement moved its source somewhere it would now match again
+    // (Soraka recalled by Guardian Angel does not save a second unit).
+    let cands = collectDieCandidates(ctx, cardId).filter((c) => state.spent?.includes(c.id) !== true);
 
     // rule 372 — several replacements for ONE death: its controller orders them.
     const chosenOrder = state.orders[cardId];
@@ -777,6 +781,24 @@ function processBatch(ctx: Ctx, state: BatchState, opts: DieBatchOptions): DieBa
       }
       if (applyCandidate(ctx, cardId, c)) {
         replaced = true;
+        // rule 373.2 — that ONE sequence covers every other simultaneous death
+        // this same replacement matches RIGHT NOW (Soraka standing here saves
+        // every smaller unit here at once); afterwards it is spent for the batch.
+        if (c.kind === "board" && !c.singleUse) {
+          (state.spent ??= []).push(c.id);
+          for (const other of state.queue.slice(1)) {
+            if (!stillOnBoard(ctx, other)) {
+              continue;
+            }
+            const again = collectDieCandidates(ctx, other).find(
+              (x) => x.id === c.id && x.optional === undefined,
+            );
+            if (again && applyCandidate(ctx, other, again)) {
+              state.replaced.push(other);
+            }
+          }
+          state.queue = state.queue.filter((id, i) => i === 0 || !state.replaced.includes(id));
+        }
         break;
       }
     }

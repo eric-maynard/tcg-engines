@@ -1841,6 +1841,13 @@ export interface RiftboundGameState {
     asked?: Record<string, string[]>;
     /** rule 373.1 — the batch-wide "which death's replacement applies first" question was settled. */
     batchOrdered?: boolean;
+    /**
+     * rule 373.2 / 373.2.a — board replacement ids that already had their ONE
+     * uninterrupted sequence in this batch: they applied to every death they
+     * matched at that moment and never apply again (not even from a location a
+     * later replacement moved their source to).
+     */
+    spent?: string[];
     /** A Kill instruction / cost / Temporary batch to finish on resume (SBA batches re-detect themselves). */
     kill?: { to: string; cause: unknown; playerId: string; sourceCardId: string };
   };

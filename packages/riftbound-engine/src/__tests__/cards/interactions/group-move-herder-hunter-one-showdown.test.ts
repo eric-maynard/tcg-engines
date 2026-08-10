@@ -146,11 +146,9 @@ describe("(a) GROUP form — {Herder, Hunter} → bfC as ONE Standard Move", () 
     expect(game.decision()).toMatchObject({ context: "chain", kind: "action", seat: P1 });
   });
 
-  // Expected (383.3.d / 446.3): the two units move simultaneously, so their two move triggers are ONE
+  // rule 383.3.d / 446.3: the two units move simultaneously, so their two move triggers are ONE
   // simultaneous batch controlled by P1 → P1 is offered the soft `order` decision naming both items.
-  // Actual: the engine fires the move event per unit in sequence (two separate trigger batches), so no
-  // order is ever offered — Herder's draw is always placed first and Hunter's Gold always resolves first.
-  test.failing("BUG: P1 should be offered the order of the two simultaneous move triggers (383.3.d, 446.3)", async () => {
+  test("P1 should be offered the order of the two simultaneous move triggers (383.3.d, 446.3)", async () => {
     const game = await board().build();
     await game.p1.move(["herder", "hunter"], "bfC");
     const d = game.decision();

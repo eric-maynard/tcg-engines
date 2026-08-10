@@ -8,7 +8,7 @@ import type {
   ZoneId as CoreZoneId,
   GameMoveDefinitions,
 } from "@tcg/core";
-import { createInteractionState, getTurnState } from "../../../chain";
+import { collapseTriggerBatch, createInteractionState, getTurnState } from "../../../chain";
 import { type ArrivalIO, noteArrival } from "../../../operations/arrive-at-battlefield";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../../types";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
@@ -360,6 +360,10 @@ export const standardMove: Defs["standardMove"] = {
     // per-unit events carry their position in that single action: a trigger
     // templated on the PLAYER ("when an opponent moves") is met only once.
     let moveBatchIndex = 0;
+    // rule 383.3.d / 446.3 — the movers of one Standard Move arrive
+    // simultaneously, so the move triggers they hand out are ONE batch their
+    // controller may order, not a fixed per-unit sequence.
+    const chainLenBeforeMoves = draft.interaction?.chain?.items.length ?? 0;
     for (const unitId of unitIds) {
       // Capture the source zone before the move so the fired event
       // Reports accurate from/to locations.
@@ -397,6 +401,7 @@ export const standardMove: Defs["standardMove"] = {
         { cards: context.cards, counters, draft, zones },
       );
     }
+    collapseTriggerBatch(draft.interaction, chainLenBeforeMoves);
 
     // Increment per-turn move counter for escalation tracking
     if (!draft.unitsMovedThisTurn) {
