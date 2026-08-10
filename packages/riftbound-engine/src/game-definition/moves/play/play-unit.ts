@@ -2238,6 +2238,15 @@ export function completeUnitPlay(
     },
   );
 
+  // rule 337.2 / 339.1 / 340.4 — a unit item resolves the instant it is
+  // finalized and so never sits on the Chain: playing it still restarts the run
+  // of passes, and once nothing is Pending the controller of the newest
+  // REMAINING item (not this player) gains Priority. `finalizeSweepTouched` is
+  // what the end-of-move finalization sweep reads to reseat Priority.
+  if (draft.interaction?.chain?.items.length) {
+    draft.finalizeSweepTouched = true;
+  }
+
   // rule 340.2.a / 347.1 — the unit resolved on finalize with nothing left
   // on the chain and no prompt outstanding: Focus passes to the next
   // Relevant Player. A play-trigger chain keeps Focus where it is (346.1).

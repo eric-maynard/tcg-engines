@@ -155,8 +155,14 @@ function freezeAnchor(
   sameZone: string | undefined,
 ): Record<string, unknown> {
   const extra: Record<string, unknown> = {};
+  let anchored = descriptor;
   if (descriptor.location === "same" && sameZone !== undefined) {
     extra.zoneIn = [sameZone];
+    // rule 140 (rule-id: ogn-258-298) — the wording is spent once the zone is
+    // pinned: keeping `location:"same"` re-applies its "at a battlefield"
+    // reading at finalization and would lose a destination that is a base.
+    const { location: _spent, ...rest } = descriptor;
+    anchored = rest;
   }
   if (descriptor.excludeSelf === true && pending !== undefined && pending.length > 0) {
     extra.idNotIn = [...pending];
@@ -164,7 +170,7 @@ function freezeAnchor(
   if (Object.keys(extra).length === 0) {
     return descriptor;
   }
-  const existing = descriptor.filter;
+  const existing = anchored.filter;
   const filters = existing === undefined ? [] : Array.isArray(existing) ? [...existing] : [existing];
-  return { ...descriptor, filter: [...filters, extra] };
+  return { ...anchored, filter: [...filters, extra] };
 }

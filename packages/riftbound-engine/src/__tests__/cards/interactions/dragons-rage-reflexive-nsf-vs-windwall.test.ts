@@ -74,18 +74,22 @@ describe("Dragon's Rage reflexive 'Then do this' × Not So Fast / Wind Wall", ()
     expect(game.chain()).toEqual([expect.objectContaining({ cardId: "rage", controller: P1, targets: ["x"], triggered: false })]);
   });
 
-  // 355.4: the Move destination is a play-time choice, made while Dragon's Rage is being finalized —
-  // before anyone receives priority — so P2 responds knowing where X is headed.
-  test("(a) X's destination is chosen as Dragon's Rage is finalized, before P2 gets priority (355.4)", async () => {
+  // Ruling 25b00b80ac336276: only the TARGET unit is declared as Dragon's Rage is played — its
+  // destination is chosen when the spell RESOLVES, because the reflexive "another enemy unit at its
+  // destination" reads the units standing there then (a response may still rearrange them).
+  test("(a) X's destination is NOT asked at play time — it is chosen as Dragon's Rage resolves (ruling 25b00b80ac336276)", async () => {
     const game = await board().build();
     await game.p1.cast("rage", { targets: "x" });
-    const d = game.decision();
-    expect(d).toMatchObject({ kind: "pick", seat: P1 });
-    expect(d?.kind === "pick" ? d.options.map((o) => o.key).sort() : []).toEqual(["base", "battlefield-bf2"]);
-    await game.p1.pick("battlefield-bf2");
-    // Only now does the priority window open, P1 (controller) first.
+    // The priority window opens straight away, P1 (controller) first — no destination pick yet.
     expect(game.decision()).toMatchObject({ context: "chain", kind: "action", seat: P1 });
     expect(game.locationOf("x")).toBe("bf1"); // not moved yet — that happens on resolution
+    await game.p1.passPriority();
+    await game.p2.passPriority(); // Dragon's Rage resolves → NOW the destination is asked
+    const d = game.decision();
+    expect(d).toMatchObject({ kind: "pick", seat: P1, timing: "RES" });
+    expect(d?.kind === "pick" ? d.options.map((o) => o.key).sort() : []).toEqual(["base", "battlefield-bf2"]);
+    await game.p1.pick("battlefield-bf2");
+    expect(game.locationOf("x")).toBe("bf2");
   });
 
   // Expected (387, 388.1, 359.3.b): when Dragon's Rage resolves X moves to bf2, THEN a new pending

@@ -12,7 +12,7 @@ import {
   stageContested,
   toBattlefieldId,
 } from "../../operations/arrive-at-battlefield";
-import { moveDestinationOptions } from "../move-destinations";
+import { keepLegalArrivals, moveDestinationOptions } from "../move-destinations";
 
 /**
  * rule 190.3.a / 450 — pure-data Contested mark for callers that only hold the
@@ -779,7 +779,7 @@ export function handle_move(effect: ExecutableEffect, ctx: EffectContext, h: Eff
     // zones join the list even when the player does not control them.
     const granted = (effect as unknown as { extraDestinations?: readonly string[] })
       .extraDestinations;
-    const options = [
+    const worded = [
       "base",
       ...Object.entries(ctx.draft.battlefields)
         .filter(
@@ -790,6 +790,10 @@ export function handle_move(effect: ExecutableEffect, ctx: EffectContext, h: Eff
         )
         .map(([bfId]) => `battlefield-${bfId}`),
     ].filter((z) => z !== currentZone);
+    // rule 447.2.b / 462.3 — a battlefield the mover may not become present at
+    // (a teammate's, or one already holding units of two other players) is
+    // never offered, exactly as at play time (`play-time-destinations.ts`).
+    const options = enteringPlay ? worded : keepLegalArrivals(worded, cardId as string, ctx);
     if (options.length === 0) {
       return;
     }

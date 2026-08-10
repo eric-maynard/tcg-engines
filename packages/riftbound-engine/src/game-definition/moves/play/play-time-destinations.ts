@@ -53,10 +53,38 @@ export function collectDestinationNodes(effect: unknown, out: AnyEffect[] = []):
     }
     return out;
   }
-  if (hasCasterChosenDestination(node)) {
+  if (hasCasterChosenDestination(node) && !destinationFeedsFollowUp(node)) {
     out.push(node);
   }
   return out;
+}
+
+/**
+ * rule-id: ogn-258-298 (ruling 25b00b80ac336276) — Dragon's Rage "Move an enemy
+ * unit. Then do this: Choose another enemy unit at its destination." A move
+ * whose reflexive follow-up picks from the units AT THE DESTINATION cannot have
+ * that destination fixed at play time (rule 355.4): the follow-up's candidates
+ * are the units standing there when the spell RESOLVES, so a response that
+ * rearranges the board (Flash) must be able to change what the caster can pick.
+ * Only the target unit is declared at play; the destination is asked as the
+ * move executes.
+ */
+function dependsOnDestination(effect: unknown): boolean {
+  if (Array.isArray(effect)) {
+    return effect.some((e) => dependsOnDestination(e));
+  }
+  if (!effect || typeof effect !== "object") {
+    return false;
+  }
+  const node = effect as AnyEffect;
+  if (node.location === "same" || node.location === "move-to-or-from") {
+    return true;
+  }
+  return Object.values(node).some((v) => dependsOnDestination(v));
+}
+
+function destinationFeedsFollowUp(node: AnyEffect): boolean {
+  return node.then !== undefined && dependsOnDestination(node.then);
 }
 
 /**

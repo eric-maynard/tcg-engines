@@ -390,10 +390,15 @@ export function resolveTarget(
     // rule-id: ogn-220-298 — "at the same battlefield": only units sharing the
     // prior target's battlefield zone are legal. Without a bound reference
     // zone (play-legality probes), any battlefield unit is a candidate.
+    // rule 140 / rule-id: ogn-258-298 — a Location is a battlefield OR a base,
+    // so a bound reference zone of "base" ("another enemy unit at its
+    // destination", the mover sent home) matches the units standing there.
     filtered = filtered.filter((id) => {
       const zone = ctx.zones.getCardZone(id as CoreCardId) ?? "";
-      if (!zone.startsWith("battlefield-")) return false;
-      return ctx.sameZone === undefined || zone === ctx.sameZone;
+      if (ctx.sameZone !== undefined) {
+        return zone === ctx.sameZone;
+      }
+      return zone.startsWith("battlefield-");
     });
   } else if (target.location?.startsWith("battlefield")) {
     // rule-id: ogs-002-024 — "all enemy units at A battlefield": once the
