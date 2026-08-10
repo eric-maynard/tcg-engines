@@ -285,6 +285,19 @@ describe("Void Rush (sfd-188-221)", () => {
     expect(isReveal).toBe(true);
   });
 
+  // rule 424.1 / 128.4 — a public REVEAL is seen by every player, so the prompt it raises must NOT
+  // be flagged `private` (the app redacts `revealed` and logs "chose a card." for private choices).
+  test("the reveal prompt is PUBLIC: the pending choice is not flagged private and carries both revealed cards", async () => {
+    const game = await board(7).build();
+    await castToReveal(game);
+    const pending = game.gameState.pendingChoice as
+      | { private?: boolean; revealed?: string[]; type?: string }
+      | undefined;
+    expect(pending?.type).toBe("reveal-and-pick");
+    expect(pending?.private).toBeUndefined();
+    expect(pending?.revealed).toEqual(["top", "second"]);
+  });
+
   // rule 419.2.a / 444.2.c — banish-and-play commits the prompter to the picked card's remaining cost, so the pick
   // prompt is a Pay step: a Reaction [Add] (recycling a ready Calm rune) may be used while it is open, and only then
   // does the [calm]-costed Seal of Focus become a legal pick.

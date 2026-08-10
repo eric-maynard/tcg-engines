@@ -539,4 +539,33 @@ describe("372 — Double and Prevent 2 both apply: the damaged unit's CONTROLLER
     expect(game.decision()?.kind).toBe("action");
     expect(game.state("foe").damage).toBe(0);
   });
+
+  // rule 372 / 371.2.b — two PREVENTS commute on the amount dealt (0 either way) but NOT on
+  // consumption: each is single-use or decrementing, and one that ends up preventing nothing is not
+  // used up. So the order still belongs to the damaged unit's controller.
+  test("two prevents (shield 7 + one-shot) also raise the order pick: the dealt amount commutes but WHICH shield is spent does not", async () => {
+    const run = async (first: "prevent-shield" | "prevent-next") => {
+      const game = await boltAt(4, 9, { ...PREVENT(7), ...PREVENT_NEXT }).build();
+      await game.p1.cast("bolt", { targets: "foe" });
+      const r = await game.settle();
+      expect(r.reason).toBe("unanswered");
+      const d = game.decision();
+      expect(isRpl(d)).toBe(true);
+      expect(d?.seat).toBe(P2);
+      expect(isRpl(d) ? d.options.map((o) => o.key).sort() : []).toEqual(["prevent-next", "prevent-shield"]);
+      await game.p2.pick(first);
+      await game.settle();
+      expect(game.state("foe").damage).toBe(0);
+      expect(damageEvents(game, "foe")).toEqual([]);
+      return game;
+    };
+    // Ki-style shield first: it eats the 4 (7 → 3) and the one-shot never applied, so it stays armed.
+    const shieldFirst = await run("prevent-shield");
+    expect(shieldFirst.state("foe").meta.damagePreventionShield).toBe(3);
+    expect(shieldFirst.state("foe").meta.preventNextDamageInstance).toBe(true);
+    // One-shot first: it is spent and the shield, having prevented nothing, keeps its full 7.
+    const nextFirst = await run("prevent-next");
+    expect(nextFirst.state("foe").meta.preventNextDamageInstance).toBe(false);
+    expect(nextFirst.state("foe").meta.damagePreventionShield).toBe(7);
+  });
 });
