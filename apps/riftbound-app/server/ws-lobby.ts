@@ -3,7 +3,8 @@
  */
 
 import type { ServerWebSocket } from "bun";
-import { loadDeckConfig } from "./decks";
+import { summarizeLegality } from "./deck-rules";
+import { deckLegalityForId, loadDeckConfig } from "./decks";
 import { json } from "./http";
 import { gameLogger } from "./log";
 import { maySelectDeck, parseOpponentDeck, syncOpponentSeatDeck } from "./opponent-deck";
@@ -130,7 +131,38 @@ export function lobbyWsMessage(ws: ServerWebSocket<WsData>, msg: Record<string, 
     broadcastLobby(lobby);
   }
 
+  // Tournament switch (host only, while waiting). Default off: legality is advisory.
+  if (msg.type === "set_enforce_legality" && role === "host" && lobby.status === "waiting") {
+    lobby.enforceLegality = msg.enabled === true;
+    broadcastLobby(lobby);
+  }
+
   if (msg.type === "start_game" && role === "host" && lobby.guest && lobby.host.ready && lobby.guest.ready) {
+    // Deck legality (server/deck-rules.ts) is advisory unless this lobby opted
+    // into enforcement: then refuse to start and name each flagged seat's
+    // problems (the requester sees codes only for the other seat's deck).
+    if (lobby.enforceLegality) {
+      syncOpponentSeatDeck(lobby);
+      const seats = [["host", lobby.host] as const, ["guest", lobby.guest] as const];
+      const flagged = seats
+        .map(([seat, p]) => ({ name: p.name, report: deckLegalityForId(p.deckId), seat }))
+        .filter((x) => !x.report.legal);
+      if (flagged.length > 0) {
+        const problems = flagged.flatMap((x) => x.report.problems
+          .filter((pr) => pr.severity === "error")
+          .map((pr) => ({ code: pr.code, message: x.seat === role ? pr.message : pr.code, seat: x.seat })));
+        const summary = flagged.map((x) => `${x.name}: ${summarizeLegality(x.report)}`).join("; ");
+        try {
+          ws.send(JSON.stringify({ error: `This lobby enforces deck legality — cannot start: ${summary}`, problems, type: "lobby_error" }));
+        } catch { /* disconnected */ }
+        // Tell the other seat too, so a flagged guest knows why nothing happens.
+        const other = role === "host" ? lobby.guest.ws : lobby.host.ws;
+        if (other && other !== ws) {
+          try { other.send(JSON.stringify({ error: `Host tried to start, but this lobby enforces deck legality: ${summary}`, type: "lobby_error" })); } catch { /* */ }
+        }
+        return;
+      }
+    }
     // D20 roll to determine who CHOOSES first player (rule 115)
     let p1Roll = 0;
     let p2Roll = 0;

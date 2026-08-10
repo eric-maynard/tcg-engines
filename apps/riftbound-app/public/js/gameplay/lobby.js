@@ -116,7 +116,11 @@ function connectLobbyWs(onOpen) {
     try { msg = JSON.parse(e.data); } catch { return; }
 
     if (msg.type === "lobby_error") {
-      _surfaceLobbyError(msg.error || "Lobby error");
+      // enforceLegality refusals carry the problem list ({seat, code, message}).
+      const extra = Array.isArray(msg.problems) && msg.problems.length
+        ? "\n" + msg.problems.slice(0, 8).map(p => `• [${p.seat}] ${p.message || p.code}`).join("\n")
+        : "";
+      _surfaceLobbyError((msg.error || "Lobby error") + extra);
       return;
     }
 
@@ -224,6 +228,7 @@ function renderLobbyRoom(lobby) {
   document.getElementById("lobbyHost").innerHTML = `
     <div class="lpc-name">${esc(lobby.host.name)}</div>
     <div class="lpc-status ${lobby.host.hasDeck ? "ready" : ""}">${lobby.host.hasDeck ? "Ready" : "Choosing deck..."}</div>
+    ${lobbyLegalityLine(lobby.host.legality, lobby, lobbyRole === "host")}
   `;
   document.getElementById("lobbyHost").classList.remove("empty");
 
@@ -237,6 +242,7 @@ function renderLobbyRoom(lobby) {
     document.getElementById("lobbyGuest").innerHTML = `
       <div class="lpc-name">${esc(lobby.guest.name)}</div>
       <div class="lpc-status ${readyClass}">${esc(descriptor)}</div>
+      ${lobbyLegalityLine(lobby.guest.legality, lobby, lobbyRole === "guest" || isSandbox)}
     `;
     document.getElementById("lobbyGuest").classList.remove("empty");
   } else {
@@ -268,6 +274,22 @@ function renderLobbyRoom(lobby) {
   } else {
     statusEl.textContent = "Ready! Waiting for host to start...";
   }
+}
+
+/**
+ * Per-seat deck legality note in the lobby room. Legality is ADVISORY: outside
+ * `enforceLegality` lobbies an illegal deck plays with this warning shown to
+ * both players (the opponent sees issue codes only — deck lists stay private).
+ */
+function lobbyLegalityLine(legality, lobby, isMine) {
+  if (!legality) return "";
+  if (legality.legal) return `<div class="lpc-legality ok" style="font-size:10px;color:#6bcc6b;margin-top:2px;">Deck: Legal ✓</div>`;
+  const n = legality.problemCount || (legality.codes || []).length;
+  const detail = isMine && legality.problems
+    ? legality.problems.filter(p => p.severity !== "warning").slice(0, 3).map(p => p.message).join("; ")
+    : (legality.codes || []).join(", ");
+  const mode = lobby.enforceLegality ? "this lobby ENFORCES legality — the host cannot start until it is fixed" : "allowed in this mode";
+  return `<div class="lpc-legality warn" title="${esc(detail)}" style="font-size:10px;color:#ffb84d;margin-top:2px;line-height:1.3;cursor:help;">⚠ not tournament-legal: ${esc(n)} issue${n === 1 ? "" : "s"}${!isMine && detail ? ` (${esc(detail)})` : ""} — ${esc(mode)}</div>`;
 }
 
 function selectDeck(deckId) {
@@ -332,6 +354,13 @@ function appendDeckGroup(select, label, decks) {
     o.dataset.champion = d.championName || "";
     o.dataset.domains = (d.domains || []).join(",");
     o.dataset.updated = d.updatedAt || d.createdAt || "";
+    // Advisory legality (server/deck-rules.ts): badge only — every deck stays selectable.
+    if (d.legality) {
+      o.dataset.legal = d.legality.legal ? "1" : "0";
+      const errs = (d.legality.problems || []).filter(p => p.severity !== "warning");
+      o.dataset.issues = String(errs.length);
+      o.dataset.issueText = errs.slice(0, 6).map(p => p.message).join("\n");
+    }
     group.appendChild(o);
   }
   select.appendChild(group);
@@ -536,10 +565,20 @@ function deckOptionDomainsHtml(opt) {
   return domains.map(d => `<span class="deck-dd-pip pip-${esc(d)}" title="${esc(d)}">${esc(DECK_DD_DOMAIN_LABELS[d] || d[0].toUpperCase())}</span>`).join("");
 }
 
+/** "✓" / "⚠ n" legality chip for a deck option (advisory: illegal decks stay pickable and playable). */
+function deckOptionLegalityHtml(opt) {
+  const legal = opt?.dataset?.legal;
+  if (legal === undefined || legal === "") return "";
+  if (legal === "1") return `<span class="deck-dd-legal ok" title="Tournament-legal" style="margin-left:6px;font-size:9px;font-weight:700;padding:0 5px;border-radius:4px;background:#1a2a1a;color:#6bcc6b;border:1px solid #2a4a2a;">✓</span>`;
+  const n = opt.dataset.issues || "?";
+  const tip = `Not tournament-legal (${n} issue${n === "1" ? "" : "s"}) — allowed in this mode\n${opt.dataset.issueText || ""}`;
+  return `<span class="deck-dd-legal warn" title="${esc(tip)}" style="margin-left:6px;font-size:9px;font-weight:700;padding:0 5px;border-radius:4px;background:#2a2110;color:#ffb84d;border:1px solid #5a4420;">⚠ ${esc(n)}</span>`;
+}
+
 function deckOptionHtml(opt) {
   const sub = deckOptionSubtitle(opt);
   return `<span class="deck-dd-text">
-      <span class="deck-dd-name">${esc(opt ? opt.textContent : "-- Choose a deck --")}</span>
+      <span class="deck-dd-name">${esc(opt ? opt.textContent : "-- Choose a deck --")}${deckOptionLegalityHtml(opt)}</span>
       ${sub ? `<span class="deck-dd-sub">${esc(sub)}</span>` : ""}
     </span>
     <span class="deck-dd-pips">${deckOptionDomainsHtml(opt)}</span>`;
@@ -708,9 +747,11 @@ async function hostSandbox() {
   connectLobbyWs(sendLobbyOppDeck);
 }
 
-// Check if sandbox is enabled on load
+// Check if sandbox is enabled on load; also pick up the server's deck rules
+// (sideboard cap etc.) so the pregame overlay never hardcodes them.
 (async () => {
   const r = await api("/api/config").catch(() => null);
+  if (r && r.deckRules) window.deckRules = r.deckRules;
   if (r && r.sandboxEnabled === false) {
     const el = document.getElementById("sandboxOption");
     if (el) el.style.display = "none";

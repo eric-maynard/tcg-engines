@@ -503,6 +503,44 @@ describe("Copy limits: 3 per full card name including the Chosen Champion; signa
   });
 });
 
+describe("Construction legality is a REPORT, not a gate: engines seat over-limit decks; lenient builders accept anything structurally sane and validate() names the problems", () => {
+  test("Game.fromDecks / createPlayableGame with 40× one name (way over the 3-copy limit), no legend, no champion, one battlefield → a playable game at P1 turn 1; only an EMPTY main deck is refused, with a clear message", async () => {
+    const overLimit = {
+      battlefieldIds: ["ogn-277-298"],
+      mainDeckCardIds: Array.from({ length: 40 }, () => "ogn-175-298"),
+      runeDeckCardIds: Array.from({ length: 12 }, () => "ogn-007-298"),
+    };
+    const short = { ...overLimit, mainDeckCardIds: overLimit.mainDeckCardIds.slice(0, 9) }; // 9 cards: far below 40, still seats
+    const game = await Game.fromDecks({ p1: overLimit, p2: short, seed: "advisory-legality" });
+    expect(game.turnNumber()).toBe(1);
+    expect(game.turnPlayer()).toBe(P1);
+    expect(game.phase()).toBe("main");
+    expect(game.p1.hand().length).toBeGreaterThan(0);
+    await expect(Game.fromDecks({ p1: { ...overLimit, mainDeckCardIds: [] }, p2: overLimit })).rejects.toThrow(/empty main deck/);
+  });
+
+  test("DeckBuilder({lenient:true}): a 4th copy, an off-identity card, a champion with the wrong tag and a 13th rune are all ACCEPTED; validate() reports TOO_MANY_COPIES / DOMAIN_IDENTITY_VIOLATION / CHAMPION_TAG_MISMATCH / RUNE_DECK_WRONG_SIZE; wrong card TYPES are still refused", () => {
+    const legend = legendL();
+    const C = championC({ tags: ["U"] }); // wrong tag for a tag-T legend
+    const b = new DeckBuilder([], "duel", { lenient: true });
+    b.setLegend(legend);
+    expect(b.setChampion(C).success).toBe(true);
+    const grunt = fillerUnit("Grunt Z");
+    for (let i = 0; i < 4; i++) {expect(b.addToMainDeck(grunt).success).toBe(true);}
+    expect(b.addToMainDeck(fillerUnit("Calm Outsider", { domain: "calm" as Domain })).success).toBe(true);
+    for (const r of [...runes12(), rune("fury")]) {expect(b.addToRuneDeck(r).success).toBe(true);}
+    expect(b.getState().runeDeck).toHaveLength(13);
+    expect(b.addToMainDeck(legendL() as unknown as Card).success).toBe(false); // a legend is not a main-deck card
+    expect(b.addToRuneDeck(grunt as unknown as RuneCard).success).toBe(false);
+    const got = codes(b.validate());
+    for (const c of ["TOO_MANY_COPIES", "DOMAIN_IDENTITY_VIOLATION", "CHAMPION_TAG_MISMATCH", "RUNE_DECK_WRONG_SIZE"]) {expect(got).toContain(c);}
+    // The strict builder (default) still refuses the same adds.
+    const strict = new DeckBuilder([], "duel");
+    strict.setLegend(legend);
+    expect(errCode(strict.setChampion(C))).toBe("TAG_MISMATCH");
+  });
+});
+
 // ===========================================================================
 // 4. Rune deck: exactly 12, in domain
 // ===========================================================================

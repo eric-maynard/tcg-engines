@@ -884,7 +884,24 @@
       padding: 8px 4px;
     }
 
-    /* Sideboard pane (≤ 8 cards; copy limit counted across main + sideboard) */
+    /* Sideboard pane (up to deckRules.sideboardMax = 10; copy limit counted across main + sideboard).
+       Caps are ADVISORY: adds always succeed, the legality panel lists what is over. */
+    .rune-section-count.over { color: #ffb84d; }
+    #mainDeckCount.over { color: #ffb84d; }
+
+    /* Legality: advisory report under the count bar + badge */
+    .legality-panel { margin: 6px 12px 2px; border: 1px solid #2a2740; border-radius: 8px; background: #15131f; font-size: 11px; }
+    .legality-panel.legal { border-color: #244a2a; }
+    .legality-panel.illegal { border-color: #5a4420; }
+    .legality-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; padding: 5px 8px; cursor: pointer; user-select: none; }
+    .legality-badge { font-weight: 700; font-size: 10px; padding: 1px 7px; border-radius: 8px; letter-spacing: 0.2px; white-space: nowrap; }
+    .legality-badge.legal { background: #1a2a1a; color: #6bcc6b; border: 1px solid #2a4a2a; }
+    .legality-badge.illegal { background: #2a2110; color: #ffb84d; border: 1px solid #5a4420; }
+    .legality-note { color: #6b6580; font-size: 10px; flex: 1 1 150px; line-height: 1.3; }
+    .legality-list { margin: 0; padding: 0 8px 6px 22px; color: #c9b99a; max-height: 120px; overflow-y: auto; }
+    .legality-list li { margin: 2px 0; line-height: 1.35; }
+    .legality-list li.warning { color: #8a82a6; list-style-type: circle; }
+    .legality-panel.collapsed .legality-list { display: none; }
     .sb-target-btn {
       padding: 2px 8px; margin-right: 8px;
       border: 1px solid #2a2740; border-radius: 6px; background: transparent;
@@ -969,6 +986,15 @@
       <span class="type-breakdown" id="typeBreakdown"></span>
     </div>
 
+    <!-- Legality (advisory): badge + problems. Illegal decks still save and play. -->
+    <div class="legality-panel legal collapsed" id="legalityPanel" style="display:none;">
+      <div class="legality-head" onclick="document.getElementById('legalityPanel').classList.toggle('collapsed')">
+        <span class="legality-badge legal" id="legalityBadge">Legal ✓</span>
+        <span class="legality-note" id="legalityNote">Tournament-legal</span>
+      </div>
+      <ul class="legality-list" id="legalityList"></ul>
+    </div>
+
     <!-- Deck list -->
     <div class="deck-list-container" id="deckListContainer">
       <div style="text-align:center; padding:30px 16px; color:#3a3460; font-size:12px;">
@@ -993,14 +1019,14 @@
       </div>
     </div>
 
-    <!-- Sideboard (up to 8; swapped in during pregame sideboarding) -->
+    <!-- Sideboard (up to deckRules.sideboardMax = 10, advisory; swapped in during pregame sideboarding) -->
     <div class="rune-section" id="sideboardSection" style="display:none;">
       <div class="rune-section-header">
         <span class="rune-section-label">Sideboard</span>
         <span style="flex:1"></span>
         <button class="sb-target-btn" id="sbTargetBtn" onclick="toggleAddTarget()"
                 title="While on, clicking a card in the browser adds it to the sideboard instead of the main deck">Add to: Main</button>
-        <span class="rune-section-count" id="sideboardCount">0 / 8</span>
+        <span class="rune-section-count" id="sideboardCount">0 / 10</span>
       </div>
       <div class="rune-list" id="sideboardList">
         <div class="rune-empty">No sideboard cards — turn on “Add to: Sideboard” and click cards</div>
@@ -1115,6 +1141,40 @@ Runes:
   let selectedChampionData = null;
   let gameVersion = 'standard';
   window.gameVersion = gameVersion;
+  // Deck construction numbers come from the server (GET /api/config deckRules) —
+  // never hardcoded here. Legality is advisory: nothing in the builder blocks on it.
+  let deckRules = { mainMin: 40, copyLimit: 3, sideboardMax: 10, runeCount: 12, battlefieldCount: 3, enforced: false };
+  window.deckRules = deckRules;
+  let deckLegality = null;
+  window.getDeckLegality = () => deckLegality;
+
+  /** Every builder response carries {state, stats, legality}; keep all three in step. */
+  function applyBuilderPayload(data) {
+    if (!data) return;
+    if (data.state) deckState = data.state;
+    if (data.stats) deckStats = data.stats;
+    if (data.legality) { deckLegality = data.legality; renderLegality(); }
+  }
+
+  function renderLegality() {
+    const panel = document.getElementById('legalityPanel');
+    if (!panel || !deckLegality) return;
+    const errors = (deckLegality.problems || []).filter(p => p.severity !== 'warning');
+    const warnings = (deckLegality.problems || []).filter(p => p.severity === 'warning');
+    const legal = !!deckLegality.legal;
+    panel.style.display = '';
+    panel.classList.toggle('legal', legal);
+    panel.classList.toggle('illegal', !legal);
+    const badge = document.getElementById('legalityBadge');
+    badge.className = 'legality-badge ' + (legal ? 'legal' : 'illegal');
+    badge.textContent = legal ? 'Legal ✓' : `⚠ Not tournament-legal (${errors.length} issue${errors.length === 1 ? '' : 's'})`;
+    document.getElementById('legalityNote').textContent = legal
+      ? (warnings.length ? `${warnings.length} check${warnings.length === 1 ? '' : 's'} could not be verified` : 'Tournament-legal')
+      : 'You can still save and play this deck — click for details';
+    document.getElementById('legalityList').innerHTML = [...errors, ...warnings]
+      .map(p => `<li class="${p.severity === 'warning' ? 'warning' : 'error'}" title="${esc(p.code)}">${esc(p.message)}</li>`).join('');
+    if (!legal && panel.dataset.autoOpened !== '1') { panel.classList.remove('collapsed'); panel.dataset.autoOpened = '1'; }
+  }
 
   window.setGameVersion = function(version, btn) {
     gameVersion = version;
@@ -1131,6 +1191,15 @@ Runes:
   // ========================================
   async function init() {
     try {
+      // Deck rules (sideboard cap etc.) — single source of truth is the server.
+      try {
+        const cfgRes = await fetch(API + '/api/config');
+        if (cfgRes.ok) {
+          const cfg = await cfgRes.json();
+          if (cfg && cfg.deckRules) { deckRules = Object.assign(deckRules, cfg.deckRules); window.deckRules = deckRules; }
+        }
+      } catch { /* defaults above */ }
+
       // Load legends
       const legendsRes = await fetch(API + '/api/legends');
       if (!legendsRes.ok) throw new Error('Failed to load legends');
@@ -1147,8 +1216,7 @@ Runes:
             if (stateData.state && stateData.state.legend) {
               // Session is alive and has a deck — restore it
               sessionId = savedSession;
-              deckState = stateData.state;
-              deckStats = stateData.stats;
+              applyBuilderPayload(stateData);
 
               selectedLegendData = stateData.state.legend;
               updateLegendSlot();
@@ -1258,8 +1326,7 @@ Runes:
       });
       if (!res.ok) throw new Error('Failed to set legend');
       const data = await res.json();
-      deckState = data.state;
-      deckStats = data.stats;
+      applyBuilderPayload(data);
 
       selectedLegendData = allLegends.find(l => l.id === legendId) || null;
 
@@ -1337,8 +1404,7 @@ Runes:
       });
       if (!res.ok) throw new Error('Failed to set champion');
       const data = await res.json();
-      deckState = data.state;
-      deckStats = data.stats;
+      applyBuilderPayload(data);
 
       // Find champion data from the response
       if (deckState && deckState.chosenChampion) {
@@ -1487,7 +1553,7 @@ Runes:
     grid.innerHTML = currentCards.map(c => {
       const count = copies[c.name] || 0;
       const inDeck = count > 0;
-      const maxed = count >= 3;
+      const maxed = count >= (deckRules.copyLimit || 3);
       const cls = ['card-tile'];
       if (inDeck) cls.push('in-deck');
       if (maxed) cls.push('maxed');
@@ -1500,7 +1566,7 @@ Runes:
         <img src="/card-image/${c.id}" loading="lazy" alt="${esc(c.name)}"
              onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
         <div class="img-placeholder" style="display:none;">${esc(c.name)}</div>
-        ${count > 0 ? `<div class="copy-badge ${maxed ? 'maxed-badge' : ''}">${count}/3</div>` : ''}
+        ${count > 0 ? `<div class="copy-badge ${maxed ? 'maxed-badge' : ''}" title="${count > (deckRules.copyLimit || 3) ? 'Over the copy limit — allowed, but not tournament-legal' : ''}">${count}/${deckRules.copyLimit || 3}</div>` : ''}
         ${sbCounts[c.name] ? `<div class="sb-badge" title="Copies in sideboard">SB ${sbCounts[c.name]}</div>` : ''}
       </div>`;
     }).join('');
@@ -1565,8 +1631,7 @@ Runes:
         }
         return;
       }
-      deckState = data.state;
-      deckStats = data.stats;
+      applyBuilderPayload(data);
       updateDeckUI();
       renderCardGrid();
       if (el) {
@@ -1588,8 +1653,7 @@ Runes:
       });
       if (!res.ok) throw new Error('Failed to remove sideboard card');
       const data = await res.json();
-      deckState = data.state;
-      deckStats = data.stats;
+      applyBuilderPayload(data);
       updateDeckUI();
       renderCardGrid();
     } catch (err) {
@@ -1617,8 +1681,7 @@ Runes:
         return;
       }
 
-      deckState = data.state;
-      deckStats = data.stats;
+      applyBuilderPayload(data);
       await silentAutoFillRunes();
       updateDeckUI();
       renderCardGrid();
@@ -1643,8 +1706,7 @@ Runes:
       });
       if (!res.ok) throw new Error('Failed to remove card');
       const data = await res.json();
-      deckState = data.state;
-      deckStats = data.stats;
+      applyBuilderPayload(data);
       await silentAutoFillRunes();
       updateDeckUI();
       renderCardGrid();
@@ -1659,8 +1721,10 @@ Runes:
   function updateDeckUI() {
     if (!deckState || !deckStats) return;
 
-    // Main deck count
-    document.getElementById('mainDeckCount').textContent = `${deckStats.mainDeckCount || 0} / 40`;
+    // Main deck count (rule 103.2 minimum from deckRules; short decks are allowed, just flagged)
+    const mdc = document.getElementById('mainDeckCount');
+    mdc.textContent = `${deckStats.mainDeckCount || 0} / ${deckRules.mainMin || 40}`;
+    mdc.classList.toggle('over', (deckStats.mainDeckCount || 0) < (deckRules.mainMin || 40));
 
     // Type breakdown
     const units = deckStats.byType?.unit || 0;
@@ -1726,9 +1790,11 @@ Runes:
     const list = document.getElementById('sideboardList');
     const countEl = document.getElementById('sideboardCount');
     const side = deckState.sideboard || [];
-    const max = deckStats?.sideboardMax || 8;
+    const max = deckStats?.sideboardMax || deckRules.sideboardMax || 10;
     section.style.display = '';
     countEl.textContent = `${side.length} / ${max}`;
+    countEl.classList.toggle('over', side.length > max);
+    countEl.title = side.length > max ? `Over the ${max}-card sideboard cap — allowed, but not tournament-legal` : '';
     if (side.length === 0) {
       list.innerHTML = '<div class="rune-empty">No sideboard cards — turn on “Add to: Sideboard” and click cards</div>';
       return;
@@ -1738,17 +1804,15 @@ Runes:
       if (!grouped.has(c.name)) grouped.set(c.name, { card: c, count: 0 });
       grouped.get(c.name).count++;
     }
-    const copies = deckStats?.copies || {};
     list.innerHTML = [...grouped.values()].map(({ card, count }) => {
       const cardJson = JSON.stringify(card).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;');
-      const full = side.length >= max || (copies[card.name] || 0) >= 3;
       return `<div class="deck-card-row" onmouseenter="showPreview(${cardJson})">
         <span class="dcr-cost">${card.energyCost ?? '-'}</span>
         <span class="dcr-name">${esc(card.name)}</span>
         <span class="dcr-count">x${count}</span>
         <span class="dcr-actions">
           <button class="dcr-btn dcr-minus" onclick="removeSideboardCard('${esc(card.id)}', event)">−</button>
-          <button class="dcr-btn dcr-plus" ${full ? 'disabled' : ''} onclick="addSideboardCard('${esc(card.id)}', null, event)">+</button>
+          <button class="dcr-btn dcr-plus" onclick="addSideboardCard('${esc(card.id)}', null, event)">+</button>
         </span>
       </div>`;
     }).join('');
@@ -1808,8 +1872,7 @@ Runes:
       });
       if (!res.ok) throw new Error('Failed to adjust runes');
       const data = await res.json();
-      deckState = data.state;
-      deckStats = data.stats;
+      applyBuilderPayload(data);
       updateRuneDisplay();
       if (data.result && !data.result.success) {
         showToast('Runes', data.result.error?.message || 'Cannot adjust runes', 'error');
@@ -1893,8 +1956,7 @@ Runes:
       });
       if (!legendRes.ok) throw new Error('Failed to set legend');
       const legendData = await legendRes.json();
-      deckState = legendData.state;
-      deckStats = legendData.stats;
+      applyBuilderPayload(legendData);
       selectedLegendData = allLegends.find(l => l.id === savedDeck.legendId) || null;
       if (selectedLegendData) {
         updateLegendSlot();
@@ -1914,8 +1976,7 @@ Runes:
         });
         if (champRes.ok) {
           const champData = await champRes.json();
-          deckState = champData.state;
-          deckStats = champData.stats;
+          applyBuilderPayload(champData);
           if (deckState.chosenChampion) {
             selectedChampionData = deckState.chosenChampion;
             updateChampionSlot();
@@ -1923,10 +1984,14 @@ Runes:
         }
       }
 
-      // Add main deck cards
+      // Add main deck cards. Saved decks keep the chosen champion's own copy as a
+      // "main" entry (it counts toward the 40) — that copy is the champion slot,
+      // so skip exactly one of it here or every save/load would add a copy.
       const mainCards = (savedDeck.cards || []).filter(c => c.zone === 'main');
+      let championCopySkipped = false;
       for (const entry of mainCards) {
         for (let i = 0; i < entry.quantity; i++) {
+          if (!championCopySkipped && entry.cardId === savedDeck.championId) { championCopySkipped = true; continue; }
           await fetch(API + `/api/deck/${sessionId}/add`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1935,8 +2000,16 @@ Runes:
         }
       }
 
-      // Sideboard entries (zone 'sideboard') — after the main deck so the
-      // combined 3-copy limit is applied in the same order as when saved.
+      // Battlefields (zone 'battlefield'), when the deck registered any.
+      for (const entry of (savedDeck.cards || []).filter(c => c.zone === 'battlefield')) {
+        await fetch(API + `/api/deck/${sessionId}/battlefield`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ battlefieldId: entry.cardId })
+        });
+      }
+
+      // Sideboard entries (zone 'sideboard').
       for (const entry of (savedDeck.cards || []).filter(c => c.zone === 'sideboard')) {
         for (let i = 0; i < entry.quantity; i++) {
           await fetch(API + `/api/deck/${sessionId}/sideboard/add`, {
@@ -1951,8 +2024,7 @@ Runes:
       const stateRes = await fetch(API + `/api/deck/${sessionId}/state`);
       if (stateRes.ok) {
         const stateData = await stateRes.json();
-        deckState = stateData.state;
-        deckStats = stateData.stats;
+        applyBuilderPayload(stateData);
       }
 
       // Restore the saved rune mix (falls back to autofill for older decks
@@ -1969,8 +2041,7 @@ Runes:
         });
         if (runeRes.ok) {
           const runeData = await runeRes.json();
-          deckState = runeData.state;
-          deckStats = runeData.stats;
+          applyBuilderPayload(runeData);
         }
       }
       await silentAutoFillRunes();
@@ -2001,8 +2072,7 @@ Runes:
       const res = await fetch(API + `/api/deck/${sessionId}/runes/autofill`, { method: 'POST' });
       if (!res.ok) return;
       const data = await res.json();
-      deckState = data.state;
-      deckStats = data.stats;
+      applyBuilderPayload(data);
     } catch (err) {
       // Silent — rune auto-fill is best-effort
     }
@@ -2016,11 +2086,13 @@ Runes:
       const res = await fetch(API + `/api/deck/${sessionId}/state`);
       if (!res.ok) throw new Error('Failed to validate');
       const data = await res.json();
-      if (data.validation && data.validation.valid) {
-        showToast('Valid Deck', 'Your deck passes all validation checks!', 'success');
+      applyBuilderPayload(data);
+      const problems = (data.legality?.problems || []).filter(p => p.severity !== 'warning');
+      if (data.legality ? data.legality.legal : (data.validation && data.validation.valid)) {
+        showToast('Legal ✓', 'Your deck passes all construction checks.', 'success');
       } else {
-        const errors = (data.validation?.errors || []).map(e => '\u2022 ' + e.message).join('\n');
-        showToast('Invalid Deck', errors || 'Unknown validation errors.', 'error');
+        const errors = (problems.length ? problems : (data.validation?.errors || [])).map(e => '\u2022 ' + e.message).join('\n');
+        showToast('Not tournament-legal', (errors || 'Unknown issues.') + '\n(You can still save and play it.)', 'error');
       }
     } catch (err) {
       console.error('Validate error:', err);
@@ -2088,8 +2160,7 @@ Runes:
       }
 
       // Update UI with imported state
-      deckState = data.state;
-      deckStats = data.stats;
+      applyBuilderPayload(data);
 
       // Update legend/champion UI
       if (data.state.legend) {
@@ -2114,11 +2185,15 @@ Runes:
       document.getElementById('manaCurveSection').style.display = '';
       document.getElementById('deckActions').style.display = '';
 
+      // Construction problems (too many copies, big sideboard, off-domain…) are
+      // NOT import errors — the list is taken as pasted and the legality panel
+      // explains what is not tournament-legal. Only unrecognized names stay here.
       if (!data.errors || data.errors.length === 0) {
         hideImportModal();
-        showToast('Imported', 'Deck imported successfully.', 'success');
+        const legalNote = data.legality && !data.legality.legal ? ' (not tournament-legal — see the panel; you can still save and play it)' : '';
+        showToast('Imported', 'Deck imported' + legalNote + '.', 'success');
       } else {
-        showToast('Partial Import', `Imported with ${data.errors.length} warning(s).`, 'error');
+        showToast('Partial Import', `Imported — ${data.errors.length} line(s) not recognized.`, 'error');
       }
     } catch (err) {
       console.error('Import error:', err);

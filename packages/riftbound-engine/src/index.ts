@@ -27,6 +27,13 @@ export { RiftboundEngine } from "./engine/riftbound-engine";
 
 // Deck builder export
 export { DeckBuilder } from "./deckbuilder";
+export type { DeckBuilderOptions } from "./deckbuilder";
+// Deck construction rules (101-103) as a report — apps decide whether it blocks.
+export { validateDeck } from "./validators/deck-validators";
+export type {
+  DeckValidationError,
+  DeckValidationResult,
+} from "./validators/deck-validators";
 
 // Card registry export
 export { getGlobalCardRegistry } from "./operations/card-lookup";

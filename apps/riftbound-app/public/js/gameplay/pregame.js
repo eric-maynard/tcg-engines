@@ -438,7 +438,7 @@ function renderSideboardStep(pregame, container) {
   const mainGroups = sbGroup(you.main || [], "-side-");
   const sideGroups = sbGroup(you.side || [], "-main-");
   const locked = Boolean(you.locked);
-  const sizesOk = (you.sideSize ?? (you.side || []).length) <= (you.sideMax ?? 8);
+  const sizesOk = (you.sideSize ?? (you.side || []).length) <= (you.sideMax ?? window.deckRules?.sideboardMax ?? 10);
   const k = (you.swaps?.ins || []).length;
 
   html += `
@@ -450,7 +450,7 @@ function renderSideboardStep(pregame, container) {
         </div>
       </div>
       <div class="sideboard-overlay__col" data-sb-drop="side">
-        <div class="sideboard-overlay__col-header">Sideboard <span id="sbSideCount">${you.sideSize ?? you.side.length}</span> / ${you.sideMax ?? 8}</div>
+        <div class="sideboard-overlay__col-header">Sideboard <span id="sbSideCount">${you.sideSize ?? you.side.length}</span> / ${you.sideMax ?? window.deckRules?.sideboardMax ?? 10}</div>
         <div class="sideboard-overlay__list" id="sbSideList">
           ${sideGroups.map((g) => sbRowHtml(g, "side", _sbPick.side)).join("") || '<div class="sideboard-overlay__empty">Sideboard is empty.</div>'}
         </div>

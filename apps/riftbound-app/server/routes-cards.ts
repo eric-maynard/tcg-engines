@@ -5,6 +5,7 @@
 
 import { allCards, loadSetJson, registry } from "./cards";
 import { PREVIEW_SETS, SANDBOX_ENABLED, STANDARD_SETS } from "./config";
+import { DECK_RULES } from "./deck-rules";
 import { json } from "./http";
 import type { RouteCtx, RouteResult } from "./state";
 
@@ -68,9 +69,11 @@ export async function handleCardRoutes(req: Request, url: URL, _ctx: RouteCtx): 
     return json(card);
   }
 
-  // GET /api/config — client feature flags
+  // GET /api/config — client feature flags + deck construction numbers (the
+  // builder / pregame overlay read caps from here instead of hardcoding them).
+  // Legality is advisory everywhere: `deckRules.enforced` is false.
   if (pathname === "/api/config") {
-    return json({ sandboxEnabled: SANDBOX_ENABLED });
+    return json({ deckRules: { ...DECK_RULES, enforced: false }, sandboxEnabled: SANDBOX_ENABLED });
   }
 
   // GET /api/sets — available sets

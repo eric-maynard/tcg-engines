@@ -253,12 +253,23 @@ export function createPlayableGame(
   deck2: DeckConfig,
   seed = "playtest"
 ): { engine: Engine; instanceIds: { p1: string[]; p2: string[] } } {
+  const P1 = "player-1";
+  const P2 = "player-2";
+  // Deck CONSTRUCTION legality (copy limit, domain identity, sideboard, 40-card
+  // minimum…) is advisory and never checked here — only refuse what makes a
+  // game impossible to seat.
+  for (const [pid, deck] of [
+    [P1, deck1],
+    [P2, deck2],
+  ] as const) {
+    if (!Array.isArray(deck?.mainDeckCardIds) || deck.mainDeckCardIds.length === 0) {
+      throw new Error(`Cannot create game: ${pid} has an empty main deck (0 cards)`);
+    }
+  }
+
   setGlobalCardRegistry(new CardDefinitionRegistry());
   const cardReg = getGlobalCardRegistry();
   const defById = new Map(allCards.map((c) => [c.id, c]));
-
-  const P1 = "player-1";
-  const P2 = "player-2";
   const engine = new RuleEngine<RiftboundGameState, RiftboundMoves, unknown, RiftboundCardMeta>(
     riftboundDefinition,
     [

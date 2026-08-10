@@ -99,7 +99,7 @@ describe("solo lobby: opponent.deck modes seat P2 with the chosen deck before pr
   const cfgB = savedDeckToDeckConfig(getDeck(deckB.id)!)!;
   const otherPrivate = saveDeck(other.id, "Their secret brew", buildDefaultDeck("calm", "mind"), false);
   const otherPublic = saveDeck(other.id, "Their public list", buildDefaultDeck("body", "order"), true);
-  // A saved deck of mine that is NOT legal (no runes) — must be refused like a human's would be.
+  // A saved deck of mine that is NOT playable (no runes) — must be refused like a human's would be. (Construction legality itself is advisory.)
   const broken = createDeck({ cards: [{ cardId: cfgA.mainDeckCardIds[0] as string, quantity: 3, zone: "main" }], championId: cfgA.championId as string, legendId: cfgA.legendId as string, name: "Broken", userId: me.id });
 
   test("fixtures are legal and distinct", () => {
@@ -182,7 +182,7 @@ describe("solo lobby: opponent.deck modes seat P2 with the chosen deck before pr
     expect(createLobby({ opponent: { deck: { deckId: "no-such-deck", mode: "deck" }, kind: "goldfish" }, sandbox: true }, me.id)).toMatchObject({ status: 404 });
     const illegal = createLobby({ opponent: { deck: { deckId: broken.id, mode: "deck" }, kind: "goldfish" }, sandbox: true }, me.id);
     expect(illegal.status).toBe(400);
-    expect((illegal.body as { error: string }).error).toMatch(/not a legal deck/);
+    expect((illegal.body as { error: string }).error).toMatch(/not a playable deck/);
     expect(createLobby({ opponent: { deck: { mode: "steal" }, kind: "goldfish" }, sandbox: true }, me.id)).toMatchObject({ status: 400 });
     expect(createLobby({ opponent: { deck: "deckA", kind: "goldfish" }, sandbox: true }, me.id)).toMatchObject({ status: 400 });
     expect(lobbies.size).toBe(before);

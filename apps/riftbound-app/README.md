@@ -18,8 +18,8 @@ Play → **VS Claude** → pick a deck, an opponent (**Claude Haiku 4.5 · Claud
 *Same as mine (mirror)*, *Random from my decks*, any of **Your Saved Decks**, **Public Decks**, or the **Default
 starter**; the choice is remembered in this browser. The server only accepts decks you own or public decks
 (ownership comes from your session, never from the request body — someone else's private deck id answers
-"Opponent deck not found" and no lobby is created), validates the list exactly like yours (legend + chosen
-champion + 40-card main deck within the copy limit + runes; an illegal sideboard is dropped), and seats player-2
+"Opponent deck not found" and no lobby is created), checks only that the list is *playable* (main-deck cards +
+runes — construction legality is advisory, see §Deck legality; nothing is dropped), and seats player-2
 with it before the game exists, so its battlefields (Bo3 picker / Bo1 random pick), sideboarding and mulligan all
 come from that deck. Claude's system prompt includes a short "YOUR DECK" list of its own registered deck. A hosted
 lobby switched to **Single Player** shows the same dropdown to the host (`{type:"select_opponent_deck", deck}` on
@@ -67,8 +67,39 @@ REST clients can pass the same field to `POST /api/game/create` / `POST /api/lob
 `opponent: {kind:"goldfish"} | {kind:"claude", model:"haiku"|"sonnet"|"opus", apiKey?}` (unknown models → 400).
 On `/api/lobby/create` (sandbox lobbies) `opponent.deck` picks the practice seat's deck:
 `{mode:"default"}` (starter, also when absent) | `{mode:"mirror"}` (the host's pick) | `{mode:"random-mine"}` (one of
-the caller's legal saved decks; 401 anonymous / 400 none) | `{mode:"deck", deckId}` (own or public deck; 404
-otherwise, 400 if not legal). `/api/game/create` takes full `deck1` / `deck2` configs instead.
+the caller's playable saved decks; 401 anonymous / 400 none) | `{mode:"deck", deckId}` (own or public deck; 404
+otherwise, 400 if not playable). `/api/game/create` takes full `deck1` / `deck2` configs instead.
+
+## Deck legality (advisory)
+
+Construction rules — rule 103 (≥ 40-card main deck counting the Chosen Champion, ≤ 3 copies per name across
+champion + main + sideboard, Domain Identity, champion tag, Signature limits, exactly 12 in-identity runes, 3 distinct
+battlefields) plus the sideboard policy below — are **checked and reported, never enforced by default**. The numbers
+live in one place, `server/deck-rules.ts` `DECK_RULES` (`mainMin 40 · copyLimit 3 · sideboardMax 10 · runeCount 12 ·
+battlefieldCount 3`), and are served to clients as `GET /api/config → deckRules` (the builder and the pregame overlay
+read caps from there). `validateDeckConfig()` returns `{legal, problems:[{code, message, severity, cardIds?}]}`;
+`severity:"warning"` marks checks that could not be verified because card data is incomplete (e.g.
+`CHAMPION_TAG_UNKNOWN`, `SIGNATURE_DATA_UNKNOWN`, `BATTLEFIELDS_NOT_SET`) and never makes a deck illegal.
+
+- **Import / save / edit always succeed.** The builder session is lenient (a 4th copy, an 11th sideboard card or an
+  off-identity card is accepted and listed in the *Legal ✓ / ⚠ Not tournament-legal (n issues)* panel);
+  `POST /api/deck/:session/import` and `POST /api/saved-decks/import {text, name?}` answer **200** with `errors`
+  holding only unrecognized lines and `legality` holding the report; a list without a legend / champion gets sensible
+  defaults (`warnings`). Saved-deck rows carry `legality` so `/decks` and the lobby pickers badge each deck.
+- **Play always succeeds** in goldfish / sandbox / hot-seat / vs-Claude and ordinary duel lobbies: `loadDeckConfig`
+  keeps every copy and the whole sideboard, `createGameFromDecks` seats the deck and adds one shared-log line
+  *"⚠ X's deck is not tournament-legal (n issues: CODES) — allowed in this game"* (codes only — lists stay private).
+  In the lobby both seats see the flag (`lobby.host|guest.legality`: your own seat gets full messages, the other seat
+  codes + count). Only decks that cannot be seated at all are refused: an empty main deck (engine and server), or a
+  saved deck with no main-deck cards / no runes (falls back to the starter).
+- **`enforceLegality`** (lobby option on `POST /api/lobby/create`, host-togglable with `{type:"set_enforce_legality",
+  enabled}` while waiting; default **false**) is the tournament switch: when on, `start_game` refuses and returns
+  `{type:"lobby_error", error, problems:[{seat, code, message}]}` to the host (and a note to the guest).
+- Server-side ownership checks (own / public decks only) are unrelated to legality and stay enforced.
+
+Tests: `server/__tests__/deck-legality.test.ts` (10-card sideboard import → legal; 4-of + 12 sideboard → 200,
+saved, flagged, plays; lobby warn-both / enforce-refuse), `decks.test.ts`, `pregame-sideboard.test.ts`, and the engine's
+`core-rules/setup-decks-and-mulligan.test.ts` ("Construction legality is a REPORT").
 
 ## Sideboarding
 
@@ -76,9 +107,10 @@ otherwise, 400 if not legal). `/api/game/create` takes full `deck1` / `deck2` co
 Battlefields; 485/486 define Bo1/Bo3) and no tournament-rules digest ships in this repo, so the app implements the
 widely published organized-play policy and states its assumptions here and at the top of `server/pregame.ts`:
 
-- A deck may register a **sideboard of up to 8 cards**, Main Deck types only (units / spells / gear — no legend,
-  champion slot, battlefields or runes). The 3-copies-per-name limit (rule 103.2.b, Chosen Champion included) is
-  counted across main deck + sideboard when building/importing, and re-checked on the post-swap main deck per swap.
+- A deck may register a **sideboard of up to 10 cards** (`DECK_RULES.sideboardMax`), Main Deck types only (units /
+  spells / gear — no legend, champion slot, battlefields or runes). The 3-copies-per-name limit (rule 103.2.b, Chosen
+  Champion included) is counted across main deck + sideboard. Both are advisory like every construction rule (§Deck
+  legality): an oversized sideboard still loads, swaps and plays, flagged `SIDEBOARD_TOO_LARGE`.
 - In **both Bo1 and Bo3**, after both players' legends, chosen champions and this game's battlefields are revealed
   (Bo1: the random pick; Bo3: after battlefield selection) and **before opening hands / mulligans**, each player may
   swap cards **1-for-1** between main deck and sideboard (sizes never change), simultaneously and hidden — the opponent

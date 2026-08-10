@@ -95,6 +95,19 @@ export interface AddCardError {
  */
 export type AddCardResult = { success: true } | { success: false; error: AddCardError };
 
+/**
+ * Builder options.
+ *
+ * `lenient`: construction rules (domain identity, copy limit, champion tag,
+ * rune / battlefield domain + counts) are ADVISORY — adds always succeed and
+ * the problems surface through validate() instead. Only structural sanity is
+ * kept (a legend is a legend, main-deck cards are main-deck types, a champion
+ * is a unit). Used by apps that let players save / test illegal lists.
+ */
+export interface DeckBuilderOptions {
+  readonly lenient?: boolean;
+}
+
 // ============================================================================
 // Constants
 // ============================================================================
@@ -115,9 +128,11 @@ const DECK_BATTLEFIELD_COUNT = 3;
 export class DeckBuilder {
   private state: DeckState;
   private cardPool: Card[];
+  private readonly lenient: boolean;
 
-  constructor(cardPool: Card[], mode: DeckState["mode"] = "duel") {
+  constructor(cardPool: Card[], mode: DeckState["mode"] = "duel", options: DeckBuilderOptions = {}) {
     this.cardPool = cardPool;
+    this.lenient = options.lenient === true;
     this.state = {
       battlefields: [],
       chosenChampion: null,
@@ -193,6 +208,16 @@ export class DeckBuilder {
    * Set the chosen champion.
    */
   setChampion(champion: UnitCard): AddCardResult {
+    if ((champion as Card).cardType !== "unit") {
+      return {
+        error: { code: "NOT_CHAMPION", message: `${champion.name} is not a unit` },
+        success: false,
+      };
+    }
+    if (this.lenient) {
+      this.state.chosenChampion = champion;
+      return { success: true };
+    }
     if (!this.state.legend) {
       return { error: { code: "NO_LEGEND", message: "Select a legend first" }, success: false };
     }
@@ -245,8 +270,8 @@ export class DeckBuilder {
       if (identity.length > 0 && !matchesDomainIdentity(c as FilterableCard, identity)) {
         return false;
       }
-      // Must not exceed 3 copies
-      if ((copies[c.name] ?? 0) >= MAX_COPIES) {
+      // Must not exceed 3 copies (lenient builders keep maxed cards addable)
+      if (!this.lenient && (copies[c.name] ?? 0) >= MAX_COPIES) {
         return false;
       }
       return true;
@@ -264,16 +289,19 @@ export class DeckBuilder {
    * Add a card to the main deck.
    */
   addToMainDeck(card: Card): AddCardResult {
-    if (!this.state.legend) {
-      return { error: { code: "NO_LEGEND", message: "Select a legend first" }, success: false };
-    }
-
     // Check card type
     if (!["unit", "spell", "gear", "equipment"].includes(card.cardType)) {
       return {
         error: { code: "WRONG_TYPE", message: `${card.cardType} cards can't go in the main deck` },
         success: false,
       };
+    }
+    if (this.lenient) {
+      this.state.mainDeck.push(card);
+      return { success: true };
+    }
+    if (!this.state.legend) {
+      return { error: { code: "NO_LEGEND", message: "Select a legend first" }, success: false };
     }
 
     // Check domain identity
@@ -342,6 +370,13 @@ export class DeckBuilder {
    * Add a rune to the rune deck.
    */
   addToRuneDeck(rune: RuneCard): AddCardResult {
+    if ((rune as Card).cardType !== "rune") {
+      return { error: { code: "WRONG_TYPE", message: `${rune.name} is not a rune` }, success: false };
+    }
+    if (this.lenient) {
+      this.state.runeDeck.push(rune);
+      return { success: true };
+    }
     if (this.state.runeDeck.length >= RUNE_DECK_SIZE) {
       return {
         error: { code: "RUNE_DECK_FULL", message: `Rune deck already has ${RUNE_DECK_SIZE} cards` },
@@ -441,6 +476,13 @@ export class DeckBuilder {
    * Add a battlefield.
    */
   addBattlefield(bf: BattlefieldCard): AddCardResult {
+    if ((bf as Card).cardType !== "battlefield") {
+      return { error: { code: "WRONG_TYPE", message: `${bf.name} is not a battlefield` }, success: false };
+    }
+    if (this.lenient) {
+      this.state.battlefields.push(bf);
+      return { success: true };
+    }
     if (this.state.battlefields.length >= 3) {
       return { error: { code: "BF_FULL", message: "Already have 3 battlefields" }, success: false };
     }

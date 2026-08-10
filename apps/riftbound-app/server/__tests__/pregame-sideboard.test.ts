@@ -148,18 +148,22 @@ describe("swap validation", () => {
     expect(lockSideboard(plain, P1).ok).toBe(false);
   });
 
-  test("copy limit (rule 103.2.b) is enforced on the post-swap main deck: a 4th copy of a name is refused", () => {
+  test("copy limit (rule 103.2.b) is advisory: a deck registering 4× a name across main + sideboard still seats (flagged in the shared log, no card names), and swapping the 4th copy into the main deck is allowed", () => {
     // Main deck holds 1× X; sideboard brings three more X plus a spell.
     const s = createGameFromDecks(withSideboard([X, X, X, SPELLS[0] as string]), BASE, "sb-copies", { gameMode: "duel" });
+    const note = s.log.find((e) => e.text.includes("not tournament-legal"));
+    expect(note?.text).toContain("Player 1");
+    expect(note?.text).toContain("TOO_MANY_COPIES");
+    expect(note?.text).not.toContain(registry.get(X)?.name as string);
+    expect(s.log.some((e) => e.text.includes("Player 2") && e.text.includes("not tournament-legal"))).toBe(false);
     const seat = s.pregame!.sideboard![P1]!;
     const nonX = seat.main.filter((c) => c.defId !== X).map((c) => c.id);
     const xs = seat.side.filter((c) => c.defId === X).map((c) => c.id);
     expect(swapSideboard(s, P1, nonX[0], xs[0]).ok).toBe(true); // 2× X
     expect(swapSideboard(s, P1, nonX[1], xs[1]).ok).toBe(true); // 3× X
-    const third = swapSideboard(s, P1, nonX[2], xs[2]); // Would be 4× X
-    expect(third.ok).toBe(false);
-    expect((third as { error: string }).error).toContain("rule 103.2.b");
-    expect((third as { error: string }).error).toContain(registry.get(X)?.name as string);
+    expect(swapSideboard(s, P1, nonX[2], xs[2]).ok).toBe(true); // 4× X in the main deck — allowed
+    expect(seat.main).toHaveLength(40);
+    expect(seat.side).toHaveLength(4);
   });
 });
 

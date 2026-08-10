@@ -16,6 +16,8 @@ export interface CreateLobbyBody {
   gameMode?: string;
   /** {kind:"goldfish"} | {kind:"claude", model, apiKey?} plus optional `deck` (server/opponent-deck.ts). */
   opponent?: unknown;
+  /** Tournament switch: refuse to start with a not-tournament-legal deck (default false — warn only). */
+  enforceLegality?: boolean;
 }
 
 /**
@@ -48,6 +50,7 @@ export function createLobby(body: CreateLobbyBody, userId: string | null): { sta
     code,
     coinFlip: null,
     createdAt: Date.now(),
+    enforceLegality: body.enforceLegality === true,
     gameId: null,
     gameMode: body.gameMode === "match" ? "match" : "duel",
     guest: isSandbox

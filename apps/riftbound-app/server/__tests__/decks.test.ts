@@ -150,8 +150,8 @@ describe("sideboard (deck side)", () => {
     expect(config.mainDeckCardIds).not.toContain(SIDE[0]);
   });
 
-  test("an illegal saved sideboard (over 8, wrong type, or >3 copies across main+side) is dropped, the deck still loads", () => {
-    const tooMany = { cardId: SIDE[2] as string, quantity: 9, zone: "sideboard" as const };
+  test("an illegal saved sideboard (over 10, wrong type, or >3 copies across main+side) is KEPT — legality is advisory — and the deck still loads; findSideboardViolation still describes it", () => {
+    const tooMany = { cardId: SIDE[2] as string, quantity: 11, zone: "sideboard" as const };
     const bf = { cardId: starter.battlefieldIds[0] as string, quantity: 1, zone: "sideboard" as const };
     const fourth = { cardId: starter.mainDeckCardIds[0] as string, quantity: 3, zone: "sideboard" as const }; // 1 in main + 3
     for (const bad of [tooMany, bf, fourth]) {
@@ -163,44 +163,57 @@ describe("sideboard (deck side)", () => {
       const saved = createDeck({ cards, championId: starter.championId as string, legendId: starter.legendId as string, name: "bad sb", userId: user.id });
       const config = savedDeckToDeckConfig(getDeck(saved.id)!);
       expect(config).not.toBeNull();
-      expect(config!.sideboardCardIds).toBeUndefined();
+      expect(config!.sideboardCardIds).toHaveLength(bad.quantity);
     }
     expect(findSideboardViolation(undefined)).toBeNull();
     expect(findSideboardViolation([])).toBeNull();
-    expect(findSideboardViolation(Array.from({ length: 9 }, () => SIDE[0] as string))).toContain("at most 8");
+    expect(findSideboardViolation(Array.from({ length: 10 }, (_, i) => SIDE[i % 3] as string))).toBeNull();
+    expect(findSideboardViolation(Array.from({ length: 11 }, (_, i) => SIDE[i % 3] as string))).toContain("at most 10");
     expect(findSideboardViolation([starter.legendId as string])).toContain("legend");
   });
 
-  test("builder session: sideboard add/remove with ≤8, main-deck types, domain identity and the combined 3-copy limit; state/stats expose it", () => {
+  test("builder session is lenient: sideboard add/remove only refuses non-main-deck types; the 10-card cap, domain identity and the combined 3-copy limit surface in payload.legality instead", () => {
     const sid = crypto.randomUUID();
     const b = getOrCreateSession(sid);
     const card = (id: string) => allCards.find((c) => c.id === id)!;
-    expect(addToSideboard(sid, b, card(SIDE[0] as string))).toEqual({ error: { code: "NO_LEGEND", message: "Select a legend first" }, success: false });
     b.setLegend(card(starter.legendId as string) as import("@tcg/riftbound-types/cards").LegendCard);
+    b.setChampion(card(starter.championId as string) as import("@tcg/riftbound-types/cards").UnitCard);
     expect(addToSideboard(sid, b, card(starter.battlefieldIds[0] as string)).success).toBe(false); // Wrong type
-    expect(addToSideboard(sid, b, card(LEGEND_ID === starter.legendId ? CHAMPION_ID : "ogn-066-298")).success).toBe(false); // Ahri: calm — outside fury/chaos
-    // Combined copy limit: 2 in main + 1 in side OK, a 4th anywhere refused.
+    // Off-identity card (Ahri: calm — outside fury/chaos) is accepted but flagged.
+    expect(addToSideboard(sid, b, card("ogn-066-298")).success).toBe(true);
+    expect(builderPayload(sid, b).legality.problems.map((p: { code: string }) => p.code)).toContain("SIDEBOARD_DOMAIN_VIOLATION");
+    expect(removeFromSideboard(sid, "ogn-066-298")).toBe(true);
+    // Combined copy limit: 2 in main + 1 in side OK, a 4th anywhere is accepted and reported.
     const x = card(SIDE[0] as string);
     expect(b.addToMainDeck(x).success).toBe(true);
     expect(b.addToMainDeck(x).success).toBe(true);
     expect(addToSideboard(sid, b, x)).toEqual({ success: true });
-    expect(addToSideboard(sid, b, x).success).toBe(false);
-    expect(builderPayload(sid, b).stats.copies[x.name]).toBe(3);
-    // Fill to 8, the 9th is refused.
+    expect(builderPayload(sid, b).legality.problems.some((p: { code: string }) => p.code === "TOO_MANY_COPIES")).toBe(false);
+    expect(addToSideboard(sid, b, x).success).toBe(true);
+    expect(builderPayload(sid, b).stats.copies[x.name]).toBe(4);
+    const tooMany = builderPayload(sid, b).legality.problems.find((p: { code: string }) => p.code === "TOO_MANY_COPIES") as { cardIds: string[]; message: string };
+    expect(tooMany.cardIds).toEqual([x.id]);
+    expect(tooMany.message).toContain("4 copies");
+    expect(removeFromSideboard(sid, x.id)).toBe(true);
+    // Fill to 10 — fine; the 11th is accepted and flagged SIDEBOARD_TOO_LARGE.
     const y = card(SIDE[1] as string);
     const z = card(SIDE[2] as string);
     for (const c of [y, y, y, z, z, z]) {expect(addToSideboard(sid, b, c).success).toBe(true);}
-    expect(getSideboard(sid)).toHaveLength(7);
-    const w = allCards.find((c) => c.cardType === "unit" && !("isChampion" in c && c.isChampion) && c.domain === "fury" && !SIDE.includes(c.id))!;
-    expect(addToSideboard(sid, b, w).success).toBe(true);
-    expect(addToSideboard(sid, b, allCards.find((c) => c.cardType === "unit" && c.domain === "chaos" && c.id !== w.id)!)).toEqual({ error: { code: "SIDEBOARD_FULL", message: "Sideboard is full (8 cards)" }, success: false });
-    const payload = builderPayload(sid, b);
-    expect(payload.state.sideboard).toHaveLength(8);
-    expect(payload.stats.sideboardCount).toBe(8);
-    expect(payload.stats.sideboardMax).toBe(8);
+    const pool = allCards.filter((c) => c.cardType === "unit" && !("isChampion" in c && c.isChampion) && c.domain === "fury" && !SIDE.includes(c.id));
+    for (const c of pool.slice(0, 3)) {expect(addToSideboard(sid, b, c).success).toBe(true);}
+    let payload = builderPayload(sid, b);
+    expect(payload.state.sideboard).toHaveLength(10);
+    expect(payload.stats.sideboardCount).toBe(10);
+    expect(payload.stats.sideboardMax).toBe(10);
+    expect(payload.legality.problems.some((p: { code: string }) => p.code === "SIDEBOARD_TOO_LARGE")).toBe(false);
+    expect(addToSideboard(sid, b, pool[3]!).success).toBe(true);
+    payload = builderPayload(sid, b);
+    expect(payload.stats.sideboardCount).toBe(11);
+    expect(payload.legality.legal).toBe(false);
+    expect(payload.legality.problems.map((p: { code: string }) => p.code)).toContain("SIDEBOARD_TOO_LARGE");
     expect(removeFromSideboard(sid, y.id)).toBe(true);
     expect(removeFromSideboard(sid, "nope")).toBe(false);
-    expect(getSideboard(sid)).toHaveLength(7);
+    expect(getSideboard(sid)).toHaveLength(10);
   });
 
   test("import keeps the 'Sideboard:' section and export writes it back", async () => {

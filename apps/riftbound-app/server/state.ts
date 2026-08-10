@@ -7,6 +7,8 @@ import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "@tcg
 import type { RuleEngine } from "@tcg/core";
 import type { Server, ServerWebSocket } from "bun";
 import type { LogEntry } from "../src/narrator";
+import type { DeckLegality } from "./deck-rules";
+import { deckLegalityForId } from "./decks";
 import type { OpponentDeckSpec } from "./opponent-deck";
 
 export type Engine = RuleEngine<RiftboundGameState, RiftboundMoves, unknown, RiftboundCardMeta>;
@@ -57,6 +59,37 @@ export interface Lobby {
    * follows the host's own pick. Absent ⇒ starter deck.
    */
   opponentDeck?: OpponentDeckSpec;
+  /**
+   * Tournament switch (default false): when true, `start_game` refuses seats
+   * whose selected deck is not tournament-legal (server/deck-rules.ts) and
+   * names the problems. When false — goldfish, sandbox, hot-seat, vs-Claude
+   * and ordinary duels — illegal decks play with a visible warning only.
+   */
+  enforceLegality?: boolean;
+}
+
+/**
+ * What a lobby seat is told about a selected deck's legality. The seat's OWN
+ * entry carries the full problem list; the opponent's entry is redacted to
+ * codes + count (problem messages name cards, and deck lists stay private).
+ */
+export interface LobbySeatLegality {
+  legal: boolean;
+  problemCount: number;
+  codes: string[];
+  problems?: DeckLegality["problems"];
+}
+
+export function lobbySeatLegality(deckId: string | null | undefined, full: boolean): LobbySeatLegality | null {
+  if (!deckId) {return null;}
+  const report = deckLegalityForId(deckId);
+  const errors = report.problems.filter((p) => p.severity === "error");
+  return {
+    codes: [...new Set(errors.map((p) => p.code))],
+    legal: report.legal,
+    problemCount: errors.length,
+    ...(full ? { problems: report.problems } : {}),
+  };
 }
 
 /** Public description of the solo opponent — safe to ship in snapshots (no key material). */
@@ -96,25 +129,32 @@ export function generateLobbyCode(): string {
   return code;
 }
 
-export function broadcastLobby(lobby: Lobby) {
-  const state = {
-    lobby: {
-      code: lobby.code,
-      coinFlip: lobby.coinFlip,
-      gameId: lobby.gameId,
-      gameMode: lobby.gameMode,
-      guest: lobby.guest ? { hasDeck: Boolean(lobby.guest.deckId), name: lobby.guest.name, ready: lobby.guest.ready } : null,
-      host: { hasDeck: Boolean(lobby.host.deckId), name: lobby.host.name, ready: lobby.host.ready },
-      id: lobby.id,
-      ...(lobby.sandbox ? { opponentDeck: { deckId: lobby.opponentDeck?.deckId, deckName: lobby.opponentDeck?.deckName, mode: lobby.opponentDeck?.mode ?? "default" } } : {}),
-      sandbox: lobby.sandbox,
-      status: lobby.status,
-    },
-    type: "lobby_update",
+/** Lobby snapshot for one audience: `viewer`'s own deck legality in full, the other seat's redacted. */
+export function lobbyView(lobby: Lobby, viewer: "host" | "guest") {
+  return {
+    code: lobby.code,
+    coinFlip: lobby.coinFlip,
+    enforceLegality: lobby.enforceLegality === true,
+    gameId: lobby.gameId,
+    gameMode: lobby.gameMode,
+    guest: lobby.guest
+      ? { hasDeck: Boolean(lobby.guest.deckId), legality: lobbySeatLegality(lobby.guest.deckId, viewer === "guest" || lobby.sandbox), name: lobby.guest.name, ready: lobby.guest.ready }
+      : null,
+    host: { hasDeck: Boolean(lobby.host.deckId), legality: lobbySeatLegality(lobby.host.deckId, viewer === "host"), name: lobby.host.name, ready: lobby.host.ready },
+    id: lobby.id,
+    ...(lobby.sandbox ? { opponentDeck: { deckId: lobby.opponentDeck?.deckId, deckName: lobby.opponentDeck?.deckName, mode: lobby.opponentDeck?.mode ?? "default" } } : {}),
+    sandbox: lobby.sandbox,
+    status: lobby.status,
   };
-  const data = JSON.stringify(state);
-  try { lobby.host.ws?.send(data); } catch { /* */ }
-  try { lobby.guest?.ws?.send(data); } catch { /* */ }
+}
+
+export function broadcastLobby(lobby: Lobby) {
+  const send = (ws: ServerWebSocket<WsData> | null | undefined, viewer: "host" | "guest") => {
+    if (!ws) {return;}
+    try { ws.send(JSON.stringify({ lobby: lobbyView(lobby, viewer), type: "lobby_update" })); } catch { /* */ }
+  };
+  send(lobby.host.ws, "host");
+  send(lobby.guest?.ws, "guest");
 }
 
 // Clean up stale lobbies every 5 minutes

@@ -156,11 +156,15 @@ window.saveDeck = async function() {
   // "Name (1)", "Name (2)", … if the name is already taken.
   let name = getDeckName();
 
-  // Get validation
-  let validation = { valid: true, errors: [] };
+  // Advisory legality report (never blocks saving).
+  let legality = { legal: true, problems: [] };
   try {
     const vr = await fetch('/api/deck/' + sessionId + '/state');
-    if (vr.ok) validation = (await vr.json()).validation || validation;
+    if (vr.ok) {
+      const st = await vr.json();
+      if (st.legality) legality = st.legality;
+      else if (st.validation) legality = { legal: !!st.validation.valid, problems: (st.validation.errors || []).map(e => ({ ...e, severity: 'error' })) };
+    }
   } catch {}
 
   // Build cards array with zones
@@ -172,11 +176,14 @@ window.saveDeck = async function() {
   for (const [id, qty] of Object.entries(mainCopies)) {
     cards.push({ cardId: id, quantity: qty, zone: 'main' });
   }
+  // The chosen champion counts toward the 40 (rule 103.2.a): its own copy is
+  // saved as a "main" entry; the server / loader take exactly one back out for
+  // the champion slot.
   if (selectedChampionData) {
     const e = cards.find(c => c.cardId === selectedChampionData.id);
     if (e) e.quantity++; else cards.push({ cardId: selectedChampionData.id, quantity: 1, zone: 'main' });
   }
-  // Sideboard lives in the builder session state (deckState.sideboard, ≤ 8).
+  // Sideboard lives in the builder session state (deckState.sideboard; cap from /api/config deckRules, advisory).
   const sbCopies = {};
   for (const c of (deckState?.sideboard || window.sideboardCards || [])) {
     sbCopies[c.id] = (sbCopies[c.id] || 0) + 1;
@@ -191,6 +198,13 @@ window.saveDeck = async function() {
   for (const [id, qty] of Object.entries(runeCopies)) {
     cards.push({ cardId: id, quantity: qty, zone: 'rune' });
   }
+  const bfCopies = {};
+  for (const b of (deckState?.battlefields || [])) {
+    bfCopies[b.id] = (bfCopies[b.id] || 0) + 1;
+  }
+  for (const [id, qty] of Object.entries(bfCopies)) {
+    cards.push({ cardId: id, quantity: qty, zone: 'battlefield' });
+  }
 
   try {
     const res = await fetch('/api/saved-decks', {
@@ -204,8 +218,10 @@ window.saveDeck = async function() {
         name = saved.name;
         setDeckName(name);
       }
-      if (!validation.valid) {
-        showToast('Saved with warnings', 'Deck "' + name + '" saved. Issues: ' + validation.errors.map(e => e.message).join('; '), 'error');
+      const savedLegality = (saved && saved.legality) || legality;
+      const issues = (savedLegality.problems || []).filter(p => p.severity !== 'warning');
+      if (!savedLegality.legal) {
+        showToast('Saved ⚠ not tournament-legal', 'Deck "' + name + '" saved (' + issues.length + ' issue' + (issues.length === 1 ? '' : 's') + ' — playable in every mode). ' + issues.slice(0, 3).map(e => e.message).join('; '), 'error');
       } else {
         showToast('Deck Saved!', '"' + name + '" saved successfully', 'success');
       }

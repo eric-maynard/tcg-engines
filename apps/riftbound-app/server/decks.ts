@@ -9,8 +9,33 @@ import { getDeck } from "../src/db/deck-repo";
 import type { FullDeck } from "../src/db/deck-repo";
 import { allCards, registry } from "./cards";
 import { PREVIEW_SETS, STANDARD_SETS } from "./config";
+import {
+  DECK_RULES,
+  type DeckLegality,
+  MAX_COPIES_PER_NAME,
+  MAX_SIDEBOARD_SIZE,
+  MIN_MAIN_DECK_SIZE,
+  SIDEBOARD_CARD_TYPES,
+  findCopyLimitViolations,
+  findSideboardViolation,
+  validateDeckConfig,
+} from "./deck-rules";
 import { json } from "./http";
 import type { DeckConfig, RouteCtx, RouteResult } from "./state";
+
+// Rule numbers + advisory checks live in ./deck-rules (single source, also
+// served as /api/config deckRules); re-exported for existing importers.
+export {
+  DECK_RULES,
+  MAX_COPIES_PER_NAME,
+  MAX_SIDEBOARD_SIZE,
+  MIN_MAIN_DECK_SIZE,
+  SIDEBOARD_CARD_TYPES,
+  findCopyLimitViolations,
+  findSideboardViolation,
+  validateDeckConfig,
+};
+export type { DeckLegality, DeckProblem } from "./deck-rules";
 
 // Active deck builder sessions (in-memory, keyed by session ID)
 export const sessions = new Map<string, DeckBuilder>();
@@ -22,9 +47,15 @@ export const sessions = new Map<string, DeckBuilder>();
  */
 export const sessionSideboards = new Map<string, Card[]>();
 
+/**
+ * Builder sessions are LENIENT: construction rules (domain identity, copy
+ * limit, champion tag, sideboard cap…) never refuse an add — they surface as
+ * `legality.problems` on every payload instead, so illegal lists can be
+ * imported, saved and play-tested.
+ */
 export function getOrCreateSession(sessionId: string): DeckBuilder {
   if (!sessions.has(sessionId)) {
-    sessions.set(sessionId, new DeckBuilder(allCards));
+    sessions.set(sessionId, new DeckBuilder(allCards, "duel", { lenient: true }));
   }
   return sessions.get(sessionId)!;
 }
@@ -48,15 +79,29 @@ function combinedCopyCounts(sessionId: string, builder: DeckBuilder): Record<str
   return counts;
 }
 
+/** Advisory legality of a builder session's current list (legend/champion may still be unset). */
+export function builderLegality(sessionId: string, builder: DeckBuilder): DeckLegality {
+  const state = builder.getState();
+  return validateDeckConfig({
+    battlefieldIds: state.battlefields.map((c) => c.id),
+    championId: state.chosenChampion?.id,
+    legendId: state.legend?.id,
+    mainDeckCardIds: state.mainDeck.map((c) => c.id),
+    runeDeckCardIds: state.runeDeck.map((c) => c.id),
+    sideboardCardIds: getSideboard(sessionId).map((c) => c.id),
+  }, { mode: state.mode === "match" ? "match" : "duel" });
+}
+
 /**
- * `{state, stats}` for every builder response: the engine builder's state plus
- * `state.sideboard`, and stats whose `copies` count main + sideboard (so the
- * card grid's x/3 badge and the 3-copy limit cover both) plus `sideboardCount`
- * / `sideboardMax`.
+ * `{state, stats, legality}` for every builder response: the engine builder's
+ * state plus `state.sideboard`, stats whose `copies` count main + sideboard
+ * (so the card grid's x/3 badge covers both) plus `sideboardCount` /
+ * `sideboardMax`, and the advisory legality report (warnings panel + badge).
  */
 export function builderPayload(sessionId: string, builder: DeckBuilder) {
   const sideboard = getSideboard(sessionId);
   return {
+    legality: builderLegality(sessionId, builder),
     state: { ...builder.getState(), sideboard: [...sideboard] },
     stats: {
       ...builder.getStats(),
@@ -72,32 +117,16 @@ export type SideboardAddResult =
   | { success: false; error: { code: string; message: string } };
 
 /**
- * Add a card to a builder session's sideboard: main-deck card types only,
- * within the legend's Domain Identity (rule 103.1.b), at most
- * MAX_SIDEBOARD_SIZE cards, and at most 3 copies per name across
- * champion + main + sideboard (rule 103.2.b).
+ * Add a card to a builder session's sideboard. Only structural sanity is
+ * enforced (main-deck card types); the sideboard cap (DECK_RULES.sideboardMax),
+ * domain identity and the combined copy limit are advisory and reported via
+ * `builderLegality` — see the policy note in ./deck-rules.
  */
-export function addToSideboard(sessionId: string, builder: DeckBuilder, card: Card): SideboardAddResult {
-  const state = builder.getState();
-  if (!state.legend) {
-    return { error: { code: "NO_LEGEND", message: "Select a legend first" }, success: false };
-  }
+export function addToSideboard(sessionId: string, _builder: DeckBuilder, card: Card): SideboardAddResult {
   if (!SIDEBOARD_CARD_TYPES.has(card.cardType)) {
     return { error: { code: "WRONG_TYPE", message: `${card.cardType} cards can't go in the sideboard` }, success: false };
   }
-  const identity = builder.getDomainIdentity();
-  const domains = Array.isArray(card.domain) ? card.domain : card.domain ? [card.domain] : [];
-  if (identity.length > 0 && !domains.every((d) => identity.includes(d as string))) {
-    return { error: { code: "DOMAIN_MISMATCH", message: `${card.name} doesn't match domain identity` }, success: false };
-  }
-  const side = getSideboard(sessionId);
-  if (side.length >= MAX_SIDEBOARD_SIZE) {
-    return { error: { code: "SIDEBOARD_FULL", message: `Sideboard is full (${MAX_SIDEBOARD_SIZE} cards)` }, success: false };
-  }
-  if ((combinedCopyCounts(sessionId, builder)[card.name] ?? 0) >= MAX_COPIES_PER_NAME) {
-    return { error: { code: "MAX_COPIES", message: `Already have ${MAX_COPIES_PER_NAME} copies of ${card.name} (main deck + sideboard)` }, success: false };
-  }
-  side.push(card);
+  getSideboard(sessionId).push(card);
   return { success: true };
 }
 
@@ -149,82 +178,6 @@ export function adjustRuneMix(builder: DeckBuilder, domain: string, delta: 1 | -
   }
   builder.removeFromRuneDeck(idx);
   return builder.addToRuneDeck(byDomain.get(giveTo)!);
-}
-
-/** Rule 103.2: a Main Deck has at least 40 cards (Chosen Champion included). */
-export const MIN_MAIN_DECK_SIZE = 40;
-
-/** Rule 103.2.b: a Main Deck can include up to 3 copies of the same named card. */
-export const MAX_COPIES_PER_NAME = 3;
-
-/**
- * Rule 103.2.b: return the names of cards that appear more than
- * MAX_COPIES_PER_NAME times in the main deck (counted by card name, so
- * alternate prints of the same card share a limit). Empty when legal.
- */
-export function findCopyLimitViolations(mainDeckCardIds: readonly string[]): string[] {
-  const counts = new Map<string, number>();
-  for (const defId of mainDeckCardIds) {
-    const name = registry.get(defId)?.name ?? defId;
-    counts.set(name, (counts.get(name) ?? 0) + 1);
-  }
-  const violations: string[] = [];
-  for (const [name, count] of counts) {
-    if (count > MAX_COPIES_PER_NAME) {violations.push(`${name} (x${count})`);}
-  }
-  return violations;
-}
-
-/**
- * Sideboard size cap. Not in the Core Rules (deck construction, rule 103,
- * only defines Legend / Main Deck / Rune Deck / Battlefields); this follows the
- * published organized-play policy — see the "Sideboarding" note at the top of
- * server/pregame.ts and README.md §Sideboarding.
- */
-export const MAX_SIDEBOARD_SIZE = 8;
-
-/** Card types that may live in a sideboard: exactly the Main Deck types (rule 103.2). */
-export const SIDEBOARD_CARD_TYPES: ReadonlySet<string> = new Set(["unit", "spell", "gear", "equipment"]);
-
-/**
- * Return a human-readable reason the sideboard is illegal, or null when it is
- * fine (or absent). Checks size ≤ MAX_SIDEBOARD_SIZE and that every card is a
- * main-deck card type (no legends / battlefields / runes). When
- * `withMainDeck` is given, the 3-copies-per-name limit (rule 103.2.b, Chosen
- * Champion included) is enforced across main deck + sideboard combined.
- */
-export function findSideboardViolation(
-  sideboardCardIds: readonly string[] | undefined,
-  withMainDeck?: { mainDeckCardIds: readonly string[]; championId?: string },
-): string | null {
-  const side = sideboardCardIds ?? [];
-  if (side.length === 0) {return null;}
-  if (side.length > MAX_SIDEBOARD_SIZE) {
-    return `sideboard has ${side.length} cards, at most ${MAX_SIDEBOARD_SIZE} allowed`;
-  }
-  for (const defId of side) {
-    const def = registry.get(defId);
-    if (!def) {return `unknown sideboard card ${defId}`;}
-    if (!SIDEBOARD_CARD_TYPES.has(def.cardType)) {
-      return `${def.name} is a ${def.cardType} — only units, spells and gear may be sideboarded`;
-    }
-  }
-  if (withMainDeck) {
-    // Saved decks may list the Chosen Champion inside their main entries too;
-    // count it once, and only blame names the sideboard actually contributes to.
-    const main = [...withMainDeck.mainDeckCardIds];
-    if (withMainDeck.championId) {
-      const dup = main.indexOf(withMainDeck.championId);
-      if (dup !== -1) {main.splice(dup, 1);}
-      main.push(withMainDeck.championId);
-    }
-    const sideNames = new Set(side.map((defId) => registry.get(defId)?.name ?? defId));
-    const violations = findCopyLimitViolations([...main, ...side]).filter((v) => [...sideNames].some((n) => v.startsWith(`${n} (x`)));
-    if (violations.length > 0) {
-      return `more than ${MAX_COPIES_PER_NAME} copies across main deck + sideboard: ${violations.join(", ")} (rule 103.2.b)`;
-    }
-  }
-  return null;
 }
 
 /** Build a default starter deck from the card pool — uses Fury/Chaos domain (Annie starter) */
@@ -328,17 +281,59 @@ export function buildDefaultDeck(domain1 = "fury", domain2 = "chaos"): DeckConfi
   return { battlefieldIds, championId, legendId, mainDeckCardIds, runeDeckCardIds };
 }
 
-/** Convert a saved deck from the database into a DeckConfig for the game engine */
+const domainsOf = (c: { domain?: unknown } | undefined): string[] => {
+  const d = c?.domain;
+  return typeof d === "string" ? [d] : Array.isArray(d) ? (d as string[]) : [];
+};
+
+/**
+ * A game cannot be seated without a Champion Legend and a Chosen Champion
+ * (rules 111 / 112). When a deck lacks a usable one, pick sensible defaults
+ * rather than refusing: the legend whose domains cover most of the main deck,
+ * and a champion unit carrying that legend's tag (preferring one the deck
+ * already runs). Returns the ids plus human-readable warnings.
+ */
+export function substituteLegendAndChampion(deck: { legendId?: string; championId?: string; mainDeckCardIds: readonly string[] }): { legendId?: string; championId?: string; warnings: string[] } {
+  const warnings: string[] = [];
+  let legend = deck.legendId ? registry.get(deck.legendId) : undefined;
+  if (legend?.cardType !== "legend") {
+    const weight = new Map<string, number>();
+    for (const id of deck.mainDeckCardIds) {
+      for (const d of domainsOf(registry.get(id))) {weight.set(d, (weight.get(d) ?? 0) + 1);}
+    }
+    const legends = allCards.filter((c) => c.cardType === "legend");
+    const score = (c: Card) => domainsOf(c).reduce((n, d) => n + (weight.get(d) ?? 0), 0);
+    legend = legends.toSorted((a, b) => score(b) - score(a))[0];
+    if (legend) {warnings.push(`no usable legend${deck.legendId ? ` (${deck.legendId})` : ""} — using ${legend.name}`);}
+  }
+  let champion = deck.championId ? registry.get(deck.championId) : undefined;
+  if (champion?.cardType !== "unit") {
+    const tag = (legend as { championTag?: string } | undefined)?.championTag;
+    const isChampionFor = (c: Card | undefined) => c?.cardType === "unit" && "isChampion" in c && c.isChampion === true && (!tag || (c.tags ?? []).includes(tag));
+    champion = deck.mainDeckCardIds.map((id) => registry.get(id)).find(isChampionFor)
+      ?? allCards.find(isChampionFor)
+      ?? allCards.find((c) => c.cardType === "unit" && "isChampion" in c && c.isChampion === true);
+    if (champion) {warnings.push(`no usable chosen champion${deck.championId ? ` (${deck.championId})` : ""} — using ${champion.name}`);}
+  }
+  return { championId: champion?.id, legendId: legend?.id, warnings };
+}
+
+/**
+ * Convert a saved deck into a DeckConfig for the game engine. Construction
+ * legality is ADVISORY (see ./deck-rules): over-limit copies, short main
+ * decks, off-identity cards and oversized sideboards all load as saved. Only
+ * decks that cannot be seated at all return null — no main-deck cards or no
+ * runes. A missing/unknown legend or champion is substituted with a warning.
+ */
 export function savedDeckToDeckConfig(deck: FullDeck): DeckConfig | null {
   const mainDeckCardIds: string[] = [];
   const runeDeckCardIds: string[] = [];
   const battlefieldIds: string[] = [];
-  let sideboardCardIds: string[] = [];
+  const sideboardCardIds: string[] = [];
 
   for (const entry of deck.cards) {
     // Rule 103.2: only "main" zone entries form the Main Deck — sideboard
-    // cards must not be shuffled in (that yielded a 4th copy in hand). They
-    // travel separately and only enter the deck through pregame sideboarding.
+    // cards travel separately and only enter the deck through pregame sideboarding.
     const target =
       entry.zone === "sideboard" ? sideboardCardIds :
       entry.zone === "rune" ? runeDeckCardIds :
@@ -348,16 +343,6 @@ export function savedDeckToDeckConfig(deck: FullDeck): DeckConfig | null {
     for (let i = 0; i < entry.quantity; i++) {
       target.push(entry.cardId);
     }
-  }
-
-  // Validate minimum requirements
-  if (mainDeckCardIds.length === 0) {
-    console.warn(`Saved deck "${deck.name}" (${deck.id}) has no main deck cards`);
-    return null;
-  }
-  if (runeDeckCardIds.length === 0) {
-    console.warn(`Saved deck "${deck.name}" (${deck.id}) has no rune deck cards`);
-    return null;
   }
 
   // Use deck-level legend/champion IDs (DB stores them separately from deck_cards)
@@ -379,40 +364,33 @@ export function savedDeckToDeckConfig(deck: FullDeck): DeckConfig | null {
         mainDeckCardIds.splice(i, 1);
       }
     }
+  } else {
+    // The deck builder saves the Chosen Champion's own copy inside the "main"
+    // entries (rule 103.2.a: it counts toward the 40). It starts in the
+    // Champion Zone (103.2.a.1), so take exactly one copy out of the deck.
+    const own = mainDeckCardIds.indexOf(championId);
+    if (own !== -1) {mainDeckCardIds.splice(own, 1);}
   }
 
-  // Rules 103.1.a / 111 / 112: setup requires a Champion Legend and a Chosen
-  // Champion — a deck without both cannot start a legal game.
-  if (!legendId) {
-    console.warn(`Saved deck "${deck.name}" (${deck.id}) has no legend`);
+  if (mainDeckCardIds.length === 0) {
+    console.warn(`Saved deck "${deck.name}" (${deck.id}) has no main deck cards`);
     return null;
   }
-  if (!championId) {
-    console.warn(`Saved deck "${deck.name}" (${deck.id}) has no chosen champion`);
-    return null;
-  }
-
-  // Rule 103.2.b: up to 3 copies of the same named card in the Main Deck.
-  const copyViolations = findCopyLimitViolations(mainDeckCardIds);
-  if (copyViolations.length > 0) {
-    console.warn(`Saved deck "${deck.name}" (${deck.id}) exceeds copy limit: ${copyViolations.join(", ")}`);
+  if (runeDeckCardIds.length === 0) {
+    console.warn(`Saved deck "${deck.name}" (${deck.id}) has no rune deck cards`);
     return null;
   }
 
-  // Rule 103.2 / 103.2.a: Main Deck of at least 40 cards, and the Chosen
-  // Champion counts toward it (it starts in the Champion Zone, 103.2.a.1).
-  const mainDeckSize = mainDeckCardIds.length + 1;
-  if (mainDeckSize < MIN_MAIN_DECK_SIZE) {
-    console.warn(`Saved deck "${deck.name}" (${deck.id}) main deck too small: ${mainDeckSize} < ${MIN_MAIN_DECK_SIZE}`);
-    return null;
-  }
+  // Rules 111 / 112: a game needs a legend and a chosen champion — substitute defaults.
+  const sub = substituteLegendAndChampion({ championId, legendId, mainDeckCardIds });
+  for (const w of sub.warnings) {console.warn(`Saved deck "${deck.name}" (${deck.id}): ${w}`);}
+  legendId = sub.legendId;
+  championId = sub.championId;
 
-  // An illegal sideboard (oversized / wrong types / copy limit across
-  // main+side) is dropped rather than failing the deck: the main deck still plays.
-  const sideboardProblem = findSideboardViolation(sideboardCardIds, { championId, mainDeckCardIds });
-  if (sideboardProblem) {
-    console.warn(`Saved deck "${deck.name}" (${deck.id}) sideboard ignored: ${sideboardProblem}`);
-    sideboardCardIds = [];
+  // Advisory only: log, never refuse or strip.
+  const legality = validateDeckConfig({ battlefieldIds, championId, legendId, mainDeckCardIds, runeDeckCardIds, sideboardCardIds });
+  if (!legality.legal) {
+    console.warn(`Saved deck "${deck.name}" (${deck.id}) is not tournament-legal (allowed): ${legality.problems.filter((p) => p.severity === "error").map((p) => p.code).join(", ")}`);
   }
 
   return {
@@ -423,6 +401,34 @@ export function savedDeckToDeckConfig(deck: FullDeck): DeckConfig | null {
     runeDeckCardIds,
     ...(sideboardCardIds.length > 0 ? { sideboardCardIds } : {}),
   };
+}
+
+/** Advisory legality of a saved deck exactly as stored (no substitution). */
+export function savedDeckLegality(deck: FullDeck): DeckLegality {
+  const ids = { battlefieldIds: [] as string[], mainDeckCardIds: [] as string[], runeDeckCardIds: [] as string[], sideboardCardIds: [] as string[] };
+  for (const entry of deck.cards) {
+    const target = entry.zone === "sideboard" ? ids.sideboardCardIds : entry.zone === "rune" ? ids.runeDeckCardIds : entry.zone === "battlefield" ? ids.battlefieldIds : ids.mainDeckCardIds;
+    for (let i = 0; i < entry.quantity; i++) {target.push(entry.cardId);}
+  }
+  // One "main" copy of the chosen champion is the champion itself (see savedDeckToDeckConfig).
+  const own = ids.mainDeckCardIds.indexOf(deck.championId);
+  if (own !== -1) {ids.mainDeckCardIds.splice(own, 1);}
+  return validateDeckConfig({ ...ids, championId: deck.championId || undefined, legendId: deck.legendId || undefined }, { mode: deck.format === "match" ? "match" : "duel" });
+}
+
+/**
+ * Legality of whatever a lobby seat selected: "default"/empty → the starter
+ * (legal by construction); a saved deck id → its stored list. Unknown ids
+ * report legal (loadDeckConfig falls back to the starter for them).
+ */
+export function deckLegalityForId(deckId: string | null | undefined): DeckLegality {
+  if (!deckId || deckId === "default") {return { legal: true, problems: [] };}
+  try {
+    const saved = getDeck(deckId);
+    return saved ? savedDeckLegality(saved) : { legal: true, problems: [] };
+  } catch {
+    return { legal: true, problems: [] };
+  }
 }
 
 /** Load a deck config by ID, falling back to default deck on error */
@@ -449,6 +455,89 @@ export function loadDeckConfig(deckId: string): DeckConfig {
     console.warn(`Failed to load saved deck ${deckId}, using default deck:`, error);
     return buildDefaultDeck();
   }
+}
+
+/** A text deck list resolved against the card pool. `errors` = unrecognized lines only. */
+export interface ParsedDeckList {
+  legend?: Card;
+  champion?: Card;
+  main: Card[];
+  battlefields: Card[];
+  runes: Card[];
+  sideboard: Card[];
+  errors: string[];
+}
+
+const SECTION_ALIASES: Record<string, keyof Omit<ParsedDeckList, "errors"> | "legend" | "champion"> = {
+  battlefield: "battlefields", battlefields: "battlefields",
+  champion: "champion", chosenchampion: "champion",
+  legend: "legend", championlegend: "legend",
+  main: "main", maindeck: "main", deck: "main",
+  rune: "runes", runedeck: "runes", runes: "runes",
+  side: "sideboard", sideboard: "sideboard",
+};
+
+/**
+ * Parse a pasted deck list ("Section:" headers, then "N Card Name" / "Nx Card
+ * Name" lines; a trailing "(SET 123)" print marker is ignored). Tolerant by
+ * design: nothing about construction legality is checked here — every
+ * recognized card is kept, however many copies or whatever its domain.
+ */
+export function parseDeckText(text: string): ParsedDeckList {
+  const out: ParsedDeckList = { battlefields: [], errors: [], main: [], runes: [], sideboard: [] };
+  const byName = (name: string, type?: string) => {
+    const want = name.toLowerCase();
+    const pool = type ? allCards.filter((c) => c.cardType === type) : allCards;
+    return pool.find((c) => c.name.toLowerCase() === want)
+      ?? pool.find((c) => c.name.toLowerCase() === want.replace(/\s*\([^)]*\)\s*$/, ""));
+  };
+  // Legend lines are often "ChampionTag, Legend Name".
+  const findLegend = (name: string) => {
+    const exact = byName(name, "legend");
+    if (exact) {return exact;}
+    const commaIdx = name.indexOf(",");
+    if (commaIdx > 0) {
+      const found = byName(name.slice(commaIdx + 1).trim(), "legend");
+      if (found) {return found;}
+    }
+    const lower = name.toLowerCase();
+    return allCards.find((c) => c.cardType === "legend" && lower.includes(c.name.toLowerCase()));
+  };
+
+  let section: string | null = null;
+  for (const line of text.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed) {continue;}
+    const header = trimmed.match(/^([A-Za-z ]+):\s*$/);
+    if (header) {
+      section = SECTION_ALIASES[header[1]!.toLowerCase().replace(/\s+/g, "")] ?? null;
+      if (!section) {out.errors.push(`Unknown section: ${header[1]}`);}
+      continue;
+    }
+    if (!section) {continue;}
+    const m = trimmed.match(/^(\d+)\s*x?\s+(.+)$/i);
+    const count = m ? Number(m[1]) : 1;
+    const name = (m ? m[2]! : trimmed).trim();
+    if (section === "legend") {
+      const legend = findLegend(name);
+      if (legend) {out.legend = legend;} else {out.errors.push(`Legend not found: ${name}`);}
+      continue;
+    }
+    if (section === "champion") {
+      const champ = byName(name, "unit");
+      if (champ) {out.champion = champ;} else {out.errors.push(`Champion not found: ${name}`);}
+      continue;
+    }
+    const type = section === "battlefields" ? "battlefield" : section === "runes" ? "rune" : undefined;
+    const card = byName(name, type) ?? (type ? undefined : byName(name));
+    if (!card) {
+      out.errors.push(`${section === "sideboard" ? "Sideboard card" : section === "battlefields" ? "Battlefield" : section === "runes" ? "Rune" : "Card"} not found: ${name}`);
+      continue;
+    }
+    const bucket = out[section as "main" | "battlefields" | "runes" | "sideboard"];
+    for (let i = 0; i < count; i++) {bucket.push(card);}
+  }
+  return out;
 }
 
 export async function handleDeckBuilderRoutes(req: Request, url: URL, _ctx: RouteCtx): RouteResult {
@@ -510,10 +599,8 @@ export async function handleDeckBuilderRoutes(req: Request, url: URL, _ctx: Rout
     const card = registry.get(body.cardId);
     if (!card) {return json({ error: "Card not found" }, 404);}
 
-    // Rule 103.2.b counted across main deck + sideboard.
-    const result = (combinedCopyCounts(sessionId, builder)[card.name] ?? 0) >= MAX_COPIES_PER_NAME
-      ? { error: { code: "MAX_COPIES", message: `Already have ${MAX_COPIES_PER_NAME} copies of ${card.name} (main deck + sideboard)` }, success: false }
-      : builder.addToMainDeck(card);
+    // Copy limit / domain identity are advisory (payload.legality), never refused.
+    const result = builder.addToMainDeck(card);
     return json({ result, ...builderPayload(sessionId, builder) });
   }
 
@@ -527,7 +614,7 @@ export async function handleDeckBuilderRoutes(req: Request, url: URL, _ctx: Rout
     return json({ ...builderPayload(sessionId, builder) });
   }
 
-  // POST /api/deck/:session/sideboard/add {cardId} — add a card to the sideboard (≤ MAX_SIDEBOARD_SIZE)
+  // POST /api/deck/:session/sideboard/add {cardId} — add a card to the sideboard (cap is advisory)
   if (pathname.match(/^\/api\/deck\/[^/]+\/sideboard\/add$/) && req.method === "POST") {
     const sessionId = pathname.split("/")[3];
     const body = (await req.json().catch(() => ({}))) as { cardId?: string };
@@ -706,143 +793,28 @@ export async function handleDeckBuilderRoutes(req: Request, url: URL, _ctx: Rout
     });
   }
 
-  // POST /api/deck/:session/import — import deck from text
+  // POST /api/deck/:session/import — import deck from text. Never refuses a
+  // list: `errors` holds only unrecognized names; construction problems are in
+  // `legality` (advisory).
   if (pathname.match(/^\/api\/deck\/[^/]+\/import$/) && req.method === "POST") {
     const sessionId = pathname.split("/")[3];
     const builder = getOrCreateSession(sessionId);
-    const body = (await req.json()) as { text: string };
-    const text = body.text ?? "";
-
-    // Parse sections
-    const sections: Record<string, { count: number; name: string }[]> = {};
-    let currentSection: string | null = null;
-
-    for (const line of text.split("\n")) {
-      const trimmed = line.trim();
-      if (!trimmed) {continue;}
-
-      const sectionMatch = trimmed.match(/^(Legend|Champion|MainDeck|Battlefields|Runes|Sideboard):$/);
-      if (sectionMatch) {
-        currentSection = sectionMatch[1];
-        sections[currentSection] = [];
-        continue;
-      }
-
-      if (currentSection) {
-        const cardMatch = trimmed.match(/^(\d+)\s+(.+)$/);
-        if (cardMatch) {
-          sections[currentSection].push({ count: Number(cardMatch[1]), name: cardMatch[2].trim() });
-        }
-      }
-    }
-
-    // Helper: find card by name (case-insensitive)
-    function findCard(name: string) {
-      return allCards.find((c) => c.name.toLowerCase() === name.toLowerCase());
-    }
-
-    // Helper: find legend by "ChampionTag, LegendName" or just name
-    function findLegend(name: string) {
-      // Try exact match first
-      const exact = allCards.find((c) => c.cardType === "legend" && c.name.toLowerCase() === name.toLowerCase());
-      if (exact) {return exact;}
-      // Try "Tag, Name" format (e.g., "Sivir, Battle Mistress")
-      const commaIdx = name.indexOf(",");
-      if (commaIdx > 0) {
-        const legendName = name.slice(commaIdx + 1).trim().toLowerCase();
-        const found = allCards.find((c) => c.cardType === "legend" && c.name.toLowerCase() === legendName);
-        if (found) {return found;}
-      }
-      // Try partial match on legend name
-      const lower = name.toLowerCase();
-      return allCards.find((c) => c.cardType === "legend" && lower.includes(c.name.toLowerCase()));
-    }
-
-    const errors: string[] = [];
+    const body = (await req.json().catch(() => ({}))) as { text?: string };
+    const parsed = parseDeckText(body.text ?? "");
 
     // Clear and rebuild
     builder.clear();
     getSideboard(sessionId).length = 0;
 
-    // Set legend
-    if (sections.Legend?.[0]) {
-      const legend = findLegend(sections.Legend[0].name);
-      if (legend && legend.cardType === "legend") {
-        builder.setLegend(legend as import("@tcg/riftbound-types/cards").LegendCard);
-      } else {
-        errors.push(`Legend not found: ${sections.Legend[0].name}`);
-      }
-    }
-
-    // Set champion
-    if (sections.Champion?.[0]) {
-      const champ = findCard(sections.Champion[0].name);
-      if (champ && champ.cardType === "unit") {
-        const result = builder.setChampion(champ as import("@tcg/riftbound-types/cards").UnitCard);
-        if (!result.success) {errors.push(`Champion error: ${result.error.message}`);}
-      } else {
-        errors.push(`Champion not found: ${sections.Champion[0].name}`);
-      }
-    }
-
-    // Add main deck cards
-    for (const entry of sections.MainDeck ?? []) {
-      const card = findCard(entry.name);
-      if (!card) {
-        errors.push(`Card not found: ${entry.name}`);
-        continue;
-      }
-      for (let i = 0; i < entry.count; i++) {
-        const result = builder.addToMainDeck(card);
-        if (!result.success) {
-          errors.push(`${entry.name}: ${result.error.message}`);
-          break;
-        }
-      }
-    }
-
-    // Add battlefields
-    for (const entry of sections.Battlefields ?? []) {
-      const bf = findCard(entry.name);
-      if (!bf || bf.cardType !== "battlefield") {
-        errors.push(`Battlefield not found: ${entry.name}`);
-        continue;
-      }
-      for (let i = 0; i < entry.count; i++) {
-        builder.addBattlefield(bf as import("@tcg/riftbound-types/cards").BattlefieldCard);
-      }
-    }
-
-    // Add runes
-    for (const entry of sections.Runes ?? []) {
-      const rune = findCard(entry.name);
-      if (!rune || rune.cardType !== "rune") {
-        errors.push(`Rune not found: ${entry.name}`);
-        continue;
-      }
-      for (let i = 0; i < entry.count; i++) {
-        builder.addToRuneDeck(rune as import("@tcg/riftbound-types/cards").RuneCard);
-      }
-    }
-
-    // Sideboard (after the main deck so the combined copy limit sees it)
-    for (const entry of sections.Sideboard ?? []) {
-      const card = findCard(entry.name);
-      if (!card) {
-        errors.push(`Sideboard card not found: ${entry.name}`);
-        continue;
-      }
-      for (let i = 0; i < entry.count; i++) {
-        const result = addToSideboard(sessionId, builder, card);
-        if (!result.success) {
-          errors.push(`Sideboard ${entry.name}: ${result.error.message}`);
-          break;
-        }
-      }
-    }
+    if (parsed.legend) {builder.setLegend(parsed.legend as import("@tcg/riftbound-types/cards").LegendCard);}
+    if (parsed.champion) {builder.setChampion(parsed.champion as import("@tcg/riftbound-types/cards").UnitCard);}
+    for (const card of parsed.main) {builder.addToMainDeck(card);}
+    for (const bf of parsed.battlefields) {builder.addBattlefield(bf as import("@tcg/riftbound-types/cards").BattlefieldCard);}
+    for (const rune of parsed.runes) {builder.addToRuneDeck(rune as import("@tcg/riftbound-types/cards").RuneCard);}
+    for (const card of parsed.sideboard) {addToSideboard(sessionId, builder, card);}
 
     return json({
-      errors,
+      errors: parsed.errors,
       ...builderPayload(sessionId, builder),
       validation: builder.validate(),
     });

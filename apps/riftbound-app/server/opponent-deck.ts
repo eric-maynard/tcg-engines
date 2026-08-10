@@ -56,7 +56,7 @@ export function maySelectDeck(deckId: string, userId: string | null | undefined)
 }
 
 function legalityError(deck: FullDeck): string {
-  return `"${deck.name}" is not a legal deck (needs a legend, a chosen champion, a 40-card main deck within the copy limit, and runes)`;
+  return `"${deck.name}" is not a playable deck (it needs main-deck cards and runes; construction legality itself is only advisory)`;
 }
 
 /** Validate the `opponent.deck` field of a create request. Absent → the starter deck. */

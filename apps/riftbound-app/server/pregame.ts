@@ -10,11 +10,13 @@
  * implements the widely published Riftbound OP policy and documents the
  * assumptions here (mirrored in README.md §Sideboarding):
  *
- * - A deck MAY register a sideboard of up to MAX_SIDEBOARD_SIZE (8) cards of
- *   Main Deck types only (units / spells / gear — no legend, champion slot,
- *   battlefields or runes). The 3-copies-per-name limit (rule 103.2.b, Chosen
- *   Champion included) is counted across main deck + sideboard at deck-build /
- *   import time, and re-checked on the post-swap main deck at swap time.
+ * - A deck MAY register a sideboard of up to DECK_RULES.sideboardMax (10)
+ *   cards of Main Deck types only (units / spells / gear — no legend, champion
+ *   slot, battlefields or runes). The 3-copies-per-name limit (rule 103.2.b,
+ *   Chosen Champion included) is counted across main deck + sideboard. Like
+ *   every construction rule this is ADVISORY (server/deck-rules.ts): an
+ *   oversized or off-identity sideboard still loads and plays, flagged as not
+ *   tournament-legal; only `enforceLegality` lobbies refuse it.
  * - In both Bo1 and Bo3, once both players' Legends, Chosen Champions and the
  *   battlefields for this game are revealed (Duel: the random pick, rule 485.5;
  *   Match: after `battlefield_select`, 486.5) and BEFORE opening hands are
@@ -43,7 +45,7 @@ import type { ServerWebSocket } from "bun";
 import { type LogEntry, actorName, makeLogEntry } from "../src/narrator";
 import { runOpponent } from "./ai-opponent";
 import { allCards, makeLookupPayload, registerCard, registry } from "./cards";
-import { MAX_SIDEBOARD_SIZE, MIN_MAIN_DECK_SIZE, findCopyLimitViolations, findSideboardViolation } from "./decks";
+import { MAX_SIDEBOARD_SIZE, summarizeLegality, validateDeckConfig } from "./deck-rules";
 import { gameLogger } from "./log";
 import { buildAvailableMoves, buildGameSnapshot } from "./snapshot";
 import {
@@ -73,25 +75,22 @@ export function createGameFromDecks(
   const P1 = "player-1";
   const P2 = "player-2";
 
-  // Rule 103.2.b: a Main Deck can include up to 3 copies of the same named
-  // card — refuse to start a game with an illegal deck.
+  // Deck construction legality (rule 103: copy limit, 40-card minimum, domain
+  // identity, sideboard policy…) is ADVISORY — see server/deck-rules.ts. Only
+  // refuse what cannot be seated at all; everything else plays, with a
+  // shared-log note (no card names: lists stay private) when a deck is flagged.
+  const legalityNotes: string[] = [];
   for (const [pid, deck] of [[P1, deck1], [P2, deck2]] as const) {
-    const violations = findCopyLimitViolations(deck.mainDeckCardIds);
-    if (violations.length > 0) {
-      throw new Error(`Illegal deck for ${pid}: more than 3 copies of ${violations.join(", ")} (rule 103.2.b)`);
+    if (!Array.isArray(deck?.mainDeckCardIds) || deck.mainDeckCardIds.length === 0) {
+      throw new Error(`Cannot create game: ${pid} has an empty main deck (0 cards)`);
     }
-    // Rule 103.2 / 103.2.a.1: Main Deck is at least 40 cards; the Chosen
-    // Champion counts toward it even though it starts in the Champion Zone.
-    const mainDeckSize = deck.mainDeckCardIds.length + (deck.championId ? 1 : 0);
-    if (mainDeckSize < MIN_MAIN_DECK_SIZE) {
-      throw new Error(`Illegal deck for ${pid}: main deck has ${mainDeckSize} cards, needs at least ${MIN_MAIN_DECK_SIZE} (rule 103.2)`);
+    if (deck.sideboardCardIds !== undefined && !Array.isArray(deck.sideboardCardIds)) {
+      throw new Error(`Cannot create game: ${pid} sideboardCardIds must be an array of card ids`);
     }
-    // Sideboarding policy (top of file): ≤ 8 cards, main-deck types only. The
-    // combined copy limit is a deck-building check (savedDeckToDeckConfig /
-    // builder); each swap re-checks the resulting main deck.
-    const sideboardProblem = findSideboardViolation(deck.sideboardCardIds);
-    if (sideboardProblem) {
-      throw new Error(`Illegal deck for ${pid}: ${sideboardProblem}`);
+    const report = validateDeckConfig(deck, { mode: options?.gameMode ?? "duel" });
+    if (!report.legal) {
+      const who = options?.names?.[pid] ?? (pid === P1 ? "Player 1" : "Player 2");
+      legalityNotes.push(`⚠ ${who}'s deck is not tournament-legal (${summarizeLegality(report)}) — allowed in this game.`);
     }
   }
 
@@ -111,7 +110,7 @@ export function createGameFromDecks(
   // opponent's list) plus leftovers from earlier games.
   cardReg.setNameCatalog(allCards as unknown as { name?: string; cardType?: string; tags?: readonly string[] }[]);
   const internal = getInternalSnapshot(engine);
-  const log: LogEntry[] = [];
+  const log: LogEntry[] = legalityNotes.map((n) => makeLogEntry(n));
 
   const decks: [string, DeckConfig][] = [[P1, deck1], [P2, deck2]];
   // A sideboard phase runs only if some seat brought a sideboard; then the
@@ -396,17 +395,9 @@ export function swapSideboard(session: GameSession, playerId: string, outId: unk
   if (inIdx === -1) {return { error: "That card is not in your sideboard", ok: false };}
   const outCard = seat.main[outIdx] as SideboardCardRef;
   const inCard = seat.side[inIdx] as SideboardCardRef;
-  // Rule 103.2.b on the deck actually presented: post-swap main deck + Chosen Champion.
-  const nextMain = seat.main.map((c, i) => (i === outIdx ? inCard.defId : c.defId));
-  const inName = registry.get(inCard.defId)?.name ?? inCard.defId;
-  const violations = findCopyLimitViolations([...nextMain, ...(seat.deck.championId ? [seat.deck.championId] : [])])
-    .filter((v) => v.startsWith(`${inName} (x`));
-  if (violations.length > 0) {
-    return { error: `Swap would exceed 3 copies of ${violations.join(", ")} (rule 103.2.b)`, ok: false };
-  }
-  if (seat.side.length > MAX_SIDEBOARD_SIZE) {
-    return { error: `Sideboard exceeds ${MAX_SIDEBOARD_SIZE} cards`, ok: false };
-  }
+  // Rule 103.2.b on the post-swap deck is advisory like the rest of deck
+  // construction (server/deck-rules.ts) — the swap is 1-for-1, so sizes are
+  // invariant and nothing here can make the game unplayable.
   // Swap in place so both lists keep their order in the overlay.
   seat.main[outIdx] = inCard;
   seat.side[inIdx] = outCard;

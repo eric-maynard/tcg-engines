@@ -119,6 +119,8 @@
       color: #d4c0ff;
     }
     .btn-primary:hover { background: #4a3a8a; }
+    .btn-secondary { background: #1e1b30; color: #a090c0; border: 1px solid #3a3560; cursor: pointer; }
+    .btn-secondary:hover { background: #2a2540; }
 
     /* Empty State */
     .empty-state {
@@ -300,6 +302,22 @@
       background: #5a1a1a; color: #ff6b6b;
     }
     .confirm-delete:hover { background: #7a2a2a; }
+
+    /* Legality badge (advisory — never blocks play) */
+    .dc-legal { font-size: 9px; font-weight: 700; padding: 1px 6px; border-radius: 4px; letter-spacing: 0.3px; white-space: nowrap; }
+    .dc-legal-ok { background: #1a2a1a; color: #6bcc6b; border: 1px solid #2a4a2a; }
+    .dc-legal-warn { background: #2a2110; color: #ffb84d; border: 1px solid #5a4420; }
+
+    /* Import (paste) modal */
+    .import-box { background: #1e1b2e; border: 1px solid #3a2f5a; border-radius: 12px; padding: 20px 22px; width: min(560px, 92vw); }
+    .import-box h3 { margin: 0 0 6px; font-size: 15px; color: #e8e0f0; }
+    .import-box p { margin: 0 0 10px; font-size: 11px; color: #8a7fa0; }
+    .import-box textarea { width: 100%; height: 260px; background: #0f0e17; color: #d8d0e8; border: 1px solid #2a2740; border-radius: 8px; padding: 10px; font-family: ui-monospace, monospace; font-size: 12px; resize: vertical; box-sizing: border-box; }
+    .import-box input { width: 100%; background: #0f0e17; color: #d8d0e8; border: 1px solid #2a2740; border-radius: 8px; padding: 8px 10px; font-size: 12px; margin-bottom: 8px; box-sizing: border-box; }
+    .import-result { font-size: 11px; margin-top: 8px; max-height: 120px; overflow-y: auto; white-space: pre-wrap; }
+    .import-result.ok { color: #6bcc6b; }
+    .import-result.warn { color: #ffb84d; }
+    .import-result.err { color: #ff6b6b; }
   </style>
 </head>
 <body>
@@ -317,7 +335,10 @@
 <div class="page">
   <div class="page-header">
     <h1>My Decks</h1>
-    <a href="/builder" class="btn btn-primary">+ Create a Deck</a>
+    <div style="display:flex; gap:8px;">
+      <button class="btn btn-secondary" id="btnImportPaste" onclick="showImport()" title="Paste a deck list — any list imports; construction issues are shown as warnings">Import from text</button>
+      <a href="/builder" class="btn btn-primary">+ Create a Deck</a>
+    </div>
   </div>
 
   <div id="content">
@@ -328,6 +349,20 @@
 <div class="toast" id="toast">
   <div id="toastTitle" style="font-weight:700;"></div>
   <div id="toastBody"></div>
+</div>
+
+<div class="confirm-overlay" id="importOverlay">
+  <div class="import-box">
+    <h3>Import a deck list</h3>
+    <p>Paste a list (Legend / Champion / MainDeck / Battlefields / Runes / Sideboard sections). Every recognized card is kept as pasted — too many copies, a big sideboard or off-domain cards only make the deck <b>not tournament-legal</b>; you can still save, edit and play it.</p>
+    <input id="importName" type="text" placeholder="Deck name (optional)" autocomplete="off">
+    <textarea id="importText" placeholder="Legend:&#10;1 Loose Cannon&#10;&#10;Champion:&#10;1 Jinx, Demolitionist&#10;&#10;MainDeck:&#10;3 ...&#10;&#10;Runes:&#10;6 Fury Rune&#10;6 Chaos Rune&#10;&#10;Sideboard:&#10;2 ..."></textarea>
+    <div class="import-result" id="importResult"></div>
+    <div class="confirm-btns" style="margin-top:12px; justify-content:flex-end;">
+      <button class="confirm-cancel" onclick="closeImport()">Close</button>
+      <button class="btn btn-primary" id="importGoBtn" onclick="doImport()">Import &amp; save</button>
+    </div>
+  </div>
 </div>
 
 <div class="confirm-overlay" id="confirmOverlay">
@@ -490,6 +525,7 @@
         <div class="dc-meta">
           <span>${d.format || 'duel'}</span>
           <span class="dc-version ${verClass}">${ver}</span>
+          ${legalityBadge(d.legality)}
           ${domains}
         </div>
         ${who ? `<div class="dc-legend">${who}</div>` : ''}
@@ -506,6 +542,63 @@
     d.textContent = str || '';
     return d.innerHTML;
   }
+
+  /** "Legal ✓" / "⚠ Not tournament-legal (n)" — advisory; hover lists the problems. */
+  function legalityBadge(legality) {
+    if (!legality) return '';
+    const errors = (legality.problems || []).filter(p => p.severity !== 'warning');
+    if (legality.legal) return `<span class="dc-legal dc-legal-ok" title="Tournament-legal">Legal ✓</span>`;
+    const tip = errors.map(p => '• ' + p.message).join('\n') + '\n(Playable in every mode — only tournament lobbies enforce this.)';
+    return `<span class="dc-legal dc-legal-warn" title="${esc(tip)}">⚠ Not tournament-legal (${errors.length})</span>`;
+  }
+
+  // Paste import → POST /api/saved-decks/import (always saves; legality is advisory)
+  function showImport() {
+    if (!currentUser) { showToast('Sign in required', 'Login or register to import decks', 'error'); return; }
+    document.getElementById('importResult').textContent = '';
+    document.getElementById('importResult').className = 'import-result';
+    document.getElementById('importOverlay').classList.add('visible');
+    document.getElementById('importText').focus();
+  }
+  function closeImport() {
+    document.getElementById('importOverlay').classList.remove('visible');
+  }
+  async function doImport() {
+    const text = document.getElementById('importText').value.trim();
+    const name = document.getElementById('importName').value.trim();
+    const out = document.getElementById('importResult');
+    if (!text) { out.className = 'import-result err'; out.textContent = 'Paste a deck list first.'; return; }
+    const btn = document.getElementById('importGoBtn');
+    btn.disabled = true;
+    try {
+      const res = await fetch('/api/saved-decks/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (localStorage.getItem('rb_token') || '') },
+        body: JSON.stringify(name ? { text, name } : { text }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { out.className = 'import-result err'; out.textContent = data.error || 'Import failed.'; return; }
+      const lines = [];
+      lines.push(`Saved as "${data.deck?.name || 'deck'}".`);
+      if (data.legality && !data.legality.legal) {
+        const errs = (data.legality.problems || []).filter(p => p.severity !== 'warning');
+        lines.push(`⚠ Not tournament-legal (${errs.length} issue${errs.length === 1 ? '' : 's'}) — still playable:`);
+        for (const p of errs.slice(0, 6)) lines.push('  • ' + p.message);
+      } else {
+        lines.push('Legal ✓');
+      }
+      for (const w of (data.warnings || [])) lines.push('note: ' + w);
+      if ((data.errors || []).length) { lines.push(`${data.errors.length} line(s) not recognized:`); for (const e of data.errors.slice(0, 6)) lines.push('  • ' + e); }
+      out.className = 'import-result ' + ((data.errors || []).length ? 'warn' : (data.legality && !data.legality.legal ? 'warn' : 'ok'));
+      out.textContent = lines.join('\n');
+      loadDecks();
+    } catch {
+      out.className = 'import-result err'; out.textContent = 'Import failed.';
+    } finally {
+      btn.disabled = false;
+    }
+  }
+  document.getElementById('importOverlay').addEventListener('click', function(e) { if (e.target === this) closeImport(); });
 
   async function openDeck(deckId) {
     // Store the deck ID so the builder can load it

@@ -5,6 +5,8 @@
 import { createDeck, deleteDeck, getDeck, listDecks, listPublicDecks, updateDeck } from "../src/db/deck-repo";
 import type { DeckCardEntry, GameVersion, SavedDeck } from "../src/db/deck-repo";
 import { registry } from "./cards";
+import type { DeckLegality } from "./deck-rules";
+import { parseDeckText, savedDeckLegality, substituteLegendAndChampion } from "./decks";
 import { json } from "./http";
 import { getUserIdFromRequest } from "./routes-auth";
 import type { RouteCtx, RouteResult } from "./state";
@@ -24,8 +26,22 @@ export function deckCardMeta(deck: Pick<SavedDeck, "legendId" | "championId">): 
   return { championName: champion?.name ?? null, domains, legendName: legend?.name ?? null };
 }
 
-function withMeta<T extends SavedDeck>(deck: T): T & DeckCardMeta {
-  return { ...deck, ...deckCardMeta(deck) };
+/**
+ * List/detail rows carry the ADVISORY legality report (`legality.legal`,
+ * `legality.problems`) so pickers can badge "Legal ✓ / Not tournament-legal ⚠"
+ * — it never gates saving, loading or playing.
+ */
+function withMeta<T extends SavedDeck>(deck: T): T & DeckCardMeta & { legality: DeckLegality } {
+  const full = "cards" in deck ? (deck as unknown as import("../src/db/deck-repo").FullDeck) : getDeck(deck.id);
+  const legality = full ? savedDeckLegality(full) : { legal: true, problems: [] };
+  return { ...deck, ...deckCardMeta(deck), legality };
+}
+
+/** Group a card list into saved-deck entries for one zone. */
+function toEntries(cards: readonly { id: string }[], zone: DeckCardEntry["zone"]): DeckCardEntry[] {
+  const counts = new Map<string, number>();
+  for (const c of cards) {counts.set(c.id, (counts.get(c.id) ?? 0) + 1);}
+  return [...counts].map(([cardId, quantity]) => ({ cardId, quantity, zone }));
 }
 
 export async function handleSavedDeckRoutes(req: Request, url: URL, _ctx: RouteCtx): RouteResult {
@@ -53,6 +69,45 @@ export async function handleSavedDeckRoutes(req: Request, url: URL, _ctx: RouteC
 
     const deck = createDeck({ userId, ...body });
     return json(withMeta(deck), 201);
+  }
+
+  // POST /api/saved-decks/import {text, name?, gameVersion?, isPublic?} —
+  // paste/text import straight to a saved deck. ALWAYS 200 for a parseable
+  // body: unrecognized lines come back in `errors`, construction problems in
+  // `deck.legality` (advisory), a missing legend/champion is substituted
+  // (`warnings`). The deck is saved either way.
+  if (pathname === "/api/saved-decks/import" && req.method === "POST") {
+    const userId = getUserIdFromRequest(req);
+    if (!userId) {return json({ error: "Not authenticated" }, 401);}
+    const body = (await req.json().catch(() => null)) as { text?: unknown; name?: unknown; gameVersion?: GameVersion; isPublic?: unknown } | null;
+    if (!body || typeof body.text !== "string" || !body.text.trim()) {
+      return json({ error: "text (the deck list) is required" }, 400);
+    }
+    const parsed = parseDeckText(body.text);
+    if (!parsed.legend && !parsed.champion && parsed.main.length === 0 && parsed.runes.length === 0 && parsed.sideboard.length === 0) {
+      return json({ error: "No cards recognized in the pasted list", errors: parsed.errors }, 400);
+    }
+    const sub = substituteLegendAndChampion({ championId: parsed.champion?.id, legendId: parsed.legend?.id, mainDeckCardIds: parsed.main.map((c) => c.id) });
+    // Saved-deck convention (deck builder): the chosen champion's own copy is a "main" entry.
+    const main = [...parsed.main, ...(sub.championId ? [{ id: sub.championId }] : [])];
+    const cards: DeckCardEntry[] = [
+      ...toEntries(main, "main"),
+      ...toEntries(parsed.runes, "rune"),
+      ...toEntries(parsed.battlefields, "battlefield"),
+      ...toEntries(parsed.sideboard, "sideboard"),
+    ];
+    const name = typeof body.name === "string" && body.name.trim() ? body.name.trim().slice(0, 80) : (parsed.champion?.name ?? parsed.legend?.name ?? "Imported deck");
+    const deck = createDeck({
+      cards,
+      championId: sub.championId ?? "",
+      gameVersion: body.gameVersion === "preview" ? "preview" : "standard",
+      isPublic: body.isPublic === true,
+      legendId: sub.legendId ?? "",
+      name,
+      userId,
+    });
+    const out = withMeta(deck);
+    return json({ deck: out, errors: parsed.errors, legal: out.legality.legal, legality: out.legality, warnings: sub.warnings });
   }
 
   // GET /api/saved-decks — list user's decks
