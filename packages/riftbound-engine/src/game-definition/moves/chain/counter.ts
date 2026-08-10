@@ -4,6 +4,7 @@
 
 import type { CardId as CoreCardId, ZoneId as CoreZoneId, GameMoveDefinitions } from "@tcg/core";
 import { removeChainItem } from "../../../chain";
+import { itemIsUncounterable } from "../../../chain/uncounterable";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../../types";
 
 type Defs = GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>;
@@ -47,8 +48,15 @@ export const counterSpell: Defs["counterSpell"] = {
     if (target.type !== "spell") {
       return false;
     }
-    // rule-id: ven-015-166 — "This can't be countered." (rule 544)
-    if (target.uncounterable) {
+    // rule-id: ven-015-166 — "This can't be countered." (rule 544); rule
+    // 727.1.c.2 — a board static shield (ven-069-166) is sampled right now.
+    if (
+      itemIsUncounterable(target, {
+        cards: context.cards as never,
+        draft: state as never,
+        zones: context.zones as never,
+      })
+    ) {
       return false;
     }
     return true;
@@ -64,7 +72,16 @@ export const counterSpell: Defs["counterSpell"] = {
     for (let i = 0; i < chain.items.length; i++) {
       const item = chain.items[i];
       // rule-id: ven-015-166 — uncounterable items are never marked countered.
-      if (item && item.id === targetChainItemId && !item.countered && !item.uncounterable) {
+      if (
+        item &&
+        item.id === targetChainItemId &&
+        !item.countered &&
+        !itemIsUncounterable(item, {
+          cards: context.cards as never,
+          draft: draft as never,
+          zones: context.zones as never,
+        })
+      ) {
         (chain.items[i] as { countered: boolean }).countered = true;
         // rule-id: ogn-064-298 (rule 425.1.a / 425.1.a.1) — a countered card
         // is cleared from the chain and trashed as part of being countered.

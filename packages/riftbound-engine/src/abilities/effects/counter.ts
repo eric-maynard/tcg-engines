@@ -2,6 +2,7 @@
 import type { CardId as CoreCardId, ZoneId as CoreZoneId } from "@tcg/core";
 import { removeChainItem } from "../../chain";
 import { isLegalCounterTarget } from "../../chain/counter-target";
+import { itemIsUncounterable } from "../../chain/uncounterable";
 import { isImmediateAddEffect } from "../../game-definition/moves/chain/activate-ability";
 import { canAffordPower } from "../../game-definition/moves/chain/effect-context";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
@@ -202,12 +203,10 @@ export function handle_counter(effect: ExecutableEffect, ctx: EffectContext, _h:
       // ask the targeted spell's controller; declining re-enters this handler
       // with the `unless` clause stripped and the counter lands.
       const ransomCost = (effect as { unless?: Record<string, unknown> }).unless;
-      if (
-        ransomCost &&
-        targetItem &&
-        !targetItem.countered &&
-        !targetItem.uncounterable
-      ) {
+      // rule 727.1.c.2 (ven-069-166) — the shield is sampled NOW, as the
+      // counter executes, not when the target was played.
+      const shielded = itemIsUncounterable(targetItem, ctx);
+      if (ransomCost && targetItem && !targetItem.countered && !shielded) {
         const payer =
           ctx.cards.getCardController?.(targetItem.cardId as CoreCardId) ??
           ctx.cards.getCardOwner(targetItem.cardId as CoreCardId);
@@ -232,7 +231,7 @@ export function handle_counter(effect: ExecutableEffect, ctx: EffectContext, _h:
       }
       // rule-id: ven-015-166 — "This can't be countered." (rule 544): the
       // counter resolves but has no effect on an uncounterable item.
-      if (targetItem && !targetItem.countered && !targetItem.uncounterable) {
+      if (targetItem && !targetItem.countered && !shielded) {
         // Mutate in-place (we're inside an Immer draft)
         (targetItem as { countered: boolean }).countered = true;
         // rule 412 (ruling 5807cc9df8627167) — a countered spell never
