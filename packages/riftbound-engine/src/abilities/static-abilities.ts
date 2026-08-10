@@ -1145,6 +1145,13 @@ function applyStaticEffect(
         | Partial<RiftboundCardMeta>
         | undefined;
       const existing = meta?.grantedKeywords ?? [];
+      // rule 809 (ogn-063-298) — "if they didn't already" also suppresses the
+      // grant when another source already gave the keyword, so two copies of
+      // the same aura never sum: the clause asks whether the unit HAS it, not
+      // whether it prints it.
+      if (onlyIfMissing && existing.some((gk) => gk.keyword === keyword)) {
+        continue;
+      }
       // Only add if not already granted statically with same keyword —
       // rule 809.2 (sfd-071-221): stackable keywords (Deflect, Assault,
       // Shield, …) sum across INDEPENDENT sources, so they are never deduped.
