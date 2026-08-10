@@ -226,6 +226,23 @@ export function getTargetIds(effect: ExecutableEffect, ctx: EffectContext): stri
 export const MIGHTY_THRESHOLD = 5;
 
 /**
+ * rule 143.2 / 187.11 — "has no Might" means NOT A UNIT (a spell, gear, rune),
+ * never "printed 0": a 0-Might unit token (Shadow Clone) is a unit, so its
+ * modifiers, buffs, equipment and combat-role bonuses all count. Key off the
+ * card TYPE, falling back to the printed number only for definitions that
+ * carry no type at all (loose inline test defs).
+ */
+function hasMightAsUnit(cardId: string): boolean {
+  const def = getGlobalCardRegistry().get(cardId) as
+    | { cardType?: string; might?: number }
+    | undefined;
+  if (def?.cardType !== undefined) {
+    return def.cardType === "unit";
+  }
+  return (def?.might ?? 0) !== 0;
+}
+
+/**
  * rule 718.3 (sfd-059-221 Svellsongur) — an attached card's Effect Text abilities
  * are appended to the Rules Text of the TOP-MOST card, so "I"/"my" inside them names
  * the wearer, not the attachment. Unattached sources always mean themselves.
@@ -244,7 +261,7 @@ export function getEffectiveMight(cardId: string, ctx: EffectContext): number {
   const registry = getGlobalCardRegistry();
   const def = registry.get(cardId);
   const printedMight = def?.might ?? 0;
-  if (printedMight === 0) {
+  if (!hasMightAsUnit(cardId)) {
     return 0;
   } // Not a unit
 
@@ -275,7 +292,7 @@ export function getEffectiveMightInRole(cardId: string, ctx: EffectContext): num
   // rule 807.1.c — only a NON-unit (no printed Might) has no combat Might. A
   // unit whose modifiers already floored it at 0 still carries its Assault /
   // Shield bonus, so a later "to a minimum of N" floor must count that bonus.
-  if ((getGlobalCardRegistry().get(cardId)?.might ?? 0) === 0) {
+  if (!hasMightAsUnit(cardId)) {
     return 0;
   }
   const meta = ctx.cards.getCardMeta?.(cardId as CoreCardId) as
@@ -293,7 +310,7 @@ export function getActualMight(cardId: string, ctx: EffectContext): number {
   const registry = getGlobalCardRegistry();
   const def = registry.get(cardId);
   const printedMight = def?.might ?? 0;
-  if (printedMight === 0) {
+  if (!hasMightAsUnit(cardId)) {
     return 0;
   } // Not a unit
   const meta = ctx.cards.getCardMeta?.(cardId as CoreCardId) as
@@ -312,7 +329,7 @@ export function getActualMight(cardId: string, ctx: EffectContext): number {
 
 /** rule 143.2.b.1 × 807.1.c — {@link getActualMight} plus the current combat-role bonus. */
 export function getActualMightInRole(cardId: string, ctx: EffectContext): number {
-  if ((getGlobalCardRegistry().get(cardId)?.might ?? 0) === 0) {
+  if (!hasMightAsUnit(cardId)) {
     return 0;
   }
   const meta = ctx.cards.getCardMeta?.(cardId as CoreCardId) as
