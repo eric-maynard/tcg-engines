@@ -42,6 +42,10 @@ export function handle_predict(effect: ExecutableEffect, ctx: EffectContext, _h:
     onDecline: { amount: topN.length, type: "order-top" },
     onPicked: "recycle",
     optional: true,
+    // rule 128.4 / 424.1 — [Predict] LOOKS at the top cards; nothing is
+    // revealed, so the cards and the recycle choice stay hidden from everyone
+    // else (the opponent sees only that a choice is being made).
+    private: true,
     prompter: ctx.playerId,
     revealed: topN,
     revealer: ctx.playerId,

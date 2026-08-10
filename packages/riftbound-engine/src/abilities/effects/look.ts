@@ -302,6 +302,12 @@ export function handle_look(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
     ? carriedLookedAt.filter((id) => deck.includes(id))
     : deck.slice(0, n);
   if (topN.length === 0) return;
+  // rule 424.1 — a look flagged as a public REVEAL presents those cards to ALL
+  // players, so their identity goes on the shared record for the log / UI; a
+  // plain look records nothing (rule 419 / 421: looking is not revealing).
+  if (isReveal && carriedLookedAt === undefined) {
+    recordPublicReveal(ctx, looker, topN);
+  }
   // rule 369.1 / 370.1 (ogn-194-298 Nocturne) — "as you look at or reveal me
   // from the top of your deck, you may …": a replacement on the LOOK itself,
   // so it is offered before the looking effect's own choice, while the card is
@@ -458,9 +464,11 @@ export function handle_look(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
     ...(visionLike || lookEff.optional ? { optional: true } : {}),
     // rule 355.13 (ogn-291-298) — "one or both": up to `remaining` picks, one answer.
     ...(recycleAnyOfThem ? { remaining: topN.length, upTo: true } : {}),
-    // rule 128.4 — "Look at" is a PRIVATE view; nothing is revealed (424.1),
-    // so the looked-at cards and the pick stay hidden from every other player.
-    private: true,
+    // rule 128.4 / 424.1 — "Look at" is a PRIVATE view: the looked-at cards and
+    // the pick stay hidden from every other player. A look flagged as a public
+    // REVEAL ("Reveal the top 2 …") is the opposite: every player sees them, so
+    // the prompt is not private.
+    ...(isReveal ? {} : { private: true }),
     prompter: looker,
     revealed: topN,
     revealer: looker,
