@@ -33,6 +33,7 @@ import { isResolvingChainItem } from "../chain/resolution-guard";
 import type { PlayerId, RiftboundGameState } from "../types";
 import { getBattlefieldVictoryScoreBonus } from "./battlefield-setup-effects";
 import { getGlobalCardRegistry } from "./card-lookup";
+import { recordPublicReveal } from "./public-reveal";
 import { applyScoreReplacement, canPlayerScoreAtBattlefield } from "./scoring-rules";
 import { areAllies, isTeamGame } from "./teams";
 
@@ -268,8 +269,26 @@ export function checkVictory(
   if (winner) {
     (draft as { status: string }).status = "finished";
     (draft as { winner?: PlayerId }).winner = winner;
+    revealFacedownCardsAtGameEnd(draft, opts.io);
   }
   return winner;
+}
+
+/**
+ * rule 421.4 — "if a facedown card would change zones or if the game ends, its
+ * owner reveals it to all players": the game ending is a reveal to everyone, so
+ * it lands on the shared public-reveal record (rule 424.1) like every other
+ * reveal path.
+ */
+export function revealFacedownCardsAtGameEnd(draft: RiftboundGameState, io?: BoardIO): void {
+  if (!io) {
+    return;
+  }
+  for (const bfId of Object.keys(draft.battlefields ?? {})) {
+    for (const cardId of io.zones.getCardsInZone(`facedown-${bfId}` as CoreZoneId)) {
+      recordPublicReveal({ draft }, io.cards.getCardOwner?.(cardId) ?? "", [cardId as string]);
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -433,12 +452,19 @@ export function awardPoints(
     cause.method === "conquer" &&
     finalPointRestrictionApplies(draft, playerId, cause.battlefieldId, io)
   ) {
-    io.zones.drawCards({
-      count: 1,
-      from: "mainDeck" as CoreZoneId,
-      playerId: playerId as CorePlayerId,
-      to: "hand" as CoreZoneId,
-    });
+    // rule 471.1.b.1 — "draw a card instead" is a real draw, so rule 431
+    // applies: an empty Main Deck burns out (trash recycled, an opponent gains
+    // a point) and only then is the card drawn. A caller whose zones cannot
+    // move cards (unit-test stubs) just performs the raw draw.
+    const burnIo = io as BurnOutIO;
+    if (typeof burnIo.zones.moveCard !== "function" || refillDeckOrBurnOut(draft, playerId, burnIo)) {
+      io.zones.drawCards({
+        count: 1,
+        from: "mainDeck" as CoreZoneId,
+        playerId: playerId as CorePlayerId,
+        to: "hand" as CoreZoneId,
+      });
+    }
     return { ...NO_GAIN, drewInstead: true };
   }
 

@@ -94,6 +94,15 @@ export function hasVisibilityGrant(
 }
 
 /**
+ * rule 421.4 — "if a facedown card would change zones OR IF THE GAME ENDS, its
+ * owner reveals it to all players": once the game is finished every facedown
+ * card is public, so no seat's view redacts it any more.
+ */
+export function isGameEndRevealed(engine: HarnessEngine, zone: string): boolean {
+  return zone.startsWith("facedown-") && engine.getState().status === "finished";
+}
+
+/**
  * rule 424.1.a.3 — a card that "is revealed" is public information from the
  * moment it is revealed until the effect that revealed it finishes resolving.
  * The in-flight `reveal-and-pick` prompt IS that window (unl-139-219 Bone
@@ -114,6 +123,49 @@ export function isRevealedForPendingChoice(
     return false;
   }
   return pending.prompter === viewer && (pending.revealed as readonly string[]).includes(id);
+}
+
+/** Whether `viewer` may learn the identity of card `id` where it currently sits. */
+export function canSeeCardIdentity(engine: HarnessEngine, viewer: Viewer, id: string): boolean {
+  const inst = getInternalState(engine).cards[id];
+  const owner = inst?.owner ?? "";
+  const zone = inst?.zone ?? "unknown";
+  return (
+    canSee(viewer, zone, owner) ||
+    hasVisibilityGrant(engine, viewer, zone, owner) ||
+    isRevealedForPendingChoice(engine, viewer, id) ||
+    isGameEndRevealed(engine, zone)
+  );
+}
+
+/** Placeholder standing in for a card id the viewer may not learn. */
+const REDACTED_CARD_ID = "hidden";
+
+/**
+ * rule 128.4 / 108.7.c — the raw `pendingChoice` embedded in every seat's
+ * Observation lists the card ids a prompt is about (`revealed`, candidate and
+ * picked lists). When the prompt reaches into a zone the viewer may not see
+ * (unl-121-219 Bewitching Spirit: the VICTIM picks a card from their own
+ * private hand), those ids are private information — replace each one the
+ * viewer cannot see with an anonymous placeholder. Counts stay intact: a
+ * hand's SIZE is public (108.7.e).
+ */
+function redactPrivateCardIds(engine: HarnessEngine, viewer: Viewer, value: unknown): unknown {
+  if (typeof value === "string") {
+    const known = getInternalState(engine).cards[value] !== undefined;
+    return known && !canSeeCardIdentity(engine, viewer, value) ? REDACTED_CARD_ID : value;
+  }
+  if (Array.isArray(value)) {
+    return value.map((v) => redactPrivateCardIds(engine, viewer, v));
+  }
+  if (value !== null && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      out[k] = redactPrivateCardIds(engine, viewer, v);
+    }
+    return out;
+  }
+  return value;
 }
 
 export function summarizeDecision(d: Decision | null): DecisionSummary | null {
@@ -189,7 +241,8 @@ export function viewCard(
   if (
     !canSee(viewer, zone, owner) &&
     !hasVisibilityGrant(engine, viewer, zone, owner) &&
-    !isRevealedForPendingChoice(engine, viewer, id)
+    !isRevealedForPendingChoice(engine, viewer, id) &&
+    !isGameEndRevealed(engine, zone)
   ) {
     return { hidden: true, index, owner, zone };
   }
@@ -251,6 +304,13 @@ export function observe(
   const visibleDecision =
     decision && (viewer === SPECTATOR || decision.seat === viewer) ? decision : summarizeDecision(decision);
 
+  // rule 128.4 — the shared state travels in every seat's Observation, so the
+  // pending prompt's card ids get the same redaction as the zones above.
+  const visibleState =
+    viewer === SPECTATOR || state.pendingChoice === undefined
+      ? state
+      : { ...state, pendingChoice: redactPrivateCardIds(engine, viewer, state.pendingChoice) as typeof state.pendingChoice };
+
   return {
     actingSeat: getActingSeat(state),
     battlefields,
@@ -259,7 +319,7 @@ export function observe(
     points,
     resources,
     seq,
-    state,
+    state: visibleState,
     status: state.status,
     turn: { activePlayer: state.turn.activePlayer, number: state.turn.number, phase: state.turn.phase },
     viewer,

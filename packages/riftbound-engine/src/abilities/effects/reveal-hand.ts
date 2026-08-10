@@ -3,7 +3,7 @@ import type { PlayerId as CorePlayerId, ZoneId as CoreZoneId } from "@tcg/core";
 import { matchesRevealPickFilter } from "../../operations/reveal-pick-filter";
 import type { RevealPickFilter } from "../../operations/reveal-pick-filter";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
-import { type EffectHelpers } from "./_helpers";
+import { type EffectHelpers, recordPublicReveal } from "./_helpers";
 
 export function handle_revealHand(effect: ExecutableEffect, ctx: EffectContext, _h: EffectHelpers): void {
   // Opponent-reveals-hand + active-player-picks flow.
@@ -80,6 +80,11 @@ export function handle_revealHand(effect: ExecutableEffect, ctx: EffectContext, 
   if (!revealed.some((id) => matchesRevealPickFilter(filter, id))) {
     return;
   }
+
+  // rule 424.1 — "They reveal their hand" presents those cards to ALL players,
+  // so the reveal lands on the shared public-reveal record like every other
+  // reveal path; the prompt only governs who may pick from it.
+  recordPublicReveal(ctx, revealer, revealed);
 
   ctx.draft.pendingChoice = {
     filter,

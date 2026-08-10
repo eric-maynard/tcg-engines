@@ -13,6 +13,7 @@ import {
   isPlayerRemoved,
   removePlayer,
 } from "../../operations/player-removal";
+import { revealFacedownCardsAtGameEnd } from "../../operations/points";
 import { emptyRunePoolInPlace } from "../../operations/riftbound-operations";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../types";
 
@@ -145,6 +146,8 @@ export const turnMoves: Partial<
         draft.status = "finished";
         draft.winner = opponentId;
         (draft as { removedPlayers?: string[] }).removedPlayers = [playerId];
+        // rule 421.4 — the game ending reveals every facedown card to all players.
+        revealFacedownCardsAtGameEnd(draft, { cards: context.cards, zones: context.zones });
 
         context.endGame?.({
           metadata: { concededBy: playerId },
@@ -171,6 +174,8 @@ export const turnMoves: Partial<
         const winnerId = remaining[0];
         draft.status = "finished";
         draft.winner = winnerId;
+        // rule 421.4 — the game ending reveals every facedown card to all players.
+        revealFacedownCardsAtGameEnd(draft, { cards: context.cards, zones: context.zones });
 
         context.endGame?.({
           metadata: { concededBy: playerId },
