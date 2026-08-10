@@ -101,12 +101,11 @@ describe("Blind Fury × Nocturne, Horrifying — the OPPONENT reveals (and may h
     expect(game.gameState.publicReveals ?? []).toContainEqual(expect.objectContaining({ cardIds: ["top"], playerId: P2 }));
   });
 
-  // BUG — expected (424.1 / 424.1.a.3): while revealed, the card is presented to ALL players, so both
-  // seats' redacted observations should show P2's top deck card BY IDENTITY (Nocturne) even though the
-  // deck is otherwise Secret. Actual: the per-seat view keeps it as an anonymous hidden deck card for
-  // both P1 and P2 (only a reveal-and-pick PROMPTER is ever un-redacted); identity is available solely
-  // through the publicReveals record / the prompt text.
-  test.failing("BUG: (a) while revealed, BOTH seats' views show P2's top deck card face-up as Nocturne", async () => {
+  // rule 424.1 / 424.1.a.3 — while revealed the card is presented to ALL players, so both seats'
+  // redacted observations show P2's top deck card BY IDENTITY (Nocturne) even though the deck is
+  // otherwise Secret: the reveal window (`gameState.activeReveals`) un-redacts it for every viewer
+  // until the effect that revealed it finishes resolving.
+  test("(a) while revealed, BOTH seats' views show P2's top deck card face-up as Nocturne", async () => {
     const game = await board().build();
     await castAndStartResolving(game);
     for (const seat of [P1, P2]) {

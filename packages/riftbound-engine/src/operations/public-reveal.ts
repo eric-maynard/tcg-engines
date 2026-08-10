@@ -19,10 +19,31 @@ export function recordPublicReveal(
 ): void {
   if (cardIds.length === 0) return;
   const draft = ctx.draft as {
+    activeReveals?: string[];
     publicReveals?: { playerId: string; cardIds: readonly string[]; turn: number }[];
     turn?: { number?: number };
   };
   const entries = draft.publicReveals ?? [];
   entries.push({ cardIds: [...cardIds], playerId, turn: draft.turn?.number ?? 0 });
   draft.publicReveals = entries.slice(-PUBLIC_REVEAL_HISTORY);
+  // rule 424.1.a.3 — open the reveal window: while it is open the card is
+  // public to EVERY seat wherever it sits (a revealed card stays in its zone,
+  // rule 424.1.a.2), not just to whoever the reveal prompted.
+  const active = draft.activeReveals ?? [];
+  for (const id of cardIds) {
+    if (!active.includes(id)) active.push(id);
+  }
+  draft.activeReveals = active;
+}
+
+/**
+ * rule 424.1.a.3 — close the reveal window once the effect that revealed the
+ * cards has finished resolving. The `publicReveals` log keeps the historical
+ * record; the cards themselves stop being public where they sit.
+ */
+export function clearActiveReveals(draft: unknown): void {
+  const d = draft as { activeReveals?: string[] };
+  if (d.activeReveals !== undefined && d.activeReveals.length > 0) {
+    d.activeReveals = [];
+  }
 }

@@ -125,6 +125,17 @@ export function isRevealedForPendingChoice(
   return pending.prompter === viewer && (pending.revealed as readonly string[]).includes(id);
 }
 
+/**
+ * rule 424.1 / 424.1.a.2 — while a reveal window is open the card is presented
+ * to ALL players, and Revealed is a state rather than a zone: it stays where it
+ * was (the top card of its owner's Secret deck, for ogn-025-298 Blind Fury) yet
+ * every seat may name it. Opened by `operations/public-reveal
+ * recordPublicReveal`, closed when the revealing effect finishes resolving.
+ */
+export function isActivelyRevealed(engine: HarnessEngine, id: string): boolean {
+  return ((engine.getState().activeReveals ?? []) as readonly string[]).includes(id);
+}
+
 /** Whether `viewer` may learn the identity of card `id` where it currently sits. */
 export function canSeeCardIdentity(engine: HarnessEngine, viewer: Viewer, id: string): boolean {
   const inst = getInternalState(engine).cards[id];
@@ -134,6 +145,7 @@ export function canSeeCardIdentity(engine: HarnessEngine, viewer: Viewer, id: st
     canSee(viewer, zone, owner) ||
     hasVisibilityGrant(engine, viewer, zone, owner) ||
     isRevealedForPendingChoice(engine, viewer, id) ||
+    isActivelyRevealed(engine, id) ||
     isGameEndRevealed(engine, zone)
   );
 }
@@ -242,6 +254,7 @@ export function viewCard(
     !canSee(viewer, zone, owner) &&
     !hasVisibilityGrant(engine, viewer, zone, owner) &&
     !isRevealedForPendingChoice(engine, viewer, id) &&
+    !isActivelyRevealed(engine, id) &&
     !isGameEndRevealed(engine, zone)
   ) {
     return { hidden: true, index, owner, zone };

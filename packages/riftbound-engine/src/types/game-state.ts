@@ -1700,6 +1700,15 @@ export interface RiftboundGameState {
   lastCounterTargetId?: string;
 
   /**
+   * rule-id: sfd-140-221 (rules 370.2 / 372) — spells on the chain that carry a
+   * "recycle it after you play it" rider. The rider replaces where the card
+   * goes as it leaves the chain, so a self-banish step inside the spell's own
+   * resolution ("Banish this.") is replaced by the recycle as well. Cleared
+   * whenever the card leaves the chain.
+   */
+  recycleRiderCardIds?: Record<string, boolean>;
+
+  /**
    * rule-id: unl-186-219 — effective Might of the unit most recently killed by
    * a `kill` effect, snapshotted as it left the board so "if it had N [Might]
    * or less" reads last-known information rather than the trash copy.
@@ -1935,6 +1944,16 @@ export interface RiftboundGameState {
     readonly cardIds: readonly string[];
     readonly turn: number;
   }[];
+
+  /**
+   * rule 424.1.a.3 — the cards currently in a reveal window: a revealed card is
+   * public information from the moment it is revealed until the effect that
+   * revealed it finishes resolving, so every seat's view shows it face-up even
+   * while it sits in a private/secret zone (the top of an opponent's deck under
+   * ogn-025-298 Blind Fury). Opened by `recordPublicReveal`, closed by
+   * `clearActiveReveals` once nothing is resolving.
+   */
+  activeReveals?: string[];
 
   /**
    * rule-id: ogn-220-298 (rule 355.5 / 811.1.b) — open multi-slot target locks

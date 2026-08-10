@@ -10,6 +10,7 @@ import {
   withTriggerFinalization,
   withinMoveReducer,
 } from "../../abilities/trigger-finalization";
+import { clearActiveReveals } from "../../operations/public-reveal";
 import { withDeferredSpellSettle } from "./chain/resolve";
 import { openPendingContestedShowdown } from "./chain/showdown";
 import type { ArrivalIO } from "../../operations/arrive-at-battlefield";
@@ -82,6 +83,16 @@ function withStagedShowdownOpening<
         );
         if (began && !draft.pendingChoice) {
           finalizePendingItems(draft, context);
+        }
+        // rule 424.1.a.3 — a revealed card is public only until the effect that
+        // revealed it finishes resolving. Outermost wrapper, so this is the one
+        // place that sees every move settle: the revealing instruction is still
+        // in flight exactly while it has a prompt parked or a suspended
+        // remainder, so once neither is there the window closes and the cards
+        // are redacted where they sit again (a later Chain item is a different
+        // effect and does not extend the reveal).
+        if (!draft.pendingChoice && !draft.deferredSequenceRest?.length) {
+          clearActiveReveals(draft);
         }
       },
     };
