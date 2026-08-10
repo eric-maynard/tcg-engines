@@ -212,7 +212,7 @@ describe("Case 3 (flip) — Spectacles on Daring Poro choosing S", () => {
 
   // Expected (185.1.b): "Card Game Objects cannot become tokens by any means" — token-ness is not a copyable trait
   // (477.1.b.1.a). Actual: copying an effect-minted token copies its `isToken` marker onto the Poro's sheet.
-  test.failing("BUG: the Spectacled Poro is still a CARD, not a token (185.1.b)", async () => {
+  test("the Spectacled Poro is still a CARD, not a token (185.1.b)", async () => {
     const { game, s } = await withTokens();
     await equip(game, "specs1", "poro", s);
     expect(game.state("poro").name).toBe("Sprite");
@@ -233,7 +233,7 @@ describe("Case 3 (flip) — Spectacles on Daring Poro choosing S", () => {
   // Expected (124, 185.1.b, 435.1.c): the killed Poro is a CARD — it goes to P1's TRASH, where (Spectacles detached,
   // off-board = new object) it is the printed Daring Poro again: 2 Might, cost 2, [Assault].
   // Actual: the engine treats the copied-token Poro as a token and makes it cease to exist ("gone"); the trash never gets it.
-  test.failing("BUG: the killed Spectacled Poro goes to P1's trash as the printed 'Daring Poro' (a card never ceases to exist — 186.1 is tokens-only)", async () => {
+  test("the killed Spectacled Poro goes to P1's trash as the printed 'Daring Poro' (a card never ceases to exist — 186.1 is tokens-only)", async () => {
     const { game, s } = await withTokens();
     await equip(game, "specs1", "poro", s);
     await toP1NextTurn(game);

@@ -274,7 +274,7 @@ describe("(c) NO side: a second Mirror Image on the Svellsongur-equipped Reflect
     expect(await suicideIntoWall(game, tok)).toBe(2);
   });
 
-  test.failing("BUG: both Reflections dying to Temporary at the start of P1's next Beginning Phase should yield 2 + 1 = 3 Deathknell draws and continue into P1's main phase — engine kills the equipped Reflection twice (second Temporary item re-kills a gone token) and strands a controller-less chain item with no pass option", async () => {
+  test("both Reflections dying to Temporary at the start of P1's next Beginning Phase should yield 2 + 1 = 3 Deathknell draws and continue into P1's main phase — engine kills the equipped Reflection twice (second Temporary item re-kills a gone token) and strands a controller-less chain item with no pass option", async () => {
     // Expected: two Temporary kills resolve (each token dies once: die ×2), three Deathknell draws + the
     // Draw step, P1 reaches an open main phase. Actual: die|c:<first token> = 2, a chain item with
     // controller "" remains and P1's only legal move is concede (phase stuck in "beginning").

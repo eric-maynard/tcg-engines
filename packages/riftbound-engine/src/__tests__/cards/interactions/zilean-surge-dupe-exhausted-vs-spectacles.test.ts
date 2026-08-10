@@ -258,7 +258,7 @@ describe("Zilean × Production Surge (created duplicate) vs Shady Spectacles (be
   // 185.1.b is absolute: "Card Game Objects cannot become tokens by any means" — the Spectacled Poro is
   // still a CARD. Actual: the engine's copy also copies the model's token flag, so state(poro).isToken
   // reads true (it would 'cease to exist' if bounced and be seen by 'token unit' text).
-  test.failing("BUG: (b) the Poro copying a Mech TOKEN must remain a CARD, not become a token (185.1.b; token-ness is not a copyable trait, 477.1.b.1.a)", async () => {
+  test("(b) the Poro copying a Mech TOKEN must remain a CARD, not become a token (185.1.b; token-ness is not a copyable trait, 477.1.b.1.a)", async () => {
     const { game, mechs } = await twoMechs();
     await equipPoroCopying(game, mechs[0]);
     expect(game.state("poro").name).toBe("Mech"); // the copy did happen …

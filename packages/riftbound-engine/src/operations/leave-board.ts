@@ -541,6 +541,9 @@ export function resetObjectState(ctx: LeaveBoardContext, cardId: string): void {
     controlEffects: undefined,
     copiedFromCardId: undefined,
     damagePreventionShield: undefined,
+    // rule 124.1: the turn-scoped "was dealt damage this turn" history belongs to the old
+    // object — the card arriving in the new zone has never been dealt damage.
+    dealtDamageThisTurn: undefined,
     delayedTriggers: undefined,
     empowered: undefined,
     equippedWith: undefined,
@@ -725,8 +728,12 @@ export function leaveBoard(
   const killing = isKillCause(cause);
 
   // rule 428.1 — killing is a permanent going to the trash FROM THE BOARD; a
-  // card that already left (bounced / banished in response) can't be killed.
-  if (killing && lki.zone !== undefined && !isBoardZone(lki.zone)) {
+  // card that already left (bounced / banished in response) can't be killed —
+  // and neither can one that is in NO zone at all: rule 186.1, a token that
+  // ceased to exist is not on the board, so a second kill aimed at it (a
+  // sibling [Temporary] item, a redundant wipe) does nothing and fires no
+  // `die` event.
+  if (killing && !isBoardZone(lki.zone)) {
     clearLKI(ctx.draft, [cardId]);
     return { cardId, cause, left: false, lki };
   }

@@ -200,10 +200,14 @@ export class CardDefinitionRegistry {
     // costing 0. Both halves are written explicitly because every reader falls
     // back to the printed card when the definition omits the field.
     const copiedFromToken = this.isToken(top.sourceId);
+    // rule 185.1.b / 477.1.b.1.a — token-ness is NOT a copyable trait: a card copying a
+    // token stays a card (and a token copying a card stays a token).
+    const original = this.copyOriginals.get(holderId) ?? source;
     this.definitions.set(holderId, {
       ...source,
       energyCost: copiedFromToken ? 0 : (source.energyCost ?? 0),
       id: holderId,
+      isToken: original.isToken,
       powerCost: copiedFromToken ? [] : (source.powerCost ?? []),
     });
     this.copySources.set(holderId, top.sourceId);

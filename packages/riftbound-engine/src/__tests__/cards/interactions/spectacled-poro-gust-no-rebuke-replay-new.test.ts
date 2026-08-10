@@ -214,7 +214,7 @@ describe("(b) Rebuke bounces it: P1's hand gets PRINTED Daring Poro (124); Spect
   // 124.1: "all Temporary Modifications of all kinds cease to be tracked on it in all capacities". The engine clears
   // damage/exhausted/copy but leaves the turn-scoped `dealtDamageThisTurn` marker (read by "if I wasn't dealt damage
   // this turn" conditions, ven-024-166) on the card in hand — and it is still there after the replay next turn.
-  test.failing("BUG: 124.1 — the bounced card carries NO 'was dealt damage this turn' history into the hand (engine keeps meta.dealtDamageThisTurn = true on the new object)", async () => {
+  test("124.1 — the bounced card carries NO 'was dealt damage this turn' history into the hand (engine keeps meta.dealtDamageThisTurn = true on the new object)", async () => {
     const game = await rebuked();
     expect(game.state("poro").meta.dealtDamageThisTurn).not.toBe(true);
   });
@@ -290,7 +290,7 @@ describe("(c) next turn P1 replays it: pays the PRINTED 2; a fresh exhausted Dar
 
   // Same 124.1 leak as in (b), observed one turn later on the board: a unit that has never been dealt damage in
   // this existence reads "dealt damage this turn".
-  test.failing("BUG: 124.1 — the replayed Poro (a new object, played on a later turn) has no 'dealt damage this turn' marker (engine still reports meta.dealtDamageThisTurn = true)", async () => {
+  test("124.1 — the replayed Poro (a new object, played on a later turn) has no 'dealt damage this turn' marker (engine still reports meta.dealtDamageThisTurn = true)", async () => {
     const game = await replayed();
     expect(game.state("poro").meta.dealtDamageThisTurn).not.toBe(true);
   });
