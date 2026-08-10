@@ -115,7 +115,12 @@ export function handle_reveal(effect: ExecutableEffect, ctx: EffectContext, _h: 
         }
       }
       if (revealed.length === 0) return;
-      recordPublicReveal(ctx, actor, revealed);
+      // rule 424.1 — the REVEALING player is the one whose deck was turned over
+      // ("Each opponent reveals…"), not the caster: one record entry per revealer.
+      for (const pid of Object.keys(ctx.draft.players)) {
+        const mine = revealed.filter((id) => (revealedFromDeckOf[id] ?? actor) === pid);
+        if (mine.length > 0) recordPublicReveal(ctx, pid, mine);
+      }
       // rule 370.1.b.1 / 166.1 (sfd-175-221 Undertitan) — "As I'm revealed from
       // YOUR deck" belongs to the player whose deck was turned over, not to the
       // opponent who caused the reveal; the rider resolves on the spot into that
