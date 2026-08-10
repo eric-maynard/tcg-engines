@@ -206,6 +206,14 @@ export const setupMoves: Partial<
       if (state.match?.usedBattlefields.includes(battlefieldId as string)) {
         return false;
       }
+      // rule 486.5 / 485.5: "each player selects one of THEIR three Battlefields" —
+      // naming an opponent's battlefield is never a legal selection. Cards seeded
+      // without an owner (bare setup fixtures) stay permissive.
+      const owner = (context.cards as { getCardOwner?: (id: CoreCardId) => string | undefined } | undefined)
+        ?.getCardOwner?.(battlefieldId as CoreCardId);
+      if (owner !== undefined && owner !== playerId) {
+        return false;
+      }
       return state.setup.battlefieldChoices?.[playerId] === undefined;
     },
 
