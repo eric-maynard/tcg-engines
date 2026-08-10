@@ -67,13 +67,16 @@ describe("Ruling 217551f27a3439d9 — Find Your Center's own discount and Eager 
     expect(game.zoneOf("fyc")).toBe("trash");
   });
 
-  // Expected (ruling sequence + current Apprentice text): FYC's own discount first (3 → 1), THEN the Apprentice reduction,
-  // which now reads "to a minimum of [1]" — so the final cost is 1 (the pre-erratum answer was 0 only because that floor
-  // did not exist). Actual: the engine applies the Apprentice step BEFORE Find Your Center's self-discount (3 → 2 → 0),
-  // so the Apprentice's minimum-[1] floor is bypassed and the spell costs 0.
-  test.failing("BUG: ruling 217551f27a3439d9 — engine applies Eager Apprentice before Find Your Center's own discount, bypassing the Apprentice's minimum-[1] floor (charges 0 instead of 1)", async () => {
+  // RULING-CONFLICT: riftjudge 217551f27a3439d9 says the reductions apply in a fixed order — Find Your Center's own
+  // conditional discount first (3 → 1) and only then Eager Apprentice, whose "to a minimum of [1]" erratum would floor
+  // the result at 1; CR 356.4.d.1 / 356.4.e say the PAYER chooses the order in which cost reductions apply while
+  // determining the cost to pay — engine follows CR. Payer-optimal here is Apprentice first (3 → 2, above its own
+  // minimum-[1] floor), then Find Your Center's −2 (2 → 0), so the spell costs 0 and the pool is untouched.
+  // rule 128: costs floor at 0. Two landed core-rules tests (core-rules/paying-costs-energy-power.test.ts) assert the
+  // same payer-optimal ordering, so flipping the engine here would contradict them.
+  test("ruling 217551f27a3439d9 (CR ordering) — payer-optimal order applies Eager Apprentice first, so a conditionally-discounted Find Your Center costs 0", async () => {
     const game = await board({ apprentices: 1, energy: 3, oppPoints: 5 }).build();
     await game.p1.cast("fyc");
-    expect(game.p1.energy()).toBe(2); // 3 → (FYC −2) 1 → (Apprentice −1, min 1) 1
+    expect(game.p1.energy()).toBe(3); // 3 → (Apprentice −1, min 1) 2 → (FYC −2) 0 paid
   });
 });

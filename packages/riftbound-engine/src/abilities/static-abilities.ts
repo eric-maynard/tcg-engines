@@ -939,8 +939,18 @@ function resolveStaticTargetsFromDescriptor(
  */
 const STACKABLE_GRANT_KEYWORDS = new Set(["Assault", "Deflect", "Shield"]);
 
+/**
+ * rule 817.2 / 817.2.a / 817.2.b — keywords that are pure trigger shorthand
+ * ("when <event> happens to me, get this effect"). Each INSTANCE is its own
+ * triggered ability, so two independent sources granting the same keyword (two
+ * Forecasters: "Your Mechs have [Vision]") leave the unit with two separate
+ * triggers, each chosen independently. Mirrors `trigger-runner.ts`
+ * GRANTED_KEYWORD_TRIGGERS / KEYWORD_SELF_TRIGGER_EVENTS.
+ */
+const PER_INSTANCE_TRIGGER_KEYWORDS = new Set(["Deathknell", "Vision"]);
+
 function isStackableKeyword(keyword: string): boolean {
-  return STACKABLE_GRANT_KEYWORDS.has(keyword);
+  return STACKABLE_GRANT_KEYWORDS.has(keyword) || PER_INSTANCE_TRIGGER_KEYWORDS.has(keyword);
 }
 
 /**
