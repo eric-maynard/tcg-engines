@@ -125,7 +125,7 @@ describe("Ruling 63b57fcabb4818c7 — Legion: a countered / Mystic-Reversed spel
 
   // Expected: Mystic Reversal takes the Stupefy chain item away from P1 — it resolves for P2 (P2 draws Stupefy's card), so
   // P1 has not "played" a card for Legion. Actual: P1's played-count keeps the stolen spell and Hopeful is offered for [2].
-  test.failing("BUG: ruling 63b57fcabb4818c7 — Stupefy taken by MYSTIC REVERSAL should leave P1's Legion off; engine still discounts Noxus Hopeful", async () => {
+  test("ruling 63b57fcabb4818c7 — Stupefy taken by MYSTIC REVERSAL should leave P1's Legion off; engine still discounts Noxus Hopeful", async () => {
     const game = await board(3).build();
     const p2Hand = game.p2.hand().length;
     await stupefyAnswered(game, "mr");

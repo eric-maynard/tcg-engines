@@ -28,6 +28,34 @@ export function notePlayThisTurn(
 }
 
 /**
+ * rule 424 (ruling 63b57fcabb4818c7) — when another player GAINS CONTROL of a
+ * spell on the chain it resolves for them, so the original caster never
+ * completes the play: unlike a counter (which keeps the tally, see
+ * `noteCounteredPlay`), the play is struck from that player's ledger entirely
+ * and their Legion abilities go back off.
+ */
+export function unnotePlayThisTurn(
+  draft: unknown,
+  playerId: string,
+  cardId: string,
+): void {
+  const holder = draft as PlaysLedgerHolder & { cardsPlayedThisTurn?: Record<string, number> };
+  const list = holder.cardsPlayedIdsThisTurn?.[playerId];
+  if (list) {
+    const at = list.lastIndexOf(cardId);
+    if (at >= 0) {
+      list.splice(at, 1);
+    }
+  }
+  if (holder.cardsPlayedThisTurn) {
+    holder.cardsPlayedThisTurn[playerId] = Math.max(
+      0,
+      (holder.cardsPlayedThisTurn[playerId] ?? 0) - 1,
+    );
+  }
+}
+
+/**
  * rule 412 (ruling 5807cc9df8627167) — a COUNTERED spell never resolves, so a
  * "when you play your Nth card in a turn" trigger skips over it: the next card
  * played is again that turn's Nth. Its play still COUNTS as a play for

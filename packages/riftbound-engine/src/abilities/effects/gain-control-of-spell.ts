@@ -3,6 +3,7 @@ import { reseatPriorityAfterResolution } from "../../chain/chain-state";
 import type { RiftboundGameState } from "../../types";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import { offerNewChoices } from "../new-choices";
+import { unnotePlayThisTurn } from "../../operations/plays-this-turn";
 import { type EffectHelpers } from "./_helpers";
 
 /**
@@ -47,6 +48,10 @@ export function handle_gainControlOfSpell(
   const prevController = stolen.controller;
   if (prevController !== ctx.playerId) {
     (stolen as { originalController?: string }).originalController ??= prevController;
+    // rule 424 (ruling 63b57fcabb4818c7) — the spell now resolves for the
+    // thief, so the original caster never completes the play: it stops
+    // counting as a card they played this turn (Legion goes back off).
+    unnotePlayThisTurn(ctx.draft, prevController, stolen.cardId);
   }
   (stolen as { controller: string }).controller = ctx.playerId;
   // rule 340.4 — once this resolution finishes, Priority belongs to the
