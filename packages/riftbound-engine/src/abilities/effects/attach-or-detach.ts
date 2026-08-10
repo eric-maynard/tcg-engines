@@ -26,6 +26,20 @@ export function handle_attach_or_detach(
   if (!equipmentId || !unitId) {
     return;
   }
+  // rule 434.1.g — the caster may name the half as the spell is played: ATTACH on
+  // the Equipment's current wearer is a legal choice that changes nothing (the rest
+  // of the spell still happens); DETACH applies only to that same wearer.
+  const named = (effect as { mode?: "attach" | "detach" }).mode;
+  if (named === "attach") {
+    attachEquipment(ctx, equipmentId, unitId);
+    return;
+  }
+  if (named === "detach") {
+    if (attachedUnitOf(ctx, equipmentId) === unitId) {
+      detachEquipment(ctx, equipmentId);
+    }
+    return;
+  }
   if (attachedUnitOf(ctx, equipmentId) === unitId) {
     detachEquipment(ctx, equipmentId);
   } else {

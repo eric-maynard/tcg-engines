@@ -907,6 +907,11 @@ export interface AttachOrDetachEffect {
   readonly type: "attach-or-detach";
   readonly equipment: AnyTarget;
   readonly to: AnyTarget;
+  /**
+   * rule 434.1.g — the caster picks which half applies as the spell is played
+   * (play param `mode`: 0 = attach, 1 = detach). Absent ⇒ derived from the board.
+   */
+  readonly mode?: "attach" | "detach";
 }
 
 /**
