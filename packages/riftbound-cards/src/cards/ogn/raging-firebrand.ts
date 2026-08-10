@@ -17,7 +17,11 @@ const abilities: Ability[] = [
       duration: "next",
       reduction: 5,
       replaces: "play-cost",
-      target: { controller: "friendly", type: "spell" },
+      // rule 355.5 / 391 — the descriptor SCOPES the delayed passive to a class
+      // of cards played LATER ("the next spell you play"); it names no Game
+      // Object anyone chooses while the trigger is finalized. `quantity: "all"`
+      // says exactly that, keeping the item out of the caster-target prompt.
+      target: { controller: "friendly", quantity: "all", type: "spell" },
       type: "replacement",
     } as unknown as Effect,
     trigger: { event: "play-self" },

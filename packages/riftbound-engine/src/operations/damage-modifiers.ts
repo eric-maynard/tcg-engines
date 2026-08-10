@@ -53,16 +53,24 @@ export function applyDamageOps(
 }
 
 /**
- * rule 372 — does the ORDER of these ops change the outcome? Only a Double
- * combined with a finite, non-zero Prevent does ((a−N)×2 ≠ 2a−N); Prevent All
- * yields 0 either way and several Prevents / several Doubles commute.
+ * rule 372 — does the ORDER of these ops change the outcome? Two things make it
+ * matter:
+ *  - arithmetic: a Double combined with a finite, non-zero Prevent ((a−N)×2 ≠
+ *    2a−N); Prevent All yields 0 either way and several Doubles commute.
+ *  - consumption (371.2.b): every Prevent here is single-use or decrementing,
+ *    and a replacement that ends up preventing nothing is NOT used up. So with
+ *    ≥2 Prevents the dealt amount may commute while WHICH shield survives does
+ *    not (Ki Barrier 7 first ⇒ PV 7→3 and a one-shot stays armed; the one-shot
+ *    first ⇒ it is spent and Ki keeps its full 7).
  */
 export function damageOpsOrderMatters(ops: readonly DamageOp[]): boolean {
+  const prevents = ops.filter((o) => o.op === "prevent");
+  if (prevents.length >= 2) {
+    return true;
+  }
   const hasDouble = ops.some((o) => o.op === "double");
-  const hasFinitePrevent = ops.some(
-    (o) => o.op === "prevent" && o.amount !== "all" && o.amount > 0,
-  );
-  const hasPreventAll = ops.some((o) => o.op === "prevent" && o.amount === "all");
+  const hasFinitePrevent = prevents.some((o) => o.op === "prevent" && o.amount !== "all" && o.amount > 0);
+  const hasPreventAll = prevents.some((o) => o.op === "prevent" && o.amount === "all");
   return hasDouble && hasFinitePrevent && !hasPreventAll;
 }
 

@@ -309,4 +309,28 @@ describe("Void Rush (sfd-188-221)", () => {
     expect(game.p1.power()).toBe(0);
   });
 
+  // rule 429.3 / 419.3.b — the same Pay step funds ENERGY: exhausting a ready rune mid-prompt is a
+  // Reaction [Add], and the discounted 3-energy unit only becomes pickable once the pool covers it.
+  test("the pick prompt is a Pay step for energy too: a 3-energy unit (→1 after the discount) is unpickable on 0 energy until a rune is exhausted mid-prompt", async () => {
+    const game = await scenario()
+      .resources(P1, { energy: 2, power: { rainbow: 1 } })
+      .rune(P1, "fury", { alias: "furyRune" })
+      .deck(P1, [SKULKER, FILLER, FILLER], ["top", "second", "third"])
+      .hand(P1, CARD, "vr")
+      .build();
+    const d = (await castToReveal(game)) as PickDecision;
+    expect(d).toMatchObject({ kind: "pick", seat: P1 });
+    expect(game.p1.energy()).toBe(0);
+    expect(d.options.map((o) => o.card)).not.toContain("top"); // 3 − 2 = 1 energy still unpaid
+    const added = await game.p1.try((p) => p.tapRune("furyRune"));
+    expect(added.ok).toBe(true);
+    expect(game.p1.energy()).toBe(1);
+    const after = game.decision() as PickDecision;
+    expect(after.options.map((o) => o.card)).toContain("top");
+    await game.p1.pick("top");
+    await finish(game);
+    expect(game.zoneOf("top")).toBe("base");
+    expect(game.p1.energy()).toBe(0);
+  });
+
 });
