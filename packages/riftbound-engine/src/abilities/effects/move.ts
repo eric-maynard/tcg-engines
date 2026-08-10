@@ -237,6 +237,13 @@ function handleSwapLocations(effect: ExecutableEffect, ctx: EffectContext): void
     return;
   }
   const selfLanded = moveCardWithEvent(ctx, selfId, partnerZone);
+  // rule 423 / 054.1 (ruling b449100f59889211) — "Move me to its location AND it to
+  // my original location" is one exchange: if I cannot move (Stunned by Vex with
+  // "they can't move it this turn", a base I may not enter, …) the whole swap is
+  // cancelled, so the partner stays put too.
+  if (selfLanded === selfZone) {
+    return;
+  }
   const partnerLanded = moveCardWithEvent(ctx, partner, selfZone);
   arriveByEffect(ctx, [selfId], selfLanded);
   arriveByEffect(ctx, [partner], partnerLanded);
