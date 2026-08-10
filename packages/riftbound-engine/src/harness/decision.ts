@@ -494,7 +494,21 @@ export function deriveFromPendingChoice(ctx: DecisionContext, pc: PendingChoice)
     fin.finalizationChainItemId ??
     fin.bindToChainItemId ??
     (fin.resume?.kind === "trigger-cost" || fin.resume?.kind === "target-slot" ? fin.resume.itemId : undefined);
+  // rule 471.2.b — a trigger raised by a Score / showdown at a battlefield is
+  // bound to THAT battlefield ("there"). Two instances of one ability can be
+  // pending at once (one Hold per battlefield) and the only lever their
+  // controller has is WHICH to perform, so the prompt must distinguish them:
+  // carry the bound item's battlefield on the decision source.
+  const boundBattlefieldId =
+    chainItemId === undefined
+      ? undefined
+      : (
+          (ctx.state.interaction?.chain?.items ?? []).find(
+            (it) => (it as { id?: string }).id === chainItemId,
+          ) as { triggerEvent?: { battlefieldId?: string } } | undefined
+        )?.triggerEvent?.battlefieldId;
   const source = {
+    ...(boundBattlefieldId !== undefined ? { battlefieldId: boundBattlefieldId } : {}),
     cardId: (pc as { sourceCardId?: string }).sourceCardId,
     ...(chainItemId !== undefined ? { chainItemId } : {}),
     pendingChoiceType: pc.type,

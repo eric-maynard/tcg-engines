@@ -108,7 +108,9 @@ describe("Undying Legion (unl-025-219)", () => {
   });
 
   test("the trash play may go to a battlefield you control, like any unit play (355.2.a)", async () => {
-    const game = await inTrash().build();
+    // rule 190.4.a — durable control needs a unit there: seeded unit-less
+    // control lapses at the first Open Cleanup (here, after the Cheap play).
+    const game = await inTrash().unit(P1, "bf1", { might: 1, name: "Holder" }, "holder").build();
     await game.p1.play("cheap", { to: "base" });
     await game.settle();
     await game.p1.play("ul", { to: "bf1" });

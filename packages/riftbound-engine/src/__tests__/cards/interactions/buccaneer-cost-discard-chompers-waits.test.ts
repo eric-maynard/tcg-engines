@@ -175,7 +175,7 @@ describe("Brazen Buccaneer's optional discard × Flame Chompers — the discard 
 
   // ── (b) the play process vs. the pending discard trigger ────────────────────────────────────
 
-  test.failing("BUG: (b) the discard line may be played to bf1, a battlefield P1 controls (355.2.a) — with 4 energy + 1 fury `play(bb → bf1, discard Chompers)` is legal and lands Buccaneer at bf1 for 4", async () => {
+  test("(b) the discard line may be played to bf1, a battlefield P1 controls (355.2.a) — with 4 energy + 1 fury `play(bb → bf1, discard Chompers)` is legal and lands Buccaneer at bf1 for 4", async () => {
     // Expected: valid locations for the discounted play are {base, bf1} exactly as for the plain play.
     // Actual: the engine enumerates the paid-additional-cost variant with location "base" only, so the
     // bf1 discard play is rejected (the plain 6-energy play does offer bf1).

@@ -27,6 +27,10 @@ import { canPlayViaAmbush } from "../../../keywords/keyword-effects";
 import { selfPlayIsForbidden } from "../../../abilities/play-restrictions";
 import { enterPlayedPermanent } from "./play-pipeline";
 import {
+  cleanupAndFireDeaths,
+  type PostMoveCleanupContext,
+} from "../../../cleanup/post-move-cleanup";
+import {
   extractBattlefieldId,
   getBattlefieldZoneId,
   isBattlefieldZone,
@@ -454,6 +458,22 @@ function enumeratedLocations(
     }
   }
   return seen.size > 0 ? [...seen] : ["base"];
+}
+
+/**
+ * rule 355.2.a — the default destinations of any unit play: base plus every
+ * battlefield this player controls. Used when the PRINTED cost is out of reach
+ * so the ordinary destination enumeration never ran; a discounted line is still
+ * a play of the card, not a play "to base".
+ */
+function defaultPlayLocations(state: RiftboundGameState, playerId: string): string[] {
+  const out: string[] = [];
+  for (const [bfId, bf] of Object.entries(state.battlefields ?? {})) {
+    if (bf.controller === playerId) {
+      out.push(getBattlefieldZoneId(bfId) as string);
+    }
+  }
+  return out;
 }
 
 /**
@@ -1512,7 +1532,15 @@ export const playUnit: Defs["playUnit"] = {
         if (altVariant) {
           results.push(altVariant);
         }
-        results.push(...discardVariants);
+        // rule 355.2.a (ogn-002-298) — the discard discount is what makes the
+        // play affordable, so the discounted line keeps the ordinary
+        // destinations: base AND every battlefield this player controls.
+        for (const variant of discardVariants) {
+          results.push(variant);
+          for (const location of defaultPlayLocations(state, context.playerId as string)) {
+            results.push({ ...variant, location });
+          }
+        }
         results.push(...buffVariants);
         results.push(...killAnyVariants);
         // rule-id: unl-170-219 (rule 356.4) — "kill a friendly unit … I cost
@@ -1859,7 +1887,15 @@ export const playUnit: Defs["playUnit"] = {
       // play-cost, also enumerate the paid variant so callers can elect
       // to pay it.
       const optional = discardCost;
-      results.push(...discardVariants);
+      // rule 355.2.a / 356.2 (ogn-002-298) — a discard additional cost is a
+      // cost of PLAYING me, not of playing me to base: mirror the discard line
+      // onto every destination already offered for the free play.
+      const discardLocations = enumeratedLocations(results, cardId as string);
+      for (const variant of discardVariants) {
+        for (const location of discardLocations) {
+          results.push({ ...variant, location });
+        }
+      }
       results.push(...buffVariants);
       results.push(...killAnyVariants);
       if (paidVariant) {
@@ -2397,6 +2433,15 @@ export function completeUnitPlay(
     if (!post.chain?.items.length && getActiveShowdown(post)?.focusPlayer === playerId) {
       draft.interaction = advanceFocusAfterAction(post);
     }
+  }
+
+  // rule 323.6 / 190.4.c — the Cleanup that follows the play. A non-standard
+  // cost (Cruel Patron's kill) can empty a battlefield its payer controls, and
+  // the play moves are not wrapped by `withPostMoveCleanup`, so without this
+  // pass control there never lapses. Idempotent; a Closed state (play triggers
+  // still on the chain) keeps control, as the one control model requires.
+  if (context?.cards && context?.counters && context?.zones) {
+    cleanupAndFireDeaths(draft, context as PostMoveCleanupContext);
   }
 }
 

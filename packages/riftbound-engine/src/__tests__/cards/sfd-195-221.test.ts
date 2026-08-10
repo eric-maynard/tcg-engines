@@ -172,6 +172,9 @@ describe("Blade Dancer (sfd-195-221)", () => {
     const game = await legend()
       .resources(P1, { energy: 2, power: { calm: 2 } })
       .battlefield("bf1", { controller: P1 })
+      // rule 190.4.a — durable control needs a unit there: seeded unit-less
+      // control lapses at the first Open Cleanup (here, after the Rookie play).
+      .unit(P1, "bf1", { might: 1, name: "Holder" }, "holder")
       .unit(P1, "base", { might: 3 }, "walker")
       .hand(P1, { cardType: "unit", energyCost: 2, might: 2, name: "Rookie" }, "rookie")
       .build();

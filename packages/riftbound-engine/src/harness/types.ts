@@ -166,6 +166,8 @@ export type DecisionTiming = "PRE" | "ACT" | "FIN" | "PAY" | "RES" | "RPL" | "CL
 export type OptionKey = string;
 
 export interface DecisionSource {
+  /** rule 471.2.b — the battlefield the bound chain item was triggered at ("there"). */
+  readonly battlefieldId?: string;
   readonly cardId?: CardRef;
   readonly chainItemId?: string;
   readonly moveId?: string;
