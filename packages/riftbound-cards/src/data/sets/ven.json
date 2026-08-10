@@ -3701,9 +3701,10 @@
                 "type": "mill"
               },
               {
-                "_rule": "356.1.b — 'then you may' play a unit from THEIR trash, ignoring its cost",
+                "_rule": "356.1.b / 359.3.e.6 — 'Then you MAY do this' play a unit from THEIR trash, ignoring its cost; the 'you may' makes the trash pick declinable",
                 "from": "trash",
                 "ignoreCost": true,
+                "optional": true,
                 "target": {
                   "controller": "enemy",
                   "type": "unit"
