@@ -18,22 +18,78 @@ function ensureChoiceOverlay() {
 
 function closeChoiceModal() {
   const overlay = document.getElementById("choiceOverlay");
-  if (overlay) overlay.classList.remove("visible");
+  if (!overlay) return;
+  overlay.classList.remove("visible");
+  overlay.removeAttribute("data-mode");
+  // [rule:chain-overlay-stale-buttons] Clear the box as well: a button wired to
+  // an already-resolved pendingChoice must not linger in the hidden overlay,
+  // where it is still selector-visible (and click-blocking) to drivers.
+  const box = document.getElementById("choiceBox");
+  if (box) box.innerHTML = "";
 }
 
-// Rule 583 / 422: render an optional cost ({xp, energy, power:[…], discard,
-// exhaust}) as short prose — an opt-in trigger's `optInCost` or a
-// reveal-and-pick's `pickCost` (unl-135-219 "you may pay 2 XP to choose a
-// card"). Returns null when the choice is free, so titles stay unchanged.
+// Rule 583 / 422 / 357: render an optional cost as short prose — an opt-in
+// trigger's `optInCost`, a reveal-and-pick's `pickCost` (unl-135-219 "you may
+// pay 2 XP to choose a card"), a counter's ransom. EXHAUSTIVE over every key
+// the engine can put in a Cost / CostComponent (riftbound-types
+// cost-types.ts + pending-choice.ts canPayOptInCost): energy, power pips, xp,
+// burn, exhaust (self / another object), kill / sacrifice, discard, recycle
+// (self / N from hand·board·trash / a rune), spend buff / rune, banish,
+// returnToHand, recycleFromTrash, x. A key it does not know still says "pay
+// its cost (see the card)" — never nothing, so a Yes can't mill/kill silently.
+// Returns null only when the choice is genuinely free.
+const _KNOWN_COST_KEYS = new Set(["energy", "power", "xp", "burn", "exhaust", "exhaustSelf", "kill", "sacrifice", "discard", "recycle", "recycleFromTrash", "spend", "spendBuff", "spendRune", "banish", "returnToHand", "x", "might", "damage", "life"]);
+function _costObjectNoun(spec, fallback) {
+  if (spec === undefined || spec === null || spec === true) return fallback;
+  if (spec === "self" || spec === "me") return "this card";
+  if (typeof spec === "number") return spec === 1 ? fallback : `${spec} ${fallback.replace(/^an? /, "")}s`;
+  if (typeof spec === "object") {
+    if (spec.anyNumber) return `any number of ${(typeof targetNoun === "function" ? targetNoun({ ...(spec.target || {}), quantity: 2 }) : "cards").replace(/^\d+ /, "")}`;
+    const t = spec.target && typeof spec.target === "object" ? spec.target : spec;
+    const amount = typeof spec.amount === "number" ? spec.amount : undefined;
+    const noun = typeof targetNoun === "function" ? targetNoun(amount !== undefined && t.quantity === undefined ? { ...t, quantity: amount } : t) : "";
+    const other = t.excludeSelf || spec.excludeSelf || t.other ? " other" : "";
+    if (noun && noun !== "a target") return noun.replace(/^(an? |\d+ |up to \d+ )/, `$1${other ? "other " : ""}`).replace("other other", "other");
+  }
+  return fallback;
+}
 function describeOptInCost(cost) {
   if (!cost || typeof cost !== "object") return null;
   const parts = [];
-  if (cost.energy) parts.push(`${cost.energy} energy`);
-  if (Array.isArray(cost.power) && cost.power.length) parts.push(cost.power.join(" + "));
-  if (cost.xp) parts.push(`${cost.xp} XP`);
-  if (cost.discard) parts.push(`discard ${cost.discard}`);
-  if (cost.exhaust) parts.push("exhaust");
-  return parts.length ? `pay ${parts.join(", ")}` : null;
+  const pay = [];
+  if (cost.energy) pay.push(`${cost.energy} energy`);
+  if (Array.isArray(cost.power) && cost.power.length) pay.push(cost.power.map(p => (p === "rainbow" ? "1 power (any domain)" : p)).join(" + "));
+  if (cost.xp) pay.push(`${cost.xp} XP`);
+  if (cost.x && typeof cost.x === "object") pay.push(`X ${cost.x.resource === "power" ? "power" : "energy"}`);
+  if (pay.length) parts.push(`pay ${pay.join(", ")}`);
+  // rule 440.1 — Burn N: top N cards of YOUR Main Deck → trash.
+  const burn = Number(cost.burn) || 0;
+  if (burn > 0) parts.push(`Burn ${burn} — put the top ${burn === 1 ? "card" : `${burn} cards`} of your deck into your trash`);
+  if (cost.exhaustSelf === true || cost.exhaust === true || cost.exhaust === "self") parts.push("exhaust this card");
+  else if (cost.exhaust) parts.push(`exhaust ${_costObjectNoun(cost.exhaust, "a friendly card")}`);
+  const kill = cost.kill ?? cost.sacrifice;
+  if (kill !== undefined) parts.push(kill === "self" ? "kill this card" : `kill ${_costObjectNoun(kill, "a friendly unit")}`);
+  if (cost.discard !== undefined) parts.push(typeof cost.discard === "number" ? `discard ${cost.discard}` : `discard ${_costObjectNoun(cost.discard, "a card")}`);
+  if (cost.recycle !== undefined) {
+    const r = cost.recycle;
+    if (r === "self") parts.push("recycle this card (bottom of deck)");
+    else if (typeof r === "number") parts.push(`recycle ${r} card${r === 1 ? "" : "s"}`);
+    else if (r && typeof r === "object") {
+      const n = r.amount ?? 1;
+      const from = r.from === "trash" ? " from your trash" : r.from === "hand" ? " from your hand" : r.from === "board" ? " from the board" : "";
+      const what = r.target ? _costObjectNoun({ target: r.target, amount: n }, n === 1 ? "a card" : `${n} cards`) : (n === 1 ? (r.from === "board" ? "a friendly permanent" : "a card") : `${n} cards`);
+      parts.push(`recycle ${what}${from}`);
+    }
+  }
+  if (cost.recycleFromTrash) parts.push(`recycle ${cost.recycleFromTrash} card${cost.recycleFromTrash === 1 ? "" : "s"} from your trash`);
+  const spendBuff = cost.spendBuff !== undefined ? cost.spendBuff : (cost.spend === "buff" || cost.spend?.type === "buff" ? (cost.spend.amount ?? 1) : undefined);
+  if (spendBuff !== undefined) parts.push(typeof spendBuff === "number" ? `spend ${spendBuff === 1 ? "a buff" : `${spendBuff} buffs`} (remove from your unit)` : spendBuff?.anyNumber ? "spend any number of buffs" : "spend a buff (remove from your unit)");
+  if (cost.spendRune !== undefined || cost.spend?.type === "rune") parts.push(`recycle ${_costObjectNoun(cost.spend?.amount ?? cost.spendRune, "a rune")} you control`);
+  if (cost.banish !== undefined) parts.push(cost.banish === "self" ? "banish this card" : `banish ${_costObjectNoun(cost.banish, "a card")}`);
+  if (cost.returnToHand !== undefined) parts.push(`return ${_costObjectNoun(cost.returnToHand, "a friendly unit")} to hand`);
+  const unknown = Object.keys(cost).filter(k => !_KNOWN_COST_KEYS.has(k) && cost[k] !== undefined && cost[k] !== null && cost[k] !== false && cost[k] !== 0);
+  if (unknown.length) parts.push(`pay its ${unknown.join("/")} cost (see the card)`);
+  return parts.length ? parts.join(", ") : null;
 }
 
 /** Display name of a card id / zone id / seat for prompt labels. */
@@ -63,19 +119,15 @@ function pendingChoiceTitle(pending) {
   switch (pending.type) {
     case "opt-in": {
       // Rule 583 (sfd-119-221): a "you may pay X to …" trigger names its cost.
-      const cost = describeOptInCost(pending.resolved?.optInCost ?? pending.acceleratePlay?.cost);
+      // Short form in the headline ("Burn 1", not its explanation) — the modal body spells it out.
+      const costFull = describeOptInCost(pending.resolved?.optInCost ?? pending.acceleratePlay?.cost);
+      const cost = costFull ? costFull.split(", ").map(c => c.split(" — ")[0]).join(", ") : null;
       if (pending.acceleratePlay) return `Pay Accelerate for ${promptName(pending.acceleratePlay.cardId)}?${cost ? ` (${cost})` : ""} — enters ready`;
       if (pending.counterRansom) return `Pay to stop ${src ?? "the counter"}?${cost ? ` (${cost})` : ""}`;
       return `Use ${src ?? "optional"} ability?${cost ? ` (${cost})` : ""}`;
     }
     case "confirm": return pending.prompt ?? `${src ? `${src}: ` : ""}Do it?`;
-    case "reveal-and-pick":
-      return pending.onPicked === "discard" ? "Discard a card"
-        : pending.onPicked === "banish" ? "Banish a card"
-        : pending.onPicked === "recycle" ? "Recycle a card"
-        : pending.onPicked === "draw" ? "Choose a card to draw"
-        : pending.onPicked === "play" ? "Choose a card to play"
-        : "Choose a card";
+    case "reveal-and-pick": return revealPickInfo(pending).title;
     case "name-card": return `Name a ${pending.cardType === "tag" ? "tag" : (pending.cardType ?? "card")}${src ? ` for ${src}` : ""}`;
     case "choose-destination": return `Choose where ${promptName(pending.cardId)} goes`;
     case "choose-target":
@@ -148,6 +200,8 @@ function pendingPickLabel(pending, p) {
     if (p.label) return p.label;
     return p.pickedKeys.length ? p.pickedKeys.map(k => pending?.options?.find?.(o => o.key === k)?.label ?? promptName(k)).join(" + ") : "None";
   }
+  // A look / reveal pick names the ACTION, never a bare card name ("Recycle Chaos Rune", "Draw Cleave").
+  if (p.pickedCardId && pending?.type === "reveal-and-pick") return revealPickInfo(pending).sidebarLabel(p.pickedCardId);
   if (p.pickedCardId) return promptName(p.pickedCardId) + (p.paidAdditionalCost ? " (pay additional cost)" : "");
   if (p.pickedPlayerId) return pName(p.pickedPlayerId);
   if (p.pickedName != null) return String(p.pickedName);
@@ -157,8 +211,9 @@ function pendingPickLabel(pending, p) {
     if (pending?.type === "choose-target" && pending.anyNumber) return p.accept ? "Yes" : "Done";
     if (pending?.type === "weaponmaster-equip") return p.accept ? "Yes" : "Don't equip";
     if (pending?.type === "choose-destination") return p.accept ? "Yes" : "Don't move";
-    // Rule ogn-067-298 / 355.13: an optional reveal-and-pick is declined AFTER the reveal.
-    if (pending?.type === "reveal-and-pick" || (pending?.type === "choose-target" && pending.optional)) return p.accept ? "Yes" : "Decline";
+    // Rule ogn-067-298 / 355.13: an optional reveal-and-pick is declined AFTER the reveal — say what declining DOES.
+    if (pending?.type === "reveal-and-pick") return p.accept ? "Yes" : revealPickInfo(pending).declineLabel;
+    if (pending?.type === "choose-target" && pending.optional) return p.accept ? "Yes" : "Decline";
     if (pending?.type === "opt-in" && pending.acceleratePlay) return p.accept ? "Pay — enters ready" : "No — enters exhausted";
     return p.accept ? "Yes" : "No";
   }
@@ -189,6 +244,7 @@ function renderPendingChoiceModal() {
   }
   overlay.dataset.mode = "pending";
   overlay.dataset.pendingType = pending.type ?? "";
+  box.classList.toggle("rp-wide", pending.type === "reveal-and-pick");
   // Card picks are mirrored as board glows (applyPendingChoiceHighlights); let
   // clicks reach the board by making the backdrop pass-through for those prompts.
   const hasBoardPicks = pending.type === "choose-target" || availableMoves.some(m =>
@@ -204,6 +260,11 @@ function renderPendingChoiceModal() {
     overlay.classList.add("visible");
     return;
   }
+  if (pending.type === "reveal-and-pick") {
+    renderRevealAndPick(pending, box);
+    overlay.classList.add("visible");
+    return;
+  }
 
   const title = pendingChoiceTitle(pending);
 
@@ -211,9 +272,33 @@ function renderPendingChoiceModal() {
   // Rule 356.1 (unl-135-219): a pick that costs something must say so before
   // the player commits — Decline is always the free way out.
   const pickCostText = describeOptInCost(pending.pickCost);
+  // Rule 583: an opt-in trigger's cost is paid only on Yes — spell it out so
+  // the player knows what saying Yes spends (e.g. [Burn 1]).
+  const optInCostText = pending.type === "opt-in"
+    ? describeOptInCost(pending.resolved?.optInCost ?? pending.acceleratePlay?.cost)
+    : null;
   html += `<div class="chain-subtitle">${pickCostText
     ? esc(`Choosing a card costs ${pickCostText.replace(/^pay /, "")} — or decline`)
+    : optInCostText
+    ? esc(`Yes costs: ${optInCostText.replace(/^pay /, "")} — No is free`)
     : "Play is paused until you choose"}</div>`;
+  // The card whose ability is asking: show its art + printed text IN the prompt —
+  // the backdrop dims the board and suspends hover preview, so without this the
+  // player answers "Use X ability?" without being able to read X.
+  if (pending.type === "opt-in" || pending.type === "confirm" || pending.type === "choose-mode" || pending.type === "choose-player") {
+    const srcCard = findCard(pending.acceleratePlay?.cardId ?? pending.sourceCardId ?? pending.thenSourceCardId);
+    if (srcCard) {
+      const sImg = String(srcCard.definitionId ?? srcCard.id).replace(/^player-[12]-(?:(?:main|rune)-\d+-|legend-|champion-|bf-)?/, "");
+      html += `<div class="prompt-source" data-card-id="${esc(srcCard.id)}" data-def-id="${esc(srcCard.definitionId ?? "")}" data-prompt-source>
+        <img class="prompt-source-img" src="/card-image/${esc(sImg)}" alt="${esc(srcCard.name ?? "")}" onerror="this.style.display='none'">
+        <div class="prompt-source-text"><div class="prompt-source-name">${esc(srcCard.name ?? "")}</div>
+        <div class="prompt-source-rules">${esc(srcCard.rulesText ?? "")}</div>
+        ${optInCostText ? `<div class="prompt-source-cost" data-optin-cost>${esc(`If you say Yes: ${optInCostText}`)}</div>` : ""}</div>
+      </div>`;
+    } else if (optInCostText) {
+      html += `<div class="prompt-source-cost" data-optin-cost>${esc(`If you say Yes: ${optInCostText}`)}</div>`;
+    }
+  }
 
   const picks = availableMoves.filter(m => m.moveId === "resolvePendingChoice");
   const cardPicks = picks.filter(m => m.params?.pickedCardId);
@@ -300,6 +385,252 @@ function renderPendingChoiceModal() {
     });
   }
   overlay.classList.add("visible");
+}
+
+/* ============================================================
+   reveal-and-pick — look / Vision / Predict / "reveal and choose" prompts.
+   ------------------------------------------------------------
+   The engine parks ONE shape (RevealAndPickChoice) for very different
+   instructions: Vision (look at the top card, you MAY recycle it), Predict,
+   "look at the top N, draw 1, recycle the rest", "they reveal their hand —
+   choose a card, recycle it", "discard 2", "play a spell from your trash",
+   "banish a unit from among them"… The prompt must therefore say, in plain
+   words: where the cards come from, who can see them, what clicking a card
+   DOES to it (the label sits on the card's own button), what happens to the
+   cards you don't pick, and — when the pick is optional — a separately
+   labelled keep/decline button. Multi-pick prompts select first and confirm
+   with a button that spells out picked vs unpicked. Never "click = mystery".
+   ============================================================ */
+
+/** Where the revealed cards sit + whose they are → prose ("the top 3 cards of your Main Deck"). */
+function revealPickPlace(pending) {
+  const ids = (Array.isArray(pending.revealed) ? pending.revealed : []).map(String);
+  const n = ids.length || Number(pending.revealedCount) || 0;
+  const zone = ids.length && typeof findCardZone === "function" ? findCardZone(ids[0]) : null;
+  const ownerId = (ids.length ? findCard(ids[0])?.owner : null) || pending.revealer;
+  const mine = ownerId === viewingPlayer;
+  const whose = mine ? "your" : `${pName(ownerId)}'s`;
+  const cards = n === 1 ? "card" : "cards";
+  if (zone === "mainDeck" || (!zone && pending.private)) {
+    return { zone: "mainDeck", mine, n, text: n === 1 ? `the top card of ${whose} Main Deck` : `the top ${n} cards of ${whose} Main Deck`, short: `${whose} deck` };
+  }
+  if (zone === "hand") return { zone, mine, n, text: `${whose} hand${n ? ` (${n} ${cards})` : ""}`, short: `${whose} hand` };
+  if (zone === "trash") return { zone, mine, n, text: `${whose} trash`, short: `${whose} trash` };
+  if (zone === "banishment") return { zone, mine, n, text: `${whose} banished cards`, short: "banishment" };
+  if (zone === "runePool") return { zone, mine, n, text: `${whose} runes in play`, short: `${whose} runes` };
+  if (zone === "base" || (zone && zone.startsWith("battlefield-"))) return { zone: "board", mine, n, text: "the board", short: "the board" };
+  return { zone: zone || "", mine, n, text: n ? `these ${n} ${cards}` : "these cards", short: "these cards" };
+}
+
+/**
+ * Everything the modal / sidebar print for a reveal-and-pick, derived from
+ * the engine fields (onPicked · onRest · optional · private · remaining · upTo
+ * · position · play* · filter · pickCost · onDecline · revealPick).
+ */
+function revealPickInfo(pending) {
+  const src = findCard(pending.sourceCardId)?.name || "";
+  const place = revealPickPlace(pending);
+  const on = pending.onPicked || "recycle";
+  const remaining = Math.max(1, Number(pending.remaining) || 1);
+  const upTo = pending.upTo === true;
+  const multi = remaining > 1;
+  const optional = pending.optional === true;
+  const fromDeckTop = place.zone === "mainDeck";
+  const deckWord = place.mine ? "your deck" : "their deck";
+  // Vision-like: recycle-or-keep of the top card(s), nothing happens to the rest.
+  const visionLike = on === "recycle" && fromDeckTop && !pending.onRest;
+  const qty = multi ? (upTo ? `up to ${remaining}` : `${remaining}`) : (upTo ? "up to 1" : "1");
+
+  const verb = { recycle: "Recycle", banish: "Banish", discard: "Discard", draw: "Draw", play: "Play" }[on] || "Choose";
+  const verbPast = { recycle: "recycled", banish: "banished", discard: "discarded", draw: "drawn", play: "played" }[on] || "chosen";
+
+  /** What clicking THIS card does (button on the card). */
+  const cardLabel = (cid) => {
+    const c = findCard(cid);
+    switch (on) {
+      case "recycle":
+        if (pending.position === "owner-choice") return "Put on top or bottom…";
+        return c?.cardType === "rune" ? "Recycle (bottom of rune deck)" : `Recycle to bottom${fromDeckTop ? "" : ` of ${deckWord}`}`;
+      case "draw": return pending.revealPick ? "Reveal & draw it" : (place.mine || place.zone === "mainDeck" ? "Draw it" : "Take it into your hand");
+      case "banish": return pending.returnOnHold ? "Banish it (returns when they hold)" : "Banish it";
+      case "discard": return "Discard it";
+      case "play": {
+        let cost;
+        if (pending.playIgnoreCost) cost = "free";
+        else if (pending.playIgnoreEnergy) cost = "no energy cost";
+        else if (c) {
+          const e = Math.max(0, (Number(c.energyCost) || 0) - (Number(pending.playEnergyReduction) || 0));
+          cost = typeof formatCostTokens === "function" ? formatCostTokens(e, c.powerCost) : `${e} energy`;
+          if (pending.playEnergyReduction) cost += ` (−${pending.playEnergyReduction})`;
+        }
+        const where = pending.playTo ? ` to ${promptName(pending.playTo)}` : "";
+        return `Play it${where}${cost ? ` — ${cost}` : ""}`;
+      }
+      default: return "Choose it";
+    }
+  };
+  /** Why a shown card cannot be picked. */
+  const whyNot = (cid) => {
+    const c = findCard(cid);
+    const f = pending.filter || {};
+    if (c && Array.isArray(f.cardTypes) && f.cardTypes.length && !f.cardTypes.includes(c.cardType)) return `not a ${f.cardTypes.join("/")}`;
+    if (c && Array.isArray(f.excludeCardTypes) && f.excludeCardTypes.includes(c.cardType)) return `${c.cardType}s can't be picked`;
+    if (c && typeof f.maxMight === "number" && Number(c.might) > f.maxMight) return `Might above ${f.maxMight}`;
+    if (c && typeof f.minEnergyCost === "number" && Number(c.energyCost) < f.minEnergyCost) return `costs less than ${f.minEnergyCost}`;
+    if (c && Array.isArray(f.domains) && f.domains.length) return `not ${f.domains.join("/")}`;
+    if (on === "play") return "can't be played now";
+    return "not eligible";
+  };
+  /** Fate of the cards NOT picked (one line; also the ineligible cards' caption). */
+  const restNote = (() => {
+    switch (pending.onRest) {
+      case "recycle": return `go to the bottom of ${deckWord}`;
+      case "trash": return "go to the trash";
+      case "draw": return "go to your hand";
+      default:
+        if (fromDeckTop) return place.n > 1 ? "stay on top of the deck" : "stays on top of the deck";
+        if (place.zone === "hand") return "stay in hand";
+        return "stay where they are";
+    }
+  })();
+  const orderNext = pending.onDecline && pending.onDecline.type === "order-top" && place.n >= 2;
+
+  // ---- headline -----------------------------------------------------------
+  let what;
+  if (visionLike && !multi && place.n === 1) what = `top card of ${place.mine ? "your" : "their"} deck: keep it on top, or recycle it to the bottom?`;
+  else if (visionLike) what = `${place.text}: recycle ${optional || upTo ? (multi ? `up to ${remaining}` : "one") : qty} to the bottom${optional ? " or keep them on top" : ""}`;
+  else if (on === "draw") what = `${place.text}: pick ${qty} to draw${pending.onRest === "recycle" ? ", the rest go to the bottom" : ""}`;
+  else if (on === "play") what = `${place.text}: ${optional ? "you may play one" : "play one"}${pending.onRest === "recycle" ? ", the rest go to the bottom" : ""}`;
+  else if (on === "banish") what = `${place.text}: ${optional ? "you may banish" : "banish"} ${qty}${pending.onRest === "draw" ? ", draw the rest" : pending.onRest === "recycle" ? ", the rest go to the bottom" : ""}`;
+  else if (on === "discard") what = `${place.text}: ${optional ? "you may discard" : "discard"} ${qty}`;
+  else what = `${place.text}: ${optional ? "you may recycle" : "recycle"} ${qty}${pending.position === "owner-choice" ? " to the top or bottom of the deck" : ` to the bottom of ${deckWord}`}`;
+  const title = `${src ? `${src} — ` : ""}${what.charAt(0).toUpperCase()}${what.slice(1)}`;
+
+  // ---- visibility / rules hint --------------------------------------------
+  const seen = pending.private
+    ? "Looked at privately — your opponent does not see these cards or which one you pick."
+    : pending.revealer && pending.revealer !== (pending.prompter ?? pending.playerId)
+    ? `${pName(pending.revealer)} revealed these — both players see them; you choose.`
+    : place.zone === "hand" && place.mine ? "These are the cards in your hand (your opponent does not see them)."
+    : fromDeckTop ? "Revealed from the top of the deck — both players see them."
+    : place.zone === "trash" || place.zone === "board" || place.zone === "banishment" || place.zone === "runePool" ? `Cards in ${place.text} (public — both players see them).`
+    : "Both players can see these cards.";
+  const rules = on === "recycle" ? "Recycle = put on the BOTTOM of its deck (rule 424.4)."
+    : on === "banish" ? "Banished cards leave the game zone they were in (rule 416.3)."
+    : on === "discard" ? "Discarded cards go to their owner's trash."
+    : on === "draw" ? "The picked card goes to your hand."
+    : on === "play" ? "The picked card is played now (it goes on the chain)." : "";
+  const pickCostText = typeof describeOptInCost === "function" ? describeOptInCost(pending.pickCost) : null;
+
+  // ---- decline / confirm ----------------------------------------------------
+  let declineLabel;
+  if (visionLike) declineLabel = `${place.n > 1 ? "Keep all on top" : "Keep it on top"}${orderNext ? " (choose their order next)" : ""}`;
+  else if (pending.onRest === "recycle") declineLabel = `${verb} none — recycle all${place.n ? ` ${place.n}` : ""} to the bottom`;
+  else if (pending.onRest === "draw") declineLabel = `${verb} none — draw all${place.n ? ` ${place.n}` : ""}`;
+  else if (pending.onRest === "trash") declineLabel = `${verb} none — trash all${place.n ? ` ${place.n}` : ""}`;
+  else declineLabel = `Don't ${verb.toLowerCase()}${on === "play" ? " anything" : place.zone === "hand" ? " — leave the hand as it is" : ""}`;
+
+  const confirmLabel = (picked, eligible) => {
+    const others = Math.max(0, place.n - picked);
+    const rest = others > 0 ? ` · ${others} other${others === 1 ? "" : "s"} ${others === 1 && !pending.onRest && fromDeckTop ? "stays on top" : restNote}` : "";
+    if (picked === 0) return upTo || optional ? `Select cards to ${verb.toLowerCase()} (up to ${remaining})` : `Select ${Math.min(remaining, eligible)} to ${verb.toLowerCase()}`;
+    return `${verb} ${picked} picked${rest}`;
+  };
+  const sidebarLabel = (cid) => `${verb} ${promptName(cid)}${on === "play" && pending.playTo ? ` to ${promptName(pending.playTo)}` : ""}`;
+
+  return { title, seen, rules, pickCostText, restNote, cardLabel, whyNot, declineLabel, confirmLabel, sidebarLabel, verb, verbPast, multi, upTo, remaining, optional, place, visionLike };
+}
+
+// Un-sent multi-pick selection (reset whenever the prompt changes).
+let _rpSel = { key: null, ids: [] };
+
+function renderRevealAndPick(pending, box) {
+  const info = revealPickInfo(pending);
+  const picks = availableMoves.filter(m => m.moveId === "resolvePendingChoice");
+  const me = picks[0]?.playerId ?? viewingPlayer;
+  const cardPicks = picks.filter(m => m.params?.pickedCardId);
+  const decline = picks.find(m => m.params?.accept === false);
+  const pickIdxOf = new Map(cardPicks.map((m, i) => [String(m.params.pickedCardId), i]));
+  // Rule 355.13 (ogn-062-298): show EVERY looked-at card, eligible or not.
+  const revealedIds = (Array.isArray(pending.revealed) ? pending.revealed : []).map(String);
+  const shownIds = [...revealedIds, ...cardPicks.map(m => String(m.params.pickedCardId)).filter(id => !revealedIds.includes(id))];
+  const eligibleCount = shownIds.filter(id => pickIdxOf.has(id)).length;
+  const key = JSON.stringify([pending.sourceCardId, shownIds, info.remaining, pending.taken ?? 0]);
+  if (_rpSel.key !== key) _rpSel = { key, ids: [] };
+  _rpSel.ids = _rpSel.ids.filter(id => pickIdxOf.has(id));
+  const sel = _rpSel.ids;
+  const need = Math.min(info.remaining, eligibleCount);
+
+  let html = `<div class="chain-title" data-rp-title>${promptTitleHtml(info.title)}</div>`;
+  html += `<div class="chain-subtitle rp-seen" data-rp-seen>${esc(info.seen)}${info.pickCostText ? esc(` Choosing a card costs ${info.pickCostText.replace(/^pay /, "")} — declining is free.`) : ""}</div>`;
+  // One-line instruction: what a click does + what happens to the rest.
+  const clickDoes = info.multi
+    ? `Click cards to select ${info.upTo ? `up to ${info.remaining}` : need} (${sel.length} selected), then confirm. Cards you don't pick ${info.restNote}.`
+    : `Click a card's button to ${info.verb.toLowerCase()} THAT card.${shownIds.length > 1 || pending.onRest ? ` Cards you don't pick ${info.restNote}.` : ""}${info.optional ? "" : " You must pick one."}`;
+  html += `<div class="rp-instruction" data-rp-instruction>${esc(clickDoes)}</div>`;
+
+  html += `<div class="choice-modal-cards rp-cards${shownIds.length > 8 ? " rp-cards--lots" : shownIds.length > 5 ? " rp-cards--many" : ""}">`;
+  for (const cid of shownIds) {
+    const card = findCard(cid);
+    const imgId = (card?.definitionId ?? cid).replace(/^player-[12]-(?:main|rune)-\d+-/, "");
+    const idx = pickIdxOf.get(cid);
+    const eligible = idx != null;
+    const on = sel.includes(cid);
+    const name = esc(card?.name ?? promptName(cid));
+    const action = eligible ? info.cardLabel(cid) : `Can't pick — ${info.whyNot(cid)}`;
+    const tileAttrs = eligible
+      ? `class="choice-modal-card rp-card${on ? " rp-picked" : ""}" data-pick-idx="${idx}" data-card-id="${esc(cid)}" role="button" tabindex="0" aria-pressed="${on}" aria-label="${name}: ${esc(action)}"`
+      : `class="choice-modal-card rp-card choice-modal-card-ineligible" data-card-id="${esc(cid)}" aria-disabled="true"`;
+    html += `<div class="rp-pick${eligible ? "" : " rp-pick--no"}${on ? " rp-pick--on" : ""}" data-rp-pick="${esc(cid)}">
+      <div ${tileAttrs} title="${name} — ${esc(action)}"><img class="choice-modal-card-img" src="/card-image/${esc(imgId)}" alt="${name}"
+        onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><div class="card-fallback" style="display:none">
+        <div class="fallback-cost">${card?.energyCost != null ? esc(card.energyCost) : "&mdash;"}</div>
+        <div class="fallback-name">${name}</div>
+        <div class="fallback-type">${esc(card?.cardType ?? "")}</div>
+      </div>${on ? `<div class="rp-check">✓ ${esc(info.verb)}</div>` : ""}</div>
+      <div class="rp-card-name">${name}</div>
+      ${eligible
+        ? `<button class="choice-modal-btn rp-card-btn${on ? " chosen" : ""}" data-rp-card="${esc(cid)}" data-rp-idx="${idx}">${esc(info.multi ? (on ? `✓ Selected — ${action}` : `Select: ${action}`) : action)}</button>`
+        : `<div class="rp-card-no" data-rp-ineligible>${esc(action)}<small>${esc(pending.onRest ? `will ${info.restNote}` : info.restNote)}</small></div>`}
+    </div>`;
+  }
+  if (!shownIds.length) html += `<div class="rp-empty">${esc(Number(pending.revealedCount) ? `${pending.revealedCount} card(s) — hidden from you` : "No cards")}</div>`;
+  html += `</div>`;
+
+  html += `<div class="choice-modal-btns rp-actions">`;
+  if (info.multi) {
+    const ok = info.upTo || info.optional ? sel.length >= 1 && sel.length <= info.remaining : sel.length === need && need > 0;
+    html += `<button class="choice-modal-btn rp-confirm" data-rp-confirm ${ok ? "" : 'disabled style="opacity:.5"'}>${esc(info.confirmLabel(sel.length, eligibleCount))}</button>`;
+    if (sel.length) html += `<button class="choice-modal-btn rp-reset" data-rp-reset>Clear selection</button>`;
+  }
+  if (decline) html += `<button class="choice-modal-btn rp-decline" data-rp-decline>${esc(info.declineLabel)}</button>`;
+  html += `</div>`;
+  if (info.rules) html += `<div class="rp-rules" data-rp-rules>${esc(info.rules)}</div>`;
+
+  box.innerHTML = html;
+  const sendPick = (cid) => {
+    const m = cardPicks[pickIdxOf.get(cid)];
+    if (m) executeMove("resolvePendingChoice", m.params, m.playerId);
+  };
+  const toggle = (cid) => {
+    if (!pickIdxOf.has(cid)) return;
+    if (!info.multi) { sendPick(cid); return; }
+    _rpSel.ids = sel.includes(cid) ? sel.filter(x => x !== cid) : (sel.length < info.remaining ? [...sel, cid] : sel);
+    renderRevealAndPick(pending, box);
+  };
+  box.querySelectorAll(".rp-card[data-pick-idx]").forEach(el => {
+    el.addEventListener("click", () => toggle(el.dataset.cardId));
+    el.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(el.dataset.cardId); } });
+  });
+  box.querySelectorAll("[data-rp-card]").forEach(el => el.addEventListener("click", () => toggle(el.dataset.rpCard)));
+  box.querySelector("[data-rp-reset]")?.addEventListener("click", () => { _rpSel.ids = []; renderRevealAndPick(pending, box); });
+  box.querySelector("[data-rp-decline]")?.addEventListener("click", () => executeMove("resolvePendingChoice", decline.params, decline.playerId));
+  box.querySelector("[data-rp-confirm]")?.addEventListener("click", () => {
+    if (!sel.length) return;
+    if (sel.length === 1) { sendPick(sel[0]); return; }
+    // rule 422.1.a / 355.13: several picks in one answer (validated server-side).
+    executeMove("resolvePendingChoice", { playerId: me, pickedCardIds: [...sel] }, me);
+  });
 }
 
 /**
@@ -693,6 +1024,7 @@ function openPlayCostModal(cardId) {
   const { overlay, box } = ensureChoiceOverlay();
   overlay.dataset.mode = "playCost";
   overlay.classList.remove("targeting");
+  box.classList.remove("rp-wide");
   if (typeof closeZoom === "function") closeZoom();
   if (typeof hidePreview === "function") hidePreview();
 
