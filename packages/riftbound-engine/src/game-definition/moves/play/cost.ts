@@ -973,6 +973,17 @@ export function canPlayToAttackedBattlefield(cardId: string): boolean {
 }
 
 /**
+ * rule 355.2 / 356.2.a.1 (unl-166-219, Stalking Wolf) — "You may play me to its
+ * battlefield (even if you don't have other units there)": the victim of the
+ * additional cost may be the only friendly unit at the destination, so the
+ * Ambush play stays legal after the kill empties that battlefield. Modelled as
+ * a self static grant-keyword `CanPlayToVictimBattlefield`.
+ */
+export function canPlayToCostVictimBattlefield(cardId: string): boolean {
+  return selfGrantsPlayLocationKeyword(cardId, "CanPlayToVictimBattlefield");
+}
+
+/**
  * A play-location permission printed as a self static `grant-keyword` marker.
  */
 function selfGrantsPlayLocationKeyword(cardId: string, keyword: string): boolean {
@@ -3537,7 +3548,7 @@ export function spendablePowerPool(
  * spent (necessarily on something the earmark allows) it can no longer tax
  * later payments. Clamp every ledger entry back to what the pool still holds.
  */
-function reconcileRestrictedPower(draft: RiftboundGameState, playerId: string): void {
+export function reconcileRestrictedPower(draft: RiftboundGameState, playerId: string): void {
   const entry = (
     draft as { restrictedPower?: Record<string, Record<string, Record<string, number>>> }
   ).restrictedPower?.[playerId];

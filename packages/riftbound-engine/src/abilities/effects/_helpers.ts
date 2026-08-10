@@ -29,7 +29,7 @@ import { hiddenChoiceIsPulledIn } from "../../game-definition/moves/play/targeti
  * replacements itself. A replacement gated on a "you may pay …" cost may be
  * declined, so it is not treated as a certainty.
  */
-function dieWouldBeReplaced(cardId: string, ctx: EffectContext): boolean {
+export function dieWouldBeReplaced(cardId: string, ctx: EffectContext): boolean {
   const replacementCtx = {
     cards: {
       getCardMeta: ctx.cards.getCardMeta ?? (() => undefined),

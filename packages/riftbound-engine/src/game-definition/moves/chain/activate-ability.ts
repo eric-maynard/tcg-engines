@@ -34,6 +34,7 @@ import {
   consumeRestrictedEnergyForPurpose,
   getDeflectSurcharge,
   lockedEnergyForPurpose,
+  reconcileRestrictedPower,
   spendablePowerPool,
 } from "../play/cost";
 import type { PlayCostSelection } from "@tcg/riftbound-types";
@@ -1299,6 +1300,9 @@ export function deductAbilityCost(
         pool.power[key] = Math.max(0, (pool.power[key] ?? 0) - 1);
       }
     }
+    // rule 429.4 (166.1 / 444.1) — an earmark rides on the pips themselves; once
+    // spent on something the earmark allows it may not tax later Power.
+    reconcileRestrictedPower(draft, playerId);
   }
 }
 
@@ -2780,7 +2784,13 @@ export const activateAbility: Defs["activateAbility"] = {
         // set ("up to two units", "split among any number of …") finishes its
         // choices in the finalization dialog (`trigger-finalization.ts` Step
         // 2b) before anyone receives Priority, exactly like a triggered ability.
-        ...(collectMultiPickSlots(ability.effect).length > 0 ? { status: "pending" as const } : {}),
+        // rule 402.2 / 411.4 (ven-133-166 Glowstone) — so does "Choose a player":
+        // the seat is named as the ability is activated (Step 1e), not at
+        // resolution.
+        ...(collectMultiPickSlots(ability.effect).length > 0 ||
+        (ability.effect as { player?: string } | undefined)?.player === "choose"
+          ? { status: "pending" as const }
+          : {}),
         type: "ability",
       },
       turnOrder,

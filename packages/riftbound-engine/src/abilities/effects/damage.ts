@@ -13,7 +13,13 @@ import {
 import { getBonusDamage } from "../bonus-damage";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import { legalBoundIds } from "../target-slots";
-import { type EffectHelpers, getTargetIds, getEffectiveMight, resolveAmount } from "./_helpers";
+import {
+  type EffectHelpers,
+  dieWouldBeReplaced,
+  getTargetIds,
+  getEffectiveMight,
+  resolveAmount,
+} from "./_helpers";
 
 /**
  * rule 417.6.b.3 — when the instruction names a UNIT as the dealer ("It deals
@@ -138,6 +144,12 @@ function noteLethalDamage(ctx: EffectContext, targetId: string, total: number, d
   }
   const might = getEffectiveMight(targetId, ctx);
   if (might <= 0 || total < might || total - dealt >= might) {
+    return;
+  }
+  // rule 370.1.a.1 — a death a certain replacement replaces never happens
+  // (Guardian Angel: the gear dies instead and the unit is recalled), so this
+  // source killed nothing and must not be credited with the kill.
+  if (dieWouldBeReplaced(targetId, ctx)) {
     return;
   }
   const ledger = (ctx.draft.effectKills ??= {});
