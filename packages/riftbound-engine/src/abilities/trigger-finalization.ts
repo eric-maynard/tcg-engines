@@ -914,7 +914,11 @@ export function finalizePendingItems(draftLike: unknown, ctx: FinalizationContex
     }
 
     // Step 2 — rule 402.2 targets.
-    if (item.type === "ability" && item.effect !== undefined) {
+    // rule 355.5 — a SPELL names its targets as it is PLAYED. One played by an
+    // effect mid-resolution (Promising Future) reaches the Chain without the
+    // play move's enumerator having asked, so its multi-pick ("up to two
+    // units") is asked here, before anyone receives Priority.
+    if ((item.type === "ability" || (item.type === "spell" && item.targets === undefined)) && item.effect !== undefined) {
       const slots = multiTargetSlots(item.effect);
       if (slots) {
         if ((item.targets?.length ?? 0) < slots.length) {

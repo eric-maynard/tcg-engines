@@ -1131,7 +1131,14 @@ export function executeResolvedItem(
       // the item, which then resolves with exactly them. An ordinary trigger's
       // multi-pick (rule-id: ven-sp2-006 Sona) still chooses at resolution, so
       // it can be responded to first (rule 383.2.a.1).
-      if (finalizeOnly && (resolved as { delayed?: boolean }).delayed !== true) {
+      // rule 355.5 — a SPELL is different: its targets are named as it is
+      // played, so a spell that reached the Chain untargeted (played by an
+      // effect mid-resolution, Promising Future) picks them at finalization.
+      if (
+        finalizeOnly &&
+        (resolved as { delayed?: boolean }).delayed !== true &&
+        resolved.type !== "spell"
+      ) {
         return {};
       }
       draft.pendingChoice = {

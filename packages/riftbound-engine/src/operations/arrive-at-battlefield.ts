@@ -314,6 +314,15 @@ function assignCombatRoles(
       : meta?.combatRole;
   };
   const getMeta = (id: CoreCardId) => metaOf(io, id as string);
+  // rule 383.4.e — designation triggers are checked only the FIRST time a unit
+  // gains the designation in a Combat. A unit that was pulled out of this
+  // combat and comes back (Ride the Wind, then a Tideturner swap) is designated
+  // again, but does not "attack" / "defend" a second time.
+  const alreadyDesignated = new Set(
+    io.draft.interaction?.showdownStack.find((sd) => sd.active && sd.battlefieldId === battlefieldId)
+      ?.designatedCardIds ?? [],
+  );
+  const newlyDesignated: string[] = [];
   const stamp = (id: string, role: "attacker" | "defender", owner: string): boolean => {
     if (roleOf(id) === role) {
       return false;
@@ -333,6 +342,10 @@ function assignCombatRoles(
     if (!stamp(id, "attacker", attacker)) {
       continue;
     }
+    newlyDesignated.push(id);
+    if (alreadyDesignated.has(id)) {
+      continue;
+    }
     emit(io, {
       alone: !occupants.some((o) => o !== id && controllerOf(io, o) === attacker),
       battlefieldId,
@@ -347,6 +360,10 @@ function assignCombatRoles(
     if (!stamp(id, "defender", owner)) {
       continue;
     }
+    newlyDesignated.push(id);
+    if (alreadyDesignated.has(id)) {
+      continue;
+    }
     const seen = defendCount.get(owner) ?? 0;
     defendCount.set(owner, seen + 1);
     emit(io, {
@@ -358,7 +375,24 @@ function assignCombatRoles(
       type: "defend",
     } as GameEvent);
   }
+  recordDesignations(io, battlefieldId, newlyDesignated);
   collapseTriggerBatch(io.draft.interaction, chainLenBefore);
+}
+
+/** rule 383.4.e — remember who has already been designated in this Combat. */
+function recordDesignations(io: ArrivalIO, battlefieldId: string, ids: readonly string[]): void {
+  const interaction = io.draft.interaction;
+  if (!interaction || ids.length === 0) {
+    return;
+  }
+  io.draft.interaction = {
+    ...interaction,
+    showdownStack: interaction.showdownStack.map((sd) =>
+      sd.active && sd.battlefieldId === battlefieldId
+        ? { ...sd, designatedCardIds: [...new Set([...(sd.designatedCardIds ?? []), ...ids])] }
+        : sd,
+    ),
+  };
 }
 
 export interface BeginOptions {
@@ -432,6 +466,37 @@ export function beginShowdownAt(io: ArrivalIO, battlefieldId: string, opts: Begi
 }
 
 /**
+ * rule 323.11 / 323.8.a / 323.10 — the Cleanup step that releases Contested: a
+ * battlefield where the applying player has no unit left (and no Showdown or
+ * Combat is ongoing there) stops being Contested, and any staged Showdown /
+ * Combat lapses with it. Another player's units still standing where they don't
+ * control re-apply it (323.11.a). Unlike the staging steps this has no
+ * Open-State condition, so it also runs while a chain is open.
+ */
+function releaseUncontestedBattlefields(io: ArrivalIO): void {
+  const draft = io.draft;
+  for (const [battlefieldId, bf] of Object.entries(draft.battlefields ?? {})) {
+    // rule 460 — a Combat awaiting its Damage Step is still ongoing.
+    if (!bf?.contested || bf.showdownComplete === true || !bf.contestedBy) {
+      continue;
+    }
+    const occupants = unitsAt(io, battlefieldId);
+    if (occupants.some((id) => controllerOf(io, id) === bf.contestedBy)) {
+      continue;
+    }
+    bf.contested = false;
+    bf.contestedBy = undefined;
+    const other = occupants
+      .map((id) => controllerOf(io, id))
+      .find((c) => c !== undefined && c !== bf.controller);
+    if (other === undefined) {
+      continue;
+    }
+    stageContested(draft, battlefieldId, other, bf.stagedBy);
+  }
+}
+
+/**
  * The Cleanup's showdown steps, run whenever the turn returns to a Neutral Open
  * State with no resolution pending:
  *  - 323.11 — a battlefield whose contesting player has no unit left there (and
@@ -445,10 +510,18 @@ export function beginShowdownAt(io: ArrivalIO, battlefieldId: string, opts: Begi
 export function beginStagedShowdowns(io: ArrivalIO): boolean {
   const draft = io.draft;
   const interaction = draft.interaction ?? createInteractionState();
-  if (getTurnState(interaction) !== "neutral-open" || draft.pendingChoice) {
+  if (draft.pendingChoice) {
     return false;
   }
   if (getActiveShowdown(interaction)?.active) {
+    return false;
+  }
+  // rule 323.11 — step 8 carries no Open-State condition, so a battlefield the
+  // contesting player has vacated (a Reaction that moved its last unit away
+  // mid-chain) stops being Contested in THIS Cleanup, while the chain is still
+  // Closed; only the staging steps below wait for a Neutral Open State.
+  releaseUncontestedBattlefields(io);
+  if (getTurnState(interaction) !== "neutral-open") {
     return false;
   }
   // rule 460 — a Combat is still ongoing until its Combat Damage Step (626) has
@@ -472,17 +545,7 @@ export function beginStagedShowdowns(io: ArrivalIO): boolean {
       continue;
     }
     const occupants = unitsAt(io, battlefieldId);
-    let attacker = bf.contestedBy as string;
-    if (!occupants.some((id) => controllerOf(io, id) === attacker)) {
-      bf.contested = false;
-      bf.contestedBy = undefined;
-      const other = occupants.map((id) => controllerOf(io, id)).find((c) => c !== undefined && c !== bf.controller);
-      if (other === undefined) {
-        continue;
-      }
-      stageContested(draft, battlefieldId, other, bf.stagedBy);
-      attacker = other;
-    }
+    const attacker = bf.contestedBy as string;
     staged.push({
       attacker,
       battlefieldId,

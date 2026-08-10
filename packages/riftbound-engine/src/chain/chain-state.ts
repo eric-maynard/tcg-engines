@@ -204,6 +204,14 @@ export interface ShowdownState {
    * chose it), so callers can tell it apart from one begun by an explicit step.
    */
   readonly autoBegun?: boolean;
+
+  /**
+   * rule 383.4.e — every unit that has ALREADY gained an Attacker / Defender
+   * designation in this Combat. A unit that leaves and comes back (a Move, a
+   * swap) is designated afresh, but its "attack" / "defend" triggers fire only
+   * the FIRST time it gains the designation in one Combat.
+   */
+  readonly designatedCardIds?: readonly string[];
 }
 
 /**
