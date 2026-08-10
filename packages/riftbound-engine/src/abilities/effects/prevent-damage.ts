@@ -32,9 +32,25 @@ export function handle_preventDamage(effect: ExecutableEffect, ctx: EffectContex
   // arms a single instance-wide shield (Prevent Value All) rather than a numeric one.
   if ((effect as { instance?: boolean }).instance === true) {
     for (const targetId of preventTargets) {
+      // rule 367 / 340.1 — several "next time" shields armed in advance are each
+      // live during a resolution, so they STACK (one spent per damage instance);
+      // two Counter Strikes cover both of Falling Star's 3s.
+      const meta = ctx.cards.getCardMeta?.(targetId as CoreCardId) as
+        | { preventNextDamageInstance?: boolean | number; preventNextDamageSource?: string }
+        | undefined;
+      const armed =
+        meta?.preventNextDamageInstance === true
+          ? 1
+          : typeof meta?.preventNextDamageInstance === "number"
+            ? meta.preventNextDamageInstance
+            : 0;
       ctx.cards.updateCardMeta?.(
         targetId as CoreCardId,
-        { preventNextDamageInstance: true, preventNextDamageSource: ctx.sourceCardId } as unknown as Record<string, unknown>,
+        {
+          // stay a plain `true` for the single-shield case (the common one).
+          preventNextDamageInstance: armed === 0 ? true : armed + 1,
+          preventNextDamageSource: meta?.preventNextDamageSource ?? ctx.sourceCardId,
+        } as unknown as Record<string, unknown>,
       );
     }
     return;

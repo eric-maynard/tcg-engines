@@ -2,6 +2,7 @@
 import type { CardId as CoreCardId, ZoneId as CoreZoneId } from "@tcg/core";
 import { removeChainItem } from "../../chain";
 import { isLegalCounterTarget } from "../../chain/counter-target";
+import { isImmediateAddEffect } from "../../game-definition/moves/chain/activate-ability";
 import { canAffordPower } from "../../game-definition/moves/chain/effect-context";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import { noteCounteredPlay } from "../../operations/plays-this-turn";
@@ -42,6 +43,55 @@ function ransomIsPayable(
     }
   }
   return true;
+}
+
+/**
+ * rule 429.3 / 429.3.a (ruling 67afd3e1651019f3) — a pool that is short right
+ * now is not the whole story: an [Add] ability may be activated DURING the
+ * payment. If the payer controls a ready permanent with an immediate [Add]
+ * activated ability, the ransom is still a real choice, so the prompt must be
+ * raised instead of the counter landing unopposed.
+ */
+function payerCanAddResources(ctx: EffectContext, payer: string): boolean {
+  const registry = getGlobalCardRegistry();
+  const zoneIds: string[] = ["base", "legendZone"];
+  const candidates: string[] = [];
+  for (const zone of zoneIds) {
+    for (const cardId of ctx.zones.getCardsInZone(zone as CoreZoneId, payer as never)) {
+      candidates.push(cardId as string);
+    }
+  }
+  for (const bfId of Object.keys(ctx.draft.battlefields ?? {})) {
+    for (const cardId of ctx.zones.getCardsInZone(`battlefield-${bfId}` as CoreZoneId)) {
+      const controller =
+        ctx.cards.getCardController?.(cardId) ?? ctx.cards.getCardOwner(cardId);
+      if (controller === payer) {
+        candidates.push(cardId as string);
+      }
+    }
+  }
+  for (const cardId of candidates) {
+    // rule 404.1 — an already-exhausted permanent cannot pay an [Exhaust] cost.
+    const meta = ctx.cards.getCardMeta?.(cardId as CoreCardId) as
+      | { isExhausted?: boolean }
+      | undefined;
+    if (meta?.isExhausted === true) {
+      continue;
+    }
+    for (const ability of registry.getAbilities(cardId) ?? []) {
+      if (ability.type !== "activated" || !isImmediateAddEffect(ability.effect)) {
+        continue;
+      }
+      // rule 429.3 (ogs-014-024 Lux) — energy earmarked "use only to play
+      // spells" is never spendable on a payment demanded while a spell
+      // resolves, so such an [Add] cannot make the ransom payable.
+      if ((ability.effect as { restriction?: unknown } | undefined)?.restriction !== undefined) {
+        continue;
+      }
+      return true;
+    }
+  }
+  return false;
 }
 
 /**
@@ -161,7 +211,10 @@ export function handle_counter(effect: ExecutableEffect, ctx: EffectContext, _h:
         const payer =
           ctx.cards.getCardController?.(targetItem.cardId as CoreCardId) ??
           ctx.cards.getCardOwner(targetItem.cardId as CoreCardId);
-        if (payer && ransomIsPayable(ctx.draft, payer, ransomCost)) {
+        if (
+          payer &&
+          (ransomIsPayable(ctx.draft, payer, ransomCost) || payerCanAddResources(ctx, payer))
+        ) {
           const { unless: _dropped, ...withoutUnless } = effect as Record<string, unknown>;
           ctx.draft.pendingChoice = {
             counterRansom: {

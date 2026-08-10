@@ -189,7 +189,8 @@ interface ActiveEntry {
 type ShieldMeta = Partial<RiftboundCardMeta> & {
   damagePreventionShield?: number | "all";
   damagePreventionSource?: string;
-  preventNextDamageInstance?: boolean;
+  /** rule 367 — count of armed "next time … prevent it" shields (legacy `true` = 1). */
+  preventNextDamageInstance?: boolean | number;
   preventNextDamageSource?: string;
 };
 
@@ -446,11 +447,22 @@ function gather(io: DamageIO, req: DamageRequest): Gathered {
   }
 
   // rule 437.5.b (sfd-194-221 Counter Strike) — "the next time it would be dealt damage, prevent it".
-  if (meta?.preventNextDamageInstance === true) {
+  // rule 367 — the meta holds a COUNT: each armed shield stops one instance, so
+  // only one is offered (and spent) here and the rest stay live for later instances.
+  const armedNextShields =
+    meta?.preventNextDamageInstance === true
+      ? 1
+      : typeof meta?.preventNextDamageInstance === "number"
+        ? meta.preventNextDamageInstance
+        : 0;
+  if (armedNextShields > 0) {
     candidates.push({
       consume: (step) => {
         if (step.before > 0) {
-          io.cards.updateCardMeta?.(target as CoreCardId, { preventNextDamageInstance: false });
+          const left = armedNextShields - 1;
+          io.cards.updateCardMeta?.(target as CoreCardId, {
+            preventNextDamageInstance: left > 1 ? left : left === 1 ? true : false,
+          });
         }
       },
       item: { ...(meta.preventNextDamageSource ? { cardId: meta.preventNextDamageSource as CoreCardId } : {}), key: "prevent-next", label: labelOf(meta.preventNextDamageSource, "Prevent the next damage") },

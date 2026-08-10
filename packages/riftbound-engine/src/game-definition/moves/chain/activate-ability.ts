@@ -263,7 +263,23 @@ function eligibleDiscardCards(hand: readonly unknown[], spec: { cardType?: strin
  * ven-075-166) is still only an Add, so unwrap it: every branch present must
  * itself be an immediate Add.
  */
-function isImmediateAddEffect(effect: unknown): boolean {
+/**
+ * rule 429.3 / 429.3.a — is the open pending choice a PAYMENT `playerId` is
+ * being asked to make? Both the [X] payment prompt and a resolving spell's
+ * "unless its controller pays [N]" ransom (sfd-136-221 Hard Bargain) are such
+ * a payment, so the payer may crack Reaction [Add] abilities during either.
+ */
+export function isPaymentPromptFor(pendingChoice: unknown, playerId: string): boolean {
+  const pc = pendingChoice as
+    | { type?: string; playerId?: string; counterRansom?: unknown }
+    | undefined;
+  if (!pc || pc.playerId !== playerId) {
+    return false;
+  }
+  return pc.type === "pay-x" || (pc.type === "opt-in" && pc.counterRansom !== undefined);
+}
+
+export function isImmediateAddEffect(effect: unknown): boolean {
   const type = (effect as { type?: string } | undefined)?.type;
   if (type === "add-resource" || type === "add") {
     return true;
@@ -1334,8 +1350,7 @@ export const activateAbility: Defs["activateAbility"] = {
     // paying player may still activate Reaction [Add] abilities (they resolve
     // immediately and never use the chain). Every other pending choice, and
     // every other ability, stays locked out until the choice is answered.
-    const payXPrompt =
-      state.pendingChoice?.type === "pay-x" && state.pendingChoice.playerId === playerId;
+    const payXPrompt = isPaymentPromptFor(state.pendingChoice, playerId);
     if (state.pendingChoice && !payXPrompt) {
       return false;
     }
@@ -1812,8 +1827,7 @@ export const activateAbility: Defs["activateAbility"] = {
     const playerId = context.playerId as string;
     // rule 429.3 / 444.2.c: mid-payment, only the paying player's Reaction
     // [Add] abilities are offered (the per-entry filter below keeps them).
-    const payXPrompt =
-      state.pendingChoice?.type === "pay-x" && state.pendingChoice.playerId === playerId;
+    const payXPrompt = isPaymentPromptFor(state.pendingChoice, playerId);
     if (state.pendingChoice && !payXPrompt) {
       return [];
     }

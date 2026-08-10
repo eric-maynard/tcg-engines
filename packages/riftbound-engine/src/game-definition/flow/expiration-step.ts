@@ -316,7 +316,8 @@ function expireCardTurnEffects(
     record.expired.push(`damagePreventionShield:${id}`);
   }
   // rule-id: sfd-194-221 — an unused "next time … this turn, prevent it" (437.7).
-  if (meta.preventNextDamageInstance === true) {
+  const armedNext = meta.preventNextDamageInstance;
+  if (armedNext === true || (typeof armedNext === "number" && armedNext > 0)) {
     update({ preventNextDamageInstance: false });
     record.expired.push(`preventNextDamageInstance:${id}`);
   }
