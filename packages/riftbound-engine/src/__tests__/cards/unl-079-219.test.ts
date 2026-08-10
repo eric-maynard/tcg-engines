@@ -85,14 +85,19 @@ describe("Diana, Lunari (unl-079-219)", () => {
     expect(def?.powerCost).toBeUndefined();
     const abilities = (def?.abilities ?? []) as Record<string, unknown>[];
     expect(abilities).toHaveLength(1);
+    // rule 444.2 (whose own example is this card): the [1] is paid INSIDE the instructions, so it is
+    // a resolution-time `conditional` pay-cost wrapping the body — not the trigger's base cost.
     expect(abilities[0]).toMatchObject({
-      condition: { cost: { energy: 1 }, type: "pay-cost" },
-      effect: { effects: [{ amount: 1, type: "predict" }, { amount: 1, from: "deck", type: "reveal" }], type: "sequence" },
-      optional: true,
+      effect: {
+        condition: { cost: { energy: 1 }, type: "pay-cost" },
+        then: { effects: [{ amount: 1, type: "predict" }, { amount: 1, from: "deck", type: "reveal" }], type: "sequence" },
+        type: "conditional",
+      },
       trigger: { event: "showdown-begin", on: { location: "here" } },
       type: "triggered",
     });
-    const reveal = ((abilities[0].effect as { effects: Record<string, unknown>[] }).effects[1] ?? {}) as Record<string, unknown>;
+    const reveal = ((abilities[0].effect as { then: { effects: Record<string, unknown>[] } }).then.effects[1] ??
+      {}) as Record<string, unknown>;
     expect(JSON.stringify(reveal)).toMatch(/spell/); // the "if it's a spell, draw it" rider is encoded
     expect(JSON.stringify(reveal)).toMatch(/draw/);
   });

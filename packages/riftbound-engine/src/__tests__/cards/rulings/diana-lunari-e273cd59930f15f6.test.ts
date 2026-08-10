@@ -70,23 +70,30 @@ describe("Ruling e273cd59930f15f6 — Diana's showdown-begin trigger sits UNDER 
       expect.objectContaining({ cardId: "guard", controller: P2, triggered: true }),
     ]);
 
-    // rule 383.3.b.1 / 402 (finalization): Diana's "you may pay [1]" is asked of P2 as the item is
-    // finalized onto the chain, before any priority — her chain POSITION (bottom) is unchanged.
-    expect(game.decision()).toMatchObject({ kind: "yes-no", seat: P2 });
-    expect(game.decision()?.prompt).toMatch(/Diana/);
-    await game.p2.no();
-    expect(game.p2.energy()).toBe(1); // declined → nothing paid
-    // rule 383.3.a: "no" removes the unfinalized item at once; the other two triggers remain.
-    expect(game.chain().map((i) => i.cardId)).toEqual(["raider", "guard"]);
+    // rule 444.2 (whose own example is this card, ruling 2dbf39bc1935898d): "you may pay [1]. If you
+    // do, …" is a payment written INSIDE the instructions, not the trigger's base cost — nothing is
+    // asked at finalization, so the batch goes straight to priority with Diana at the bottom.
+    expect(game.decision()?.kind).toBe("action");
+    expect(game.p2.energy()).toBe(1);
 
     // 340.1 — newest first: Guard's defend trigger resolves (P2 draws) …
     await resolveTop(game);
     expect(game.p2.hand()).toEqual(["p2top"]);
     expect(game.p1.hand()).toEqual([]);
-    expect(game.chain().map((i) => i.cardId)).toEqual(["raider"]);
+    expect(game.chain().map((i) => i.cardId)).toEqual(["diana", "raider"]);
     // … then Raider's attack trigger (P1 draws).
     await resolveTop(game);
     expect(game.p1.hand()).toEqual(["p1top"]);
+    expect(game.chain().map((i) => i.cardId)).toEqual(["diana"]);
+    // … and Diana last, which is where her [1] is finally asked of P2 (444.2). Declining ends it.
+    for (let i = 0; i < 4 && game.decision()?.kind === "action"; i++) {
+      await passOnce(game);
+    }
+    expect(game.decision()).toMatchObject({ kind: "yes-no", seat: P2 });
+    expect(game.decision()?.prompt).toMatch(/Diana/);
+    await game.p2.no();
+    expect(game.p2.energy()).toBe(1); // declined → nothing paid
+    await game.settle();
     expect(game.chain()).toEqual([]);
   });
 
@@ -109,18 +116,22 @@ describe("Ruling e273cd59930f15f6 — Diana's showdown-begin trigger sits UNDER 
       expect.objectContaining({ cardId: "guard", controller: P2, triggered: true }),
     ]);
 
-    // rule 383.3.b.1: the "you may pay [1]" is asked — and the energy paid — at finalization.
-    expect(game.decision()).toMatchObject({ kind: "yes-no", seat: P1 });
-    expect(game.decision()?.prompt).toMatch(/Diana/);
-    await game.p1.yes();
-    expect(game.p1.energy()).toBe(0); // paid [1]
+    // rule 444.2 (ruling 2dbf39bc1935898d): nothing is asked or paid at finalization.
+    expect(game.decision()?.kind).toBe("action");
+    expect(game.p1.energy()).toBe(1);
 
     await resolveTop(game); // Guard → P2 draws
     expect(game.p2.hand()).toEqual(["p2top"]);
     await resolveTop(game); // Raider → P1 draws p1top; p1spell is now on top
     expect(game.p1.hand()).toEqual(["p1top"]);
     expect(game.chain().map((i) => i.cardId)).toEqual(["diana"]);
-    await resolveTop(game); // Diana last
+    // Diana last: her "you may pay [1]" is asked as she RESOLVES, and P1 pays it here.
+    for (let i = 0; i < 4 && game.decision()?.kind === "action"; i++) {
+      await passOnce(game);
+    }
+    expect(game.decision()).toMatchObject({ kind: "yes-no", seat: P1 });
+    await game.p1.yes();
+    expect(game.p1.energy()).toBe(0); // paid [1]
     // Predict (may recycle the top card) then reveal: answer any remaining Diana prompts by keeping the card.
     for (let i = 0; i < 4; i++) {
       const d = game.decision();
