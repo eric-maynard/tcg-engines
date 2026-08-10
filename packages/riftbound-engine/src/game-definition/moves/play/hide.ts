@@ -33,7 +33,13 @@ import {
   spendablePowerPool,
 } from "./cost";
 import { enterPlayedPermanent } from "./play-pipeline";
-import { beginRevealPairLock, beginRevealSlotLock, isSinglePickSlot } from "./reveal-target-lock";
+import {
+  beginRevealPairLock,
+  beginRevealSlotLock,
+  chargeDeflectFor,
+  filterDeflectAffordable,
+  isSinglePickSlot,
+} from "./reveal-target-lock";
 import {
   collectSequenceTargetSlots,
   enumerateSubsetsUpTo,
@@ -1032,27 +1038,40 @@ function lockRevealedSpellTarget(
       hiddenChoiceIsPulledIn(item.effect as SpellEffectTargetShape) ||
       ctx.zones.getCardZone(id as CoreCardId) === bfZone,
   );
-  if (options.length === 0) {
+  // rule 809.1.b / 809.1.d — an opponent's [Deflect] object costs extra to
+  // CHOOSE, on top of whatever the card cost (a [0] Hidden flip included), so a
+  // candidate whose surcharge this caster cannot cover is not offered.
+  const { deflectTax, options: affordable } = filterDeflectAffordable(
+    draft,
+    playerId,
+    cardId,
+    options,
+    ctx,
+  );
+  if (affordable.length === 0) {
     return;
   }
   // rule 355.5 with rule 402.2 — a lone legal candidate is no decision, but it is
   // still CHOSEN as the card is played: lock it onto the chain item so a response
   // that moves it away mistargets (359.3.e.5) and a later re-choice by a new
   // controller (752.1) starts from a real target instead of nothing.
-  if (options.length === 1) {
+  if (affordable.length === 1) {
     const idx = items?.findIndex((it) => it.id === item.id) ?? -1;
     if (items && idx >= 0) {
-      items[idx] = { ...items[idx], targets: [options[0] as string] };
+      items[idx] = { ...items[idx], targets: [affordable[0] as string] };
     }
+    // rule 809.1.c.1 — the surcharge is owed as the target is chosen.
+    chargeDeflectFor(draft, playerId, cardId, affordable, ctx);
     return;
   }
   draft.pendingChoice = {
     bindToChainItemId: item.id,
     effect: item.effect as never,
-    options: options as never,
+    options: affordable as never,
     playerId: playerId as never,
     remaining: 1,
     sourceCardId: cardId as never,
+    ...(deflectTax ? { deflectTax: true as const } : {}),
     type: "choose-target",
   };
 }

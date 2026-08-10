@@ -83,6 +83,11 @@ function setRole(
   io.cards.updateCardMeta?.(cardId as CoreCardId, {
     combatRole: role,
     combatRoleAt: battlefieldId,
+    // rule 466.7.b / 384.2 — "a combat that I WAS in" is a historical fact:
+    // once a unit has held a designation there, moving away (to base, still on
+    // the board) does not erase it, so the combat-end trigger still finds it.
+    // Cleared when that combat ends.
+    wasInCombatAt: battlefieldId,
   } as never);
 }
 

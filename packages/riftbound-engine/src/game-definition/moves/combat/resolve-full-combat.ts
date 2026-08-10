@@ -996,21 +996,55 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
     // Step — after damage, kills, recalls and control are settled. Every unit
     // that was in it and is still on the board sees it end; ones that died are
     // in the trash and see nothing (rule 428.1.a).
-    for (const unitId of [...remainingUnits, ...recalledUnits]) {
-      if (!combatParticipantIds.has(unitId as string)) {
-        continue;
+    // rule 466.7.b / 384.2 (ruling 69880fdccc4bd956) — "was in" is historical:
+    // a unit that held a designation here and then LEFT the battlefield (e.g.
+    // Flashed to base) is still on the board when the combat ends, so it sees
+    // it end too. `wasInCombatAt` is stamped with the designation and survives
+    // the relocation that clears `combatRole`.
+    const onBoardIds: string[] = Object.keys(draft.battlefields ?? {}).flatMap((bfId) =>
+      [...zones.getCardsInZone(`battlefield-${bfId}` as CoreZoneId)].map((id) => String(id)),
+    );
+    for (const playerId of Object.keys(draft.players ?? {})) {
+      for (const id of zones.getCardsInZone("base" as CoreZoneId, playerId as CorePlayerId)) {
+        onBoardIds.push(String(id));
       }
+    }
+    const departed: string[] = [];
+    for (const id of onBoardIds) {
+      const meta = cards.getCardMeta?.(id as CoreCardId) as { wasInCombatAt?: string } | undefined;
+      if (meta?.wasInCombatAt === battlefieldId) {
+        departed.push(id);
+      }
+    }
+    const endRoster = [
+      ...new Set<string>([
+        ...[...remainingUnits, ...recalledUnits]
+          .map((id) => String(id))
+          .filter((id) => combatParticipantIds.has(id)),
+        ...departed,
+      ]),
+    ];
+    for (const unitId of endRoster) {
       fireTriggers(
         {
           battlefieldId,
-          cardId: unitId as string,
+          cardId: unitId,
           playerId:
-            (cards.getCardController?.(unitId) as string | undefined) ??
-            (cards.getCardOwner(unitId) as string | undefined),
+            (cards.getCardController?.(unitId as CoreCardId) as string | undefined) ??
+            (cards.getCardOwner(unitId as CoreCardId) as string | undefined),
           type: "combat-end",
         },
         { cards, counters, draft, zones },
       );
+    }
+    // The combat is over: its historical roster stamp goes with it.
+    for (const unitId of [...endRoster, ...combatParticipantIds]) {
+      const meta = cards.getCardMeta?.(unitId as CoreCardId) as
+        | { wasInCombatAt?: string }
+        | undefined;
+      if (meta?.wasInCombatAt === battlefieldId) {
+        cards.updateCardMeta?.(unitId as CoreCardId, { wasInCombatAt: undefined } as never);
+      }
     }
 
     // rule 319.1 / 472 — the Cleanup that follows combat resolution: statics,

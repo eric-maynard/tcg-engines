@@ -21,6 +21,8 @@ import type { CardId as CoreCardId, ZoneId as CoreZoneId } from "@tcg/core";
 import type { RiftboundGameState } from "../../../types";
 import { resolveTarget } from "../../../abilities/target-resolver";
 import { getBattlefieldZoneId } from "../../../zones/zone-configs";
+import { payAnyDomainPower, totalPooledPower } from "../chain/resolve";
+import { getDeflectSurcharge } from "./cost";
 
 /** Minimal move-context surface these helpers need. */
 export interface RevealLockContext {
@@ -90,6 +92,43 @@ function slotOptions(
 }
 
 /**
+ * rule 809.1.b / 809.1.d (356.2.a.2) — [Deflect] is a MANDATORY additional cost
+ * of CHOOSING an opponent's object, owed on top of whatever the card cost, a
+ * [0] Hidden flip included (rule 811.1.a). A candidate whose surcharge the
+ * caster cannot cover is therefore not a legal choice and is never offered.
+ * `deflectTax` marks a real prompt so `pending-choice.ts` charges the pick
+ * (rule 809.1.c.1 — the surcharge is owed as the target is chosen).
+ */
+export function filterDeflectAffordable(
+  draft: RiftboundGameState,
+  playerId: string,
+  sourceCardId: string,
+  ids: readonly string[],
+  ctx: RevealLockContext,
+): { options: string[]; deflectTax: boolean } {
+  const budget = totalPooledPower(draft, playerId);
+  const surchargeOf = (id: string): number =>
+    getDeflectSurcharge(draft, playerId, [id], ctx.cards, sourceCardId, ctx.zones);
+  const options = ids.filter((id) => surchargeOf(id) <= budget);
+  return { deflectTax: options.some((id) => surchargeOf(id) > 0), options };
+}
+
+/** Pay the [Deflect] surcharge for objects bound without a prompt (rule 402.2). */
+export function chargeDeflectFor(
+  draft: RiftboundGameState,
+  playerId: string,
+  sourceCardId: string,
+  ids: readonly string[],
+  ctx: RevealLockContext,
+): void {
+  payAnyDomainPower(
+    draft,
+    playerId,
+    getDeflectSurcharge(draft, playerId, [...ids], ctx.cards, sourceCardId, ctx.zones),
+  );
+}
+
+/**
  * Settle the remaining slots of `lock`. Prompts as soon as a slot has two or
  * more legal candidates; a slot with exactly one candidate is bound without
  * asking, and a slot with none stops the walk (rule 355.8 already gated the
@@ -103,7 +142,13 @@ function advance(
   ctx: RevealLockContext,
 ): boolean {
   for (let i = lock.picked.length; i < lock.slots.length; i++) {
-    const options = slotOptions(draft, ctx, lock, lock.slots[i]);
+    const { deflectTax, options } = filterDeflectAffordable(
+      draft,
+      lock.playerId,
+      lock.cardId,
+      slotOptions(draft, ctx, lock, lock.slots[i]),
+      ctx,
+    );
     if (options.length >= 2) {
       writeLockedTargets(draft, itemId, lock);
       draft.pendingChoice = {
@@ -113,11 +158,14 @@ function advance(
         playerId: lock.playerId as never,
         remaining: 1,
         sourceCardId: lock.cardId as never,
+        ...(deflectTax ? { deflectTax: true as const } : {}),
         type: "choose-target",
       };
       return true;
     }
     if (options.length === 1) {
+      // A sole candidate binds without asking — its surcharge is still owed.
+      chargeDeflectFor(draft, lock.playerId, lock.cardId, options, ctx);
       lock.picked.push(options[0] as string);
       continue;
     }
