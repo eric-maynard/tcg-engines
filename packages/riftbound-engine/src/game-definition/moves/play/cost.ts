@@ -3748,17 +3748,19 @@ export function computePlayResourceCost(
   // rule 356.4.b / 356.6: the one-shot "next spell costs [N] less" (spent only when `consume`).
   const nextPlay = takeNextPlayDiscount(state, playerId, cardId, consume);
   const nextPlayEnergy = nextPlay.energy;
+  // rule 353.3 → 353.4 (rule-id: ogn-084-298 × sfd-146-221): increases join the
+  // total cost BEFORE any reduction, so a discount — and its own minimum — is
+  // measured against the INCREASED cost, not the printed one.
+  const increased = Math.max(0, baseCost.energy + modifier) + boardIncrease.energy + runtimeIncrease;
   // rule 356.4.e: a discount's minimum binds only that discount, and the payer
   // orders discounts — floored board auras go first so unfloored ones aren't lost.
   const discounted =
-    applyStaticCostReduction(Math.max(0, baseCost.energy + modifier), boardReduction) - interactive - selfScaled - nextPlayEnergy;
+    applyStaticCostReduction(increased, boardReduction) - interactive - selfScaled - nextPlayEnergy;
   const energy = Math.max(
     0,
     Math.max(0, discounted) +
       xEnergy +
       repeatSurcharge +
-      boardIncrease.energy +
-      runtimeIncrease +
       applyDiscountOverflowToAdditionalCost(extras.additionalCost?.energy ?? 0, discounted),
   );
 
