@@ -2,7 +2,10 @@
 import type { CardId as CoreCardId } from "@tcg/core";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
-import { consumeEntersReadyReplacement } from "../../game-definition/moves/play/cost";
+import {
+  consumeEntersReadyReplacement,
+  getGrantedAcceleratePlayCost,
+} from "../../game-definition/moves/play/cost";
 import { offerWeaponmasterEquip } from "../../game-definition/moves/play/weaponmaster";
 import { arriveByEffect } from "./move";
 import { battlefieldForbidsUnitPlays } from "../play-restrictions";
@@ -104,6 +107,71 @@ function findPlayTokenReplacement(ctx: EffectContext): string | undefined {
   return undefined;
 }
 
+/** Every card on the board (base / legend zone / battlefields) controlled by `playerId`. */
+function friendlyBoardIds(ctx: EffectContext, playerId: string): string[] {
+  const ids: string[] = [
+    ...ctx.zones.getCardsInZone("base" as never, playerId as never),
+    ...ctx.zones.getCardsInZone("legendZone" as never, playerId as never),
+  ] as string[];
+  for (const bfId of Object.keys(ctx.draft.battlefields ?? {})) {
+    for (const id of ctx.zones.getCardsInZone(`battlefield-${bfId}` as never)) {
+      if (ctx.cards.getCardOwner(id) === playerId) {
+        ids.push(id as string);
+      }
+    }
+  }
+  return ids;
+}
+
+/**
+ * rule 805.1.a / 805.2 (sfd-029-221 Rek'Sai) — a board static granting
+ * [Accelerate] to "units played from anywhere other than a player's hand"
+ * licenses a unit TOKEN's play too (rule 185.2.a: playing a token IS playing a
+ * unit), so its controller may pay the optional additional cost as the token is
+ * played. rule 805.1.a.2 / 185.3.b: a domainless token's pip is ANY domain, so
+ * the price is [1] plus one Power pip from any Domain in the pool.
+ * Returns undefined when unlicensed or unpayable (rule 404.2 — an unaffordable
+ * optional cost is never offered).
+ */
+function tokenAccelerateCost(
+  ctx: EffectContext,
+  tokenDefinitionId: string,
+  controller: string,
+): { energy: number } | undefined {
+  const board = friendlyBoardIds(ctx, controller).map((cardId) => ({ cardId, controller }));
+  const granted = getGrantedAcceleratePlayCost(tokenDefinitionId, controller, board, false);
+  if (!granted) {
+    return undefined;
+  }
+  const pool = ctx.draft.runePools[controller];
+  const pips = pool
+    ? Object.values(pool.power as Partial<Record<string, number>>).reduce<number>(
+        (a, b) => a + (b ?? 0),
+        0,
+      )
+    : 0;
+  if (!pool || pool.energy < granted.energy || pips < 1) {
+    return undefined;
+  }
+  return { energy: granted.energy };
+}
+
+/** rule 805.6 — pay the elected Accelerate: [1] plus one pip of any Domain. */
+function payTokenAccelerate(ctx: EffectContext, controller: string, energy: number): void {
+  const pool = ctx.draft.runePools[controller];
+  if (!pool) {
+    return;
+  }
+  pool.energy = Math.max(0, pool.energy - energy);
+  const power = pool.power as Partial<Record<string, number>>;
+  const key = Object.entries(power)
+    .filter(([, v]) => (v ?? 0) > 0)
+    .sort(([, a], [, b]) => (b ?? 0) - (a ?? 0))[0]?.[0];
+  if (key !== undefined) {
+    power[key] = (power[key] ?? 0) - 1;
+  }
+}
+
 /** Marks a `play-token` replacement used for the turn (rule: once each turn). */
 function consumePlayTokenReplacement(ctx: EffectContext, key: string): void {
   if (!ctx.draft.consumedNextReplacements) {
@@ -166,6 +234,13 @@ export function handle_createToken(effect: ExecutableEffect, ctx: EffectContext,
   } else {
     targetZone = "base";
   }
+  // The Accelerate election below re-enters this handler from a prompt, where
+  // the source-zone context ("here") is gone: the location resolved on the
+  // first pass rides along so the token still lands where it was headed.
+  const carriedZone = (effect as { resolvedTokenZone?: string }).resolvedTokenZone;
+  if (carriedZone !== undefined) {
+    targetZone = carriedZone;
+  }
   // rule 054 / 359.3.e.6 (rule-id: sfd-216-221) — "play a … token HERE" names
   // one location: when that battlefield forbids unit plays the instruction
   // can't be followed, so it is ignored entirely (never redirected to base).
@@ -222,6 +297,45 @@ export function handle_createToken(effect: ExecutableEffect, ctx: EffectContext,
   // token's state, overriding the rule 143.4 default.
   const tokenEntersReady =
     effect.ready === true || tokenEntersReadyFromStaticGrant(ctx, tokenDef.type, ownerId);
+  // rule 419.3.b / 805.2 — the Accelerate election belongs to THIS token's play
+  // steps: it is offered before the token enters, once per token, and the pool
+  // is only drained when the controller accepts (rule 805.6 → enters ready).
+  const accel = effect as {
+    acceleratePaid?: boolean;
+    skipAccelerateOffer?: boolean;
+    resolvedTokenZone?: string;
+  };
+  const paidAccelerate = accel.acceleratePaid === true;
+  if (
+    tokenDef.type !== "gear" &&
+    count === 1 &&
+    !paidAccelerate &&
+    !tokenEntersReady &&
+    accel.skipAccelerateOffer !== true &&
+    !ctx.draft.pendingChoice
+  ) {
+    const price = tokenAccelerateCost(ctx, tokenDefinitionId, ownerId);
+    if (price) {
+      const carry = { ...effect, resolvedTokenZone: targetZone } as Record<string, unknown>;
+      ctx.draft.pendingChoice = {
+        declineEffect: { ...carry, skipAccelerateOffer: true },
+        effect: { ...carry, acceleratePaid: true },
+        playerId: ownerId,
+        prompt: `Pay [${price.energy}][any] to Accelerate ${tokenDef.name}?`,
+        sourceCardId: ctx.sourceCardId,
+        type: "confirm",
+        ...(ctx.boundTargets && ctx.boundTargets.length > 0
+          ? { boundTargets: [...ctx.boundTargets] }
+          : {}),
+      } as typeof ctx.draft.pendingChoice;
+      return;
+    }
+  }
+  if (paidAccelerate) {
+    payTokenAccelerate(ctx, ownerId, 1);
+  }
+  // rule 805.6: a paid Accelerate overrides the rule 143.4 exhausted default.
+  const entersReadyNow = tokenEntersReady || paidAccelerate;
   // Rule unl-081-219 (Keeper of Masks): "They become copies of me." A token
   // spec carrying the `CopyOnPlay` marker registers each instance with the
   // source card's definition (name, Might, keywords, abilities) instead of
@@ -253,7 +367,7 @@ export function handle_createToken(effect: ExecutableEffect, ctx: EffectContext,
     createdIds.push(tokenId);
     // Rule 143.4 / 185.2.d: token units enter play exhausted; gear tokens
     // enter ready unless the effect says otherwise (sfd-004-221).
-    if ((tokenDef.type !== "gear" || effect.ready === false) && !tokenEntersReady) {
+    if ((tokenDef.type !== "gear" || effect.ready === false) && !entersReadyNow) {
       ctx.counters.setFlag(tokenId as CoreCardId, "exhausted", true);
     }
     // `effect` (and thus `tokenDef`) reaches here via the chain-state
