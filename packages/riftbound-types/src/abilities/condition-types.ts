@@ -374,6 +374,12 @@ export interface TargetAttackingCondition {
 // rule-id: ogn-005-298
 export interface ThisKillsTargetCondition {
   readonly type: "this-kills-target";
+  /**
+   * rule 372 — engine-stamped re-check: the units the damage step was about to
+   * kill. Present only on the copy carried by a queued reflexive item, which
+   * resolves after the death (or its replacement) has actually happened.
+   */
+  readonly ids?: readonly string[];
 }
 
 // ============================================================================

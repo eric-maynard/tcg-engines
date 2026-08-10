@@ -37,7 +37,13 @@ export function parseDamageEffect(text: string): DamageEffect | SequenceEffect |
       // rule 387.2 / 388.1 — the "do this:" wording makes the follow-up a
       // Reflexive Trigger: it is not carried out inline but becomes its own
       // pending chain item, so opponents get Priority before it resolves.
-      const then = reflexive ? ({ effect: thenEffect, type: "reflexive" } as unknown as typeof thenEffect) : thenEffect;
+      // rule 372 — `killGuard` makes the queued item re-check the kill as it
+      // resolves: an optional "instead" replacement (The Boss) can still save
+      // the unit after this instruction has finished, and a replaced death is
+      // no kill (370.1.a.1).
+      const then = reflexive
+        ? ({ effect: thenEffect, killGuard: true, type: "reflexive" } as unknown as typeof thenEffect)
+        : thenEffect;
       return {
         effects: [
           damage,

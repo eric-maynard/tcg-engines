@@ -2,7 +2,7 @@
 import { addToChain, createInteractionState } from "../../chain";
 import type { RiftboundGameState } from "../../types";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
-import type { EffectHelpers } from "./_helpers";
+import { type EffectHelpers, lethallyDamagedBoundIds } from "./_helpers";
 
 /**
  * rule 387 / 388 — Reflexive Trigger ("[Then] [you may] do this[ N times]: …").
@@ -24,6 +24,7 @@ import type { EffectHelpers } from "./_helpers";
 export function handle_reflexive(effect: ExecutableEffect, ctx: EffectContext, _h: EffectHelpers): void {
   const node = effect as unknown as {
     effect?: ExecutableEffect;
+    killGuard?: boolean;
     optional?: boolean;
     times?: number;
   };
@@ -43,6 +44,14 @@ export function handle_reflexive(effect: ExecutableEffect, ctx: EffectContext, _
     pending,
     ctx.sameZone,
   );
+  // rule 372 / 370.1.a.1 (rule-id: ogn-005-298 × ogn-269-298 The Boss) — "If
+  // this kills it, do this: …" queues this item while the lethally damaged unit
+  // is still on the board: the rule 520 death, and any optional "you may pay …
+  // instead" replacement answering it, happen after this instruction. So the
+  // kill test travels with the item, stamped with the units it was about to
+  // kill; a unit whose death was replaced is alive when the item resolves and
+  // the body does nothing.
+  const guarded = node.killGuard === true ? guardOnKill(frozen, ctx) : frozen;
   const times = Math.max(0, Math.floor(node.times ?? 1));
   const turnOrder = Object.keys(ctx.draft.players ?? {});
   const draft = ctx.draft as RiftboundGameState & {
@@ -54,7 +63,7 @@ export function handle_reflexive(effect: ExecutableEffect, ctx: EffectContext, _
       {
         cardId: ctx.sourceCardId,
         controller: ctx.playerId,
-        effect: frozen,
+        effect: guarded,
         ...(node.optional === true ? { optional: true } : {}),
         // rule 388.1 / 337.1 — a Pending Item until the finalization dialog
         // (run by the move wrapper once this resolution has finished) has
@@ -70,6 +79,19 @@ export function handle_reflexive(effect: ExecutableEffect, ctx: EffectContext, _
       turnOrder,
     );
   }
+}
+
+/** Wrap a queued body in the deferred "did this actually kill them" re-check. */
+function guardOnKill(body: ExecutableEffect, ctx: EffectContext): ExecutableEffect {
+  const ids = lethallyDamagedBoundIds(ctx);
+  if (ids.length === 0) {
+    return body;
+  }
+  return {
+    condition: { ids: [...ids], type: "this-kills-target" },
+    then: body,
+    type: "conditional",
+  } as unknown as ExecutableEffect;
 }
 
 function referencesPendingValue(effect: unknown): boolean {

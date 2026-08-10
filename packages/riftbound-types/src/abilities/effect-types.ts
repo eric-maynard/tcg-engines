@@ -824,6 +824,13 @@ export interface ReflexiveEffect {
   readonly times?: number;
   /** "you MAY do this" — the item's controller opts in when it is finalized (402.1). */
   readonly optional?: boolean;
+  /**
+   * rule 372 (rule-id: ogn-005-298) — the body is gated on "if this kills it".
+   * The queued item re-checks the kill when it resolves, because the rule 520
+   * death (and any optional replacement that replaces it) happens after the
+   * instruction that queued this item.
+   */
+  readonly killGuard?: boolean;
 }
 
 // ============================================================================
