@@ -126,9 +126,8 @@ describe("Tricksy Tentacles × Determined Sentry — (a) finalization choices", 
     expect(game.zoneOf("tt")).toBe("hand");
   });
 
-  test.failing("BUG: the single shared destination should be chosen at FINALIZATION, before P1 passes priority (355.4) — engine asks it only on resolution", async () => {
-    // Expected: right after cast() the pending decision is P1's destination pick (timing FIN), THEN priority.
-    // Actual: cast() goes straight to the priority window; the destination is asked at RES.
+  test("the single shared destination is chosen at FINALIZATION, before P1 passes priority (355.4)", async () => {
+    // Right after cast() the pending decision is P1's destination pick (timing FIN), THEN priority.
     const game = await board().build();
     await game.p1.cast("tt", { targets: [...TRIO] });
     const d = game.decision();
@@ -145,6 +144,9 @@ describe("Tricksy Tentacles × Determined Sentry — (a) finalization choices", 
     await game.p1.pick("battlefield-bfC");
     // no second destination prompt for the other two movers
     expect(isDestinationPick(game.decision())).toBe(false);
+    // chosen before priority (355.4) → both pass and the spell resolves the whole group at once
+    await game.p1.passPriority();
+    await game.p2.passPriority();
     for (const u of TRIO) {
       expect(game.locationOf(u)).toBe("bfC");
     }
@@ -166,9 +168,7 @@ describe("Tricksy Tentacles × Determined Sentry — (b) destination = P2's base
     expect(game.decision()).toMatchObject({ context: "main", kind: "action", seat: P1 });
   });
 
-  test.failing("BUG: Determined Sentry 'can't move to base' — its move is impossible and ignored (054.1 / 359.3.e.6 / .e.11): Sentry stays at bfB and P2 KEEPS control of bfB (190.4.a); engine moves Sentry to base too", async () => {
-    // Expected: sentry still at bfB, bfB.controller === P2, nothing contested/staged.
-    // Actual: sentry lands in P2's base with the others and bfB goes uncontrolled.
+  test("Determined Sentry 'can't move to base' — its move is impossible and ignored (054.1 / 359.3.e.6 / .e.11): Sentry stays at bfB and P2 KEEPS control of bfB (190.4.a)", async () => {
     const game = await board().build();
     await castTrioTo(game, "base");
     expect(game.locationOf("sentry")).toBe("bfB");

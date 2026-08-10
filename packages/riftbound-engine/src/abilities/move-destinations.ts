@@ -47,10 +47,29 @@ export function hasCasterChosenDestination(effect: unknown): boolean {
     return false;
   }
   const to = e.to;
-  if (to === "choose" || to === "any-battlefield") {
+  // rule 355.4 (rule-id: unl-054-219) — "…to a single location" is one
+  // caster-chosen destination shared by the whole group, so it is a play-time
+  // choice exactly like a single mover's "choose".
+  if (to === "choose" || to === "any-battlefield" || to === "single-location") {
     return true;
   }
   return typeof to === "object" && to !== null && typeof to.battlefield === "string";
+}
+
+/**
+ * rule 198.1 / 355.4 (rule-id: unl-054-219) — the Locations a group moved "to a
+ * single location" may share: every base-or-battlefield, minus the one zone the
+ * whole group already stands in (a group spread across zones excludes nothing).
+ * rule 355.4.a tests only that the units MAY be present there — a mover that
+ * individually can't make the trip is handled as the move executes (359.3.e.6).
+ */
+export function singleLocationOptions(movers: readonly string[], ctx: EffectContext): string[] {
+  const zonesOf = movers.map((id) => ctx.zones.getCardZone(id as CoreCardId) as string | undefined);
+  const shared = zonesOf.every((z) => z === zonesOf[0]) ? zonesOf[0] : undefined;
+  return [
+    "base",
+    ...Object.keys(ctx.draft.battlefields ?? {}).map((bfId) => `battlefield-${bfId}`),
+  ].filter((z) => z !== shared);
 }
 
 /**
@@ -145,6 +164,13 @@ export function moveDestinationOptions(
       return undefined;
     }
     return battlefields.map(([bfId]) => `battlefield-${bfId}`).filter((z) => z !== currentZone);
+  }
+
+  if (to === "single-location") {
+    if (!onBoard) {
+      return undefined;
+    }
+    return singleLocationOptions([moverId], ctx);
   }
 
   if (typeof to !== "object" || to === null || typeof to.battlefield !== "string") {

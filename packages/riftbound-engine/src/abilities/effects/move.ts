@@ -12,7 +12,7 @@ import {
   stageContested,
   toBattlefieldId,
 } from "../../operations/arrive-at-battlefield";
-import { keepLegalArrivals, moveDestinationOptions } from "../move-destinations";
+import { keepLegalArrivals, moveDestinationOptions, singleLocationOptions } from "../move-destinations";
 import { attachedUnitOf, detachEquipment } from "./_attachment";
 
 /**
@@ -951,13 +951,28 @@ export function handle_move(effect: ExecutableEffect, ctx: EffectContext, h: Eff
     if (first === undefined) {
       return;
     }
-    const zonesOf = moveTargets.map((id) => ctx.zones.getCardZone(id as CoreCardId));
-    const shared = zonesOf.every((z) => z === zonesOf[0]) ? zonesOf[0] : undefined;
-    const options = [
-      "base",
-      ...Object.keys(ctx.draft.battlefields ?? {}).map((bfId) => `battlefield-${bfId}`),
-    ].filter((z) => z !== shared);
+    const options = singleLocationOptions(moveTargets, ctx);
     if (options.length === 0) {
+      return;
+    }
+    // rule 355.4 — the shared destination is normally named when the spell was
+    // played (`play-time-destinations.ts`); re-check it here (355.4.a: no longer
+    // valid ⇒ the group does not move).
+    const boundDest = (effect as unknown as { _dest?: string | null })._dest;
+    if (boundDest !== undefined) {
+      if (boundDest === null || !options.includes(boundDest)) {
+        return;
+      }
+      const arrivedBound: string[] = [];
+      for (const cardId of moveTargets) {
+        if (ctx.zones.getCardZone(cardId as CoreCardId) === boundDest) {
+          continue;
+        }
+        if (moveCardWithEvent(ctx, cardId, boundDest) === boundDest) {
+          arrivedBound.push(cardId);
+        }
+      }
+      arriveByEffect(ctx, arrivedBound, boundDest);
       return;
     }
     if (options.length > 1 && !ctx.draft.pendingChoice) {

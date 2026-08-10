@@ -23,6 +23,7 @@ import {
   hasCasterChosenDestination,
   keepLegalArrivals,
   moveDestinationOptions,
+  singleLocationOptions,
 } from "../../../abilities/move-destinations";
 import { collectSequenceTargetSlots, isRestatementOf, type SpellEffectTargetShape } from "./targeting";
 
@@ -167,6 +168,36 @@ export function raisePlayTimeDestinationChoice(
   for (const [index, node] of nodes.entries()) {
     if (node._dest !== undefined) {
       continue;
+    }
+    // rule 355.4 (rule-id: unl-054-219 Tricksy Tentacles) — "Move any number of
+    // enemy units … to a single location": the whole chosen group shares ONE
+    // destination, so it is named at finalization like a single mover's.
+    if (node.to === "single-location") {
+      const movers = ((item.targets as readonly string[] | undefined) ?? []).filter((m) =>
+        isOnBoard(ctx, m),
+      );
+      if (movers.length === 0) {
+        continue;
+      }
+      const options = singleLocationOptions(movers, ctx);
+      if (options.length === 0) {
+        node._dest = null;
+        continue;
+      }
+      if (options.length === 1) {
+        node._dest = options[0] as string;
+        continue;
+      }
+      draft.pendingChoice = {
+        bindToChainItemId: item.id,
+        cardId: movers[0] as string,
+        destinationNodeIndex: index,
+        options,
+        playerId: item.controller as string,
+        sourceCardId: item.cardId as string,
+        type: "choose-destination",
+      };
+      return true;
     }
     const mover = moverForNode(item, item.effect, node);
     if (mover === undefined || !isOnBoard(ctx, mover)) {

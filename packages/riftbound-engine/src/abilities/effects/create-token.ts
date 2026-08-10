@@ -393,6 +393,10 @@ export function handle_createToken(effect: ExecutableEffect, ctx: EffectContext,
         ctx.cards.updateCardMeta?.(tokenId as CoreCardId, {
           copyOfCardId: copySourceId,
         } as unknown as Record<string, unknown>);
+        // rule 477.1.b.1.b — the token's copyable traits are the ones it copies
+        // (so something copying IT is priced as the copied card, not as a bare
+        // costless token, 185.3.a.1).
+        registry.noteCopySource?.(tokenId, copySourceId);
       }
       // rule 477.2 / 477.2.a: the effect's own keywords are GRANTED on top of
       // the copied traits (ability layer), so they survive a later copy of the
@@ -514,8 +518,10 @@ export function handle_createToken(effect: ExecutableEffect, ctx: EffectContext,
     // player picks the destination among their own base / battlefields they
     // control — with "choose an opponent, they play a token" that is `ownerId`,
     // not the controller of the creating effect.
+    // rule 186 / 355.2 (rule-id: sfd-216-221 Rockfall Path) — a token unit IS
+    // played, so a battlefield forbidding unit plays is not a legal destination.
     const controlled = Object.entries(ctx.draft.battlefields ?? {})
-      .filter(([, bf]) => bf.controller === ownerId)
+      .filter(([bfId, bf]) => bf.controller === ownerId && !battlefieldForbidsUnitPlays(bfId))
       .map(([bfId]) => `battlefield-${bfId}`);
     const [first, ...rest] = createdIds;
     if (controlled.length > 0 && first !== undefined) {

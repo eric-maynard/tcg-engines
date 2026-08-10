@@ -170,9 +170,11 @@ describe("Tricksy Tentacles (unl-054-219)", () => {
       .hand(P1, CARD, "tt")
       .build();
     await game.p1.cast("tt", { targets: ["lone"] });
-    const r = await game.settle(); // resolves up to the destination prompt
-    expect(r.decision).toMatchObject({ kind: "pick", seat: P1 });
-    await game.p1.pick("battlefield-bf2"); // the tail of the resolution; its Cleanup follows at once
+    // rule 355.4 — the shared destination is a play-time choice, asked at finalization
+    expect(game.decision()).toMatchObject({ kind: "pick", seat: P1, semantics: "destination", timing: "FIN" });
+    await game.p1.pick("battlefield-bf2");
+    await game.p1.passPriority(); // now it resolves; its Cleanup follows at once
+    await game.p2.passPriority();
     expect(game.locationOf("lone")).toBe("bf2");
     expect(game.gameState.battlefields.bf1?.controller).toBeNull();
     expect(game.gameState.battlefields.bf2).toMatchObject({ contested: true, contestedBy: P2, controller: P1 });
