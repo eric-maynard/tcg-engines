@@ -10,6 +10,7 @@ import type {
 import type { RiftboundCardMeta } from "../../types";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import { recordPublicReveal } from "../../operations/public-reveal";
+import { randomizedRecycleOrder } from "../../operations/recycle-order";
 import { additionalCostWasPaid } from "../../operations/additional-costs-paid";
 import { effectiveTags } from "../card-tags";
 import { scoreWithinConditionMet } from "../../operations/score-within";
@@ -603,7 +604,10 @@ export function resolveAmount(
     }
     const hits = topN.filter((id) => registry.hasKeyword(id, keyword)).length;
     if ((amount.then ?? "recycle") === "recycle") {
-      for (const id of topN) {
+      // rule 416.5 — these cards are recycled TOGETHER, so they reach the
+      // bottom in a random order; watching the reveal must not tell anyone
+      // the order of the bottom five.
+      for (const id of randomizedRecycleOrder(topN, ctx.rng)) {
         ctx.zones.moveCard({
           cardId: id as CoreCardId,
           position: "bottom",

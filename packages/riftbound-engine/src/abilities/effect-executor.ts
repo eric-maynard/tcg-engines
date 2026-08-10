@@ -187,6 +187,11 @@ export interface EffectContext {
    * If not provided, trigger-dependent effects (become-mighty) are silently skipped.
    */
   readonly fireTriggers?: (event: import("./game-events").GameEvent) => void;
+  /**
+   * The game's SEEDED randomness (rule 416.5: cards recycled together reach the
+   * bottom in a random order). Absent ⇒ the caller keeps the given order.
+   */
+  readonly rng?: { readonly shuffle: <T>(array: readonly T[]) => T[] };
 }
 
 export { evaluateEffectCondition } from "./effects/_helpers";

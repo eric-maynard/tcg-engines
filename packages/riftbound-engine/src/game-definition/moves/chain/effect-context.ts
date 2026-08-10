@@ -95,6 +95,9 @@ export function buildEffectContext(
     draft,
     fireTriggers: (event) => fireTriggers(event, triggerCtx),
     playerId,
+    // rule 416.5 — effects that recycle several cards at once need the game's
+    // seeded randomness to order them (a transcript still replays exactly).
+    rng: (context as { rng?: EffectContext["rng"] }).rng,
     sourceCardId,
     sourceZone: context.zones.getCardZone(sourceCardId as CoreCardId) as string | undefined,
     zones: context.zones,

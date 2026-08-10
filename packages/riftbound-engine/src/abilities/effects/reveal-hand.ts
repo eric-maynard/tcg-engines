@@ -71,6 +71,12 @@ export function handle_revealHand(effect: ExecutableEffect, ctx: EffectContext, 
     }
   }
 
+  // rule 424.1 / 424.3.a — "They reveal their hand" presents those cards to ALL
+  // players, so the reveal lands on the shared public-reveal record like every
+  // other reveal path; the prompt only governs who may pick from it. The reveal
+  // is unconditional — it happens even when nothing in the hand is pickable.
+  recordPublicReveal(ctx, revealer, revealed);
+
   // rule 359.3.e.11 — if the revealer has no cards in hand, or every revealed
   // card fails the pick filter, there is no valid pick: the choose/recycle
   // instructions are skipped so play can continue (otherwise pendingChoice
@@ -80,11 +86,6 @@ export function handle_revealHand(effect: ExecutableEffect, ctx: EffectContext, 
   if (!revealed.some((id) => matchesRevealPickFilter(filter, id))) {
     return;
   }
-
-  // rule 424.1 — "They reveal their hand" presents those cards to ALL players,
-  // so the reveal lands on the shared public-reveal record like every other
-  // reveal path; the prompt only governs who may pick from it.
-  recordPublicReveal(ctx, revealer, revealed);
 
   ctx.draft.pendingChoice = {
     filter,
