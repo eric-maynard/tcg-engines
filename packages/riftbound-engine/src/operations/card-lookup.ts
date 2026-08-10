@@ -140,6 +140,13 @@ export class CardDefinitionRegistry {
   private readonly copyOriginals = new Map<string, CardDefinitionLookup>();
   /** Instance being copied, per copying instance (rule 477.1.b) — lets snapshots render the copy. */
   private readonly copySources = new Map<string, string>();
+  /**
+   * rule 478 / 480.3 — every copy effect currently applying to a holder, in
+   * timestamp order (earliest first, latest wins). Two Shady Spectacles on one
+   * unit are independent layer-1 effects: ending one must leave the other in
+   * force, and re-applying one moves it to the back (480.2).
+   */
+  private readonly copyLayers = new Map<string, { key: string; sourceId: string }[]>();
   /** rule 762 — the format-legal card pool used to enumerate nameable cards/tags. */
   private nameCatalog: NameCatalogEntry[] | null = null;
 
@@ -148,7 +155,7 @@ export class CardDefinitionRegistry {
    * Might, keywords, abilities) are replaced for as long as the copy lasts.
    * Separately granted keywords live on card meta and are untouched (477.2.a).
    */
-  becomeCopyOf(holderId: string, sourceId: string): void {
+  becomeCopyOf(holderId: string, sourceId: string, layerKey?: string): void {
     const source = this.definitions.get(sourceId);
     const current = this.definitions.get(holderId);
     if (!source || !current) {
@@ -157,19 +164,49 @@ export class CardDefinitionRegistry {
     if (!this.copyOriginals.has(holderId)) {
       this.copyOriginals.set(holderId, current);
     }
+    // rule 480.2 — re-applying the same effect gives it a NEW timestamp, so it
+    // goes to the back of the queue rather than keeping its old position.
+    const key = layerKey ?? sourceId;
+    const layers = (this.copyLayers.get(holderId) ?? []).filter((l) => l.key !== key);
+    layers.push({ key, sourceId });
+    this.copyLayers.set(holderId, layers);
+    this.applyCopyLayers(holderId);
+  }
+
+  /**
+   * rule 480.3 — recompute the holder's definition from its copy layers: the
+   * latest timestamp wins, and with none left the printed definition returns.
+   */
+  private applyCopyLayers(holderId: string): void {
+    const layers = this.copyLayers.get(holderId) ?? [];
+    const top = layers[layers.length - 1];
+    if (!top) {
+      const original = this.copyOriginals.get(holderId);
+      this.copyLayers.delete(holderId);
+      this.copySources.delete(holderId);
+      if (original) {
+        this.copyOriginals.delete(holderId);
+        this.definitions.set(holderId, original);
+      }
+      return;
+    }
+    const source = this.definitions.get(top.sourceId);
+    if (!source) {
+      return;
+    }
     // rule 477.1.b.1.a: Cost is a copyable value, so the copy is priced as the
     // SOURCE, never as its own printing. rule 185.3.a.1: a token has no cost —
     // it is treated as 0 for all purposes — so a card copying a token reads as
     // costing 0. Both halves are written explicitly because every reader falls
     // back to the printed card when the definition omits the field.
-    const copiedFromToken = this.isToken(sourceId);
+    const copiedFromToken = this.isToken(top.sourceId);
     this.definitions.set(holderId, {
       ...source,
       energyCost: copiedFromToken ? 0 : (source.energyCost ?? 0),
       id: holderId,
       powerCost: copiedFromToken ? [] : (source.powerCost ?? []),
     });
-    this.copySources.set(holderId, sourceId);
+    this.copySources.set(holderId, top.sourceId);
   }
 
   /**
@@ -180,15 +217,22 @@ export class CardDefinitionRegistry {
     return this.copySources.get(holderId);
   }
 
-  /** End a `becomeCopyOf` copy, restoring the instance's printed definition. */
-  revertCopy(holderId: string): void {
-    const original = this.copyOriginals.get(holderId);
-    if (!original) {
+  /**
+   * End a `becomeCopyOf` copy. With `layerKey` only that effect's copy ends —
+   * rule 435.1.d: detaching one Equipment leaves every other copy effect on the
+   * unit applying. Without one, every copy on the holder ends (it left the
+   * board, 719.5), restoring the printed definition.
+   */
+  revertCopy(holderId: string, layerKey?: string): void {
+    if (!this.copyOriginals.has(holderId)) {
       return;
     }
-    this.copyOriginals.delete(holderId);
-    this.copySources.delete(holderId);
-    this.definitions.set(holderId, original);
+    const layers = this.copyLayers.get(holderId) ?? [];
+    this.copyLayers.set(
+      holderId,
+      layerKey === undefined ? [] : layers.filter((l) => l.key !== layerKey),
+    );
+    this.applyCopyLayers(holderId);
   }
 
   /**

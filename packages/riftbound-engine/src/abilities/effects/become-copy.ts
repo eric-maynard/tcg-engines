@@ -17,12 +17,15 @@ export function handle_become_copy(
 ): void {
   const holderId = (effect as { holderId?: string }).holderId;
   const sourceId = (ctx.boundTargets ?? [])[0];
+  // rule 480.3 — the copy is timestamped per applying effect (the Equipment),
+  // so two Spectacles on one unit are two independent layers.
+  const layerKey = (effect as { layerKey?: string }).layerKey ?? ctx.sourceCardId;
   if (!holderId || !sourceId || holderId === sourceId) {
     return;
   }
   // rule 709 / 710 — copying a bigger unit's printed Might is a Might change
   // like any other, so it can be the moment the holder becomes [Mighty].
   withMightWatch([holderId], ctx, () => {
-    getGlobalCardRegistry().becomeCopyOf(holderId, sourceId);
+    getGlobalCardRegistry().becomeCopyOf(holderId, sourceId, layerKey);
   });
 }

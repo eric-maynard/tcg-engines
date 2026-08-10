@@ -566,8 +566,9 @@ export function detachOnLeave(ctx: LeaveBoardContext, cardId: string): void {
     update(holder as CoreCardId, { equippedWith: held.filter((e) => e !== cardId) });
     update(cardId as CoreCardId, { attachedTo: undefined, copiedFromCardId: undefined });
     // rule 477.1.b: a "becomes a copy … for as long as this is attached" copy
-    // ends the moment the link is severed (Shady Spectacles).
-    getGlobalCardRegistry().revertCopy(holder);
+    // ends the moment the link is severed (Shady Spectacles) — only that
+    // Equipment's own copy layer (435.1.d).
+    getGlobalCardRegistry().revertCopy(holder, cardId);
   }
   const worn = [...((meta.equippedWith ?? []) as string[])];
   for (const equipId of worn) {

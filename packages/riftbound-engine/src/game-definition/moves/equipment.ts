@@ -496,9 +496,10 @@ export const equipmentMoves: Partial<
         } as Partial<RiftboundCardMeta>,
       );
 
-      // rule 477.1.b: the Shady Spectacles copy lasts only while attached.
+      // rule 477.1.b: the Shady Spectacles copy lasts only while attached —
+      // and only this Equipment's copy ends here (435.1.d).
       if (unitId) {
-        getGlobalCardRegistry().revertCopy(unitId);
+        getGlobalCardRegistry().revertCopy(unitId, equipmentId);
       }
 
       // Remove from unit's equippedWith list

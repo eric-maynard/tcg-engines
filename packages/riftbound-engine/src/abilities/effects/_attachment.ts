@@ -145,10 +145,10 @@ export function applyCopyOnAttach(
   }
   // rule 355.5: the controller chooses; a sole legal candidate is auto-bound.
   if (candidates.length === 1 && candidates[0] !== undefined) {
-    registry.becomeCopyOf(unitId, candidates[0]);
+    registry.becomeCopyOf(unitId, candidates[0], equipmentId);
   } else if (candidates.length > 1 && !ctx.draft.pendingChoice) {
     ctx.draft.pendingChoice = {
-      effect: { holderId: unitId, type: "become-copy" },
+      effect: { holderId: unitId, layerKey: equipmentId, type: "become-copy" },
       options: candidates,
       playerId: ctx.playerId,
       remaining: 1,
@@ -179,8 +179,9 @@ export function detachEquipment(ctx: EffectContext, equipmentId: string): void {
   });
 
   if (unitId) {
-    // rule 477.1.b: "for as long as this is attached" — detaching ends the copy.
-    getGlobalCardRegistry().revertCopy(unitId);
+    // rule 477.1.b: "for as long as this is attached" — detaching ends THIS
+    // Equipment's copy only; rule 435.1.d, any other copy on the unit stays.
+    getGlobalCardRegistry().revertCopy(unitId, equipmentId);
     const held = meta(ctx, unitId)?.equippedWith;
     const current = Array.isArray(held) ? (held as string[]) : [];
     update(unitId as CoreCardId, {
