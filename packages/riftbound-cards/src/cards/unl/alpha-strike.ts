@@ -60,10 +60,15 @@ export const alphaStrike: SpellCard = {
   domain: ["calm", "body"],
   energyCost: 3,
   id: createCardId("unl-192-219"),
+  // rule 103.2.d: Signature card — legal only in a Master Yi Champion Legend
+  // deck, and it shares the 3-card Signature cap with every other "Master Yi"
+  // Signature card regardless of name.
+  isSignature: true,
   name: "Alpha Strike",
   rarity: "epic",
   rulesText:
     "[Action] (Play on your turn or in showdowns.)\nChoose a friendly unit. It deals damage equal to its Might split among enemy units at battlefields. Then for each unit this kills, do this: Gain 1 XP.",
   setId: "UNL",
+  tags: ["Master Yi"],
   timing: "action",
 };

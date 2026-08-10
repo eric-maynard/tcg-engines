@@ -1862,8 +1862,28 @@ export function getDeflectSurcharge(
     // a static "friendly units have [Deflect]") lives in meta.grantedKeywords,
     // not the printed definition, and stacks with any printed Deflect.
     const meta = cards?.getCardMeta?.(targetId as CoreCardId) as
-      | { grantedKeywords?: readonly { keyword: string; value?: number }[] }
+      | {
+          grantedKeywords?: readonly { keyword: string; value?: number }[];
+          equippedWith?: readonly string[];
+        }
       | undefined;
+    // rule 136.2.c / 718 / 809.2 (rule-id: sfd-059-221 Svellsongur) — an
+    // attached Equipment whose effect text COPIES the wearer's text appends
+    // that text back onto the unit, so each printed [Deflect] instance applies
+    // once more per copy and the surcharges stack (Ornn: 2 + 2 = 4).
+    let printedTextCopies = 0;
+    for (const equipId of meta?.equippedWith ?? []) {
+      const equipMeta = cards?.getCardMeta?.(equipId as CoreCardId) as
+        | { copiedFromCardId?: string }
+        | undefined;
+      if (
+        registry.get(equipId)?.copyAttachedUnitText === true &&
+        equipMeta?.copiedFromCardId === targetId
+      ) {
+        printedTextCopies += 1;
+      }
+    }
+    targetSurcharge *= 1 + printedTextCopies;
     for (const gk of meta?.grantedKeywords ?? []) {
       if (gk.keyword === "Deflect") {
         targetSurcharge += gk.value ?? 1;

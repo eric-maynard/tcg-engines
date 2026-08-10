@@ -7,10 +7,15 @@ export const highlander: SpellCard = {
   domain: ["calm", "body"],
   energyCost: 4,
   id: createCardId("ogs-020-024"),
+  // rule 103.2.d: Signature card — legal only in a Master Yi Champion Legend
+  // deck, and it shares the 3-card Signature cap with every other "Master Yi"
+  // Signature card regardless of name.
+  isSignature: true,
   name: "Highlander",
   rarity: "epic",
   rulesText:
     "[Reaction] (Play any time, even before spells and abilities resolve.)\nChoose a friendly unit. The next time it would die this turn, heal it, exhaust it, and recall it instead. (Send it to base. This isn't a move.)",
   setId: "OGS",
+  tags: ["Master Yi"],
   timing: "reaction",
 };
