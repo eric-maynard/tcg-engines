@@ -2057,6 +2057,28 @@ export const playUnit: Defs["playUnit"] = {
       );
     }
 
+    // rule 356.4 / 370 (rule-id: ogn-231-298 × sfd-173-221) — "Reduce my cost
+    // by [A] for each killed this way" counts only the units that ACTUALLY
+    // died. A cost-kill whose death a replacement effect (Soraka) rewrote into
+    // a heal/recall still pays the cost (357.2.a), but it grants no discount:
+    // charge back the pip that was waived for it above.
+    if (killAnyCost && sacrificed.length > 0) {
+      const survived = sacrificed.filter((id) => {
+        const zone = zones.getCardZone(id as CoreCardId) as string | undefined;
+        return zone === "base" || (typeof zone === "string" && zone.startsWith("battlefield-"));
+      });
+      const pool = draft.runePools[playerId];
+      if (survived.length > 0 && pool) {
+        const key = killAnyCost.domain as keyof typeof pool.power;
+        const owed = Math.min(survived.length, pool.power[key] ?? 0);
+        if (owed > 0) {
+          pool.power[key] = (pool.power[key] ?? 0) - owed;
+          // rule 364.3.a — pips paid for the printed cost count as power spent.
+          recordPowerSpent(draft, playerId, owed);
+        }
+      }
+    }
+
     let paidAccelerate = false;
     let paidAdditionalCostActual = discardPaid || sacrificed.length > 0;
     if (paidAdditionalCost) {
