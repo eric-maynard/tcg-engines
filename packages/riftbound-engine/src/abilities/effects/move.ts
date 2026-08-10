@@ -236,17 +236,23 @@ function handleSwapLocations(effect: ExecutableEffect, ctx: EffectContext): void
   if (!partnerZone || partnerZone === selfZone) {
     return;
   }
-  const selfLanded = moveCardWithEvent(ctx, selfId, partnerZone);
-  // rule 423 / 054.1 (ruling b449100f59889211) — "Move me to its location AND it to
-  // my original location" is one exchange: if I cannot move (Stunned by Vex with
-  // "they can't move it this turn", a base I may not enter, …) the whole swap is
-  // cancelled, so the partner stays put too.
-  if (selfLanded === selfZone) {
+  // rule 423 / 054.1 (ruling b449100f59889211) — a unit under a blanket "they can't
+  // move it this turn" takes no part in the exchange at all, so the whole swap is
+  // cancelled and the partner stays put too.
+  if (moverIsForbidden(ctx, selfId)) {
     return;
   }
+  // rule 356.3.e.11 / 359.3.e.6 (ruling 365759e6b0393f5f) — a DESTINATION-specific
+  // prohibition (Vilemaw's Lair: "units can't move from here to base") only fails
+  // that half of the exchange: do as much as you can, so the other unit still moves.
+  const selfLanded = moveCardWithEvent(ctx, selfId, partnerZone);
   const partnerLanded = moveCardWithEvent(ctx, partner, selfZone);
-  arriveByEffect(ctx, [selfId], selfLanded);
-  arriveByEffect(ctx, [partner], partnerLanded);
+  if (selfLanded !== selfZone) {
+    arriveByEffect(ctx, [selfId], selfLanded);
+  }
+  if (partnerLanded !== partnerZone) {
+    arriveByEffect(ctx, [partner], partnerLanded);
+  }
 
   // rule-id: sfd-050-221 (rule 716) — "If it's equipped, you may attach one of
   // its Equipment to me": only the swap knows which unit was chosen, so the

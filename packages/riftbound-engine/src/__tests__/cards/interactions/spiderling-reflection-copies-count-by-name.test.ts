@@ -105,7 +105,7 @@ describe("baseline: two Spiderlings together", () => {
 });
 
 describe("(a) Deceiver's hold trigger plays a Reflection at bf1 that becomes a copy of a Spiderling", () => {
-  test.failing("BUG: the trigger fires in P1's Beginning Phase off the hold (+1 point) as an opt-in whose cost is 'discard 1 + exhaust me'; both Spiderlings there are offered as the copy source", async () => {
+  test("the trigger fires in P1's Beginning Phase off the hold (+1 point) as an opt-in whose cost is 'discard 1 + exhaust me'; both Spiderlings there are offered as the copy source", async () => {
     const game = await holdBoard().build();
     await game.p2.endTurn();
     expect(game.turnPlayer()).toBe(P1);
@@ -116,6 +116,17 @@ describe("(a) Deceiver's hold trigger plays a Reflection at bf1 that becomes a c
     await game.p1.yes();
     if (game.decision()?.kind === "pick" && (game.decision() as { semantics?: string }).semantics === "from-revealed") {
       await game.p1.pick("fodder");
+    }
+    // rules 387 / 359.2 — "It becomes a copy of another unit there" is REFLEXIVE:
+    // its object is named only as that instruction resolves, so both players hold
+    // Priority on the finalized trigger first and the copy-source pick comes after
+    // (same shape as `deceiverCopiesS1` above).
+    for (let i = 0; i < 4; i++) {
+      const p = game.decision();
+      if (p?.kind !== "action" || p.context !== "chain") {
+        break;
+      }
+      await game.seat(p.seat).passPriority();
     }
     const d = game.decision();
     expect(d).toMatchObject({ kind: "pick", seat: P1, semantics: "target" });

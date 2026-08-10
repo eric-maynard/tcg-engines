@@ -54,7 +54,7 @@ async function swapWithPal(game: Game): Promise<void> {
 }
 
 describe("Ruling 365759e6b0393f5f — Azir's swap across Vilemaw's Lair: the to-base half fails, both units end at the Lair", () => {
-  test.failing("BUG: Azir AT the Lair, Pal in base: activation is legal; Azir cannot leave the Lair for base so he STAYS, while Pal moves base → Lair", async () => {
+  test("Azir AT the Lair, Pal in base: activation is legal; Azir cannot leave the Lair for base so he STAYS, while Pal moves base → Lair", async () => {
     const game = await board("lair", "base").build();
     expect(game.state("azir").keywords).toContain("NoMoveToBase");
     await swapWithPal(game);
