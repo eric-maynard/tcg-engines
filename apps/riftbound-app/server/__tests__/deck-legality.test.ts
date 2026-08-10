@@ -23,6 +23,7 @@ const { DECK_RULES, validateDeckConfig } = await import("../deck-rules");
 const { buildDefaultDeck, deckLegalityForId, loadDeckConfig, parseDeckText, savedDeckToDeckConfig } = await import("../decks");
 const { handleSavedDeckRoutes } = await import("../routes-deck");
 const { handleCardRoutes } = await import("../routes-cards");
+const { handleGameRoutes } = await import("../routes-game");
 const { generateToken } = await import("../routes-auth");
 const { createLobby } = await import("../routes-lobby");
 const { lobbyWsMessage } = await import("../ws-lobby");
@@ -181,6 +182,49 @@ describe("validateDeckConfig report", () => {
       expect(p?.severity).toBe("warning");
       expect(r.problems.some((x) => x.code === "CHAMPION_TAG_MISMATCH")).toBe(false);
     }
+  });
+});
+
+describe("POST /api/game/create is advisory too", () => {
+  const create = async (payload: Record<string, unknown>) => {
+    const req = new Request("http://x/api/game/create", { body: JSON.stringify(payload), headers: { "Content-Type": "application/json" }, method: "POST" });
+    const res = await handleGameRoutes(req, new URL(req.url), {} as never);
+    return { body: (await res!.json()) as { error?: string; gameId?: string; legality?: Record<string, { legal: boolean; problems: { code: string }[] }> }, status: res!.status };
+  };
+  const fourOf = () => {
+    const four = EXTRA[15] as string;
+    return { ...starter, mainDeckCardIds: [...starter.mainDeckCardIds, four, four, four, four] };
+  };
+
+  test("a 4-of deck with a 12-card sideboard creates the game (200) with per-seat legality instead of a 400", async () => {
+    const deck1 = { ...fourOf(), sideboardCardIds: EXTRA.slice(16, 22).flatMap((id) => [id, id]) };
+    const { status, body } = await create({ deck1, seed: "create-advisory" });
+    expect(status).toBe(200);
+    expect(body.gameId).toBeTruthy();
+    expect(body.legality?.deck1?.legal).toBe(false);
+    const codes = body.legality?.deck1?.problems.map((p) => p.code) ?? [];
+    expect(codes).toContain("TOO_MANY_COPIES");
+    expect(codes).toContain("SIDEBOARD_TOO_LARGE");
+    expect(body.legality?.deck2?.legal).toBe(true);
+    expect(gameSessions.get(body.gameId as string)).toBeTruthy();
+  });
+
+  test("a 12-card main deck is short of the 40-card minimum but still playable → 200, MAIN_DECK_TOO_SMALL reported", async () => {
+    const { status, body } = await create({ deck1: { ...starter, mainDeckCardIds: starter.mainDeckCardIds.slice(0, 12) }, seed: "create-short" });
+    expect(status).toBe(200);
+    expect(body.legality?.deck1?.problems.map((p) => p.code)).toContain("MAIN_DECK_TOO_SMALL");
+  });
+
+  test("enforceLegality:true refuses the same deck with the summary; an EMPTY main deck is refused either way", async () => {
+    const enforced = await create({ deck1: fourOf(), enforceLegality: true, seed: "create-enforced" });
+    expect(enforced.status).toBe(400);
+    expect(enforced.body.error).toContain("enforces deck legality");
+    expect(enforced.body.legality?.deck1?.legal).toBe(false);
+    expect(enforced.body.gameId).toBeUndefined();
+
+    const empty = await create({ deck1: { ...starter, championId: undefined, mainDeckCardIds: [] }, seed: "create-empty" });
+    expect(empty.status).toBe(400);
+    expect(empty.body.error).toContain("empty main deck");
   });
 });
 

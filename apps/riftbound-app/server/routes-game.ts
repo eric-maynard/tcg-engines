@@ -7,7 +7,8 @@ import { getGlobalCardRegistry } from "@tcg/riftbound";
 import type { PlayerId } from "@tcg/core";
 import { allCards } from "./cards";
 import { SANDBOX_ENABLED, SERVER_ONLY_MOVES } from "./config";
-import { MIN_MAIN_DECK_SIZE, buildDefaultDeck, findCopyLimitViolations, findSideboardViolation } from "./decks";
+import { buildDefaultDeck } from "./decks";
+import { type DeckLegality, summarizeLegality, validateDeckConfig } from "./deck-rules";
 import { json } from "./http";
 import { gameLogger } from "./log";
 import { createGameFromDecks } from "./pregame";
@@ -32,6 +33,8 @@ export async function handleGameRoutes(req: Request, url: URL, _ctx: RouteCtx): 
       deck1?: DeckConfig;
       deck2?: DeckConfig;
       sandbox?: boolean;
+      /** Opt-in tournament enforcement, like a lobby's `enforceLegality` (server/ws-lobby.ts). */
+      enforceLegality?: boolean;
       /** {kind:"goldfish"} | {kind:"claude", model, apiKey?} — the key is held in memory only. */
       opponent?: unknown;
     };
@@ -49,24 +52,33 @@ export async function handleGameRoutes(req: Request, url: URL, _ctx: RouteCtx): 
 
     const deck1 = body.deck1 ?? buildDefaultDeck();
     const deck2 = body.deck2 ?? buildDefaultDeck();
-    // Rule 103.2.b: reject decks with more than 3 copies of a named card.
+    // Construction legality (rule 103) is ADVISORY here, exactly as in the lobby
+    // path (server/ws-lobby.ts): the game is built either way and each seat's
+    // `{legal, problems}` report rides along on the response. Only a structurally
+    // unplayable deck (no main-deck cards at all) and an explicit
+    // `enforceLegality: true` refuse.
+    const legality: Record<"deck1" | "deck2", DeckLegality> = {
+      deck1: validateDeckConfig(deck1),
+      deck2: validateDeckConfig(deck2),
+    };
     for (const [label, deck] of [["deck1", deck1], ["deck2", deck2]] as const) {
-      const violations = findCopyLimitViolations(deck.mainDeckCardIds ?? []);
-      if (violations.length > 0) {
-        return json({ error: `${label} exceeds the 3-copy limit (rule 103.2.b): ${violations.join(", ")}` }, 400);
-      }
-      // Rule 103.2 / 103.2.a.1: at least 40 Main Deck cards, Chosen Champion included.
-      const mainDeckSize = (deck.mainDeckCardIds ?? []).length + (deck.championId ? 1 : 0);
-      if (mainDeckSize < MIN_MAIN_DECK_SIZE) {
-        return json({ error: `${label} main deck has ${mainDeckSize} cards, needs at least ${MIN_MAIN_DECK_SIZE} (rule 103.2)` }, 400);
-      }
-      // Optional sideboard (OP policy, server/pregame.ts): ≤ 8 main-deck-type cards.
       if (deck.sideboardCardIds !== undefined && !Array.isArray(deck.sideboardCardIds)) {
         return json({ error: `${label}.sideboardCardIds must be an array of card ids` }, 400);
       }
-      const sideboardProblem = findSideboardViolation(deck.sideboardCardIds);
-      if (sideboardProblem) {
-        return json({ error: `${label} ${sideboardProblem}` }, 400);
+      if ((deck.mainDeckCardIds ?? []).length === 0 && !deck.championId) {
+        return json({ error: `${label} has an empty main deck — nothing to play`, legality }, 400);
+      }
+    }
+    if (body.enforceLegality === true) {
+      const flagged = (["deck1", "deck2"] as const).filter((k) => !legality[k].legal);
+      if (flagged.length > 0) {
+        return json(
+          {
+            error: `This game enforces deck legality — ${flagged.map((k) => `${k}: ${summarizeLegality(legality[k])}`).join("; ")}`,
+            legality,
+          },
+          400,
+        );
       }
     }
     const gameId = crypto.randomUUID();
@@ -78,7 +90,7 @@ export async function handleGameRoutes(req: Request, url: URL, _ctx: RouteCtx): 
       sandbox: body.sandbox ?? false,
       source: "api",
     });
-    return json({ gameId, state: buildGameSnapshot(session) });
+    return json({ gameId, legality, state: buildGameSnapshot(session) });
   }
 
   // GET /api/game/:id/state — get full game state snapshot
