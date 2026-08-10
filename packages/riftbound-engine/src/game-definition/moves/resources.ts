@@ -41,6 +41,29 @@ function holdsRunePriority(state: RiftboundGameState, playerId: string): boolean
 }
 
 /**
+ * rule 128.6 / 419.2.a — is this `opt-in` the "you may play it?" confirm of an
+ * instructed play that still costs something? Both confirm shapes are covered:
+ * the pre-chain one (`playConfirmSpec`, raised by `beginPlay`) and the pending
+ * item's own (`playConfirm` + `playItemId`, raised by `continueEffectPlay`).
+ * A play under a fully waived cost mode charges nothing, so it is no Pay step.
+ */
+function playConfirmCharges(state: RiftboundGameState, p: Record<string, unknown>): boolean {
+  let spec = p.playConfirmSpec as { costMode?: { kind?: string } } | undefined;
+  if (spec === undefined && p.playConfirm === true && typeof p.playItemId === "string") {
+    const items = (state.interaction?.chain?.items ?? []) as readonly {
+      id?: string;
+      play?: { costMode?: { kind?: string } };
+    }[];
+    spec = items.find((it) => it.id === p.playItemId)?.play;
+  }
+  if (spec === undefined) {
+    return false;
+  }
+  const kind = spec.costMode?.kind;
+  return kind !== "ignore-all" && kind !== "ignore-any-and-all";
+}
+
+/**
  * rule 444.2.c / 429.3 / 204.4.b.1 — a Pay demanded by a resolving ability
  * ("you may pay [1] to …") is still a Pay step, so the player being asked may
  * activate a rune's [Reaction] Add ability to fund it. Every other pending
@@ -79,7 +102,13 @@ function runeAddAllowedDuringChoice(state: RiftboundGameState, playerId: string)
     p.payChoice !== undefined ||
     // rule 355.1.a / 357 — electing (and then paying) a pending play's
     // optional additional cost is part of that play's Pay step.
-    (p.playItemId !== undefined && p.playConfirm !== true)
+    (p.playItemId !== undefined && p.playConfirm !== true) ||
+    // rule 128.6 / 419.2.a / 444.2.c (rule-id: ogn-194-298 Nocturne "you may
+    // play me for [rainbow]") — saying yes to a declinable instructed play
+    // commits the performer to paying that play's cost, so the confirm carries
+    // the play's Pay step exactly like the Void Rush pick above: Reaction [Add]
+    // abilities stay activatable while it is open, unless the play is free.
+    playConfirmCharges(state, p)
   ) {
     return true;
   }
