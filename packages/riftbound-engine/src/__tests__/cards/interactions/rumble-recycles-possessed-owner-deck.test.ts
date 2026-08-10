@@ -139,7 +139,7 @@ describe("Rumble recycles a Possessed unit — it goes to its OWNER's deck; the 
   // "recycle another friendly unit" and is offered next to Little Buddy. Actual: the engine enumerates
   // recycle-cost candidates by OWNER — the Sergeant is never a candidate, Buddy is auto-bound as the
   // lone candidate (and with no Buddy the trigger is removed unasked).
-  test.failing("BUG: (a) after opting in, the cost-object pick offers BOTH the Possessed Sergeant and Little Buddy (740.1.a, 383.4.c.2.a)", async () => {
+  test("(a) after opting in, the cost-object pick offers BOTH the Possessed Sergeant and Little Buddy (740.1.a, 383.4.c.2.a)", async () => {
     const game = await possessed();
     await conquer(game);
     const d = await drive(game, (x) => x?.kind === "pick" && x.seat === P1 && (offers(x, "sarge") || offers(x, "buddy")));
@@ -149,7 +149,7 @@ describe("Rumble recycles a Possessed unit — it goes to its OWNER's deck; the 
     expect(offers(d, "rumble")).toBe(false); // "another"
   });
 
-  test.failing("BUG: (a) with the Sergeant as P1's ONLY other unit the opt-in is still offered and acceptable — the borrowed unit can pay the cost (740.1.a, 416.3)", async () => {
+  test("(a) with the Sergeant as P1's ONLY other unit the opt-in is still offered and acceptable — the borrowed unit can pay the cost (740.1.a, 416.3)", async () => {
     const game = await possessed({ buddy: false });
     await conquer(game);
     let acceptable = false;
@@ -167,7 +167,7 @@ describe("Rumble recycles a Possessed unit — it goes to its OWNER's deck; the 
   // ── (b) which deck ──────────────────────────────────────────────────────────────────────────
   // Expected: the Sergeant goes to the bottom of P2's main deck (416.1.c / 056.2). Actual: it cannot be
   // recycled at all (see (a)), so it is still on bf1.
-  test.failing("BUG: (b) P1 recycles the Sergeant → it is the BOTTOM card of P2's main deck: P2 deck +1, P1 deck unchanged, neither trash gains it (416.1.c, 056.2)", async () => {
+  test("(b) P1 recycles the Sergeant → it is the BOTTOM card of P2's main deck: P2 deck +1, P1 deck unchanged, neither trash gains it (416.1.c, 056.2)", async () => {
     const game = await possessed();
     const p1Deck0 = game.p1.deck();
     const p2Deck0 = game.p2.deck();
@@ -181,7 +181,7 @@ describe("Rumble recycles a Possessed unit — it goes to its OWNER's deck; the 
     expect(game.zoneOf("buddy")).toBe("base"); // Buddy was not the one paid
   });
 
-  test.failing("BUG: (b) (owner, controller, zone) trajectory: (P2,P2,bf2) → (P2,P1,base) → (P2,P1,bf1) → owner P2 in P2's main deck — never a P2 card in a P1 pile (056)", async () => {
+  test("(b) (owner, controller, zone) trajectory: (P2,P2,bf2) → (P2,P1,base) → (P2,P1,bf1) → owner P2 in P2's main deck — never a P2 card in a P1 pile (056)", async () => {
     const game = await board().build();
     const seen: OCZ[] = [ocz(game, "sarge")];
     await game.p1.cast("poss", { targets: "sarge" });
@@ -205,7 +205,7 @@ describe("Rumble recycles a Possessed unit — it goes to its OWNER's deck; the 
   // ── (c) discount + "your trash" ─────────────────────────────────────────────────────────────
   // Expected: discount = the recycled Sergeant's Might (4) → Mega-Mech costs [3] from P1's trash: energy
   // 5 → 2. Actual: Buddy (2) is force-recycled instead → [5] → energy 0.
-  test.failing("BUG: (c) Mega-Mech is played from P1's trash for exactly [3] (7 − the Sergeant's 4): energy 5 → 2, Mega-Mech in P1's base exhausted (359.3.e.13)", async () => {
+  test("(c) Mega-Mech is played from P1's trash for exactly [3] (7 − the Sergeant's 4): energy 5 → 2, Mega-Mech in P1's base exhausted (359.3.e.13)", async () => {
     const game = await possessed();
     await conquer(game);
     await drive(game, isOpenMain, { recycle: "sarge", to: "base" });
@@ -241,7 +241,7 @@ describe("Rumble recycles a Possessed unit — it goes to its OWNER's deck; the 
 
   // ── (e) no trace of Possession ──────────────────────────────────────────────────────────────
   // Depends on (b): the Sergeant must first reach P2's deck.
-  test.failing("BUG: (e) the recycled Sergeant is a NEW object in P2's deck (124.1): when P2 later draws and plays it, P2 controls it in P2's base — no lingering control change (477.1.a, 191.3)", async () => {
+  test("(e) the recycled Sergeant is a NEW object in P2's deck (124.1): when P2 later draws and plays it, P2 controls it in P2's base — no lingering control change (477.1.a, 191.3)", async () => {
     const game = await possessed();
     await conquer(game);
     await drive(game, isOpenMain, { recycle: "sarge" });

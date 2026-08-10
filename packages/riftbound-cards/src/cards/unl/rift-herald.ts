@@ -25,6 +25,9 @@ const abilities: Ability[] = [
       filter: { cardTypes: ["unit"] },
       from: "deck",
       optional: true,
+      // rule 424.1 — the verb is REVEAL: the look stays private, but the card
+      // actually taken is revealed to every player.
+      revealPick: true,
       type: "look",
     },
     trigger: { event: "move-to-battlefield", on: "self" },

@@ -29,6 +29,7 @@ import {
   readChosenModes,
 } from "../../abilities/effects/choice";
 import { locationKeyOf } from "../../abilities/effects/choose-per-location";
+import { mandatoryRevealEffects } from "../../abilities/effects/look";
 import { markContestedOnArrival } from "../../abilities/effects/move";
 import { recalculateStaticEffects } from "../../abilities/static-abilities";
 import { isBlockedByTwoOtherPlayers } from "./movement/helpers";
@@ -453,23 +454,29 @@ export function recycleCostCandidates(
   ];
   const registry = getGlobalCardRegistry();
   const out: string[] = [];
+  // rule 740.1.a — "friendly" is a CONTROL relation, so a borrowed unit (owner
+  // P2, controller P1) is a legal object: walk every seat's board zones and
+  // filter by current controller, exactly as killCostCandidates does.
   for (const zoneId of zoneIds) {
-    for (const raw of context.zones.getCardsInZone(zoneId as CoreZoneId, playerId as CorePlayerId)) {
-      const id = raw as string;
-      if (target.excludeSelf === true && id === sourceCardId) {
-        continue;
+    for (const seat of Object.keys(state.players ?? {})) {
+      for (const raw of context.zones.getCardsInZone(zoneId as CoreZoneId, seat as CorePlayerId)) {
+        const id = raw as string;
+        if (out.includes(id) || (target.excludeSelf === true && id === sourceCardId)) {
+          continue;
+        }
+        const controller =
+          context.cards.getCardController?.(id as CoreCardId) ??
+          context.cards.getCardOwner?.(id as CoreCardId) ??
+          seat;
+        const friendly = controller === playerId;
+        if (target.controller === "enemy" ? friendly : !friendly) {
+          continue;
+        }
+        if (typeof target.type === "string" && registry.getCardType(id) !== target.type) {
+          continue;
+        }
+        out.push(id);
       }
-      const controller =
-        context.cards.getCardController?.(id as CoreCardId) ??
-        context.cards.getCardOwner?.(id as CoreCardId);
-      const friendly = controller === playerId;
-      if (target.controller === "enemy" ? friendly : !friendly) {
-        continue;
-      }
-      if (typeof target.type === "string" && registry.getCardType(id) !== target.type) {
-        continue;
-      }
-      out.push(id);
     }
   }
   return out;
@@ -3617,6 +3624,18 @@ export const pendingChoiceMoves: Partial<
       // player, so it goes on the shared public-reveal record.
       if ((choice as { revealPick?: boolean }).revealPick) {
         recordPublicReveal({ draft }, choice.prompter as string, picks);
+        // rule 424.2.a / 429.2 (sfd-175-221 Undertitan × unl-179-219 Rift
+        // Herald) — the picked card is genuinely REVEALED from the deck, so
+        // its mandatory "As I'm revealed from your deck, …" ability resolves
+        // now, before the card is drawn. Merely looked-at cards fire nothing.
+        for (const revealedId of picks as readonly string[]) {
+          for (const effect of mandatoryRevealEffects(revealedId)) {
+            executeEffect(effect as ExecutableEffect, {
+              ...buildEffectContext(draft, choice.prompter, revealedId, context),
+              boundTargets: [revealedId as CoreCardId],
+            });
+          }
+        }
       }
       // Set when the pick's `then` follow-up rides the Chain as its own item
       // instead of running inline (rule-id: ven-089-166-look-then-empower).
