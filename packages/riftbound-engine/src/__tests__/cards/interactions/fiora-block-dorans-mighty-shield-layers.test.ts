@@ -102,10 +102,18 @@ describe("Fiora, Victorious × Block × Doran's Blade — Mighty/Shield layering
     await game.p2.passPriority(); // Block resolves; combat not yet resolved (autoProcedures off)
     const s = game.state("fiora");
     expect(s.combatRole).toBe("defender");
-    expect(s.grantedKeywords).toEqual([
+    // rule 814.1.c / 476.3 — Shield 3 on the Defender is real Might (4+3 = 7), so her own
+    // "While I'm [Mighty]" grants land as static grants alongside Block's turn-long pair.
+    expect(s.grantedKeywords.filter((g) => g.duration === "turn")).toEqual([
       { duration: "turn", keyword: "Shield", value: 3 },
       { duration: "turn", keyword: "Tank" },
     ]);
+    expect(
+      s.grantedKeywords
+        .filter((g) => g.duration === "static")
+        .map((g) => g.keyword)
+        .sort(),
+    ).toEqual(["Deflect", "Ganking", "Shield"]);
     expect(game.zoneOf("block")).toBe("trash");
   });
 

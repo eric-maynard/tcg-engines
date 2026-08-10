@@ -289,7 +289,13 @@ export function evaluateCondition(
       for (const equipId of meta?.equippedWith ?? []) {
         equipBonus += registry.getMightBonus(equipId as string);
       }
-      return baseMight + buffBonus + mightMod + staticBonus + equipBonus >= MIGHTY_THRESHOLD;
+      // rule 807.1.c / 814.1.c — a combat-only bonus (Assault while attacking,
+      // Shield while defending) is real Might for as long as the designation is
+      // stamped, so a 4-Might attacker with [Assault 3] IS [Mighty] mid-combat.
+      const roleBonus = combatRoleMightBonus(source.id, meta);
+      return (
+        baseMight + buffBonus + mightMod + staticBonus + equipBonus + roleBonus >= MIGHTY_THRESHOLD
+      );
     }
 
     case "while-buffed": {
