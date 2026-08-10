@@ -5,18 +5,23 @@
  *   hand. If you do, play a 2 [Might] Sand Soldier unit token here.
  *
  * Rules: 383.4.c / 471.2.a (conquer effects trigger only at the battlefield conquered), 190.6.d
- * ("you" = the Dais's controller, i.e. whoever just conquered it), 205 ("you may pay … If you do"
- * — the payment is a game action inside the effect; the follow-up checks it was performed; both
- * halves — [1] AND the return — must be done), 355.10.c.1 (cost-within-instruction: unpayable →
- * nothing happens, never a free token), 108.2 / 740.1.a ("a unit you CONTROL here" vs "its OWNER's
- * hand"), 186.1 (a token returned to hand ceases to exist), 184.1 (a played unit token enters
- * exhausted), 190.4.a (the Sand Soldier keeps the battlefield controlled after the bounce).
+ * ("you" = the Dais's controller, i.e. whoever just conquered it), 383.3.a / 402.1 (the leading
+ * "you may" is decided while the trigger is FINALIZED: "use it?" — timing FIN; "no" ⇒ no chain
+ * item), 402.2 (the unit "you control here" is the ability's chosen object, named at finalization
+ * too — timing FIN), 205 / 204.3 ("pay [1] and return … . If you do, …" is NOT "[X] to [Y]": the
+ * pay and the return are game actions performed as the ability RESOLVES — 444.2: the pay is asked,
+ * and still declinable, then — and "if you do" is a linked instruction: both halves must actually
+ * happen or no token; unpayable → nothing, never a free token), 108.2 / 740.1.a ("a unit you CONTROL
+ * here" vs "its OWNER's hand"), 186.1 (a token returned to hand ceases to exist), 184.1 (a played
+ * unit token enters exhausted), 190.4.a (the Sand Soldier keeps the battlefield controlled after the bounce).
  *
  * Head-judge notes — the tricky spots for THIS card:
  *  1. The whole option is one package: pay [1] + bounce one of YOUR units HERE → Sand Soldier
- *     HERE. With 0 energy (or no unit here) the option cannot be taken; declining costs nothing.
+ *     HERE. With no unit here the option cannot be taken (402.4); with 0 energy the opt-in is free
+ *     to take but the pay can never be made on resolution; declining costs nothing.
  *  2. Which unit: only units you control AT THE DAIS are candidates (never base / other
- *     battlefields); with two conquerors the payer picks which one goes home.
+ *     battlefields); with two conquerors the payer picks which one goes home — when the trigger
+ *     is put on the chain (402.2), so a response still sees it on the board.
  *  3. Bouncing your ONLY conqueror is fine — the 2-Might token replaces it and you keep control.
  *  4. Control ≠ ownership: a borrowed (P2-owned) conqueror returns to P2's hand; the token is yours.
  *  5. A unit TOKEN may be the returned unit: it ceases to exist and the Sand Soldier still comes.
@@ -62,16 +67,25 @@ async function acceptReturning(game: Game, seat: "p1" | "p2", ret: string): Prom
 }
 
 describe("Emperor's Dais (sfd-207-221)", () => {
-  test("registry payload should scope the conquer trigger to HERE (printed 'When you conquer here'); the hand-authored trigger carries no location at all", async () => {
-    // Expected: trigger mentions "here" (either `location: "here"` or `on: {…, location: "here"}`).
-    // Actual: `{ event: "conquer", on: "controller" }` — fires for a conquer anywhere.
+  test("registry payload: an optional 'conquer HERE' trigger with NO base cost — a resolution-time pay-[1] question over 'return the chosen unit here → if you did, Sand Soldier here' (383.3.a, 205, 402.2)", async () => {
     const def = (await loadDefaultCardPool()).get(CARD);
     expect(def).toMatchObject({ cardType: "battlefield", name: "Emperor's Dais" });
     expect(def?.abilities).toHaveLength(1);
     const ability = def?.abilities?.[0] as { type: string; optional?: boolean; trigger: unknown; effect: unknown; condition?: unknown };
+    expect(ability.condition).toBeUndefined(); // 205 — nothing here is a cost
     expect(ability).toMatchObject({
-      condition: { cost: { energy: 1, returnToHand: { controller: "friendly", location: "here", type: "unit" } }, type: "pay-cost" },
-      effect: { location: "here", token: { might: 2, name: "Sand Soldier", type: "unit" }, type: "create-token" },
+      effect: {
+        condition: { cost: { energy: 1 }, type: "pay-cost" },
+        target: { controller: "friendly", location: "here", type: "unit" },
+        then: {
+          effects: [
+            { target: { controller: "friendly", location: "here", type: "unit" }, type: "return-to-hand" },
+            { condition: { type: "did-perform" }, then: { location: "here", token: { might: 2, name: "Sand Soldier", type: "unit" }, type: "create-token" }, type: "conditional" },
+          ],
+          type: "sequence",
+        },
+        type: "conditional",
+      },
       optional: true,
       trigger: { event: "conquer" },
       type: "triggered",
@@ -79,19 +93,23 @@ describe("Emperor's Dais (sfd-207-221)", () => {
     expect(JSON.stringify(ability.trigger)).toContain("here");
   });
 
-  test("conquering the empty Dais with [1] available: P1 is offered the option (payable), and the conquer point is already scored", async () => {
+  test("conquering the empty Dais: P1 is offered the option at FINALIZATION (free to take — 205), the lone conqueror is bound as its object, and the conquer point is already scored; the [1] is asked only as it RESOLVES", async () => {
     const game = await walkIn(1).build();
     await game.p1.move("centurion", "dais");
     const r = await game.settle();
     expect(r.reason).toBe("unanswered");
-    expect(game.decision()).toMatchObject({ canAccept: true, kind: "yes-no", seat: P1, source: { cardId: "dais" } });
+    expect(game.decision()).toMatchObject({ canAccept: true, kind: "yes-no", seat: P1, source: { cardId: "dais" }, timing: "FIN" });
     expect(game.p1.points()).toBe(1);
     expect(game.gameState.battlefields.dais?.controller).toBe(P1);
+    await game.p1.yes();
+    expect(game.p1.energy()).toBe(1); // nothing paid to finalize
+    expect(game.chain()).toEqual([expect.objectContaining({ cardId: "dais", controller: P1, targets: ["centurion"], triggered: true })]);
+    expect(game.zoneOf("centurion")).toBe("battlefield-dais"); // still here through the response window
+    expect((await game.settle()).reason).toBe("unanswered");
+    expect(game.decision()).toMatchObject({ canAccept: true, kind: "yes-no", seat: P1, source: { cardId: "dais" }, timing: "RES" });
   });
 
-  test("accepting pays [1], returns the lone conqueror to hand and plays an exhausted 2-Might Sand Soldier token AT THE DAIS — P1 keeps control (205, 184.1, 190.4.a)", async () => {
-    // Expected: energy 1→0, Centurion in hand, one Sand Soldier token (2 Might, exhausted) at the Dais,
-    // Dais still P1's. Actual: the [1] is taken but nothing is returned and no token is played.
+  test("accepting both questions pays [1], returns the lone conqueror to hand and plays an exhausted 2-Might Sand Soldier token AT THE DAIS — P1 keeps control (205, 184.1, 190.4.a)", async () => {
     const game = await walkIn(1).build();
     await game.p1.move("centurion", "dais");
     await acceptReturning(game, "p1", "centurion");
@@ -107,12 +125,30 @@ describe("Emperor's Dais (sfd-207-221)", () => {
     expect(game.decision()).toMatchObject({ context: "main", kind: "action", seat: P1 });
   });
 
-  test("declining: nothing is paid, nobody goes home, no token — straight back to the main phase with the point", async () => {
+  test("declining (at finalization: no chain item; or the pay on resolution): nothing is paid, nobody goes home, no token — straight back to the main phase with the point", async () => {
     const game = await walkIn(1).build();
     await game.p1.move("centurion", "dais");
     await game.settle();
+    expect(game.decision()).toMatchObject({ kind: "yes-no", seat: P1, timing: "FIN" });
     await game.p1.no();
+    expect(game.chain()).toEqual([]);
     await game.settle();
+    expect(game.p1.energy()).toBe(1);
+    expect(game.zoneOf("centurion")).toBe("battlefield-dais");
+    expect(sandSoldiersAt(game, "p1", "dais")).toHaveLength(0);
+
+    const late = await walkIn(1).build();
+    await late.p1.move("centurion", "dais");
+    await late.settle();
+    await late.p1.yes(); // opt in …
+    await late.settle();
+    expect(late.decision()).toMatchObject({ kind: "yes-no", seat: P1, timing: "RES" });
+    await late.p1.no(); // … but do not pay (444.2)
+    await late.settle();
+    expect(late.p1.energy()).toBe(1);
+    expect(late.zoneOf("centurion")).toBe("battlefield-dais");
+    expect(sandSoldiersAt(late, "p1", "dais")).toHaveLength(0);
+    expect(late.decision()).toMatchObject({ context: "main", kind: "action", seat: P1 });
     expect(game.p1.energy()).toBe(1);
     expect(game.zoneOf("centurion")).toBe("battlefield-dais");
     expect(sandSoldiersAt(game, "p1", "dais")).toHaveLength(0);
@@ -121,28 +157,32 @@ describe("Emperor's Dais (sfd-207-221)", () => {
     expect(game.decision()).toMatchObject({ context: "main", kind: "action", seat: P1 });
   });
 
-  test("355.10.c.1 — with 0 energy the option cannot be taken (no offer, or an offer that cannot be accepted); passing on it leaves the board untouched and never yields a free token", async () => {
+  test("444.2 / 359.3.e.14 — with 0 energy the opt-in may still be taken (it costs nothing), but the [1] can never be paid as it resolves: nobody goes home and no free token", async () => {
     const game = await walkIn(0).build();
     await game.p1.move("centurion", "dais");
-    const r = await game.settle();
-    if (r.reason === "unanswered") {
-      expect(game.decision()).toMatchObject({ canAccept: false, kind: "yes-no", seat: P1 });
-      expect((await game.p1.try((p) => p.yes())).ok).toBe(false);
-      await game.p1.no();
-      await game.settle();
+    for (let i = 0; i < 4; i++) {
+      const r = await game.settle();
+      if (r.reason !== "unanswered" || game.decision()?.kind !== "yes-no") {
+        break;
+      }
+      const t = await game.p1.try((p) => p.yes());
+      if (!t.ok) {
+        expect(game.decision()).toMatchObject({ canAccept: false, kind: "yes-no", seat: P1, timing: "RES" });
+        await game.p1.no();
+      }
     }
+    await game.settle();
     expect(game.zoneOf("centurion")).toBe("battlefield-dais");
     expect(sandSoldiersAt(game, "p1", "dais")).toHaveLength(0);
     expect(game.p1.points()).toBe(1);
     expect(game.decision()).toMatchObject({ context: "main", kind: "action", seat: P1 });
   });
 
-  test("two conquerors — the payer picks WHICH unit here returns (base units are not candidates); returning the 1-Might Squire leaves the Centurion plus a Sand Soldier at the Dais", async () => {
-    // Expected: a pick over exactly {centurion, squire}; afterwards squire in hand, centurion + token at
-    // the Dais, energy 0. Actual: no return / no token happens at all.
+  test("402.2 — two conquerors: the payer picks WHICH unit here returns when the trigger is finalized (timing FIN; base units are not candidates); returning the 1-Might Squire leaves the Centurion plus a Sand Soldier at the Dais", async () => {
     const game = await walkIn(1).unit(P1, "base", { might: 1, name: "Squire" }, "squire").build();
     await game.p1.move(["centurion", "squire"], "dais");
     let offered: string[] | undefined;
+    let pickTiming: string | undefined;
     for (let i = 0; i < 6; i++) {
       const r = await game.settle();
       if (r.reason !== "unanswered") {
@@ -153,10 +193,12 @@ describe("Emperor's Dais (sfd-207-221)", () => {
         await game.p1.yes();
       } else if (d?.kind === "pick") {
         offered = d.options.map((o) => o.card ?? o.key).sort();
+        pickTiming = d.timing;
         await game.p1.pick("squire");
       }
     }
     expect(offered).toEqual(["centurion", "squire"]);
+    expect(pickTiming).toBe("FIN");
     expect(game.zoneOf("squire")).toBe("hand");
     expect(game.zoneOf("centurion")).toBe("battlefield-dais");
     expect(sandSoldiersAt(game, "p1", "dais")).toHaveLength(1);

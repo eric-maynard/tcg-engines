@@ -8,8 +8,10 @@
  * Rules: 340–345 (a Showdown begins whenever a battlefield becomes Contested — combat or not — and
  * whoever applied Contested gets Focus), 383 (this is a plain triggered ability keyed to an EVENT at
  * Diana's location, not an Attack Trigger: it fires when she attacks, when she is attacked, and when
- * she walks onto an empty non-friendly battlefield), 135.2 ("you may pay [1]. If you do …" — paying is
- * an optional game action; unpayable → nothing), 436 (Predict 1: look at the top card, may recycle it
+ * she walks onto an empty non-friendly battlefield), 383.3.a / 402.1 (the LEADING "you may" is decided
+ * while the trigger is finalized: perform it — it becomes a chain item — or drop it, no item at all),
+ * 205 + 444.2 ("pay [1]. If you do …" is NOT a cost: paying is a game action performed — and still
+ * declinable — as the ability RESOLVES; unpaid/unpayable → the linked instructions are skipped), 436 (Predict 1: look at the top card, may recycle it
  * to the bottom; no burn out on a short deck), 128/359 (reveal exactly ONE card — the top card AFTER
  * the predict; a non-spell stays on top, a spell is drawn).
  *
@@ -22,7 +24,9 @@
  *     reveal the spell, draw it. Keep the unit instead → reveal the unit → no draw, it stays on top.
  *  5. Exactly one card is revealed — never "reveal until you hit a spell" (parsed payload says
  *     `until: "spell"`, which is suspicious → dedicated negative test).
- *  6. Pay [1] with 0 energy → cannot accept; declining keeps energy and touches nothing.
+ *  6. Two questions, two timings: "use it?" at FINALIZATION (timing FIN — "no" ⇒ nothing on the
+ *     chain), "pay [1]?" at RESOLUTION (timing RES — "no" keeps the energy and touches nothing).
+ *     With 0 energy the opt-in is still free to take, but the pay then simply cannot be made.
  *  7. The trigger resolves on the showdown chain BEFORE combat damage; the fight then proceeds normally.
  */
 
@@ -53,18 +57,30 @@ function board(deck: readonly (string | typeof BOLT)[], aliases: readonly string
     .deck(P1, deck, aliases);
 }
 
-/** After the showdown began: drain to Diana's "you may pay [1]" prompt. */
-async function toPayPrompt(game: Game): Promise<void> {
+/** rule 383.3.a / 402.1 — the showdown began: Diana's Pending trigger asks its leading "you may" NOW (timing FIN); take it. */
+async function optIn(game: Game): Promise<void> {
   expect(game.chain().some((i) => i.cardId === "diana" && i.triggered && i.controller === P1)).toBe(true);
+  if (game.decision()?.kind !== "yes-no") {
+    expect((await game.settle()).reason).toBe("unanswered");
+  }
+  expect(game.decision()).toMatchObject({ canAccept: true, kind: "yes-no", seat: P1, source: { cardId: "diana" }, timing: "FIN" });
+  const energyBefore = game.p1.energy();
+  await game.p1.yes();
+  expect(game.p1.energy()).toBe(energyBefore); // 205 — nothing is paid to finalize it
+  expect(game.chain().some((i) => i.cardId === "diana" && i.triggered)).toBe(true);
+}
+
+/** Opt in, then drain the chain to the item's RESOLUTION-time "pay [1]?" question (rule 444.2, timing RES). */
+async function toPayPrompt(game: Game): Promise<void> {
+  await optIn(game);
   const r = await game.settle();
   expect(r.reason).toBe("unanswered");
-  expect(game.decision()).toMatchObject({ kind: "yes-no", seat: P1 });
+  expect(game.decision()).toMatchObject({ kind: "yes-no", seat: P1, source: { cardId: "diana" }, timing: "RES" });
 }
 
 /** Answer the Predict look: recycle the shown card (true) or keep it (false). Asserts what was shown. */
 async function predict(game: Game, shown: string, recycle: boolean): Promise<void> {
-  // rule 402 (finalization): the "you may pay [1]" is answered when the trigger is put on the chain;
-  // the predict itself only happens when that chain item resolves.
+  // rule 444.2 — the pay was just made as the item resolves; the Predict follows at once.
   if (game.decision()?.kind !== "pick") {
     await game.settle();
   }
@@ -85,17 +101,20 @@ describe("Diana, Lunari (unl-079-219)", () => {
     expect(def?.powerCost).toBeUndefined();
     const abilities = (def?.abilities ?? []) as Record<string, unknown>[];
     expect(abilities).toHaveLength(1);
-    // rule 444.2 (whose own example is this card): the [1] is paid INSIDE the instructions, so it is
-    // a resolution-time `conditional` pay-cost wrapping the body — not the trigger's base cost.
+    // rule 383.3.a — the leading "you may" makes the trigger `optional` (opt-in at finalization);
+    // rule 205 / 444.2 (whose own example is this card): the [1] is NOT a cost — it is a
+    // resolution-time `conditional` pay question wrapping the body, never the trigger's base cost.
     expect(abilities[0]).toMatchObject({
       effect: {
         condition: { cost: { energy: 1 }, type: "pay-cost" },
         then: { effects: [{ amount: 1, type: "predict" }, { amount: 1, from: "deck", type: "reveal" }], type: "sequence" },
         type: "conditional",
       },
+      optional: true,
       trigger: { event: "showdown-begin", on: { location: "here" } },
       type: "triggered",
     });
+    expect(abilities[0]?.condition).toBeUndefined(); // no `pay-cost` base cost
     const reveal = ((abilities[0].effect as { then: { effects: Record<string, unknown>[] } }).then.effects[1] ??
       {}) as Record<string, unknown>;
     expect(JSON.stringify(reveal)).toMatch(/spell/); // the "if it's a spell, draw it" rider is encoded
@@ -113,7 +132,21 @@ describe("Diana, Lunari (unl-079-219)", () => {
     expect((await scenario().resources(P1, { energy: 2, power: { mind: 2 } }).hand(P1, CARD, "d").build()).p1.can("play", "d")).toBe(false);
   });
 
-  test("Diana attacks bf1 → showdown begins here → 'you may pay [1]'; declining keeps the energy, deck and hand untouched, and the 3-vs-2 fight conquers", async () => {
+  test("383.3.a.2 — Diana attacks bf1 → showdown begins here → 'use it?' at FINALIZATION; declining leaves NO chain item (nothing for P2 to respond to), keeps the energy, and the 3-vs-2 fight conquers", async () => {
+    const game = await board([FILLER, BOLT, FILLER], ["u1", "bolt", "u3"]).build();
+    await game.p1.move("diana", "bf1");
+    expect(game.decision()).toMatchObject({ kind: "yes-no", seat: P1, source: { cardId: "diana" }, timing: "FIN" });
+    await game.p1.no();
+    expect(game.chain()).toEqual([]);
+    await game.settle();
+    expect(game.p1.energy()).toBe(1);
+    expect(game.p1.hand()).toEqual([]);
+    expect(game.p1.deck().slice(0, 3)).toEqual(["u1", "bolt", "u3"]);
+    expect(game.zoneOf("foe")).toBe("trash");
+    expect(game.gameState.battlefields.bf1?.controller).toBe(P1);
+  });
+
+  test("444.2 — opted in, but declining the PAY as it resolves: energy, deck and hand untouched, and the fight still conquers", async () => {
     const game = await board([FILLER, BOLT, FILLER], ["u1", "bolt", "u3"]).build();
     await game.p1.move("diana", "bf1");
     await toPayPrompt(game);
@@ -202,12 +235,14 @@ describe("Diana, Lunari (unl-079-219)", () => {
     expect(game.p1.deck()[1]).toBe("bolt");
   });
 
-  test("0 energy: the payment cannot be made — 'yes' is refused, nothing is looked at or drawn, and the fight just happens", async () => {
+  test("0 energy: the opt-in itself costs nothing (383.3.a — it may still be taken), but the [1] cannot be paid as it resolves (444.2) — nothing is looked at or drawn, and the fight just happens", async () => {
     const game = await board([BOLT, FILLER], ["bolt", "u2"], 0).build();
     await game.p1.move("diana", "bf1");
+    await optIn(game);
     await game.settle();
     const d = game.decision();
     if (d?.kind === "yes-no" && d.seat === P1) {
+      // A pay question that cannot be met may be shown, but never accepted.
       expect(d.canAccept).toBe(false);
       expect((await game.p1.try((p) => p.yes())).ok).toBe(false);
       await game.p1.no();

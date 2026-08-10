@@ -130,20 +130,34 @@ export function parseTriggeredAbilityInner(text: string): TriggeredAbility | und
       effectText = effectText.slice(killSelfToMatch[0].length);
     }
 
-    // Check for "pay :rb_X:. If you do, Y" pattern: treat as optional cost
-    // That gates the rest of the effect on having been paid.
+    // rule 383.3.b / 204.3.a / 745 (rule-id: ogn-282-298 Monastery of Hirana,
+    // ogn-147-298 Wildclaw Shaman): "you may spend a buff to X" — spending the
+    // buff is a cost within instructions immediately after the leading "you
+    // may", so it is the trigger's BASE COST: the buffed unit you control is
+    // named and its buff removed while the item is finalized (before anyone
+    // holds priority); with no buff to spend the item never reaches the Chain.
+    const spendBuffToMatch =
+      optional && !condition ? effectText.match(/^spend a buff to\s+/i) : null;
+    if (spendBuffToMatch) {
+      condition = { cost: { spendBuff: 1 }, type: "pay-cost" } as unknown as { type: string };
+      effectText = effectText.slice(spendBuffToMatch[0].length);
+    }
+
+    // Check for "pay :rb_X:. If you do, Y" pattern.
     const payIfYouDoMatch = effectText.match(
       /^pay\s+((?::rb_(?:energy_\d+|rune_(?:fury|calm|mind|body|chaos|order|rainbow)):)+)\.\s+if you do,\s*/i,
     );
     let payAtResolution: Record<string, unknown> | undefined;
     if (payIfYouDoMatch) {
-      // rule 158.1 / 383.3.b (rule-id: sfd-020-221): "you may pay [X]. If you
-      // do, Y" is a payment written INSIDE the instructions, not the trigger's
-      // base cost. The item goes on the Chain charging and asking nothing; the
-      // controller decides only as it RESOLVES, so they first see everything
-      // that resolved above it. (Contrast "you may pay [X] to Y", which IS the
-      // trigger's cost and is settled at finalization.)
-      optional = false;
+      // rule 205 / 383.3.a (rule-id: sfd-020-221, unl-079-219): "you may pay
+      // [X]. If you do, Y" — the leading "you may" is still decided while the
+      // item is FINALIZED (383.3.a / 402.1: perform the ability or drop it), but
+      // "pay [X]" written this way is NOT a cost (205: no "[X] to [Y]" link) —
+      // it is a game action performed as the ability RESOLVES, and "if you do"
+      // is a linked instruction that checks whether it was performed. So the
+      // ability keeps `optional` and its body is wrapped in a resolution-time
+      // pay question. (Contrast "you may pay [X] to Y": that IS the base cost,
+      // paid at finalization — 383.3.b.)
       payAtResolution = parseCost(payIfYouDoMatch[1]!) as unknown as Record<string, unknown>;
       effectText = effectText.slice(payIfYouDoMatch[0].length);
     }

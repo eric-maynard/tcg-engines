@@ -70,9 +70,15 @@ describe("Ruling e273cd59930f15f6 — Diana's showdown-begin trigger sits UNDER 
       expect.objectContaining({ cardId: "guard", controller: P2, triggered: true }),
     ]);
 
-    // rule 444.2 (whose own example is this card, ruling 2dbf39bc1935898d): "you may pay [1]. If you
-    // do, …" is a payment written INSIDE the instructions, not the trigger's base cost — nothing is
-    // asked at finalization, so the batch goes straight to priority with Diana at the bottom.
+    // rule 383.3.a / 402.1 — the leading "you may" is a free "use it?" answered while the trigger is
+    // finalized (383.3.d.1: an order offer for P2's two triggers may come first — keep it as listed);
+    // rule 205 / 444.2 (whose own example is this card, ruling 2dbf39bc1935898d): the [1] is a payment
+    // written INSIDE the instructions, NOT the trigger's base cost — nothing is PAID at finalization,
+    // and the batch then goes to priority with Diana at the bottom.
+    await game.acceptTriggerOrder();
+    expect(game.decision()).toMatchObject({ kind: "yes-no", seat: P2, source: { cardId: "diana" }, timing: "FIN" });
+    await game.p2.yes();
+    await game.acceptTriggerOrder();
     expect(game.decision()?.kind).toBe("action");
     expect(game.p2.energy()).toBe(1);
 
@@ -89,7 +95,7 @@ describe("Ruling e273cd59930f15f6 — Diana's showdown-begin trigger sits UNDER 
     for (let i = 0; i < 4 && game.decision()?.kind === "action"; i++) {
       await passOnce(game);
     }
-    expect(game.decision()).toMatchObject({ kind: "yes-no", seat: P2 });
+    expect(game.decision()).toMatchObject({ kind: "yes-no", seat: P2, timing: "RES" });
     expect(game.decision()?.prompt).toMatch(/Diana/);
     await game.p2.no();
     expect(game.p2.energy()).toBe(1); // declined → nothing paid
@@ -116,7 +122,12 @@ describe("Ruling e273cd59930f15f6 — Diana's showdown-begin trigger sits UNDER 
       expect.objectContaining({ cardId: "guard", controller: P2, triggered: true }),
     ]);
 
-    // rule 444.2 (ruling 2dbf39bc1935898d): nothing is asked or paid at finalization.
+    // rule 383.3.a — only the free "use it?" opt-in at finalization; 205 / 444.2 (ruling
+    // 2dbf39bc1935898d): nothing is PAID there.
+    await game.acceptTriggerOrder();
+    expect(game.decision()).toMatchObject({ kind: "yes-no", seat: P1, source: { cardId: "diana" }, timing: "FIN" });
+    await game.p1.yes();
+    await game.acceptTriggerOrder();
     expect(game.decision()?.kind).toBe("action");
     expect(game.p1.energy()).toBe(1);
 
@@ -129,7 +140,7 @@ describe("Ruling e273cd59930f15f6 — Diana's showdown-begin trigger sits UNDER 
     for (let i = 0; i < 4 && game.decision()?.kind === "action"; i++) {
       await passOnce(game);
     }
-    expect(game.decision()).toMatchObject({ kind: "yes-no", seat: P1 });
+    expect(game.decision()).toMatchObject({ kind: "yes-no", seat: P1, timing: "RES" });
     await game.p1.yes();
     expect(game.p1.energy()).toBe(0); // paid [1]
     // Predict (may recycle the top card) then reveal: answer any remaining Diana prompts by keeping the card.

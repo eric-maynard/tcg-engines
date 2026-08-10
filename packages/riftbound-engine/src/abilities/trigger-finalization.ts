@@ -44,6 +44,7 @@ import {
   killCostCandidates,
   recycleCostCandidates,
   returnToHandCostCandidates,
+  spendBuffCostCandidates,
 } from "../game-definition/moves/pending-choice";
 import { raiseChainDestinationChoices } from "../game-definition/moves/play/play-time-destinations";
 import { raisePlayTimeModeChoice } from "../game-definition/moves/play/play-time-modes";
@@ -210,7 +211,7 @@ export function removeUnfinalizedItem(draftLike: unknown, itemId: string): void 
 
 /** One Game-Object component of a trigger's base cost (rule 383.3.b / 403.1.b.1). */
 export interface TriggerObjectCost {
-  readonly kind: "kill" | "recycle" | "returnToHand";
+  readonly kind: "kill" | "recycle" | "returnToHand" | "spendBuff";
   /** How many objects must be named — all of them, or the cost is not paid (404.1). */
   readonly needed: number;
   /** The raw spec as carried on `optInCost` (descriptor / `{ amount, target }`). */
@@ -244,6 +245,12 @@ export function objectCostsOf(cost: unknown): TriggerObjectCost[] {
   if (c.returnToHand !== undefined && typeof c.returnToHand === "object" && c.returnToHand !== null) {
     out.push({ kind: "returnToHand", needed: amountOf(c.returnToHand), spec: c.returnToHand });
   }
+  // rule 383.3.b / 745 (rule-id: ogn-282-298, ogn-147-298) — "you may spend a
+  // buff to …": the Buff counter is removed from a unit its controller controls
+  // (745.2) and NAMES — one object per buff to spend.
+  if (typeof c.spendBuff === "number" && c.spendBuff > 0) {
+    out.push({ kind: "spendBuff", needed: c.spendBuff, spec: { amount: c.spendBuff } });
+  }
   return out;
 }
 
@@ -263,6 +270,8 @@ export function objectCostCandidates(
       return recycleCostCandidates(draft, playerId, sourceCardId, part.spec, context);
     case "returnToHand":
       return returnToHandCostCandidates(draft, playerId, sourceCardId, part.spec, context);
+    case "spendBuff":
+      return spendBuffCostCandidates(draft, playerId, sourceCardId, context);
     default:
       return [];
   }
@@ -343,10 +352,15 @@ export function payTriggerObjectCost(
           ? ({ target: { type: "permanent" }, type: "kill" } as unknown as ExecutableEffect)
           : part.kind === "recycle"
             ? ({ target: { type: "unit" }, type: "recycle" } as unknown as ExecutableEffect)
-            : ({
-                target: (part.spec as { target?: object }).target ?? (part.spec as object),
-                type: "return-to-hand",
-              } as unknown as ExecutableEffect);
+            : part.kind === "spendBuff"
+              ? // rule 745.1 — remove ONE Buff counter from each named unit (the
+                // `spend-buff` handler spends exactly its bound objects and fires
+                // the "when you spend a buff" event; no payoff rides on it).
+                ({ target: { type: "unit" }, type: "spend-buff" } as unknown as ExecutableEffect)
+              : ({
+                  target: (part.spec as { target?: object }).target ?? (part.spec as object),
+                  type: "return-to-hand",
+                } as unknown as ExecutableEffect);
       executeEffect(effect, { ...base, boundTargets: ids, paidObjects: paid });
     }
     // rule 319 — the payment changed the board (deaths, a vacated battlefield's
@@ -394,7 +408,10 @@ function settleObjectCost(
     (ctx.cards.getCardName?.(cardId as CoreCardId) as string | undefined) ??
     (getGlobalCardRegistry().get(cardId) as { name?: string } | undefined)?.name ??
     cardId;
-  const verb = parts.length === 1 ? { kill: "kill", recycle: "recycle", returnToHand: "return" }[parts[0]!.kind] : "pay with";
+  const verb =
+    parts.length === 1
+      ? { kill: "kill", recycle: "recycle", returnToHand: "return", spendBuff: "spend the buff of" }[parts[0]!.kind]
+      : "pay with";
   draft.pendingChoice = {
     max: needed,
     min: needed,
@@ -935,6 +952,10 @@ function raiseTriggerOrderPrompt(
   // 808.2 — Karthus doubling a [Deathknell]) or the same source-independent
   // effect from two cards (two Watchful Sentries' "Draw 1"). An effect that
   // reads its source ("me", "here", the triggering object) stays distinct.
+  // rule 816.1 (ruling bd1e9b90cf899340) — an effect kind that names no target
+  // because it acts on its OWN source ([Temporary]'s "kill me") is source-bound
+  // just as much as a written `"self"`: two [Temporary] triggers kill different
+  // permanents, so their controller really does get to order them.
   const signature = (it: ChainItem): string => {
     const json = JSON.stringify(it.effect ?? null);
     const sourceBound = /"self"|"trigger-source"|"here"|"source"|"same"/.test(json);

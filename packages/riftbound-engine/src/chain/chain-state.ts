@@ -110,11 +110,14 @@ export interface ChainItem {
   /** Rule 583 (unl-021-219): "you may" trigger — controller opts in on resolve */
   readonly optional?: boolean;
   /**
-   * rule 383.3.a.3 (rule-id: sfd-120-221) — the "you may" is a later part of
-   * the effect, so it is decided on RESOLUTION: this item is never offered the
-   * finalization opt-in and always reaches the chain.
+   * rules 383.3.a–b / 205 — the `optional-kind.ts` classification of this
+   * triggered item: `cost-at-finalization` (its "you may … TO" / cost step is
+   * the base cost, decided AND paid while finalized), `may-at-finalization`
+   * ("you may Y" / "you may X. If you do, Y": decided while finalized, X and Y
+   * performed on resolution), `may-at-resolution` (a later "you may"/"pay … to"
+   * only — 383.3.a.3), `none`.
    */
-  readonly optionalOnResolution?: boolean;
+  readonly mayKind?: import("../abilities/optional-kind").OptionalKind;
   /**
    * rule-id: sfd-119-221 — "you may pay [N] to …" trigger: the cost the
    * controller must pay on opt-in ({ energy?, power?, exhaust? }). Accepting

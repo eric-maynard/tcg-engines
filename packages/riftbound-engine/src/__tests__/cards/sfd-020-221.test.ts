@@ -7,15 +7,31 @@
  * Rules: 466.3.a (a player — and their units, 466.3.c — win a combat when they are the only
  * side with units left at the battlefield); 383.4.e/f (attack / defend triggers);
  * 187.5 (Gold token: domainless gear token with "[Reaction] Kill this, [E]: Add [A]").
- *
- * Engine status: `win-combat` is never emitted, and the parsed "you may pay [fury]. If you do" rider is a
- * `paid-additional-cost` condition instead of an opt-in cost — neither trigger does anything yet (BUG tests).
+ * 383.3.a / 402.1 — the LEADING "you may" is decided while the trigger is finalized ("use it?",
+ * timing FIN; "no" ⇒ no chain item at all); 205 + 444.2 (the CR's own example is this wording) —
+ * "pay [fury]. If you do" is NOT a cost: the Pay is a game action performed, and still declinable,
+ * as the ability RESOLVES ("pay [fury]?", timing RES); unpaid ⇒ the linked +2 is skipped.
  */
 
 import { describe, expect, test } from "bun:test";
+import type { Game } from "../../harness";
 import { P1, P2, scenario } from "../../harness";
 
 const CARD = "sfd-020-221";
+
+/** Take Draven's finalization opt-in (nothing is paid there — 205) and drain to the RESOLUTION-time pay question. */
+async function optInToPayPrompt(game: Game): Promise<void> {
+  if (game.decision()?.kind !== "yes-no") {
+    await game.settle();
+  }
+  expect(game.decision()).toMatchObject({ canAccept: true, kind: "yes-no", seat: P1, source: { cardId: "draven" }, timing: "FIN" });
+  const furyBefore = game.p1.power("fury");
+  await game.p1.yes();
+  expect(game.p1.power("fury")).toBe(furyBefore);
+  expect(game.chain().some((i) => i.cardId === "draven" && i.triggered)).toBe(true);
+  await game.settle();
+  expect(game.decision()).toMatchObject({ kind: "yes-no", seat: P1, source: { cardId: "draven" }, timing: "RES" });
+}
 
 const goldOf = (game: Awaited<ReturnType<ReturnType<typeof scenario>["build"]>>, seat: "p1" | "p2") =>
   game[seat].base().filter((id) => game.state(id).name === "Gold");
@@ -40,11 +56,10 @@ describe("Draven, Vanquisher (sfd-020-221)", () => {
     expect(poor.p1.can("play", "draven")).toBe(false);
   });
 
-  test("When I attack: you may pay [fury] → +2 Might this turn (4 → 6 kills a 5-Might defender)", async () => {
+  test("When I attack: opt in (FIN), then pay [fury] as it resolves (RES) → +2 Might this turn (4 → 6 kills a 5-Might defender)", async () => {
     const game = await attacking(1, 5).build();
     await game.p1.move("draven", "bf1");
-    await game.settle();
-    expect(game.decision()).toMatchObject({ kind: "yes-no", seat: P1 });
+    await optInToPayPrompt(game);
     await game.p1.yes();
     expect(game.p1.power("fury")).toBe(0);
     await game.settle();
@@ -56,11 +71,22 @@ describe("Draven, Vanquisher (sfd-020-221)", () => {
     expect(game.state("draven").might).toBe(4);
   });
 
-  test("When I attack: declining pays nothing and gives no Might (4 vs 5 → Draven dies)", async () => {
+  test("383.3.a.2 — When I attack: declining at FINALIZATION puts nothing on the chain, pays nothing and gives no Might (4 vs 5 → Draven dies)", async () => {
     const game = await attacking(1, 5).build();
     await game.p1.move("draven", "bf1");
+    expect(game.decision()).toMatchObject({ kind: "yes-no", seat: P1, source: { cardId: "draven" }, timing: "FIN" });
+    await game.p1.no();
+    expect(game.chain().some((i) => i.cardId === "draven")).toBe(false);
     await game.settle();
-    expect(game.decision()).toMatchObject({ kind: "yes-no", seat: P1 });
+    expect(game.p1.power("fury")).toBe(1);
+    expect(game.zoneOf("draven")).toBe("trash");
+    expect(game.locationOf("foe")).toBe("bf1");
+  });
+
+  test("444.2 — opted in but declining the PAY on resolution: nothing paid, no Might (4 vs 5 → Draven dies)", async () => {
+    const game = await attacking(1, 5).build();
+    await game.p1.move("draven", "bf1");
+    await optInToPayPrompt(game);
     await game.p1.no();
     await game.settle();
     expect(game.p1.power("fury")).toBe(1);
@@ -68,19 +94,22 @@ describe("Draven, Vanquisher (sfd-020-221)", () => {
     expect(game.locationOf("foe")).toBe("bf1");
   });
 
-  test("When I attack: without a [fury] to pay, the +2 cannot be had", async () => {
+  test("When I attack: without a [fury] to pay, the +2 cannot be had — the free opt-in may be taken, the pay never can", async () => {
     const game = await attacking(0, 5).build();
     await game.p1.move("draven", "bf1");
-    await game.settle();
-    if (game.decision()?.kind === "yes-no") {
+    for (let i = 0; i < 4; i++) {
+      await game.settle();
+      const d = game.decision();
+      if (d?.kind !== "yes-no") {
+        break;
+      }
       const t = await game.p1.try((p) => p.yes());
-      if (t.ok) {
-        await game.settle();
-      } else {
+      if (!t.ok) {
+        expect(d.timing).toBe("RES"); // only the PAY can be refused for want of fury
         await game.p1.no();
-        await game.settle();
       }
     }
+    await game.settle();
     expect(game.zoneOf("draven")).toBe("trash");
     expect(game.locationOf("foe")).toBe("bf1");
   });
@@ -94,8 +123,7 @@ describe("Draven, Vanquisher (sfd-020-221)", () => {
       .unit(P2, "base", { might: 5, name: "Raider" }, "raider")
       .build();
     await game.p2.move("raider", "bf1");
-    await game.settle();
-    expect(game.decision()).toMatchObject({ kind: "yes-no", seat: P1 });
+    await optInToPayPrompt(game);
     await game.p1.yes();
     expect(game.p1.power("fury")).toBe(0);
     await game.settle();
@@ -109,7 +137,7 @@ describe("Draven, Vanquisher (sfd-020-221)", () => {
     expect(goldOf(game, "p1")).toHaveLength(0);
     await game.p1.move("draven", "bf1");
     await game.settle();
-    if (game.decision()?.kind === "yes-no") {
+    while (game.decision()?.kind === "yes-no") {
       await game.p1.no();
       await game.settle();
     }
@@ -124,7 +152,7 @@ describe("Draven, Vanquisher (sfd-020-221)", () => {
     const game = await attacking(0, 6).build();
     await game.p1.move("draven", "bf1");
     await game.settle();
-    if (game.decision()?.kind === "yes-no") {
+    while (game.decision()?.kind === "yes-no") {
       await game.p1.no();
       await game.settle();
     }
@@ -143,7 +171,7 @@ describe("Draven, Vanquisher (sfd-020-221)", () => {
       .build();
     await game.p1.move("draven", "bf1");
     await game.settle();
-    if (game.decision()?.kind === "yes-no") {
+    while (game.decision()?.kind === "yes-no") {
       await game.p1.no();
       await game.settle();
     }

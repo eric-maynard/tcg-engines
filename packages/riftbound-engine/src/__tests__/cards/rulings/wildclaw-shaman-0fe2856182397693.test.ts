@@ -9,6 +9,13 @@
  *    Shaman; her trigger then buffs her again. Nuance: the two triggers are simultaneous, so you order them —
  *    with an UNBUFFED Cithria you could resolve her buff first and then spend that buff to ready the Shaman.
  * Rules: 383.3.d (controller orders simultaneous triggers), 383.3.a/b (opt-in + spend cost), 702.2 (buffs).
+ *
+ * Model (CR 383.3.a/b, 204.3.a, 740.4.a.2): "you may [spend a buff] TO [buff me and ready me]" — the spend is the
+ * trigger's BASE COST, named and paid while the item is FINALIZED (before either trigger resolves). So the headline
+ * answer holds for ANY order (Cithria's buff is already spent when her own trigger resolves and re-buffs her), but the
+ * nuance does not — RULING-CONFLICT: riftjudge 0fe2856182397693 (nuance) has an unbuffed Cithria's fresh buff pay the
+ * Shaman "on resolution"; CR 383.3.b.1 / 404.2 (+ Unleashed-era ruling 202877fb824b2d2b, same shape) say a buff that
+ * does not exist when the batch is finalized cannot pay, and the Shaman's item is removed unasked. Engine follows the CR.
  */
 import { describe, expect, test } from "bun:test";
 import type { Game } from "../../../harness";
@@ -56,46 +63,48 @@ async function drive(game: Game, onTop: "shaman" | "cithria"): Promise<{ optIn: 
 }
 
 describe("Ruling 0fe2856182397693 — Wildclaw Shaman spending Cithria's buff; Cithria's own play trigger buffs her again", () => {
-  test("playing the Shaman with a buffed Cithria: P1 is asked the Shaman's 'you may spend a buff' opt-in and Cithria's trigger is on the chain too", async () => {
+  test("playing the Shaman with a buffed Cithria: P1 is asked the Shaman's 'spend a buff?' opt-in at FINALIZATION (Cithria's trigger is on the chain too), and 'yes' spends Cithria's buff at once (383.3.b.1)", async () => {
     const game = await board(true).build();
     expect(game.state("cithria")).toMatchObject({ isBuffed: true, might: 2 });
     await game.p1.play("shaman");
     expect(game.p1.energy()).toBe(0);
-    expect(game.decision()).toMatchObject({ kind: "yes-no", seat: P1, source: { cardId: "shaman" } });
+    expect(game.decision()).toMatchObject({ kind: "yes-no", seat: P1, source: { cardId: "shaman" }, timing: "FIN" });
     expect(game.chain().map((c) => c.cardId).sort()).toEqual(["cithria", "shaman"]);
     expect(game.chain().every((c) => c.triggered)).toBe(true);
+    await game.p1.yes();
+    expect(game.state("cithria")).toMatchObject({ isBuffed: false, might: 1 }); // the lone buff paid, before anything resolves
+    expect(game.state("shaman").isBuffed).toBe(false); // the payoff waits for resolution
   });
 
-  // Expected: Shaman's ability spends Cithria's buff (Shaman → buffed 4 Might and READY), and Cithria's "when
-  // you play another unit" trigger then buffs her again → she ends buffed at 2. (Either because the spend is the
-  // trigger's base cost paid at finalization, 383.3.b, or because P1 orders the Shaman trigger to resolve first.)
-  // Actual: the engine stacks Cithria's trigger on top with no order offered and only spends the buff when the
-  // Shaman trigger resolves — Cithria's trigger resolves first as a no-op (already buffed), then her buff is
-  // spent: she ends UNBUFFED at 1.
-  test("ruling 0fe2856182397693 — after spending her buff on the Shaman, Cithria is buffed again by her own trigger (ends buffed, 2 Might; Shaman 4 & ready); engine leaves her unbuffed", async () => {
-    const game = await board(true).build();
-    await game.p1.play("shaman");
-    const seen = await drive(game, "shaman");
-    expect(seen.optIn).toBe(true);
-    expect(game.chain()).toEqual([]);
-    expect(game.state("shaman")).toMatchObject({ isBuffed: true, isReady: true, might: 4 });
-    expect(game.state("cithria")).toMatchObject({ isBuffed: true, might: 2 });
-  });
+  // The ruling's headline: the Shaman spends Cithria's buff (Shaman → buffed 4 Might and READY) and Cithria's "when
+  // you play another unit" trigger buffs her again → she ends buffed at 2 — under the CR for EITHER order, because the
+  // spend already happened at finalization.
+  for (const onTop of ["shaman", "cithria"] as const) {
+    test(`ruling 0fe2856182397693 — after her buff pays for the Shaman, Cithria is buffed again by her own trigger (ends buffed, 2 Might; Shaman 4 & ready) — with ${onTop}'s trigger on top`, async () => {
+      const game = await board(true).build();
+      await game.p1.play("shaman");
+      const seen = await drive(game, onTop);
+      expect(seen.optIn).toBe(true);
+      expect(game.chain()).toEqual([]);
+      expect(game.state("shaman")).toMatchObject({ isBuffed: true, isReady: true, might: 4 });
+      expect(game.state("cithria")).toMatchObject({ isBuffed: true, might: 2 });
+      expect(game.violations()).toEqual([]);
+    });
+  }
 
-  // Expected (nuance): with an UNBUFFED Cithria both triggers still fire simultaneously; P1 orders Cithria's on
-  // top → she is buffed → the Shaman's trigger then spends that buff → Shaman buffed + ready, Cithria back to 1.
-  // Actual: with no buff on the board at trigger time the Shaman's ability is never put on the chain / offered,
-  // and no order decision exists — Shaman stays exhausted and unbuffed, Cithria keeps her new buff.
-  test("ruling 0fe2856182397693 (nuance) — unbuffed Cithria: order her trigger first, then spend that fresh buff to buff+ready the Shaman; engine never offers the Shaman's ability", async () => {
+  // RULING-CONFLICT (nuance): riftjudge says an UNBUFFED Cithria's trigger can be ordered first and her fresh buff then
+  // pays the Shaman on resolution. CR 383.3.b.1 / 404.2: the spend is due when the batch is FINALIZED — no buff you
+  // control exists then, so the Shaman's Pending item is removed unasked; only Cithria's trigger reaches the chain.
+  test("CR 383.3.b.1 / 404.2 (nuance, contra the ruling) — unbuffed Cithria: the Shaman's item never reaches the chain (no opt-in, nothing to order); Cithria just gets her buff and the Shaman stays exhausted, unbuffed", async () => {
     const game = await board(false).build();
     expect(game.state("cithria").isBuffed).toBe(false);
     await game.p1.play("shaman");
-    expect(game.chain().map((c) => c.cardId).sort()).toEqual(["cithria", "shaman"]);
     const seen = await drive(game, "cithria");
-    expect(seen.ordered).toBe(true); // P1 chose the order (383.3.d)
+    expect(seen.optIn).toBe(false);
+    expect(seen.ordered).toBe(false);
     expect(game.chain()).toEqual([]);
-    expect(game.state("shaman")).toMatchObject({ isBuffed: true, isReady: true, might: 4 });
-    expect(game.state("cithria")).toMatchObject({ isBuffed: false, might: 1 });
+    expect(game.state("shaman")).toMatchObject({ isBuffed: false, isExhausted: true, might: 3 });
+    expect(game.state("cithria")).toMatchObject({ isBuffed: true, might: 2 });
   });
 
   test("baseline the ruling relies on — playing ANY unit triggers Cithria: with the Shaman's opt-in declined, Cithria (unbuffed) simply gets buffed and the Shaman enters exhausted, unbuffed", async () => {

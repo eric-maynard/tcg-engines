@@ -2462,11 +2462,16 @@ export const pendingChoiceMoves: Partial<
           }
           const branch = paid ? payChoice.then : payChoice.else;
           if (branch) {
+            // rule 359.3.f / 108.2 (rule-id: sfd-207-221 Emperor's Dais) — "… If you
+            // do, play a … token HERE": a Battlefield card's ability acts AT its
+            // battlefield, so the branch run on the answer reads "here" as the
+            // units' zone there (never the battlefield row the card sits in);
+            // an explicit referent carried on the prompt wins.
+            const hereZone = payChoice.sourceZone ?? sourceHereZone(draft, choice.sourceCardId, context);
             executeEffect(branch as ExecutableEffect, {
               ...buildEffectContext(draft, payChoice.sourcePlayerId, choice.sourceCardId, context),
               ...(payChoice.boundTargets ? { boundTargets: payChoice.boundTargets } : {}),
-              // rule 359.3.f — same referents as the interrupted resolution.
-              ...(payChoice.sourceZone !== undefined ? { sourceZone: payChoice.sourceZone } : {}),
+              ...(hereZone !== undefined ? { sourceZone: hereZone } : {}),
               ...(payChoice.triggerSourceId !== undefined ? { triggerSourceId: payChoice.triggerSourceId } : {}),
             });
           }

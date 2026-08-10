@@ -24,6 +24,7 @@ import type { GameEvent } from "./game-events";
 import { evaluateLegionCondition } from "./legion-conditions";
 import { recalculateStaticEffects } from "./static-abilities";
 import { isResolvingChainItem } from "../chain/resolution-guard";
+import { optionalKind, payCostOf } from "./optional-kind";
 import { finalizePendingItems, insideMoveReducer } from "./trigger-finalization";
 import type {
   CardWithAbilities,
@@ -528,26 +529,12 @@ export function toTriggerableAbilities(cardId: string): TriggerableAbility[] {
  * the chain item can charge it on opt-in.
  */
 export function extractPayCost(condition: unknown): Record<string, unknown> | undefined {
-  if (!condition || typeof condition !== "object") {
-    return undefined;
-  }
-  const c = condition as { type?: string; cost?: unknown; conditions?: unknown[] };
   // rule 383.3.b (rule-id: ven-162-166) — a GATING clause may carry the opt-in
   // cost alongside it ("if you control 4 or fewer runes, you may pay [1] to
   // draw 1"): the clause still gates the trigger (383.2.a.1), the `cost` is
-  // charged on opt-in exactly as a bare `pay-cost` condition is.
-  if (c.cost && typeof c.cost === "object") {
-    return c.cost as Record<string, unknown>;
-  }
-  if (c.type === "and" && Array.isArray(c.conditions)) {
-    for (const sub of c.conditions) {
-      const found = extractPayCost(sub);
-      if (found) {
-        return found;
-      }
-    }
-  }
-  return undefined;
+  // charged on opt-in exactly as a bare `pay-cost` condition is. ONE reader:
+  // `optional-kind.ts payCostOf`.
+  return payCostOf(condition);
 }
 
 /**
@@ -2180,6 +2167,10 @@ export function fireTriggers(rawEvent: GameEvent, ctx: TriggerRunnerContext): nu
           // rule-id: sfd-119-221 — "you may pay [N] to …": carry the cost so
           // the opt-in prompt charges it instead of resolving for free.
           ...(optInCost ? { optInCost } : {}),
+          // rules 383.3.a–b / 205 — WHEN this item's "you may" / cost is decided
+          // and paid (ONE classifier: `optional-kind.ts`); read by the harness
+          // and the UI to label the finalization prompt.
+          mayKind: optionalKind(match.ability as Parameters<typeof optionalKind>[0]),
           // rule 383.3.e.2 — refunded if the item leaves the Chain unfinalized.
           ...(isOncePerTurnTrigger(match.ability)
             ? { onceKey: triggerFireKey(match.ability.trigger, { id: match.cardId }) }

@@ -280,21 +280,18 @@ export function optInIsPerformable(
   opts: { readonly atFinalization?: boolean } = {},
 ): boolean {
   {
-    // rule-id: ogn-147-298 — "you may spend a buff to …": when no friendly
-    // buff can be spent the cost is unpayable, so don't offer the opt-in
-    // prompt at all — the trigger simply has no effect.
-    // rule 404 / 383.3.d (rule-id: ogn-282-298 Monastery of Hirana × ogn-164-298
-    // Sett, Brawler) — but the buff is spent as the instruction RESOLVES, not as
-    // the item is finalized: an item whose buff does not exist YET still goes on
-    // the Chain, so its controller may order a buff-granting trigger under it and
-    // spend that new buff. Only the resolution-time gate drops it for want of a buff.
+    // rule 383.3.b / 404.2 — a leading "you may spend a buff to …" is the
+    // trigger's BASE COST (`optInCost.spendBuff`, named and paid by the
+    // finalization dialog; no buffed unit ⇒ the item is removed unasked —
+    // `trigger-finalization.ts optInCostObjectsExist`). A `spend-buff` step
+    // still leading an optional EFFECT (a resolution-time "you may spend …",
+    // rule 383.3.a.3) with nothing to spend is likewise no question at all.
     const optEffect = resolved.effect as ExecutableEffect | undefined;
     const leadEffect =
       optEffect?.type === "sequence"
         ? (optEffect as { effects?: ExecutableEffect[] }).effects?.[0]
         : optEffect;
     if (
-      opts.atFinalization !== true &&
       leadEffect?.type === "spend-buff" &&
       !findSpendableBuff(
         leadEffect,
@@ -883,8 +880,21 @@ export function executeResolvedItem(
         ? [(effect.target ?? fightDefenderDesc) as TargetDescriptor]
         : ((collectSequenceTargetSlots(effect as unknown as SpellEffectTargetShape) ??
             []) as TargetDescriptor[]);
+    // rule 811.1.d.2 / 359.3.f.3 (ven-099-166 Tornado Warrior × Gust) — for a
+    // card played from face down, "here" is the battlefield it was FACE DOWN
+    // at, referenced when the trigger condition was fulfilled, not re-read from
+    // where the source now stands. Bouncing the source in response therefore
+    // does not empty that scope: the object locked at finalization (402.2) is
+    // still governed by the `hiddenZone` filters below, and the ability is
+    // independent of its source (383.3). Every other "here" stays re-read on
+    // execution per 359.3.f.2 (a killed Teemo's "an enemy unit here" mistargets).
+    const hereScopeUnreadable =
+      hiddenZone !== undefined &&
+      !sourceStillOnBoard(resolved.cardId, context) &&
+      !(baseCtx.sourceZone ?? "").startsWith("battlefield-");
     const slotPools = slotDescriptors
       .filter((d) => typeof d.type === "string" && d.type !== "self" && d.type !== "trigger-source")
+      .filter((d) => !(hereScopeUnreadable && d.location === "here"))
       .map((d) => {
         let pool = resolveTarget({ ...d, quantity: "all" }, {
           ...resolverCtx,
@@ -1729,6 +1739,15 @@ export function settleResolvedSpellCard(
     hasTrashToBanishReplacement(draft, context, resolved.controller as string)
   ) {
     targetZone = "banishment";
+  }
+  // rule-id: sfd-140-221 — the recycle rider is spent once the card leaves the
+  // chain, however it got there.
+  if (draft !== undefined) {
+    const riders = (draft as { recycleRiderCardIds?: Record<string, boolean> })
+      .recycleRiderCardIds;
+    if (riders) {
+      delete riders[resolved.cardId as string];
+    }
   }
   context.zones.moveCard({
     cardId: resolved.cardId as CoreCardId,

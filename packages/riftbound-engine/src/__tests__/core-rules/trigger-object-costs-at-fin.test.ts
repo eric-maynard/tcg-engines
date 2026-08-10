@@ -2,10 +2,13 @@
  * Core rules — the OBJECT costs of a triggered ability's base cost are chosen and paid at FINALIZATION.
  *
  *   383.3.b / 403.1.b.1 / 204.3.a / 740.4.a.2
- *             a cost within instructions at the start of a trigger's effect (or right after its leading
- *             "you may") — "kill a unit you control here TO …", "recycle another friendly unit TO …",
- *             "pay [1] and return a unit you control here …", "kill 3 other friendly units and/or gear
- *             TO …" — is the trigger's BASE COST
+ *             a cost within instructions ("[do X] TO [do Y]") at the start of a trigger's effect (or right
+ *             after its leading "you may") — "kill a unit you control here TO …", "recycle another
+ *             friendly unit TO …", "spend a buff TO …", "kill 3 other friendly units and/or gear TO …"
+ *             — is the trigger's BASE COST
+ *   205       CONTRAST: "you may pay [1] and return a unit you control here … . IF YOU DO, …" (Emperor's
+ *             Dais) is NOT a cost (no "[X] to [Y]" link): the unit is still CHOSEN at finalization
+ *             (402.2) but the pay and the return are game actions performed as the ability RESOLVES
  *   402.1     the leading "you may" is answered while the item is finalized (opt-in prompt, timing FIN)
  *   402.2     every choice — incl. WHICH objects pay — is made while finalizing (402.4.b: not declinable)
  *   402.4 / 404.2  no object to name ⇒ the Pending item is removed silently (no prompt, no chain item)
@@ -117,7 +120,7 @@ describe("kill-cost at finalization (Dusk Rose Lab × Watchful Sentry)", () => {
   });
 });
 
-describe("return-cost + resource at finalization (Emperor's Dais)", () => {
+describe("contrast (205): '… and return a unit you control here … . If you do, …' is NOT a cost (Emperor's Dais)", () => {
   function board(energy: number) {
     return scenario()
       .resources(P1, { energy })
@@ -127,30 +130,46 @@ describe("return-cost + resource at finalization (Emperor's Dais)", () => {
       .unit(P1, "base", { might: 1, name: "Homebody" }, "home");
   }
 
-  test("accepting pays [1] AND bounces the unit here before the first priority window; the bounced unit rides on the item as a paid object (404.1, 406.4)", async () => {
+  test("opt-in at FIN pays nothing and bounces nothing: the unit here is CHOSEN (402.2, on the item's targets — no paidObjects) and stays on the board through the response window; the [1] is asked as the item RESOLVES (444.2), then the unit returns and the Sand Soldier is played", async () => {
     const game = await board(1).build();
     await conquer(game, "scout", "dais");
     expect(game.decision()).toMatchObject({ canAccept: true, kind: "yes-no", seat: P1, source: { cardId: "dais" }, timing: "FIN" });
     await game.p1.yes();
-    expect(game.p1.energy()).toBe(0);
-    expect(game.zoneOf("scout")).toBe("hand");
+    expect(game.p1.energy()).toBe(1);
+    expect(game.zoneOf("scout")).toBe("battlefield-dais");
     expect(game.zoneOf("home")).toBe("base");
     expect(game.decision()).toMatchObject({ context: "chain", kind: "action" });
-    const item = game.gameState.interaction?.chain?.items[0] as { cardId: string; paidObjects?: { id: string }[]; optional?: boolean };
-    expect(item).toMatchObject({ cardId: "dais", optional: false, paidObjects: [expect.objectContaining({ id: "scout" })] });
+    const item = game.gameState.interaction?.chain?.items[0] as { cardId: string; paidObjects?: unknown; optional?: boolean; targets?: string[] };
+    expect(item).toMatchObject({ cardId: "dais", optional: false, targets: ["scout"] });
+    expect(item.paidObjects).toBeUndefined();
+    await resolveTop(game);
+    expect(game.decision()).toMatchObject({ canAccept: true, kind: "yes-no", seat: P1, source: { cardId: "dais" }, timing: "RES" });
+    await game.p1.yes();
+    expect(game.p1.energy()).toBe(0);
+    expect(game.zoneOf("scout")).toBe("hand");
     await game.settle();
     expect(game.cardsAt("dais").map((id) => game.state(id).name)).toEqual(["Sand Soldier"]);
   });
 
-  test("DESIGN: objects exist but the [1] is short → the yes/no is still shown with canAccept:false; 'no' removes the item, nothing bounced or paid, no priority window", async () => {
+  test("[1] short: the opt-in is still free to take (nothing is paid to finalize — 383.3.a), the item reaches the chain, and on resolution the pay simply cannot be made — nothing bounced, no token (444.2 / 359.3.e.14)", async () => {
     const game = await board(0).build();
     await conquer(game, "scout", "dais");
-    const d = game.decision();
-    expect(d).toMatchObject({ canAccept: false, kind: "yes-no", seat: P1, timing: "FIN" });
-    expect((await game.p1.try((p) => p.yes())).ok).toBe(false);
-    await game.p1.no();
+    expect(game.decision()).toMatchObject({ canAccept: true, kind: "yes-no", seat: P1, timing: "FIN" });
+    await game.p1.yes();
+    expect(game.chain()).toEqual([expect.objectContaining({ cardId: "dais", targets: ["scout"] })]);
+    for (let i = 0; i < 4; i++) {
+      await game.settle();
+      const d = game.decision();
+      if (d?.kind !== "yes-no") {
+        break;
+      }
+      expect(d).toMatchObject({ canAccept: false, timing: "RES" });
+      expect((await game.p1.try((p) => p.yes())).ok).toBe(false);
+      await game.p1.no();
+    }
     expect(game.chain()).toEqual([]);
     expect(game.zoneOf("scout")).toBe("battlefield-dais");
+    expect(game.cardsAt("dais").map((id) => game.state(id).name)).toEqual(["Scout"]);
     expect(game.decision()).toMatchObject({ context: "main", kind: "action", seat: P1 });
   });
 });

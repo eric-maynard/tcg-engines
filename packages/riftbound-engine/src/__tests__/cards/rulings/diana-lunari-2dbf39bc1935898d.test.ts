@@ -10,7 +10,9 @@
  *    triggered ability resolves independently of its source: on resolution the controller may pay [1] → Predict →
  *    reveal top → draw it if a spell.
  * Rules: 383.3 (triggered abilities go on the chain), 444.2 (Diana's [1] is chosen/paid when the ability RESOLVES —
- *        the rule's own example), 336/337 (LIFO), abilities resolve independently of their source.
+ *        the rule's own example) + 205 (that pay is a game action, not a cost), 383.3.a / 402.1 (the LEADING "you
+ *        may" itself is a free "use it?" answered while the trigger is finalized — timing FIN — before anyone can
+ *        respond; nothing is paid there), 336/337 (LIFO), abilities resolve independently of their source.
  */
 import { describe, expect, test } from "bun:test";
 import type { Game } from "../../../harness";
@@ -39,21 +41,23 @@ function board() {
     );
 }
 
+/** rule 383.3.a / 402.1 — Diana's leading "you may": P1 takes the free finalization opt-in (nothing paid — 205). */
+async function optIn(game: Game): Promise<void> {
+  expect(game.decision()).toMatchObject({ canAccept: true, kind: "yes-no", seat: P1, source: { cardId: "diana" }, timing: "FIN" });
+  await game.p1.yes();
+  expect(game.p1.energy()).toBe(1);
+}
+
 /**
- * Brute attacks bf1 → showdown begins → Diana triggers; P2 responds with Gust on Diana.
- * (If a "pay [1]?" prompt appears at trigger time it is answered "yes" here; per the ruling / rule 444.2 it belongs
- * on resolution — the first test pins that timing.)
+ * Brute attacks bf1 → showdown begins → Diana triggers (P1 opts in at finalization, paying nothing); P2 responds
+ * with Gust on Diana.
  */
 async function triggerThenGust(): Promise<Game> {
   const game = await board().build();
   await game.p2.move("brute", "bf1");
   // 1. Trigger: Diana's ability is on the chain.
   expect(game.chain()).toEqual([expect.objectContaining({ cardId: "diana", controller: P1, triggered: true })]);
-  if (game.decision()?.kind === "yes-no") {
-    expect(game.decision()).toMatchObject({ kind: "yes-no", seat: P1, source: { cardId: "diana" } });
-    await game.p1.yes();
-    expect(game.p1.energy()).toBe(0);
-  }
+  await optIn(game);
   // 2. Response: P2 Gusts Diana while her ability is still on the chain.
   if (game.actingSeat() === P1) {
     await game.p1.passPriority();
@@ -70,12 +74,14 @@ async function bothPass(game: Game): Promise<void> {
 
 describe("Ruling 2dbf39bc1935898d — Diana's showdown trigger still resolves after she is Gusted to hand", () => {
   // Ruling step 4 / rule 444.2's own Diana example: the [1] is offered when the ability RESOLVES — i.e. after Gust has
-  // already bounced her — and P1 may still pay it then and get the full effect.
-  test("ruling 2dbf39bc1935898d — Diana's optional [1] is offered on resolution, not at trigger time", async () => {
+  // already bounced her — and P1 may still pay it then and get the full effect. (The only trigger-time question is
+  // the free 383.3.a opt-in.)
+  test("ruling 2dbf39bc1935898d — Diana's [1] is offered on resolution, not at trigger time (only the free 'use it?' opt-in is asked at finalization)", async () => {
     const game = await board().build();
     await game.p2.move("brute", "bf1");
     expect(game.chain()).toEqual([expect.objectContaining({ cardId: "diana", triggered: true })]);
-    // No payment question yet — just a priority/focus window with the trigger pending.
+    await optIn(game);
+    // No payment question yet — just a priority/focus window with the trigger finalized.
     expect(game.decision()?.kind).toBe("action");
     expect(game.p1.energy()).toBe(1);
     if (game.actingSeat() === P1) {
@@ -85,7 +91,7 @@ describe("Ruling 2dbf39bc1935898d — Diana's showdown trigger still resolves af
     await bothPass(game); // Gust resolves: Diana → hand
     expect(game.zoneOf("diana")).toBe("hand");
     await bothPass(game); // Diana's ability starts resolving → NOW the pay-[1] choice
-    expect(game.decision()).toMatchObject({ kind: "yes-no", seat: P1, source: { cardId: "diana" } });
+    expect(game.decision()).toMatchObject({ kind: "yes-no", seat: P1, source: { cardId: "diana" }, timing: "RES" });
     await game.p1.yes();
     expect(game.p1.energy()).toBe(0);
     if (game.decision()?.kind === "pick") {
@@ -139,9 +145,7 @@ describe("Ruling 2dbf39bc1935898d — Diana's showdown trigger still resolves af
       .deck(P1, [{ cardType: "unit", energyCost: 2, might: 2, name: "Grunt" }], ["grunt"])
       .build();
     await game.p2.move("brute", "bf1");
-    if (game.decision()?.kind === "yes-no") {
-      await game.p1.yes();
-    }
+    await optIn(game);
     if (game.actingSeat() === P1) {
       await game.p1.passPriority();
     }

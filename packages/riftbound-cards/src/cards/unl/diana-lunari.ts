@@ -10,13 +10,16 @@ import { createCardId } from "@tcg/riftbound-types/cards";
  */
 const abilities: Ability[] = [
   {
-    // rule 444.2 (whose own example is this card) / 383.3.b — "you may pay [1].
-    // If you do, …" is a payment written INSIDE the instructions, not the
-    // trigger's base cost: the item goes on the Chain charging and asking
-    // nothing, and its controller decides only as it RESOLVES (so a response
-    // that bounces Diana first still leaves the choice intact). This is the
-    // same shape the parser emits for the phrasing; contrast "you may pay [1]
-    // TO …", which IS the trigger's base cost and is settled at finalization.
+    // rule 383.3.a / 402.1 — the leading "you may" is decided while the item is
+    // FINALIZED (perform the ability or drop it: declined ⇒ no Chain item, no
+    // reaction window). rule 205 / 444.2 (whose own example is this card) —
+    // "pay [1]. If you do, …" is NOT a cost (no "[X] to [Y]" link): it is a Pay
+    // game action performed as the ability RESOLVES, and its controller may
+    // still choose not to pay then (444.2), in which case the linked "if you
+    // do" instructions are not performed. Same shape the parser emits for the
+    // phrasing (`optional` + a resolution-time pay question); contrast "you may
+    // pay [1] TO …", which IS the trigger's base cost, paid at finalization
+    // (383.3.b).
     effect: {
       condition: { cost: { energy: 1 }, type: "pay-cost" },
       then: {
@@ -34,6 +37,7 @@ const abilities: Ability[] = [
       },
       type: "conditional",
     },
+    optional: true,
     // rule-id: unl-079-219 — "When a showdown begins here" covers non-combat
     // showdowns too, so key off the engine's showdown-begin event (not attack).
     trigger: {

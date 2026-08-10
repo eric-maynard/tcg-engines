@@ -335,17 +335,15 @@ describe("pending-choice decisions (one per engine PendingChoice type)", () => {
     expect(game.decision()?.kind).toBe("action");
     expect(game.gameState.pendingChoice).toBeUndefined();
 
-    // rule 404 (rule-id: ogn-282-298) — the buff is spent as the instruction
-    // RESOLVES, so an empty board at FINALIZATION does not drop the item: the
-    // opt-in is still offered (a trigger ordered under it may grant the buff
-    // first). Declining leaves nothing behind.
+    // rule 383.3.b / 404.2 (rule-id: ogn-282-298) — "spend a buff TO …" is the
+    // trigger's BASE COST, paid at FINALIZATION from a buff that exists right
+    // now: with no buffed unit you control the item is removed unasked — no
+    // yes/no, no chain item, nothing left behind.
     const bare = await scenario().resources(P1, { energy: 4 }).hand(P1, WILDCLAW, "wc").build();
     await bare.p1.play("wc");
     await bare.settle();
-    expect(bare.decision()).toMatchObject({ kind: "yes-no", seat: P1, source: { cardId: "wc", pendingChoiceType: "opt-in" }, timing: "FIN" });
-    await bare.p1.no();
-    await bare.settle();
     expect(bare.gameState.pendingChoice).toBeUndefined();
+    expect(bare.chain()).toEqual([]);
     expect(bare.decision()?.kind).toBe("action");
   });
 

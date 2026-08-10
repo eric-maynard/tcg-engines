@@ -91,11 +91,13 @@ describe("Parser: parseIfYouDoEffect()", () => {
     expect(cond.else?.amount).toBe(1);
   });
 
-  // rule 158.1 / 383.3.b (ruling 1bed529c1618f01c, sfd-020-221) — "you may pay [X]. If you do, Y"
-  // is a payment made INSIDE the instructions, so it becomes a `conditional` in the effect body
-  // (asked on resolution), NOT the trigger's own `pay-cost` condition (which is settled when the
-  // item is put on the Chain, as "you may pay [X] to Y" is).
-  it("parses 'pay [rune]. If you do, Y' inside a trigger as a resolution-time payment", () => {
+  // rule 205 / 444.2 (sfd-020-221 Draven, unl-079-219 Diana) — "you may pay [X]. If you do, Y":
+  // the pay is NOT a cost (no "[X] to [Y]" link) but a game action performed as the ability
+  // resolves, so it becomes a `conditional` pay question in the effect body — never the trigger's
+  // own `pay-cost` condition (that is what "you may pay [X] TO Y" becomes: the base cost, settled
+  // when the item is finalized). rule 383.3.a / 402.1 — the LEADING "you may" still marks the
+  // trigger `optional`: perform-or-drop is decided while the item is finalized.
+  it("parses 'you may pay [rune]. If you do, Y' inside a trigger as optional (383.3.a) + a resolution-time payment (205)", () => {
     const result = parseAbilities(
       "When I attack or defend, you may pay [fury]. If you do, give me +2 [Might] this turn.",
     );
@@ -107,11 +109,29 @@ describe("Parser: parseIfYouDoEffect()", () => {
       effect: { type: string; condition?: { type: string; cost?: unknown }; then?: { type: string } };
     };
     expect(a.type).toBe("triggered");
-    expect(a.optional).toBeUndefined();
+    expect(a.optional).toBe(true);
     expect(a.condition).toBeUndefined();
     expect(a.effect.type).toBe("conditional");
     expect(a.effect.condition?.type).toBe("pay-cost");
     expect(a.effect.condition?.cost).toEqual({ power: ["fury"] });
     expect(a.effect.then?.type).toBe("modify-might");
+  });
+
+  // rule 383.3.b / 204.3.a / 740.4.a.2 (ogn-282-298 Monastery of Hirana) — "you may spend a buff TO Y":
+  // the spend right after the leading "you may" IS the trigger's base cost (`pay-cost.spendBuff`),
+  // named and paid at finalization; Y is the whole effect.
+  it("parses 'you may spend a buff to Y' inside a trigger as a spendBuff base cost", () => {
+    const result = parseAbilities("When you conquer here, you may spend a buff to draw 1.");
+    expect(result.success).toBe(true);
+    const a = result.abilities?.[0] as unknown as {
+      type: string;
+      optional?: boolean;
+      condition?: { type: string; cost?: unknown };
+      effect: { type: string; amount?: number };
+    };
+    expect(a.type).toBe("triggered");
+    expect(a.optional).toBe(true);
+    expect(a.condition).toEqual({ cost: { spendBuff: 1 }, type: "pay-cost" });
+    expect(a.effect).toEqual({ amount: 1, type: "draw" });
   });
 });

@@ -26,8 +26,16 @@ sub-step is intentionally not implemented; see `moves/play/cost-model.ts`).
   extra [A] is actually in the pool).
 - The single convenience is the app's right-click Recycle: recycling an untapped rune auto-taps it for +1 Energy
   first. That resource lands in the pool BEFORE any play starts, so it is ordinary pool affordability.
-- Pays demanded while an ability RESOLVES ("you may pay [1] to …", a counter's ransom) keep their prompt open;
-  the player may tap runes while it is open and then answer — still manual, nothing auto-tapped.
+- Pays demanded while an ability RESOLVES (a spell's / activation's "pay [1] to …", a trigger's LATER "then you may
+  pay …", a leading "you may pay [C]. If you do, …" — rule 205: not a cost, a Pay performed on resolution, 444.2 —
+  or a counter's ransom) keep their prompt open; the player may tap runes while it is open and then answer — still
+  manual, nothing auto-tapped. (Known gap: `effects/conditional.ts` skips the question outright when the POOL cannot
+  pay, without crediting untapped runes; a finalization-cost prompt does credit them via `canPayOptInCost`.)
+- Trigger optional/cost timing follows ONE model (`E/abilities/optional-kind.ts`, core-rules test
+  `optional-instructions-timing.test.ts`): "you may [cost] TO Y" = base cost decided+paid at FINALIZATION (383.3.a/b,
+  204.3.a); "you may Y" / "you may X. If you do, Y" = decided at FINALIZATION, X/Y performed at RESOLUTION (205, 444.2,
+  383.3.a.1: no second "may"); a later "you may"/"pay … to" = RESOLUTION (383.3.a.3). No deviation — the ~28 riftjudge
+  rulings that put a leading may/cost at resolution predate the Unleashed CR and are annotated RULING-CONFLICT.
 - Exception class that MUST work (and does): printed cost ALTERNATIVES / replacements are always enumerated from
   the cost model, even with an empty pool, and choosing one charges no Energy —
   - "you may spend a buff as an additional cost. If you do, ignore this spell's cost" (Wallop ogn-146,

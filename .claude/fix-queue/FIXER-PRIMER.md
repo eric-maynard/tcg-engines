@@ -52,10 +52,36 @@ Recipe: 1) dump enriched abilities. 2) JSON wrong → explicit `abilities` in th
   `resolveTarget({...tgt, quantity:"all"}, {choosing:true})`; `enumerator` emits one variant per legal target — this is what
   `game.p1.option("cast", c).fields` exposes. Only descriptors with `quantity` undefined/1 are caster-chosen at play time;
   `quantity:"all"`, `type:"player"|"battlefield"|"self"` are not. No Focus-holder check exists yet (rule 347 bugs land here).
+- OPTIONAL / COSTED parts of a TRIGGERED ability — ONE model, ONE classifier `E/abilities/optional-kind.ts
+  optionalKind(ability)` (stamped on the chain item as `item.mayKind`; core spec `core-rules/optional-instructions-
+  timing.test.ts`; adjudicated against CR 2026-07-24 + train rulings — do NOT re-litigate per ruling):
+  | kind | parsed shape / text | decided | act / paid |
+  | `cost-at-finalization` | `condition:{type:"pay-cost",cost}` (± `optional`) = "you may **[pay N|kill me|exhaust me|
+    banish me|discard N|[Burn N]|spend a buff|kill X|recycle X|return X] TO Y**"; or a lead `costStep:true` step ("Recycle me
+    to Y", "spend 3 XP to Y", "disempower X to Y") | FIN opt-in (383.3.a/402.1; timing FIN, prompt "Pay … to use") — decline
+    ⇒ item removed, never a chain item | FIN: it is the BASE COST (383.3.b, 204.3.a — the CR names Overzealous Fan —,
+    740.4.a.2, 404.1); cost objects named by a forced FIN `pick-many`; unpayable ⇒ removed unasked (404.2); a counter refunds
+    nothing (425.1.c); a resource that appears only after finalization (Sett's conquer buff for the Monastery) can't pay |
+  | `may-at-finalization` | `optional:true`, no pay-cost, no lead costStep = "you may Y", "you may X. **If you do,** Y"
+    (Reaver's Row, Tideturner, Azir; Draven V./Diana Lunari "you may pay [C]. If you do", Emperor's Dais "you may pay [1] and
+    return a unit here …. If you do", Adaptatron) | FIN opt-in (free — prompt "Use …?"; declined ⇒ removed 383.3.a.2) | RES:
+    X and Y are instructions; a "pay [C]. If you do" is a Pay GAME ACTION, not a cost (205) — asked, still declinable, as
+    the item resolves (444.2, `effects/conditional.ts` payChoice, timing RES); objects X/Y name are TARGETS chosen at FIN
+    (402.2); Y mandatory once opted in (383.3.a.1 — no "move it?" at RES); "if you do" linked (359.3.e.14 /
+    `did-perform`): X not performed ⇒ Y skipped |
+  | `may-at-resolution` | trigger NOT led by "you may": an inner `conditional{pay-cost}` / `optional` node / `pickCost`
+    (Insightful Investigator "… You may pay 2 XP to …", Ornn "You may reveal …", "Then you may pay") | RES (383.3.a.3) | RES
+    (204.3.b, 740.4.a.2.a) |
+  Rulings that put a LEADING may/cost at resolution (Fan survives NSF, SMDR chain-discards, Monastery/Wildclaw spend Sett's/
+  Cithria's fresh buff, Row "decline the move at resolution", Draven "nothing asked at trigger time") are the pre-Unleashed
+  minority (~28 train ids, see do_not_commit-free list in `core-rules/optional-instructions-timing.test.ts` header):
+  rewrite the facet to the model with `// RULING-CONFLICT: riftjudge <id> says X; CR 383.3.a/b / 204.3.a says Y — engine
+  follows CR`. Parser (`C/parser/impl/triggers.ts`): "you may pay/exhaust me/kill me/spend a buff … TO" ⇒ `pay-cost`
+  condition; "you may pay [C]. If you do, Y" ⇒ `optional:true` + effect `conditional{condition:pay-cost, then:Y}`.
 - TRIGGERED items are FINALIZED when queued (rules 337.1/383.3.a-b/402-404): `E/abilities/trigger-finalization.ts
   finalizePendingItems` (run at the end of every move by `withTriggerFinalization`, moves/index.ts) asks, oldest
-  pending item first and BEFORE anyone gets priority: leading "you may" (`opt-in` + simple pay-cost, decline ⇒ item
-  removed), then the single caster-chosen target(s) (`executeResolvedItem(…, {finalizeOnly:true})` reuses the same
+  pending item first and BEFORE anyone gets priority: leading "you may" (`opt-in`; for `cost-at-finalization` items the
+  base cost rides on the same prompt and is paid on accept; decline ⇒ item removed), then the single caster-chosen target(s) (`executeResolvedItem(…, {finalizeOnly:true})` reuses the same
   planning; ≥2 options ⇒ `choose-target` with `bindToChainItemId`, 1 ⇒ auto-bound onto `item.targets`, 0 ⇒ removed
   per 402.4), then modes (`raisePlayTimeModeChoice`). Resolution uses `item.targets` and re-checks them against the
   descriptor (illegal ⇒ that instruction fizzles, no re-target). MOVE DESTINATIONS too (rule 355.4,
@@ -254,7 +280,8 @@ effect and thread it through `reveal-and-pick.then`. If B needs A's object use `
   discarded/dying card itself; championZone excluded) → `findMatchingTriggers` → `evaluateTriggerCondition` (`legion,
   paid-additional-cost, while-empowered, while-at-battlefield, control, alone-in-combat, exists-here, fewer-runes-than-opponent`;
   unknown ⇒ true) → `orderTriggers` (turn player first) → `addToChain({triggered:true, optional, optInCost, triggerEvent})`.
-  `add-resource` effects and `ctx.resolveInline` run immediately. `optional:true` ⇒ `opt-in` prompt at FINALIZATION (see §2 note).
+  `add-resource` effects and `ctx.resolveInline` run immediately. `optional:true` / `optInCost` ⇒ `opt-in` prompt at FINALIZATION;
+  the item carries `mayKind = optionalKind(ability)` (see §2 model).
   `GRANTED_KEYWORD_TRIGGERS` synthesises Vision for granted keywords. `play-self` also triggers a static recalc here.
 - rule 383.3.d SAME-CONTROLLER ORDER: after a batch is finalized, `trigger-finalization.ts offerTriggerOrder` offers the
   ≥2 non-interchangeable triggered items one player controls as a SOFT prompt on `draft.pendingTriggerOrder` (type
@@ -388,20 +415,24 @@ Recipe — timing wrong: spell → card `rulesText`/`normalizeSpellTiming`; abil
   `play-unit.ts completeUnitPlay` runs from `pending-choice.ts postChoiceCleanup` via `completeSuspendedPlay` once no
   prompt is open (resources were paid first; the unit is still in its origin zone meanwhile). rule 357.3: playSpell's
   `mandatoryKillCandidates` drops sacrifices that would leave a cost-capped "play from trash" with no legal card.
-- TRIGGER costs (`item.optInCost`, from `condition:{type:"pay-cost", cost}`) are ALL settled at FINALIZATION
+- TRIGGER costs (`item.optInCost`, from `condition:{type:"pay-cost", cost}` — the `cost-at-finalization` kind of §2's
+  model; NOT the "you may pay [C]. If you do" Pay, which is a RES game action per rule 205) are ALL settled at FINALIZATION
   (rules 383.3.b / 402–404): `trigger-finalization.ts` raises the `opt-in` (`finalizationChainItemId`, timing FIN;
   payability gate = `pending-choice.ts canPayOptInCost` = resources + `killCostCandidates`/`recycleCostCandidates`/
-  `returnToHandCostCandidates` counts; DESIGN: resource-short ⇒ prompt stays with canAccept:false; an EMPTY/too-small
-  object set ⇒ item removed silently, no prompt — `optInCostObjectsExist`). On `yes()` the opt-in reducer pays
-  energy/power/xp/exhaust/kill-me/banish-me/burn/discard-N at once and, when the cost names board objects
-  (`objectCostsOf(cost)`: `kill {amount?,target}` / `recycle {…}` / `returnToHand {…}` — "here"/"another"/types
-  honoured), marks the item `objectCostOwed`; the dialog's Step 1b (`settleObjectCost`) then has the controller
+  `returnToHandCostCandidates`/`spendBuffCostCandidates` counts; DESIGN: resource-short ⇒ prompt stays with canAccept:false;
+  an EMPTY/too-small object set ⇒ item removed silently, no prompt — `optInCostObjectsExist`). On `yes()` the opt-in reducer
+  pays energy/power/xp/exhaust/kill-me/banish-me/burn/discard-N at once and, when the cost names board objects
+  (`objectCostsOf(cost)`: `kill {amount?,target}` / `recycle {…}` / `returnToHand {…}` / `spendBuff: n` (buffed units the
+  payer CONTROLS, 745.2; paid via the `spend-buff` handler with bound targets, fires "when you spend a buff") —
+  "here"/"another"/types honoured), marks the item `objectCostOwed`; the dialog's Step 1b (`settleObjectCost`) then has the controller
   name them (forced `pick-many`, `resume:{kind:"trigger-cost", itemId}`) and `payTriggerObjectCost` snapshots LKI →
   `item.paidObjects`, kills/recycles/bounces them through the effect handlers (357.2.a replacements, Deathknell,
   186.1) inside `withinMoveReducer`, then targets are chosen (Step 2). Nothing is asked or paid again at
   resolution (`executeResolvedItem` passes `paidObjects` into the EffectContext). Card-def shape for "you may
-  <kill|recycle|return> X to Y": `condition:{type:"pay-cost", cost:{kill:{target}}}` + effect Y (Dusk Rose Lab,
-  Bottled Constellation, Rumble, Emperor's Dais). Costs written inside instructions (`costStep:true`: "disempower X
+  <kill|recycle|return|spend a buff> X TO Y": `condition:{type:"pay-cost", cost:{kill:{target}}}` + effect Y (Dusk Rose Lab,
+  Bottled Constellation, Rumble, Monastery of Hirana `{spendBuff:1}`). NOT Emperor's Dais ("… . If you do," ⇒ rule 205:
+  `optional:true` + `conditional{pay-cost [1], target:<unit here>, then: sequence[return-to-hand, conditional did-perform →
+  create-token]}` — unit chosen at FIN, pay + return at RES). Costs written inside instructions (`costStep:true`: "disempower X
   to …", "banish me to …", "Recycle me to …", and the parser's "Spend N XP to …" lead step) are paid by
   `payFinalizationCostSteps` (Step 3, after targets; a target-less cost step consumes no bound-target slot).
 - Activated costs: `moves/chain/activate-ability.ts` condition checks energy, power (`chain/effect-context.ts canAffordPower`),
@@ -770,3 +801,4 @@ prompt — reuse the `opt-in` pattern (`die-replacement-batch.ts offerOptionalSh
 - **File-level embargo**: `.claude/fix-queue/embargo-files.txt` lines `owner<TAB>regex`; `land-patch.sh` refuses patches touching matching files unless your land LABEL starts with `owner` (you'll see `embargoed_file=…` `committed=false`). If you hit it: DROP that file from your land list and land the rest (or mark the item failed with note "embargoed files (owner package)"). NEVER `git checkout -- <file>` / `git restore` / `git stash` ANY file in the shared working tree — other lanes' and package owners' uncommitted work lives there; reverting a shared file destroys it. The only sanctioned way to 'undo' your own hunk is to edit it back by hand.
 - **Multi-execution / multi-instance damage vs replacements (rulings 87d4521a, 501859c8, 3afdd260, 6482271b):** DAMAGE-time replacements and prevention (The Boss 'would be dealt lethal damage', Counter Strike/'next time … prevent', Shield-style) apply PER damage instance/execution as it happens. DEATH ('if this would die' — Zhonya's Hourglass, Guardian Angel, Soraka) is a Cleanup event: no death check runs between [Repeat] executions or between instances of one resolving spell; lethal-damaged units die (and would-die replacements are consulted ONCE) in the single Cleanup after the item leaves the chain. Costs paid mid-resolution that make a unit lethal likewise wait for that Cleanup — EXCEPT where a rule inserts a Cleanup (319.x). Don't 'fix' one ruling by breaking the other class.
 - **Land lock etiquette**: call `land-patch.sh` ONCE and let its own `flock -w 1800` wait; on `reason=lock_timeout` call it once more. Do NOT write polling loops / background scripts that repeatedly try the lock — they starve fair waiters. Package lands may be given priority via `.claude/fix-queue/.land.priority` (coordinator-managed); your call will simply wait a bit longer.
+- **Coordinator note — editing land-patch.sh**: never edit it in place while lands are queued (bash reads scripts incrementally by byte offset; a running instance that holds the lock can fall into newly inserted lines). Write to a temp file and `mv` it over (new inode) so running instances keep the old text.
