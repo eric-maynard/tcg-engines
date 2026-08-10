@@ -38,7 +38,11 @@ import {
   cleanupAndFireDeaths,
   type PostMoveCleanupContext,
 } from "../../../cleanup/post-move-cleanup";
-import { extractBattlefieldId, isBattlefieldZone } from "../../../zones/zone-configs";
+import {
+  extractBattlefieldId,
+  getBattlefieldZoneId,
+  isBattlefieldZone,
+} from "../../../zones/zone-configs";
 import {
   addToChain,
   createInteractionState,
@@ -269,6 +273,21 @@ export function enterPlayedPermanent(io: PlayIO, spec: EnterPlayedPermanentSpec)
     }
   }
 
+  // rule 361 / 142.4.c / 320–323 (unl-118-219 Elder Dragon) — a permanent whose
+  // passive REDEFINES LETHAL DAMAGE ("any amount of your damage is enough to
+  // kill enemy units") applies the instant it is on the board, so the state
+  // check has to run here: the units it has just made lethally damaged die
+  // before the play trigger picks its targets and before anyone gets priority.
+  // Every other arrival is already covered by the cleanup the surrounding move
+  // / chain resolution runs.
+  const redefinesLethal = (registry.getAbilities(cardId) ?? []).some((a) => {
+    const ability = a as { type?: string; effect?: { type?: string } };
+    return ability.type === "static" && ability.effect?.type === "lethal-damage-modifier";
+  });
+  if (redefinesLethal && canFire && typeof counters.getCounter === "function") {
+    cleanupAndFireDeaths(draft, { cards, counters, zones } as unknown as PostMoveCleanupContext);
+  }
+
   if (!canFire) {
     return entryZone;
   }
@@ -333,6 +352,47 @@ export function enterPlayedPermanent(io: PlayIO, spec: EnterPlayedPermanentSpec)
 }
 
 /**
+ * rule 323.6 / 190.4.c (ruling 41251a7db1c8d7f0 — Baited Hook, and the CR's
+ * Cruel Patron example) — control of a battlefield rests on having a unit
+ * there. An effect that kills a player's LAST unit at a battlefield and then
+ * plays a card costs them that battlefield as a destination straight away,
+ * even though the recorded `controller` is only cleared by the next Open State
+ * (`state-based-checks.ts` step 6). Control that never rested on a unit here
+ * (`controllerOccupied` false — a seeded board, or control handed over by an
+ * effect) has nothing to vacate and survives, exactly as in that check.
+ */
+function stillHoldsBattlefield(
+  draft: RiftboundGameState,
+  io: PlayIO | undefined,
+  playerId: string,
+  bfId: string,
+): boolean {
+  if (draft.battlefields?.[bfId]?.controllerOccupied !== true) {
+    return true;
+  }
+  // rule 309.1 / 323.6 — outside an Open State the recorded control normally
+  // stands (a Deathknell whose unit was just killed by an opponent's spell
+  // still plays to "its" battlefield). The ruling's exception is narrower: the
+  // ability doing the playing is the one that KILLED the player's unit, so by
+  // the time it plays the card it has already given the battlefield up.
+  if (draft.lastKilledUnitId === undefined || draft.lastKilledUnitController !== playerId) {
+    return true;
+  }
+  const zones = io?.zones;
+  if (typeof zones?.getCardsInZone !== "function") {
+    return true; // no zone reader (unit-test stubs) — keep the recorded control
+  }
+  const registry = getGlobalCardRegistry();
+  const here = zones.getCardsInZone(getBattlefieldZoneId(bfId as CoreCardId)) as readonly CoreCardId[];
+  return here.some((id) => {
+    if (registry.getCardType(id as string) !== "unit") {
+      return false;
+    }
+    return (io?.cards?.getCardController?.(id) ?? io?.cards?.getCardOwner?.(id)) === playerId;
+  });
+}
+
+/**
  * rule 355.2 / 355.4 / 462.2.a — where `playerId` may put a permanent they are
  * playing: their base or a battlefield they control (never one that forbids
  * unit plays — sfd-216-221), plus any location an effect explicitly grants
@@ -343,7 +403,12 @@ export function playDestinationOptions(
   draft: RiftboundGameState,
   playerId: string,
   cardId: string,
-  spec?: { readonly only?: readonly string[]; readonly extra?: readonly string[] },
+  spec?: {
+    readonly only?: readonly string[];
+    readonly extra?: readonly string[];
+    /** Supplied by `locationOptionsFor`; enables the 323.6 vacancy check above. */
+    readonly io?: PlayIO;
+  },
 ): string[] {
   const type = getGlobalCardRegistry().getCardType(cardId);
   const isUnit = type !== "gear" && type !== "equipment";
@@ -359,7 +424,7 @@ export function playDestinationOptions(
   const out = [
     "base",
     ...Object.entries(draft.battlefields ?? {})
-      .filter(([, bf]) => bf.controller === playerId)
+      .filter(([bfId, bf]) => bf.controller === playerId && stillHoldsBattlefield(draft, spec?.io, playerId, bfId))
       .map(([bfId]) => `battlefield-${bfId}`),
   ];
   for (const zone of spec?.extra ?? []) {
@@ -852,6 +917,7 @@ function locationOptionsFor(io: PlayIO, spec: EffectPlaySpec): string[] {
     return [
       ...playDestinationOptions(draft, spec.playerId, spec.cardId, {
         extra: selfGrantedPlayLocations(io, spec),
+        io,
       }),
       ...affordableRedirectDestinations(io, spec),
     ];
@@ -865,6 +931,7 @@ function locationOptionsFor(io: PlayIO, spec: EffectPlaySpec): string[] {
   return [
     ...playDestinationOptions(draft, spec.playerId, spec.cardId, {
       extra: [...loc.extra, ...selfGrantedPlayLocations(io, spec)],
+      io,
     }),
     ...affordableRedirectDestinations(io, spec),
   ];
