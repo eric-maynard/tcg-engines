@@ -2,7 +2,7 @@
 import type { CardId as CoreCardId } from "@tcg/core";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import type { EffectHelpers } from "./_helpers";
-import { getTargetIds } from "./_helpers";
+import { getTargetIds, withMightWatch } from "./_helpers";
 
 /**
  * rule 323.5 / 142.4.b (ven-116-166 Dragon Form) — "Its base Might becomes N
@@ -20,9 +20,14 @@ export function handle_setBaseMight(
   if (typeof amount !== "number") {
     return;
   }
-  for (const cardId of getTargetIds(effect, ctx)) {
-    ctx.cards.updateCardMeta?.(cardId as CoreCardId, {
-      baseMightOverride: amount,
-    } as unknown as Record<string, unknown>);
-  }
+  // rule 709 / 710 — a SET base Might can carry the unit across the Mighty
+  // threshold just like a pump, so the change goes through the Might watch.
+  const targetIds = getTargetIds(effect, ctx);
+  withMightWatch(targetIds, ctx, () => {
+    for (const cardId of targetIds) {
+      ctx.cards.updateCardMeta?.(cardId as CoreCardId, {
+        baseMightOverride: amount,
+      } as unknown as Record<string, unknown>);
+    }
+  });
 }

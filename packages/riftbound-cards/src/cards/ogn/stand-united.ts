@@ -21,6 +21,9 @@ const abilities: Ability[] = [
         {
           effect: {
             amount: 1,
+            // rule 703 — the rider is per Buff counter, so a unit that may hold
+            // several buffs (Lee Sin, 426.1.b.2) gets +1 for each of them.
+            perBuffCounter: true,
             target: { controller: "friendly", filter: "buffed", type: "unit" },
             type: "modify-might",
           },

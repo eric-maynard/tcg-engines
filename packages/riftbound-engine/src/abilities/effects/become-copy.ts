@@ -2,6 +2,7 @@
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import type { EffectHelpers } from "./_helpers";
+import { withMightWatch } from "./_helpers";
 
 /**
  * rule 477.1.b / 477.2 (ven-137-166 Shady Spectacles): "the equipped unit
@@ -19,5 +20,9 @@ export function handle_become_copy(
   if (!holderId || !sourceId || holderId === sourceId) {
     return;
   }
-  getGlobalCardRegistry().becomeCopyOf(holderId, sourceId);
+  // rule 709 / 710 — copying a bigger unit's printed Might is a Might change
+  // like any other, so it can be the moment the holder becomes [Mighty].
+  withMightWatch([holderId], ctx, () => {
+    getGlobalCardRegistry().becomeCopyOf(holderId, sourceId);
+  });
 }

@@ -1057,6 +1057,12 @@ function applyStaticEffect(
         | Partial<RiftboundCardMeta>
         | undefined;
       let targetAmount = amount;
+      // rule 703 (rule-id: ogn-053-298) — "Buffs give an additional +N [Might]":
+      // each Buff counter is its own object, so the rider scales with the
+      // target's counter count, not with the boolean "is buffed".
+      if (effect.perBuffCounter === true) {
+        targetAmount *= (meta?.buffed ? 1 : 0) + (meta?.extraBuffs ?? 0);
+      }
       if (equipMultiplier !== undefined && registry) {
         let equipBase = 0;
         for (const equipId of meta?.equippedWith ?? []) {

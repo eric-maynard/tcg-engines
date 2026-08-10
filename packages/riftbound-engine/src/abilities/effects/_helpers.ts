@@ -594,6 +594,26 @@ export function checkBecomesMighty(cardId: string, mightBefore: number, ctx: Eff
 }
 
 /**
+ * rule 709 / 710 — ANY change to a unit's current Might can make it "become
+ * [Mighty]", whatever layer moved it (buff, modifier, static, equipment, a SET
+ * base Might, or a copy effect swapping the printed Might). Writers that are
+ * not already a `checkBecomesMighty` call site wrap their mutation in this, so
+ * the threshold is compared once from a single choke: snapshot → mutate →
+ * compare, emitting become-mighty at most once per unit.
+ */
+export function withMightWatch<T>(cardIds: string[], ctx: EffectContext, mutate: () => T): T {
+  const before = new Map<string, number>();
+  for (const id of cardIds) {
+    before.set(id, getEffectiveMight(id, ctx));
+  }
+  const result = mutate();
+  for (const id of cardIds) {
+    checkBecomesMighty(id, before.get(id) ?? 0, ctx);
+  }
+  return result;
+}
+
+/**
  * Evaluate a condition for conditional effects.
  */
 export function evaluateEffectCondition(
