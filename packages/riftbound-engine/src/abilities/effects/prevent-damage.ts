@@ -61,11 +61,27 @@ export function handle_preventDamage(effect: ExecutableEffect, ctx: EffectContex
   const preventAmount: number | "all" =
     (effect.amount as unknown) === "all" ? "all" : resolveAmount(effect.amount ?? 0, ctx);
   for (const targetId of preventTargets) {
+    // rule 437.5.a — all Prevent Values on a unit are considered together, so a
+    // second numeric shield ADDS to the pool rather than replacing it (two Ki
+    // Barriers prevent 14). A Prevent All swallows any numeric pool.
+    const meta = ctx.cards.getCardMeta?.(targetId as CoreCardId) as
+      | { damagePreventionShield?: number | "all"; damagePreventionSource?: string }
+      | undefined;
+    const existing = meta?.damagePreventionShield;
+    const merged: number | "all" =
+      preventAmount === "all" || existing === "all"
+        ? "all"
+        : typeof existing === "number" && existing > 0
+          ? existing + preventAmount
+          : preventAmount;
     ctx.cards.updateCardMeta?.(
       targetId as CoreCardId,
       {
-        damagePreventionShield: preventAmount,
-        damagePreventionSource: ctx.sourceCardId,
+        damagePreventionShield: merged,
+        damagePreventionSource:
+          typeof existing === "number" && existing > 0 && meta?.damagePreventionSource
+            ? meta.damagePreventionSource
+            : ctx.sourceCardId,
       } as unknown as Record<string, unknown>,
     );
   }
