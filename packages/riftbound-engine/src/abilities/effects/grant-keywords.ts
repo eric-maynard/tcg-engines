@@ -3,7 +3,7 @@ import type { CardId as CoreCardId } from "@tcg/core";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import type { GrantedKeyword, RiftboundCardMeta } from "../../types";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
-import { type EffectHelpers, getTargetIds } from "./_helpers";
+import { type EffectHelpers, getTargetIds, unitIsOnBoard } from "./_helpers";
 
 /**
  * "Give … my keywords" (sfd-112-221 Kato the Arm). Card definitions encode this
@@ -28,6 +28,12 @@ function expandSelfKeywords(kws: readonly string[], ctx: EffectContext): Keyword
     return kws.map((k) => ({ keyword: k }));
   }
   const source = ctx.sourceCardId;
+  // rule 359.3.e.12 — information about a permanent that has changed to a
+  // non-board zone is null: the ability still resolves (355.9.c) but "my
+  // keywords" copies nothing. The card now in hand/trash is a new object (124).
+  if (!unitIsOnBoard(source, ctx)) {
+    return kws.filter((k) => k !== SELF_KEYWORDS).map((k) => ({ keyword: k }));
+  }
   const def = getGlobalCardRegistry().get(source);
   const own: KeywordGrant[] = [];
   for (const ability of def?.abilities ?? []) {

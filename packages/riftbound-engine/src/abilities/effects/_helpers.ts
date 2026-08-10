@@ -46,7 +46,7 @@ function dieWouldBeReplaced(cardId: string, ctx: EffectContext): boolean {
 }
 
 /** On the board = in a base or at a battlefield (trash/banished/hand are not). */
-function unitIsOnBoard(cardId: string, ctx: EffectContext): boolean {
+export function unitIsOnBoard(cardId: string, ctx: EffectContext): boolean {
   const zone = ctx.zones.getCardZone(cardId as CoreCardId) ?? "";
   return zone === "base" || zone.startsWith("battlefield-");
 }
@@ -421,7 +421,15 @@ export function resolveAmount(
   if ("might" in amount) {
     const mightRef = amount.might;
     if (mightRef === "self") {
-      return getEffectiveMight(selfReferenceCardId(ctx.sourceCardId, ctx), ctx);
+      const selfId = selfReferenceCardId(ctx.sourceCardId, ctx);
+      // rule 359.3.e.12 — information about a permanent that has changed to a
+      // non-board zone is null, and a calculation using it is ignored: an
+      // ability that outlives its source ("+[Might] equal to MY Might", 355.9.c)
+      // grants nothing once the source has left the board.
+      if (!unitIsOnBoard(selfId, ctx)) {
+        return 0;
+      }
+      return getEffectiveMight(selfId, ctx);
     }
     // rule-id: ogn-260-298 (rule 355.14.a) — "Ready a friendly unit. It deals
     // damage equal to ITS Might": "its" names the unit an EARLIER sequence step
