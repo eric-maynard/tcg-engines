@@ -414,7 +414,16 @@ export function computeStaticCostIncrease(
     return total;
   }
   const playedCardType = playedDef.cardType;
-  const playedKeywords = keywordsWhilePlaying(playedDef.keywords ?? [], playContext);
+  // Printed keywords live either in the flat `keywords` list or as
+  // `{type:"keyword"}` abilities, so read both before the audience match.
+  const printedKeywords = [
+    ...(playedDef.keywords ?? []),
+    ...((registry.getAbilities(playedCardId) ?? [])
+      .filter((a) => (a as { type?: string }).type === "keyword")
+      .map((a) => (a as { keyword?: string }).keyword)
+      .filter((k): k is string => typeof k === "string")),
+  ];
+  const playedKeywords = keywordsWhilePlaying(printedKeywords, playContext);
   const playedTags = playedDef.tags ?? [];
 
   const playedTiming = (playedDef as { timing?: string }).timing;
@@ -1078,7 +1087,12 @@ export function keywordsWhilePlaying(
   printed: readonly string[],
   playContext?: PlayKeywordContext,
 ): readonly string[] {
-  const granted = playContext?.fromHidden === true || playContext?.grantedReaction === true;
+  // rule 819.1.b (sfd-022-221) — [Quick-Draw] is an inherent grant of
+  // [Reaction], so a "cards with [Reaction]" audience sees it unconditionally.
+  const granted =
+    playContext?.fromHidden === true ||
+    playContext?.grantedReaction === true ||
+    printed.includes("Quick-Draw");
   if (!granted || printed.includes("Reaction")) {
     return printed;
   }
