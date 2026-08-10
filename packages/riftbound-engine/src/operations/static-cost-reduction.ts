@@ -402,6 +402,7 @@ export function computeStaticCostIncrease(
   ctx: CostReductionContext,
   playerId: string,
   playedCardId: string,
+  playContext?: PlayKeywordContext,
 ): { energy: number; power: Partial<Record<string, number>> } {
   const registry = getGlobalCardRegistry();
   const playedDef = registry.get(playedCardId);
@@ -413,7 +414,7 @@ export function computeStaticCostIncrease(
     return total;
   }
   const playedCardType = playedDef.cardType;
-  const playedKeywords = playedDef.keywords ?? [];
+  const playedKeywords = keywordsWhilePlaying(playedDef.keywords ?? [], playContext);
   const playedTags = playedDef.tags ?? [];
 
   const playedTiming = (playedDef as { timing?: string }).timing;
@@ -1045,6 +1046,43 @@ function costRestrictionsSatisfied(
     return false;
   }
   return true;
+}
+
+/**
+ * How a card is being played, for keyword audiences that read more than the
+ * printed line ("cards with [Reaction]").
+ */
+export interface PlayKeywordContext {
+  /** The play is a flip of a facedown (Hidden) card. */
+  readonly fromHidden?: boolean;
+  /**
+   * rule 822.1.c / 822.4 — the play itself grants the card [Reaction] for its
+   * duration ([Ambush] played to a battlefield where you control units).
+   */
+  readonly grantedReaction?: boolean;
+}
+
+/**
+ * rule 811.6 / 813.1.b — a Hidden card has [Reaction] while it is facedown or
+ * being played from facedown, so a "cards with [Reaction]" audience must see
+ * that grant even though the printed timing says [Action]. Having [Hidden] is
+ * independent of being facedown (811.5.a), hence the play context rather than
+ * the card definition decides.
+ *
+ * rule 822.4 / 813.4 / 813.5 — the same holds for a conditionally GRANTED
+ * [Reaction] ([Ambush] while being played to a battlefield where you control
+ * units): while the condition holds it is the card's Reaction characteristic
+ * and other effects (Mystic Vortex's surcharge) read it.
+ */
+export function keywordsWhilePlaying(
+  printed: readonly string[],
+  playContext?: PlayKeywordContext,
+): readonly string[] {
+  const granted = playContext?.fromHidden === true || playContext?.grantedReaction === true;
+  if (!granted || printed.includes("Reaction")) {
+    return printed;
+  }
+  return [...printed, "Reaction"];
 }
 
 /**

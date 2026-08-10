@@ -390,6 +390,9 @@ function revealSurcharge(
     } as CostReductionContext,
     playerId,
     cardId,
+    // rule 811.6 — played from facedown, the card has [Reaction] for audiences
+    // like Mystic Vortex even though its printed timing is [Action].
+    { fromHidden: true },
   );
   const pips: string[] = [];
   for (const [domain, count] of Object.entries(increase.power)) {
@@ -423,9 +426,14 @@ function planPipPayment(
   const spent: string[] = [];
   for (const pip of pips) {
     if (pip === "rainbow") {
-      const key = Object.entries(remaining)
-        .filter(([, v]) => v > 0)
-        .sort(([, a], [, b]) => b - a)[0]?.[0];
+      // rule 135.2.e.5.a/b — [A] is payable from any domain; spend pooled [A]
+      // first so domain-specific Power stays available for domain-specific pips.
+      const key =
+        (remaining.rainbow ?? 0) > 0
+          ? "rainbow"
+          : Object.entries(remaining)
+              .filter(([, v]) => v > 0)
+              .sort(([, a], [, b]) => b - a)[0]?.[0];
       if (key === undefined) {
         return undefined;
       }
