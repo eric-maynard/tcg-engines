@@ -27,9 +27,15 @@ export function isPrivateZone(zone: string): boolean {
   return zone === "hand" || zone.startsWith("facedown-") || isSecretZone(zone);
 }
 
-/** Zones nobody may look at (rule 127: secret) — deck order. */
+/**
+ * Zones nobody may look at (rule 127: secret) — deck order, plus the pregame
+ * set-aside pile.
+ * rule 486.5 / 485.5 — the two battlefields a player did NOT select "are set
+ * aside and will not be used": nobody learns which two they were, which is why
+ * `zones/zone-configs.ts` marks `setAside` secret.
+ */
 export function isSecretZone(zone: string): boolean {
-  return zone === "mainDeck" || zone === "runeDeck";
+  return zone === "mainDeck" || zone === "runeDeck" || zone === "setAside";
 }
 
 /** Zones that hold one shared list for all players (filter by owner). */
@@ -136,11 +142,40 @@ export function isActivelyRevealed(engine: HarnessEngine, id: string): boolean {
   return ((engine.getState().activeReveals ?? []) as readonly string[]).includes(id);
 }
 
+/**
+ * rule 486.5 / 485.5 — "each player selects one of their three Battlefields …
+ * The selected Battlefields are placed SIMULTANEOUSLY": until every player has
+ * locked one in, a player's selection is hidden from every other seat (the
+ * engine's own `views/player-view.ts createPlayerView` filters `battlefields`
+ * the same way; this is the harness-side mirror).
+ */
+export function pregameHiddenBattlefields(engine: HarnessEngine, viewer: Viewer): ReadonlySet<string> {
+  if (viewer === SPECTATOR) {
+    return new Set();
+  }
+  const state = engine.getState();
+  const choices = state.setup?.battlefieldChoices;
+  if (choices === undefined) {
+    return new Set();
+  }
+  if (Object.keys(state.players).every((pid) => choices[pid] !== undefined)) {
+    return new Set();
+  }
+  return new Set(
+    Object.entries(choices)
+      .filter(([pid]) => pid !== viewer)
+      .map(([, cardId]) => cardId),
+  );
+}
+
 /** Whether `viewer` may learn the identity of card `id` where it currently sits. */
 export function canSeeCardIdentity(engine: HarnessEngine, viewer: Viewer, id: string): boolean {
   const inst = getInternalState(engine).cards[id];
   const owner = inst?.owner ?? "";
   const zone = inst?.zone ?? "unknown";
+  if (pregameHiddenBattlefields(engine, viewer).has(id)) {
+    return false;
+  }
   return (
     canSee(viewer, zone, owner) ||
     hasVisibilityGrant(engine, viewer, zone, owner) ||
@@ -250,13 +285,7 @@ export function viewCard(
   const inst = internal.cards[id];
   const owner = inst?.owner ?? "";
   const zone = (inst?.zone ?? "unknown") as ZoneKey;
-  if (
-    !canSee(viewer, zone, owner) &&
-    !hasVisibilityGrant(engine, viewer, zone, owner) &&
-    !isRevealedForPendingChoice(engine, viewer, id) &&
-    !isActivelyRevealed(engine, id) &&
-    !isGameEndRevealed(engine, zone)
-  ) {
+  if (!canSeeCardIdentity(engine, viewer, id)) {
     return { hidden: true, index, owner, zone };
   }
   return buildCardState(engine, id, pool);
@@ -278,7 +307,11 @@ export function observe(
     zones[zoneId] = z.cardIds.map((id, idx) => viewCard(engine, viewer, id, idx, pool));
   }
 
-  const battlefields: BattlefieldView[] = Object.values(state.battlefields ?? {}).map((bf) => ({
+  const hiddenBattlefields = pregameHiddenBattlefields(engine, viewer);
+
+  const battlefields: BattlefieldView[] = Object.values(state.battlefields ?? {})
+    .filter((bf) => !hiddenBattlefields.has(bf.id))
+    .map((bf) => ({
     contested: bf.contested,
     contestedBy: bf.contestedBy,
     controller: bf.controller,
@@ -333,6 +366,32 @@ export function observe(
           ...(state.publicReveals === undefined
             ? {}
             : { publicReveals: redactPrivateCardIds(engine, viewer, state.publicReveals) as typeof state.publicReveals }),
+          // rule 486.5 — a selection locked in before the other seats have
+          // chosen is hidden information: it names no battlefield entry and no
+          // `setup.battlefieldChoices` row in anyone else's state.
+          ...(hiddenBattlefields.size === 0
+            ? {}
+            : {
+                battlefields: Object.fromEntries(
+                  Object.entries(state.battlefields ?? {}).filter(([cardId]) => !hiddenBattlefields.has(cardId)),
+                ) as typeof state.battlefields,
+                ...(state.setup === undefined
+                  ? {}
+                  : {
+                      setup: {
+                        ...state.setup,
+                        ...(state.setup.battlefieldChoices === undefined
+                          ? {}
+                          : {
+                              battlefieldChoices: Object.fromEntries(
+                                Object.entries(state.setup.battlefieldChoices).filter(
+                                  ([, cardId]) => !hiddenBattlefields.has(cardId),
+                                ),
+                              ),
+                            }),
+                      },
+                    }),
+              }),
         };
 
   return {

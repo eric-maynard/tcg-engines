@@ -2212,9 +2212,14 @@ export const pendingChoiceMoves: Partial<
             | undefined;
           const idx = chainItems?.findIndex((it) => it.id === finPlayerItemId) ?? -1;
           if (chainItems && idx >= 0) {
+            const itemEffect = chainItems[idx]?.effect as { type?: string } | undefined;
+            // rule 355.10 — a "Choose an opponent" naming the REVEALING player
+            // is read back as `_chosenPlayer` (abilities/chosen-player.ts), not
+            // as the `player: "choose"` seat swap that writes `ownerId`.
+            const seatKey = itemEffect?.type === "reveal-hand" ? "_chosenPlayer" : "ownerId";
             chainItems[idx] = {
               ...chainItems[idx],
-              effect: { ...(chainItems[idx]?.effect as object), ownerId: picked },
+              effect: { ...(itemEffect as object), [seatKey]: picked },
             } as (typeof chainItems)[number];
           }
           return;

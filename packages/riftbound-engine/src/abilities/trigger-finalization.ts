@@ -29,6 +29,8 @@
 import type { CardId as CoreCardId } from "@tcg/core";
 import type { ChainItem, ChainTargetSlot } from "../chain/chain-state";
 import { removeChainItem } from "../chain/chain-state";
+import { legalChosenPlayers } from "./chosen-player";
+import { revealHandChosenPlayerWhich } from "./reveal-hand-player";
 import type { PostMoveCleanupContext } from "../cleanup/post-move-cleanup";
 import { cleanupAndFireDeaths } from "../cleanup/post-move-cleanup";
 import { recalculateStaticEffects } from "./static-abilities";
@@ -64,7 +66,7 @@ import {
   costRiderTargetIsClassFilter,
   replacementTargetIsClassFilter,
 } from "./replacement-effects";
-import { resolveAmount } from "./effects/_helpers";
+import { evaluateEffectCondition, resolveAmount } from "./effects/_helpers";
 import type { TargetDescriptor } from "./target-resolver";
 import { resolveTarget } from "./target-resolver";
 import { bindTargetSlot, collectMultiPickSlots, slotCandidates } from "./target-slots";
@@ -197,6 +199,62 @@ function patchItem(draft: RiftboundGameState, itemId: string, patch: Partial<Cha
  * ever becoming a Finalized Chain Item (not a counter). rule 383.3.e.2: a
  * "once each turn" trigger that was not performed has not used up its turn.
  */
+/**
+ * rule 370.1.a.1 / 373 — has a queued "If this kills it, …" rider's stamped kill
+ * been undone? The reflexive item carries the ids it was about to kill; by
+ * finalization the rule 520 deaths and every `die` replacement have been
+ * settled, so a still-on-board unit was saved and the rider never triggered.
+ */
+/**
+ * rule 355.10 — open the "Choose an opponent" prompt of a `reveal-hand` item
+ * that still owes one (spell or ability alike). Returns true when it prompted.
+ */
+function raiseRevealHandOpponentChoice(draft: {
+  interaction?: { chain?: { items?: readonly ChainItem[] } };
+  pendingChoice?: unknown;
+  players: Record<string, unknown>;
+}): boolean {
+  for (const item of draft.interaction?.chain?.items ?? []) {
+    if (item.countered === true) {
+      continue;
+    }
+    const which = revealHandChosenPlayerWhich(item.effect);
+    if (which === undefined) {
+      continue;
+    }
+    const legalSeats = legalChosenPlayers(which, item.controller as string, Object.keys(draft.players));
+    if (legalSeats.length < 2) {
+      continue;
+    }
+    (draft as { pendingChoice?: unknown }).pendingChoice = {
+      effect: item.effect,
+      finalizationChainItemId: item.id,
+      options: legalSeats,
+      playerId: item.controller,
+      prompt: "Choose an opponent",
+      sourceCardId: item.cardId,
+      type: "choose-player",
+    };
+    return true;
+  }
+  return false;
+}
+
+function killGuardAlreadyFailed(item: ChainItem, draft: unknown, context: unknown): boolean {
+  const condition = (item as { effect?: { condition?: { ids?: readonly string[]; type?: string } } })
+    .effect?.condition;
+  if (condition?.type !== "this-kills-target" || condition.ids === undefined) {
+    return false;
+  }
+  const ctx = buildEffectContext(
+    draft as never,
+    item.controller as string,
+    item.cardId as string,
+    context as never,
+  );
+  return !evaluateEffectCondition(condition as never, ctx as never);
+}
+
 export function removeUnfinalizedItem(draftLike: unknown, itemId: string): void {
   const draft = draftLike as RiftboundGameState;
   const interaction = draft.interaction;
@@ -1126,6 +1184,15 @@ export function finalizePendingItems(draftLike: unknown, ctx: FinalizationContex
     if (draft.pendingChoice) {
       return;
     }
+    // rule 355.10 / 402.2 (ogn-156-298 Sabotage, ogn-192-298 Mindsplitter) —
+    // "Choose an opponent. They reveal their hand …": the seat is one of the
+    // choices made as the item is PLAYED, before anyone receives Priority. A
+    // single legal player is auto-bound by the handler (402.2, every 1v1 game);
+    // with two or more the item's controller is asked here and the answer rides
+    // on the effect as `_chosenPlayer` (see `abilities/chosen-player.ts`).
+    if (raiseRevealHandOpponentChoice(draft)) {
+      return;
+    }
     // rule 355.4 / 349 / 402.2 — Move Destinations of every FINALIZED item
     // (a spell or activation just played, a trigger finalized on the previous
     // pass) are chosen now, mover by mover, before anyone receives priority.
@@ -1175,6 +1242,15 @@ export function finalizePendingItems(draftLike: unknown, ctx: FinalizationContex
       if (continueEffectPlay({ ...context, draft } as never, item) === "prompted") {
         return;
       }
+      continue;
+    }
+
+    // rule 359.3.e.14.b / 370.1.a.1 — a queued "If this kills it, do this: …"
+    // rider whose kill turned out to be REPLACED (a single-use shield chose
+    // that death at the Cleanup — rule 373) never triggered at all: the item is
+    // removed before Priority instead of resolving to nothing.
+    if (killGuardAlreadyFailed(item, draft, context)) {
+      removeUnfinalizedItem(draft, item.id);
       continue;
     }
 
