@@ -152,6 +152,7 @@ function tokenAccelerateCost(
   ctx: EffectContext,
   tokenDefinitionId: string,
   controller: string,
+  pledged = 0,
 ): { energy: number } | undefined {
   const board = friendlyBoardIds(ctx, controller).map((cardId) => ({ cardId, controller }));
   const granted = getGrantedAcceleratePlayCost(tokenDefinitionId, controller, board, false);
@@ -165,13 +166,16 @@ function tokenAccelerateCost(
         0,
       )
     : 0;
-  if (!pool || pool.energy < granted.energy || pips < 1) {
+  // rule 404.2: "play three tokens" elects each token's Accelerate separately,
+  // but all of them are paid together as the effect finishes — an election the
+  // pool can no longer cover once the earlier ones are counted is not offered.
+  if (!pool || pool.energy < granted.energy * (pledged + 1) || pips < pledged + 1) {
     return undefined;
   }
   return { energy: granted.energy };
 }
 
-/** rule 805.6 — pay the elected Accelerate: [1] plus one pip of any Domain. */
+/** rule 805.6 — pay each elected Accelerate: [1] plus one pip of any Domain. */
 function payTokenAccelerate(ctx: EffectContext, controller: string, energy: number): void {
   const pool = ctx.draft.runePools[controller];
   if (!pool) {
@@ -317,24 +321,33 @@ export function handle_createToken(effect: ExecutableEffect, ctx: EffectContext,
   // is only drained when the controller accepts (rule 805.6 → enters ready).
   const accel = effect as {
     acceleratePaid?: boolean;
+    accelerateAsked?: number;
+    acceleratePaidCount?: number;
     skipAccelerateOffer?: boolean;
     resolvedTokenZone?: string;
   };
-  const paidAccelerate = accel.acceleratePaid === true;
+  // rule 185.2.a: "play three … tokens" is three plays, so each token gets its
+  // own election — `accelerateAsked` counts the offers already answered and
+  // `acceleratePaidCount` how many were accepted (the first N tokens minted).
+  const asked = accel.accelerateAsked ?? 0;
+  const paidAccelerateCount = accel.acceleratePaidCount ?? (accel.acceleratePaid === true ? 1 : 0);
   if (
     tokenDef.type !== "gear" &&
-    count === 1 &&
-    !paidAccelerate &&
+    asked < count &&
     !tokenEntersReady &&
     accel.skipAccelerateOffer !== true &&
     !ctx.draft.pendingChoice
   ) {
-    const price = tokenAccelerateCost(ctx, tokenDefinitionId, ownerId);
+    const price = tokenAccelerateCost(ctx, tokenDefinitionId, ownerId, paidAccelerateCount);
     if (price) {
-      const carry = { ...effect, resolvedTokenZone: targetZone } as Record<string, unknown>;
+      const carry = {
+        ...effect,
+        accelerateAsked: asked + 1,
+        resolvedTokenZone: targetZone,
+      } as Record<string, unknown>;
       ctx.draft.pendingChoice = {
-        declineEffect: { ...carry, skipAccelerateOffer: true },
-        effect: { ...carry, acceleratePaid: true },
+        declineEffect: { ...carry, acceleratePaidCount: paidAccelerateCount },
+        effect: { ...carry, acceleratePaidCount: paidAccelerateCount + 1 },
         playerId: ownerId,
         prompt: `Pay [${price.energy}][any] to Accelerate ${tokenDef.name}?`,
         sourceCardId: ctx.sourceCardId,
@@ -346,11 +359,12 @@ export function handle_createToken(effect: ExecutableEffect, ctx: EffectContext,
       return;
     }
   }
-  if (paidAccelerate) {
+  for (let paid = 0; paid < paidAccelerateCount; paid++) {
     payTokenAccelerate(ctx, ownerId, 1);
   }
-  // rule 805.6: a paid Accelerate overrides the rule 143.4 exhausted default.
-  const entersReadyNow = tokenEntersReady || paidAccelerate;
+  // rule 805.6: a paid Accelerate overrides the rule 143.4 exhausted default —
+  // for exactly the tokens whose election was accepted.
+  const entersReadyAt = (index: number) => tokenEntersReady || index < paidAccelerateCount;
   // Rule unl-081-219 (Keeper of Masks): "They become copies of me." A token
   // spec carrying the `CopyOnPlay` marker registers each instance with the
   // source card's definition (name, Might, keywords, abilities) instead of
@@ -382,7 +396,7 @@ export function handle_createToken(effect: ExecutableEffect, ctx: EffectContext,
     createdIds.push(tokenId);
     // Rule 143.4 / 185.2.d: token units enter play exhausted; gear tokens
     // enter ready unless the effect says otherwise (sfd-004-221).
-    if ((tokenDef.type !== "gear" || effect.ready === false) && !entersReadyNow) {
+    if ((tokenDef.type !== "gear" || effect.ready === false) && !entersReadyAt(i)) {
       ctx.counters.setFlag(tokenId as CoreCardId, "exhausted", true);
     }
     // `effect` (and thus `tokenDef`) reaches here via the chain-state

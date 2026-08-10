@@ -74,7 +74,7 @@ describe("Ruling 4ec47c8afe310207 — Rek'Sai lets you Accelerate the Forerunner
   // Expected: as each token is played (not from hand) Rek'Sai grants it [Accelerate], so P1 is asked — once per token —
   // whether to pay [1] + 1 power; paying for exactly one leaves that Mech ready, the other exhausted, and costs 1/1.
   // Actual: the tokens are created exhausted with no Accelerate opt-in ever offered.
-  test.failing("BUG: ruling 4ec47c8afe310207 — engine offers no per-token Accelerate opt-in for effect-played tokens under Rek'Sai", async () => {
+  test("ruling 4ec47c8afe310207 — engine offers no per-token Accelerate opt-in for effect-played tokens under Rek'Sai", async () => {
     const game = await board().build();
     await killForerunner(game);
     let offers = 0;
