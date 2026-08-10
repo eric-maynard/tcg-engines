@@ -541,6 +541,12 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
               const playerId = context.getCurrentPlayer();
               const triggerCtx = buildFlowTriggerContext(context);
               fireTriggers({ playerId: playerId as string, type: "start-of-turn" }, triggerCtx);
+              // rule 383.3.d — the [Temporary] kills queued above are Chain items
+              // of this same instant, but they are added by the flow, not by a
+              // trigger match, so nothing has run the finalization sweep when no
+              // other start-of-phase ability fired. Run it here so their
+              // controller is offered their order.
+              finalizePendingItems(context.state, triggerCtx);
 
               // rule 315.2.a before 315.2.b — the Scoring Step waits for the
               // Beginning Step's triggers, so a battlefield vacated by such a
