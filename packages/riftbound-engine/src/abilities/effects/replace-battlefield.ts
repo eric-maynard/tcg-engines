@@ -76,7 +76,15 @@ export function handle_replaceBattlefield(
   // TOKEN put anywhere but the board ceases to exist — it never waits there, so
   // a later Swap Back has nothing to swap to (438.7.c). 438.6.a: that does not
   // undo or invalidate the replacement.
-  let replacedId: string | null = null;
+  // rule 438.7.b — the replacer inherits the relationship the replaced object
+  // carried, so Brushing a Brush still remembers the ORIGINAL battlefield
+  // waiting in Banishment (the old token itself ceases to exist, 186.1).
+  const inheritedLink = (
+    ctx.cards.getCardMeta?.(battlefieldId as CoreCardId) as
+      | { replacedBattlefieldCardId?: string | null }
+      | undefined
+  )?.replacedBattlefieldCardId;
+  let replacedId: string | null = inheritedLink ?? null;
   if (!registry.isToken(battlefieldId)) {
     // rule 438.5.a: a replaced CARD persists in Banishment "as Replaced" as its
     // own object, so it can be swapped back later.
