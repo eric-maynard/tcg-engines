@@ -17,6 +17,7 @@ import type {
 import { type EffectContext, executeEffect } from "../../../abilities/effect-executor";
 import { addToChain, createInteractionState } from "../../../chain";
 import { evaluateLegionCondition } from "../../../abilities/legion-conditions";
+import { hasEffectiveTag } from "../../../abilities/card-tags";
 import { evaluateWhileLevel } from "../../../abilities/xp-conditions";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
 import { countDistinctTagsAmongUnits } from "../../../operations/distinct-tags";
@@ -377,10 +378,14 @@ function evaluateEnterReadyCondition(
             if (t.type === "gear" && def?.cardType !== "gear" && def?.cardType !== "equipment") {
               continue;
             }
+            // rule 135.2 / 136.2 (rule-id: sfd-073-221) — a tag conferred by a
+            // continuous effect ("I am a Mech." on an attached Equipment) counts
+            // for "if you control a Mech" exactly like a printed one.
+            const tagMeta = cards?.getCardMeta(id as CoreCardId);
             const tagOk = filters.every((f) => {
               const tag = (f as { tag?: unknown } | null)?.tag;
               if (typeof tag !== "string") return true;
-              return (def?.tags ?? []).some((x) => x.toLowerCase() === tag.toLowerCase());
+              return hasEffectiveTag(def?.tags, tagMeta, tag);
             });
             if (!tagOk) {
               continue;
