@@ -2,6 +2,7 @@
 import type { PlayerId as CorePlayerId, ZoneId as CoreZoneId } from "@tcg/core";
 import { matchesRevealPickFilter } from "../../operations/reveal-pick-filter";
 import type { RevealPickFilter } from "../../operations/reveal-pick-filter";
+import { legalChosenPlayers, playerTargetWhich } from "../chosen-player";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import { type EffectHelpers, recordPublicReveal } from "./_helpers";
 
@@ -18,8 +19,23 @@ export function handle_revealHand(effect: ExecutableEffect, ctx: EffectContext, 
   //     OnPicked?: "recycle" | "banish" | "discard",     // default: recycle
   //   }
   const revealerOverride = (effect as unknown as { revealer?: string }).revealer;
+  // rule 355.10 / 359.3.e.2 / 359.3.e.5 — "Choose an opponent" named a PLAYER
+  // when this item was finalized, and new choices may have kept it through a
+  // control change (`abilities/new-choices.ts`). A player who is no longer a
+  // legal value (nobody is their own opponent) makes the instruction illegal:
+  // the reveal, the pick and the recycle are all skipped.
+  const chosen = (effect as unknown as { _chosenPlayer?: string })._chosenPlayer;
+  const which = playerTargetWhich(effect);
+  if (
+    chosen !== undefined &&
+    which !== undefined &&
+    !legalChosenPlayers(which, ctx.playerId, Object.keys(ctx.draft.players)).includes(chosen)
+  ) {
+    return;
+  }
   const revealer =
     revealerOverride ??
+    chosen ??
     Object.keys(ctx.draft.players).find((p) => p !== ctx.playerId) ??
     ctx.playerId;
   const revealed = ctx.zones

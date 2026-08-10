@@ -70,6 +70,7 @@ import type {
   RiftboundGameState,
 } from "../types";
 import { getBonusDamage } from "./bonus-damage";
+import { legalChosenPlayers, playerTargetWhich } from "./chosen-player";
 import type { EffectContext, ExecutableEffect } from "./effect-executor";
 import { playTimeModeOptions } from "./effects/choice";
 import type { GameEvent } from "./game-events";
@@ -797,6 +798,70 @@ function destinationSlots(d: Discovery, effect: AnyEffect, out: LiveSlot[]): voi
   });
 }
 
+/**
+ * rule 355.10 / 402.2 — record the PLAYER the item chose when it was finalized
+ * ("Choose an opponent"), read from the seat that chose it. With a single legal
+ * player the choice was auto-bound and never written down, so recover it here,
+ * on the item's own effect, where the resolving handler can read it: it must
+ * survive a control change rather than be re-derived from the new controller.
+ */
+function stampChosenPlayer(draft: RiftboundGameState, item: ChainItem): void {
+  const which = playerTargetWhich(item.effect);
+  if (which === undefined) {
+    return;
+  }
+  const live = writableEffect(draft, item.id);
+  if (live === undefined || typeof live._chosenPlayer === "string") {
+    return;
+  }
+  const chose = item.originalController ?? item.controller;
+  const auto = legalChosenPlayers(which, chose, Object.keys(draft.players));
+  if (auto.length === 1) {
+    live._chosenPlayer = auto[0];
+  }
+}
+
+/**
+ * rule 355.10 / 753.1 — the chosen PLAYER slot, re-read from the CHOOSER's seat:
+ * after a control change the new controller's own opponents are the legal
+ * values. KEEPING the old controller's opponent sticks (753) and simply makes
+ * the instruction illegal at resolution (359.3.e.5) instead of re-aiming.
+ */
+function playerSlots(d: Discovery, effect: AnyEffect, out: LiveSlot[]): void {
+  const which = playerTargetWhich(effect);
+  const current = effect._chosenPlayer;
+  if (which === undefined || typeof current !== "string") {
+    return;
+  }
+  const now = (): string | undefined => {
+    const live = findItem(d.draft, d.item.id)?.effect as AnyEffect | undefined;
+    const v = live?._chosenPlayer;
+    return typeof v === "string" ? v : undefined;
+  };
+  out.push({
+    apply: (values) => {
+      const live = writableEffect(d.draft, d.item.id);
+      if (live !== undefined && values[0] !== undefined) {
+        live._chosenPlayer = values[0];
+      }
+    },
+    get current(): readonly string[] {
+      const cur = now();
+      return cur === undefined ? [] : [cur];
+    },
+    key: "player:0",
+    kind: "target",
+    label: "Chosen player",
+    options: () => {
+      const legal = legalChosenPlayers(which, d.chooser, Object.keys(d.draft.players));
+      const cur = now();
+      const keys = cur !== undefined && !legal.includes(cur) ? [cur, ...legal] : legal;
+      return keys.map((p) => ({ key: p, label: p }));
+    },
+    targetsObjects: false,
+  });
+}
+
 /** Every re-choosable slot of the item, in dialog order: modes (each with its target), targets / source / sets, destinations. */
 function discoverSlots(d: Discovery): LiveSlot[] {
   const item = findItem(d.draft, d.item.id);
@@ -815,6 +880,7 @@ function discoverSlots(d: Discovery): LiveSlot[] {
       abilitySetSlots(d, effect, out);
     }
   }
+  playerSlots(d, effect, out);
   destinationSlots(d, effect, out);
   return out;
 }
@@ -1031,6 +1097,9 @@ export function offerNewChoices(
   if (!item || item.countered === true || draft.pendingChoice) {
     return false;
   }
+  // rule 355.10 — pin the finalized player choice before it can be re-read from
+  // the new controller's seat.
+  stampChosenPlayer(draft, item);
   const choice: NewChoicesChoice = {
     cursor: -1,
     ...(opts.grantedBy ? { grantedBy: opts.grantedBy as never } : {}),
