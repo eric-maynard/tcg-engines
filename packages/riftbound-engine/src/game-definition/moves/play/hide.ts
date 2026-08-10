@@ -31,6 +31,7 @@ import {
   getCardEffectiveMight,
   getGrantedAcceleratePlayCost,
   getOptionalPlayCost,
+  opponentsRestrictedToBase,
   spendablePowerPool,
 } from "./cost";
 import { enterPlayedPermanent } from "./play-pipeline";
@@ -1162,6 +1163,17 @@ export const revealHidden: Defs["revealHidden"] = {
       typeof meta.hiddenAt === "string" &&
       battlefieldForbidsUnitPlays(meta.hiddenAt) &&
       getGlobalCardRegistry().getCardType(context.params.cardId as string) === "unit"
+    ) {
+      return false;
+    }
+    // rule 811.1.d.1 + 054.1 (rule-id: ogn-070-298 Mageseeker Warden, ruling
+    // 005f282eb3ef939a) — the flip must play the unit AT its facedown
+    // battlefield, so an enemy "opponents can only play units to their base"
+    // static leaves it no valid location: it stays facedown.
+    if (
+      typeof meta.hiddenAt === "string" &&
+      getGlobalCardRegistry().getCardType(context.params.cardId as string) === "unit" &&
+      opponentsRestrictedToBase(state, context.zones, context.params.playerId as string)
     ) {
       return false;
     }

@@ -73,6 +73,7 @@ import {
   getGrantedAcceleratePlayCost,
   getOptionalPlayCost,
   hasStaticEffect,
+  opponentsRestrictedToBase,
   optionalPlayCostOffered,
   payResourceCost,
   playOnlyToConqueredBattlefield,
@@ -394,7 +395,19 @@ export function playDestinationOptions(
   // destination the card forbids (base), nothing is legal → 055 / 358.3.a.
   const conqueredOnly = isUnit && playOnlyToConqueredBattlefield(cardId);
   const conquered = draft.conqueredThisTurn?.[playerId] ?? [];
+  // rule 054.1 / 355.2 (ogn-070-298 Mageseeker Warden) — "opponents can only
+  // play units to their base" narrows every play, not just the one from hand:
+  // an effect that INSTRUCTS a play (419.3) may not put the unit at a
+  // battlefield either, and with no legal location left the instruction is
+  // simply skipped (358.3.a / 419.3.c).
+  const restrictedToBase =
+    isUnit &&
+    typeof spec?.io?.zones?.getCardsInZone === "function" &&
+    opponentsRestrictedToBase(draft, spec.io.zones, playerId);
   const legal = (zone: string): boolean => {
+    if (isUnit && restrictedToBase && zone.startsWith("battlefield-")) {
+      return false;
+    }
     if (
       isUnit &&
       zone.startsWith("battlefield-") &&
@@ -964,7 +977,7 @@ function locationOptionsFor(io: PlayIO, spec: EffectPlaySpec): string[] {
     // object was (last-known information), never a choice.
     const lki = (cards.getCardMeta?.(spec.cardId as CoreCardId) as { banishedFrom?: string } | undefined)
       ?.banishedFrom;
-    return lki && isBoardZoneId(lki) ? playDestinationOptions(draft, spec.playerId, spec.cardId, { only: [lki] }) : [];
+    return lki && isBoardZoneId(lki) ? playDestinationOptions(draft, spec.playerId, spec.cardId, { io, only: [lki] }) : [];
   }
   if (loc === "prompt") {
     return [
@@ -977,10 +990,10 @@ function locationOptionsFor(io: PlayIO, spec: EffectPlaySpec): string[] {
     ];
   }
   if ("fixed" in loc) {
-    return playDestinationOptions(draft, spec.playerId, spec.cardId, { only: [loc.fixed] });
+    return playDestinationOptions(draft, spec.playerId, spec.cardId, { io, only: [loc.fixed] });
   }
   if ("only" in loc) {
-    return playDestinationOptions(draft, spec.playerId, spec.cardId, { only: loc.only });
+    return playDestinationOptions(draft, spec.playerId, spec.cardId, { io, only: loc.only });
   }
   return [
     ...playDestinationOptions(draft, spec.playerId, spec.cardId, {
