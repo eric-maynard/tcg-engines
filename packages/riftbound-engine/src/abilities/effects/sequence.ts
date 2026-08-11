@@ -4,6 +4,7 @@ import {
   cleanupAndFireDeaths,
   type PostMoveCleanupContext,
 } from "../../cleanup/post-move-cleanup";
+import { isLegalCounterTarget } from "../../chain/counter-target";
 import { type CleanupContext, performCleanup } from "../../cleanup/state-based-checks";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import type { TargetDescriptor } from "../target-resolver";
@@ -255,15 +256,60 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
       (e) => e.type === "counter" && (e as { target?: unknown }).target === undefined,
     );
     let counterBoundId: string | undefined;
+    // rule 820.2 / 359.3.e.7 (sfd-136-221 via [Flow]) — a [Repeat]ed bare
+    // counter played WITHOUT a play-time choice (a [Flow] / effect play makes
+    // none today) still names its spell once for the whole item: lock the spell
+    // the first execution would counter and hand that same chain item to every
+    // execution. An execution whose spell has already left the chain (an
+    // earlier execution countered it) is then ignored instead of sliding onto
+    // the next spell down, which was never chosen (355.15).
+    let lockedRepeatCounters = false;
+    if (
+      (seq as { _repeatExecutions?: boolean })._repeatExecutions === true &&
+      ctx.boundTargets === undefined &&
+      seq.effects.length > 1 &&
+      seq.effects.every(
+        (e) => e.type === "counter" && (e as { target?: unknown }).target === undefined,
+      )
+    ) {
+      const chainItems = ctx.draft.interaction?.chain?.items ?? [];
+      const counterCtx = {
+        controllerOf: (id: string) =>
+          ctx.cards.getCardController?.(id as CoreCardId) ??
+          ctx.cards.getCardOwner(id as CoreCardId),
+        playerId: ctx.playerId,
+        zoneOf: (id: string) => ctx.zones.getCardZone(id as CoreCardId),
+      };
+      for (let i = chainItems.length - 1; i >= 0; i--) {
+        const item = chainItems[i];
+        if (
+          item !== undefined &&
+          isLegalCounterTarget(
+            seq.effects[0] as { target?: unknown },
+            item,
+            ctx.sourceCardId,
+            counterCtx,
+          )
+        ) {
+          ctx = {
+            ...ctx,
+            boundTargets: seq.effects.map(() => item.cardId),
+          } as EffectContext;
+          lockedRepeatCounters = true;
+          break;
+        }
+      }
+    }
     // rule 820.2.a (sfd-136-221) — repeated counters own one locked chain item
     // EACH (positional, below); that list must not be split as a lead pick.
     const repeatedCounterTargets =
-      (seq as { independentTargets?: boolean }).independentTargets === true &&
+      lockedRepeatCounters ||
+      ((seq as { independentTargets?: boolean }).independentTargets === true &&
       seq.effects.every(
         (e) => e.type === "counter" && (e as { target?: unknown }).target === undefined,
       ) &&
-      ctx.boundTargets !== undefined &&
-      ctx.boundTargets.length === seq.effects.length;
+        ctx.boundTargets !== undefined &&
+        ctx.boundTargets.length === seq.effects.length);
     if (!repeatedCounterTargets && counterStepIdx >= 0 && ctx.boundTargets && ctx.boundTargets.length > 1) {
       const chainItems = ctx.draft.interaction?.chain?.items ?? [];
       const at = ctx.boundTargets.findIndex((id) =>
@@ -380,6 +426,9 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
     }
     const resolverCtx = {
       cards: ctx.cards,
+      // rule 355.13 (rule-id: sfd-023-221) — "one OTHER unit" reads what the
+      // earlier slot of this instruction chose.
+      chosenTargetIds: ctx.chosenTargetIds,
       draft: ctx.draft,
       playerId: ctx.playerId,
       sourceCardId: ctx.sourceCardId,
@@ -912,6 +961,10 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
             remaining: 1,
             sourceCardId: ctx.sourceCardId,
             type: "choose-target",
+            // rule 355.13 (rule-id: sfd-023-221) — a later "up to one OTHER
+            // unit" slot must know what this one took, even though the
+            // remainder chooses independently.
+            carryChosenTargets: true,
             // The remainder makes its OWN choices — it must not inherit the id
             // this prompt just bound, or the next step would re-hit that card.
             // rule 354.2 (rule-id: ven-139-166) — UNLESS every remaining step
