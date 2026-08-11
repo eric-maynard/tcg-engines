@@ -276,57 +276,6 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
       (seq as { independentTargets?: boolean }).independentTargets === true
         ? collectIndependentTargetSlots(seq as unknown as SpellEffectTargetShape)
         : undefined;
-    /** The play-time pick of a positional slot step, or undefined when it cannot be told. */
-    const slotIdOfStep = (stepIdx: number): string | undefined => {
-      if (!indepSlots) {
-        // rule 355.8 (sfd-023-221 Piercing Light) — a sequence whose steps own
-        // DISTINCT descriptor slots ("Deal 2 to a unit at a battlefield, then
-        // deal 2 to up to one other unit") knows each step's pick too; without
-        // this every step reads as "target unknown" and each damage step would
-        // force its own Cleanup.
-        const subTarget = (seq.effects?.[stepIdx] as { target?: SubTarget } | undefined)?.target;
-        if (!seqSlots || typeof subTarget !== "object" || subTarget === null) {
-          return undefined;
-        }
-        const j = seqSlots.slots.findIndex((s) =>
-          isRestatementOf(s as { type: string }, subTarget as unknown as { type: string }),
-        );
-        return j >= 0 ? seqSlots.bound[j] : undefined;
-      }
-      const k = indepSlots.findIndex((s) => s.index === stepIdx);
-      if (k < 0) {
-        return undefined;
-      }
-      const vacated = ctx.vacatedTargetSlots;
-      if (vacated?.includes(k) === true) {
-        return undefined;
-      }
-      return ctx.boundTargets?.[
-        vacated === undefined ? k : k - vacated.filter((v) => v < k).length
-      ];
-    };
-    /**
-     * rule 370.1.a.2 — does a LATER damage instruction of this sequence name
-     * the same unit this one just damaged? Only then do its deaths have to be
-     * processed before the sequence goes on (rule 359.3.e.8, Icathian Rain);
-     * otherwise they join the one Cleanup that follows the whole spell.
-     */
-    const damageStepHitAgainLater = (stepIdx: number): boolean => {
-      const mine = slotIdOfStep(stepIdx);
-      if (mine === undefined) {
-        return true;
-      }
-      for (let j = stepIdx + 1; j < (seq.effects?.length ?? 0); j++) {
-        if (seq.effects?.[j]?.type !== "damage") {
-          continue;
-        }
-        const other = slotIdOfStep(j);
-        if (other === undefined || other === mine) {
-          return true;
-        }
-      }
-      return false;
-    };
     // rule 820.2.a (ogn-213-298 Hidden Blade) — a [Repeat]ed spell whose
     // instructions are themselves a sequence ("Kill a unit at a battlefield.
     // Its controller draws 2.") keeps the caster's choice on an INNER step, so
@@ -997,8 +946,7 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
         ctx.draft.pendingChoice === undefined &&
         ctx.cards !== undefined &&
         ctx.counters !== undefined &&
-        ctx.zones !== undefined &&
-        damageStepHitAgainLater(i)
+        ctx.zones !== undefined
       ) {
         performCleanup(ctx as unknown as CleanupContext, { shieldsOnly: true });
       }
@@ -1220,12 +1168,21 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
           // slot, the remainder keeps the LATER slots' picks, not the id this
           // step just aimed at.
           const slotK = indepSlots ? indepSlots.findIndex((s) => s.index === i) : -1;
+          // rule 355.8 (sfd-023-221 Piercing Light × ogn-269-298 The Boss) —
+          // when the steps own DISTINCT positional targets ("Deal 2 to a unit
+          // at a battlefield, THEN deal 2 to up to one other unit"), the
+          // remainder keeps the later slots' picks; carrying this step's id
+          // would re-aim the next instruction at the unit just shielded.
+          const slotCarry =
+            slotK < 0 && seqSlots !== undefined && stepSlotIdx >= 0
+              ? seqSlots.bound.slice(stepSlotIdx + 1).filter((id): id is string => id !== undefined)
+              : undefined;
           const carry =
             slotK >= 0 && ctx.boundTargets !== undefined
               ? ctx.boundTargets.slice(slotK + 1)
-              : ((subCtx.boundTargets ?? ctx.boundTargets) as readonly string[] | undefined);
+              : (slotCarry ?? ((subCtx.boundTargets ?? ctx.boundTargets) as readonly string[] | undefined));
           const restSeq =
-            slotK >= 0
+            slotK >= 0 || slotCarry !== undefined
               ? {
                   boundTargetsOverride: [...(carry ?? [])],
                   effects: rest,
