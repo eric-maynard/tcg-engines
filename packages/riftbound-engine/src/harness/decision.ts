@@ -1656,6 +1656,16 @@ export function narrowVariants(ctx: DecisionContext, option: ActionOption, args:
       );
       if (exact.length > 0) {
         variants = exact;
+      } else {
+        // rule 355.5 (ogn-248-298 Icathian Rain) — repeated identical slots
+        // ("Deal 2 to a unit." ×6) are enumerated in one arbitrary board order,
+        // but WHICH instance hits which unit is the player's choice: keep the
+        // order the caller named so the instances land in that sequence.
+        variants = variants.map((v) =>
+          Array.isArray(v.params.targets) && sameSet(v.params.targets as unknown[], ordered)
+            ? { ...v, params: { ...v.params, targets: [...ordered] } }
+            : v,
+        );
       }
     }
   }

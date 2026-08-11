@@ -83,7 +83,7 @@ describe("Icathian Rain × The Boss × Sett, Kingpin — spending the buff recou
   // with the Rain still on the chain and Kingpin not yet damaged, so P2 decides KNOWING instances 4-6 are still to
   // come. Actual: the engine runs all six instances first and only then raises the offer — at the prompt the Rain is
   // already in the trash and Kingpin already carries all 6 marks.
-  test.failing("BUG: (a) The Boss must be offered at the 3rd instance — while the Rain is still resolving and before instances 4-6 land on Kingpin", async () => {
+  test("(a) The Boss must be offered at the 3rd instance — while the Rain is still resolving and before instances 4-6 land on Kingpin", async () => {
     const game = await board().build();
     await rain(game);
     expect(game.decision()).toMatchObject({ kind: "yes-no", seat: P2 });
@@ -94,8 +94,9 @@ describe("Icathian Rain × The Boss × Sett, Kingpin — spending the buff recou
 
   // Expected (702.2.b / 745.1 / 703): accepting SPENDS B's buff mid-resolution, so before instances 4-6 are dealt B
   // is a 4-Might unit in base and Kingpin's "+1 for each buffed friendly unit at my battlefield" recounts 6 → 5 on
-  // the spot. Actual: the offer only comes after all six instances have landed, so by the time the buff is spent
-  // Kingpin has already taken his damage and is killed in the same breath — the 5-Might reading is never observable.
+  // the spot. Actual: the offer now comes at instance 3, but ANSWERING it resolves the rest of the item inside the
+  // same move (instances 4-6 land and the post-item Cleanup kills Kingpin), so the 5-Might/0-damage reading between
+  // the save and instance 4 is never observable — the engine has no resume step between the answer and the remainder.
   test.failing("BUG: (a) spending B's buff recounts Kingpin's static immediately (6 → 5) with instances 4-6 still to come — a static ability counts continuously (703)", async () => {
     const game = await board().build();
     await rain(game);
@@ -123,9 +124,9 @@ describe("Icathian Rain × The Boss × Sett, Kingpin — spending the buff recou
   test("(b) decline — the buff is never spent, so Kingpin's static never recounts: he goes into the Cleanup at 6 Might with 6 marks and B at 5 Might with 6 marks, both still alive (321 — no death check between instances)", async () => {
     const game = await board().build();
     await rain(game);
-    // Snapshot taken with all six instances dealt and the offer still unanswered: nothing has died yet.
+    // Snapshot taken at the offer — instances 1-3 dealt, 4-6 still to come (321): nothing has died yet.
     expect(game.state("b")).toMatchObject({ damage: 6, isBuffed: true, location: "bf1", might: 5 });
-    expect(game.state("kingpin")).toMatchObject({ damage: 6, location: "bf1", might: 6 });
+    expect(game.state("kingpin")).toMatchObject({ damage: 0, location: "bf1", might: 6 });
     expect(game.decision()).toMatchObject({ kind: "yes-no", seat: P2 });
     await game.p2.no();
     expect(game.state("kingpin").isBuffed).toBe(false); // the buff was B's; declining spent nothing
@@ -146,12 +147,12 @@ describe("Icathian Rain × The Boss × Sett, Kingpin — spending the buff recou
     expect(game.violations()).toEqual([]);
   });
 
-  test("(c) Kingpin dies only in the post-item Cleanup, never mid-item: with all six instances dealt he is still at bf1 holding 6 lethal marks, and only settling puts him in the trash", async () => {
+  test("(c) Kingpin dies only in the post-item Cleanup, never mid-item: he stands at bf1 while the Rain is still dealing its instances, and only settling puts him in the trash", async () => {
     const game = await board().build();
     await rain(game);
-    // All six instances have been dealt and no death check has run between them (321).
+    // The save is offered at instance 3 and no death check has run between instances (321).
     expect(game.locationOf("kingpin")).toBe("bf1");
-    expect(game.state("kingpin").damage).toBe(6);
+    expect(game.state("kingpin").damage).toBe(0);
     await game.p2.yes();
     await game.settle();
     expect(game.zoneOf("kingpin")).toBe("trash");
@@ -171,6 +172,9 @@ describe("Icathian Rain × The Boss × Sett, Kingpin — spending the buff recou
     expect(game.state("kingpin").keywords).toContain("Tank");
     await rain(game);
     expect(game.state("b").damage).toBe(6); // the spell's targets are not redirected to the Tank
-    expect(game.state("kingpin").damage).toBe(6);
+    expect(game.state("kingpin").damage).toBe(0); // his own three instances come after the save is answered
+    await game.p2.no();
+    await game.settle();
+    expect(game.zoneOf("kingpin")).toBe("trash"); // instances 4-6 land on him all the same
   });
 });
