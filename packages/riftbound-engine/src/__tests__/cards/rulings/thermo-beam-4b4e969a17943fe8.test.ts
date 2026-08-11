@@ -45,13 +45,20 @@ async function seekerThenReveal(): Promise<Game> {
 }
 
 describe("Ruling 4b4e969a17943fe8 — no Thermo Beam window against a Zhonya's revealed in response to lethal", () => {
-  test.failing("BUG: the reveal resolves on the spot: Zhonya's is face-up in P1's BASE (gear is recalled off the battlefield), it never sits on the chain, and priority did not pass to P2 in between", async () => {
+  // RULING-CONFLICT: riftjudge 4b4e969a17943fe8 says priority never passes to P2 between the reveal and the Hourglass
+  // being in play; CR 337.2 + 340.4 say the flipped gear resolves at once and then "the controller of the newest item on
+  // the chain gains Priority" — Void Seeker's controller, P2 (the passes collected before the flip are void, 339.1) —
+  // engine follows CR (same reading as the green ruling 5ca148dd1d06db74). The ruling's real point still holds: that
+  // window is a Closed State, so P2's [Action] Thermo Beam is not playable in it (next test).
+  test("the reveal resolves on the spot: Zhonya's is face-up in P1's BASE (gear is recalled off the battlefield), it never sits on the chain, and priority returns to the newest chain item's controller", async () => {
     const game = await seekerThenReveal();
     expect(game.state("zh").isHidden).toBe(false);
     expect(game.zoneOf("zh")).toBe("base");
     expect(game.p1.gear()).toContain("zh");
     expect(game.chain().map((c) => c.cardId)).toEqual(["vs"]); // only the Void Seeker — no Hourglass item to respond to
-    expect(game.decision()).toMatchObject({ context: "chain", kind: "action", seat: P1 });
+    // rule 340.4: chain non-empty, no pending items ⇒ the newest item's controller (P2) gains Priority.
+    expect(game.decision()).toMatchObject({ context: "chain", kind: "action", seat: P2 });
+    expect(game.p2.can("cast", "thermo")).toBe(false); // Closed State — [Action] timing is illegal here
   });
 
   test("while Void Seeker's chain is open P2 only ever gets Reaction timing: Thermo Beam ([Action]) is not legal at any priority stop before the chain empties", async () => {
