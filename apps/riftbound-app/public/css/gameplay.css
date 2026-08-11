@@ -578,7 +578,7 @@
        so the whole face stays visible instead of letterboxing. */
     /* [rule:ui-bf-one-row] ONE row per side, no wrap, no scrollbar: every slot
        gets width --bfw = clamp(56px, fair share of the row, natural size) so
-       the cards first SHRINK; once they sit at the 56px floor the row OVERLAPS
+       the cards first SHRINK; once they sit at the 64px floor the row OVERLAPS
        them (negative margin computed from the slot count --n that board.js
        stamps on the row) like a fanned hand — later cards on top, each keeping
        a visible strip; :hover lifts one clear of its neighbours. */
@@ -586,7 +586,7 @@
       --bf-gap: 4px;
       --bf-nat: calc(min(126px, 100cqb - 6px) * 90 / 126);
       --bf-extra: calc(var(--stacks, 0) * 14px);
-      --bfw: clamp(56px, calc((100cqi - var(--bf-extra) - (var(--n, 1) - 1) * var(--bf-gap) - 8px) / var(--n, 1)), var(--bf-nat));
+      --bfw: clamp(min(64px, var(--bf-nat)), calc((100cqi - var(--bf-extra) - (var(--n, 1) - 1) * var(--bf-gap) - 8px) / var(--n, 1)), var(--bf-nat));
       --bf-lap: min(0px, calc((100cqi - var(--bf-extra) - 8px - var(--n, 1) * var(--bfw)) / max(var(--n, 1) - 1, 1) - var(--bf-gap)));
     }
     .bf-units .card {
@@ -618,7 +618,7 @@
       display: flex;
       position: absolute;
       top: 3px;
-      right: 3px;
+      left: 3px; /* the LEFT strip is what stays visible in an overlapped fan */
       min-width: 16px;
       height: 16px;
       padding: 0 3px;
@@ -634,6 +634,8 @@
       pointer-events: none;
     }
     .bf-units--crowded .card .card-name { display: none; }
+    .bf-units--crowded .card .card-damage { right: auto; left: 3px; bottom: 3px; width: 16px; height: 16px; font-size: 9px; }
+    .bf-units--crowded .card.facedown .card-hidden-badge { font-size: 7px; padding: 0 2px; }
     /* "⤢ N" chip → spread view (board.js openBfSpread). */
     .bf-spread-chip {
       position: absolute;

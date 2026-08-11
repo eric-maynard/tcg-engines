@@ -620,10 +620,26 @@ export function buildGameSnapshot(session: GameSession, viewingPlayer?: string) 
   // ids embed the definition id, so the id is replaced with an opaque one too.
   // A Claude seat is a real opponent: its hand (and facedown cards) stay
   // private to the human even though the session runs on sandbox plumbing.
+  // rule 723 / 127: a Hidden (facedown) card is private to its owner in EVERY
+  // redacted mode (duel and vs-Claude alike) — the opponent's seat receives an
+  // opaque stand-in unless an information effect granted that seat a look
+  // (state.visibilityGrants, e.g. unl-053-219 "you can look at their facedown
+  // cards this turn") or the game has ended (rule 421.4: facedown cards are
+  // revealed to all players when the game ends). Deck order is never granted.
   const vsAi = session.opponent?.info.kind === "claude";
   const redactFor = (!session.sandbox || vsAi) && viewingPlayer ? viewingPlayer : undefined;
+  const grantKind = (zoneId: string): "hand" | "facedown" | undefined =>
+    zoneId === "hand" ? "hand" : zoneId.startsWith("facedown-") ? "facedown" : undefined;
+  const hasGrant = (viewer: string, owner: string, zoneId: string): boolean => {
+    const kind = grantKind(zoneId);
+    if (!kind) {return false;}
+    if (kind === "facedown" && state.status === "finished") {return true;}
+    return (state.visibilityGrants ?? []).some(
+      (g) => g.viewer === viewer && g.owner === owner && g.zones.includes(kind),
+    );
+  };
   const isPrivateZone = (zoneId: string) =>
-    zoneId === "hand" || zoneId === "mainDeck" || zoneId === "runeDeck" || (vsAi && zoneId.startsWith("facedown-"));
+    zoneId === "hand" || zoneId === "mainDeck" || zoneId === "runeDeck" || zoneId.startsWith("facedown-");
 
   const costCtx = buildCostReductionContext(internal, state.battlefields);
   // rule 356 — only hand cards are ever priced by the UI's pay bar, and the
@@ -642,7 +658,7 @@ export function buildGameSnapshot(session: GameSession, viewingPlayer?: string) 
       const cardInstance = internal.cards[cardId];
       const meta = internal.cardMetas[cardId];
       const owner = cardInstance?.owner ?? "";
-      if (redactFor && isPrivateZone(zoneId) && owner !== redactFor) {
+      if (redactFor && isPrivateZone(zoneId) && owner !== redactFor && !hasGrant(redactFor, owner, zoneId)) {
         return {
           cardType: "unknown",
           controller: cardInstance?.controller ?? "",

@@ -295,12 +295,81 @@ function renderCardElement(card, isFacedown = false, zone = "") {
       </div>
       ${card.meta?.damage > 0 ? `<div class="card-damage">${card.meta.damage}</div>` : ""}
       ${mightBadge}
+      ${effMight != null && !mightBadge ? `<div class="card-might-chip" aria-hidden="true">${effMight}</div>` : ""}
       ${attachBadge}
       ${namedBadge}
       ${hideBtn}
       <div class="card-name">${esc(card.name || "")}</div>
     </div>
   `;
+}
+
+/**
+ * rule 723 (Hidden) — a facedown card at a battlefield renders as a card BACK
+ * for every seat (tilted, HIDDEN badge, owner-coloured edge). What the hover
+ * preview may show is decided by the SERVER: the per-seat snapshot carries the
+ * real definitionId only for the controller (or a seat holding a rule 127 look
+ * grant) and an opaque `hidden-…` stand-in otherwise, so `data-def-id` is
+ * simply whatever this seat was sent — the client never knows more.
+ */
+function renderFacedownCard(card, zone) {
+  const mine = card.owner === viewingPlayer;
+  const known = !!card.definitionId;
+  const classes = ["card", "facedown", "card--bf-hidden", mine ? "card--bf-hidden-mine" : "card--bf-hidden-theirs"];
+  if (selectedCard === card.id) classes.push("selected");
+  if (mine && hasMovesForCard(card.id, zone)) classes.push("playable");
+  const who = mine ? "you" : pName(card.controller || card.owner);
+  const title = known
+    ? (mine ? "Your hidden card — hover to peek, click for actions" : `Hidden card controlled by ${who} — revealed to you`)
+    : `Facedown card — controlled by ${who}`;
+  return `
+    <div class="${classes.join(" ")}"
+         data-card-id="${esc(card.id)}"
+         ${known ? `data-def-id="${esc(card.definitionId)}"` : ""}
+         data-zone="${esc(zone)}"
+         data-owner="${esc(card.owner || "")}"
+         data-facedown="1"
+         title="${esc(title)}"
+         ${mine ? `onpointerdown="onPointerDown(event, '${esc(card.id)}')"` : ""}>
+      <div class="card-back card-back-art card-back-art--main"></div>
+      <div class="card-hidden-badge">HIDDEN</div>
+      ${known ? `<div class="card-hidden-peek" aria-hidden="true">&#128065;</div>` : ""}
+    </div>
+  `;
+}
+
+/**
+ * rule 434.4 — an attached Equipment is wherever its holder is: group each
+ * unit with the gear attached to it (same zone list) so the pair renders as one
+ * stack. Gear whose holder is not in this list stays a loose card.
+ */
+function groupAttachments(cards) {
+  const byId = new Map(cards.map(c => [c.id, c]));
+  const gearOf = new Map();
+  const nested = new Set();
+  for (const c of cards) {
+    const host = c.meta?.attachedTo;
+    if (host && byId.has(host) && host !== c.id) {
+      if (!gearOf.has(host)) gearOf.set(host, []);
+      gearOf.get(host).push(c);
+      nested.add(c.id);
+    }
+  }
+  return cards.filter(c => !nested.has(c.id)).map(c => ({ host: c, gear: gearOf.get(c.id) || [] }));
+}
+
+/** One board slot: the unit, with any attached gear tucked under it (peeking edge stays hoverable/clickable). */
+function renderUnitSlot(entry, zone) {
+  const { host, gear } = entry;
+  if (!gear.length) return renderCardElement(host, false, zone);
+  return `<div class="unit-stack" data-stack-host="${esc(host.id)}" style="--gear-n:${gear.length}">${
+    gear.map((g, i) => `<div class="unit-stack-gear" style="--i:${i}" title="${esc(`${g.name || "Gear"} — attached to ${host.name || ""}`)}">${renderCardElement(g, false, zone)}</div>`).join("")
+  }${renderCardElement(host, false, zone)}</div>`;
+}
+
+/** A row of board cards (base / one side of a battlefield) with attachments grouped. */
+function renderUnitRow(cards, zone) {
+  return groupAttachments(cards).map(e => renderUnitSlot(e, zone)).join("");
 }
 
 /**

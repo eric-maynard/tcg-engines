@@ -22,9 +22,7 @@ function renderZones() {
   // Player base (drop target for hand cards, draggable for movement)
   const playerBase = zoneForPlayer("base", viewingPlayer);
   const baseEl = document.getElementById("player-base");
-  baseEl.innerHTML =
-    playerBase.map(c => renderCardElement(c, false, "base")).join("") ||
-    "";
+  baseEl.innerHTML = renderUnitRow(playerBase, "base");
 
   // W10a: attach the per-zone token panel to the viewing player's base.
   // Base gets the full token set including Gold (the economy token).
@@ -34,9 +32,7 @@ function renderZones() {
 
   // Opponent base
   const opponentBase = zoneForPlayer("base", opponent);
-  document.getElementById("opponent-base").innerHTML =
-    opponentBase.map(c => renderCardElement(c, false, "base")).join("") ||
-    "";
+  document.getElementById("opponent-base").innerHTML = renderUnitRow(opponentBase, "base");
 
   // Rune pools — the player's pile fans out to whatever height its row really
   // has (never clipped, never over the Legend/Champion); the opponent's is compact.
@@ -105,15 +101,17 @@ function renderBattlefields() {
 
     // rule-id: ogn-197-298 — Rule 723 (Hidden): the engine parks hidden cards
     // in a sibling `facedown-${bfId}` zone, not `battlefield-${bfId}`, so they
-    // must be read separately or they never appear on the board. The owner
-    // sees the face (private info they already know); the opponent sees a back.
+    // must be read separately or they never appear on the board. Every seat
+    // sees a card BACK; the per-seat snapshot decides whose hover may peek.
     const fdZoneId = `facedown-${bfId}`;
     const facedownAtBf = zones[fdZoneId] || [];
-    const renderFacedown = (c) => (c.owner === viewingPlayer || (isSandboxGame && !(typeof isVsAiGame === "function" && isVsAiGame())))
-      ? `<div class="bf-facedown" title="Hidden (facedown)">${renderCardElement(c, false, fdZoneId)}</div>`
-      : renderCardElement({}, true);
-    const opponentFacedownHtml = facedownAtBf.filter(c => c.owner === opponent).map(renderFacedown).join("");
-    const playerFacedownHtml = facedownAtBf.filter(c => c.owner === viewingPlayer).map(renderFacedown).join("");
+    const opponentFacedownHtml = facedownAtBf.filter(c => c.owner === opponent).map(c => `<div class="bf-facedown">${renderFacedownCard(c, fdZoneId)}</div>`).join("");
+    const playerFacedownHtml = facedownAtBf.filter(c => c.owner === viewingPlayer).map(c => `<div class="bf-facedown">${renderFacedownCard(c, fdZoneId)}</div>`).join("");
+    const oppSlots = groupAttachments(opponentUnits);
+    const mySlots = groupAttachments(playerUnits);
+    const oppN = oppSlots.length + facedownAtBf.filter(c => c.owner === opponent).length;
+    const myN = mySlots.length + facedownAtBf.filter(c => c.owner === viewingPlayer).length;
+    const crowded = Math.max(oppN, myN) >= BF_CROWDED_AT;
 
     const bfName = bfNames[bfId] || bfId.replace(/^ogn-|^sfd-|^unl-/g, "").replace(/-\d+$/, "");
 
@@ -128,7 +126,7 @@ function renderBattlefields() {
     const showdownClass = hasShowdown ? "showdown-active-bf" : "";
 
     html += `
-      <div class="battlefield ${isContested ? "contested" : ""} ${controlClass} ${showdownClass}" data-bf-id="${esc(bfId)}"
+      <div class="battlefield ${isContested ? "contested" : ""} ${controlClass} ${showdownClass} ${crowded ? "battlefield--crowded" : ""}" data-bf-id="${esc(bfId)}"
            data-drop-zone="${esc(bfId)}"
            onclick="onBattlefieldClick(event, '${esc(bfId)}')"
            style="--bf-img: url('/card-image/${esc(bfImgId)}');">
@@ -142,19 +140,16 @@ function renderBattlefields() {
             <div class="bf-name">${esc(bfName)}</div>
             <div class="bf-control">${controlLabel}${isContested ? " (Contested)" : ""}${hasShowdown ? " — " + (activeShowdown.isCombatShowdown ? "Combat" : "Showdown") : ""}</div>
           </div>
-          <div class="bf-units opponent-side">
-            ${opponentUnits.map(c => renderCardElement(c, false, bfZoneId)).join("") || ""}${opponentFacedownHtml}
-          </div>
+          ${renderBfSide("opponent-side", bfId, oppSlots, opponentFacedownHtml, oppN, bfZoneId)}
           <div class="bf-divider"></div>
-          <div class="bf-units player-side">
-            ${playerUnits.map(c => renderCardElement(c, false, bfZoneId)).join("") || ""}${playerFacedownHtml}
-          </div>
+          ${renderBfSide("player-side", bfId, mySlots, playerFacedownHtml, myN, bfZoneId)}
         </div>
       </div>
     `;
   }
   const rowEl = document.getElementById("battlefieldRow");
   rowEl.innerHTML = html;
+  renderBfSpread(); // keep an open spread view in sync with the new state
 
   // W10a: after the battlefield DOM is built, inject a per-battlefield
   // token panel so the viewing player can spawn combat tokens (Recruit,
@@ -183,3 +178,91 @@ function renderBattlefields() {
     }
   }
 }
+
+// ============================================================================
+// Crowded battlefield sides
+// ----------------------------------------------------------------------------
+// One horizontal row per side, never a second row and never a scrollbar: the
+// cards first SHRINK to fit (down to a legible minimum) and past that OVERLAP
+// like a fanned hand (later cards on top; hover lifts one clear of its
+// neighbours; each keeps a visible, clickable strip). The row carries its slot
+// count as --n so gameplay.css can size/overlap without measuring. A crowded
+// side also gets a "⤢ N" chip that opens the SPREAD view: every unit on that
+// side at full size in a grid, each tile forwarding hover (preview) and click
+// (select / target) to the real board card, closed by outside click or Esc.
+// ============================================================================
+const BF_CROWDED_AT = 4;      // slots on one side before compact badges + the spread chip appear
+let _bfSpread = null;         // { bfId, side } while the spread view is open
+
+function renderBfSide(sideClass, bfId, slots, facedownHtml, n, bfZoneId) {
+  const crowded = n >= BF_CROWDED_AT;
+  const stacks = slots.filter(e => e.gear.length).length;
+  const chip = crowded
+    ? `<button type="button" class="bf-spread-chip" data-bf-spread="${esc(bfId)}:${esc(sideClass)}" onpointerdown="event.stopPropagation()" onclick="event.stopPropagation(); openBfSpread('${esc(bfId)}', '${esc(sideClass)}')" title="Spread out all ${n} cards on this side">&#10530; ${n}</button>`
+    : "";
+  return `<div class="bf-units ${sideClass} ${crowded ? "bf-units--crowded" : ""}" data-n="${n}" style="--n:${Math.max(n, 1)};--stacks:${stacks}">${slots.map(e => renderUnitSlot(e, bfZoneId)).join("")}${facedownHtml}${chip}</div>`;
+}
+
+function openBfSpread(bfId, side) {
+  _bfSpread = { bfId, side };
+  if (typeof hidePreview === "function") hidePreview(true);
+  renderBfSpread();
+}
+
+function closeBfSpread() {
+  _bfSpread = null;
+  document.getElementById("bfSpread")?.remove();
+}
+
+/** (Re)build the spread popover from the CURRENT board DOM for the open side; closes itself when that side empties. */
+function renderBfSpread() {
+  if (!_bfSpread) { document.getElementById("bfSpread")?.remove(); return; }
+  const { bfId, side } = _bfSpread;
+  const sideEl = document.querySelector(`.battlefield[data-bf-id="${CSS.escape(bfId)}"] .bf-units.${CSS.escape(side)}`);
+  const cards = sideEl ? Array.from(sideEl.querySelectorAll(".card[data-card-id]")) : [];
+  if (!sideEl || cards.length === 0) { closeBfSpread(); return; }
+  let pop = document.getElementById("bfSpread");
+  if (!pop) {
+    pop = document.createElement("div");
+    pop.id = "bfSpread";
+    pop.className = "bf-spread";
+    pop.addEventListener("pointerdown", (e) => e.stopPropagation());
+    pop.addEventListener("click", (e) => {
+      const tile = e.target.closest("[data-spread-for]");
+      if (!tile) return;
+      e.stopPropagation();
+      const real = document.querySelector(`#battlefieldRow .card[data-card-id="${CSS.escape(tile.dataset.spreadFor)}"]`);
+      if (!real) return;
+      // Same path as clicking the board card: select it / pick it as a target.
+      if (typeof onCardClick === "function") onCardClick(tile.dataset.spreadFor);
+    });
+    document.body.appendChild(pop);
+  }
+  const bfName = document.querySelector(`.battlefield[data-bf-id="${CSS.escape(bfId)}"] .bf-name`)?.textContent || bfId;
+  const whose = side === "player-side" ? "Your" : "Opponent's";
+  pop.innerHTML = `
+    <div class="bf-spread-head"><span>${esc(whose)} side of ${esc(bfName)} — ${cards.length} card${cards.length === 1 ? "" : "s"}</span><button type="button" class="bf-spread-close" onclick="closeBfSpread()" title="Close (Esc)">&times;</button></div>
+    <div class="bf-spread-grid">${cards.map(el => {
+      const clone = el.cloneNode(true);
+      clone.removeAttribute("onpointerdown");
+      clone.removeAttribute("ondblclick");
+      clone.classList.remove("dragging");
+      // The tile is a hover-preview surface in its own right (same data-card-id /
+      // data-def-id) and forwards clicks to the board card.
+      return `<div class="bf-spread-tile" data-spread-for="${esc(el.dataset.cardId)}">${clone.outerHTML}</div>`;
+    }).join("")}</div>`;
+  // Sit over the battlefield row, clamped to the viewport.
+  const row = document.getElementById("battlefieldRow")?.getBoundingClientRect();
+  if (row) {
+    pop.style.top = Math.max(8, Math.round(row.top + 8)) + "px";
+    pop.style.maxHeight = Math.max(160, Math.round(window.innerHeight - row.top - 24)) + "px";
+  }
+}
+
+// Outside click / Esc close the spread view.
+document.addEventListener("pointerdown", (e) => {
+  if (!_bfSpread) return;
+  if (e.target.closest("#bfSpread, .bf-spread-chip, #actionBar, #targetBanner")) return;
+  closeBfSpread();
+}, true);
+document.addEventListener("keydown", (e) => { if (_bfSpread && (e.key === "Escape" || e.key === "Esc")) closeBfSpread(); }, true);

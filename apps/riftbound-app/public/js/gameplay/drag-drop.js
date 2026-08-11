@@ -343,6 +343,7 @@ document.addEventListener("pointerup", (e) => {
   // Set when the drop resolves to per-target variants; targeting mode is entered
   // after drag cleanup so its highlights survive clearValidTargetHighlights().
   let targetingMoves = null;
+  let hideOnlyAfterDrop = null; // rule 723: hide needs an explicit confirm (see below)
 
   if (wasDragging) {
     // Check for drop on a valid zone first, then fall back to unit-drop for equipment.
@@ -390,6 +391,12 @@ document.addEventListener("pointerup", (e) => {
           m.params?.location === `battlefield-${dropZone}` || (m.moveId === "hideCard" && m.params?.battlefieldId === dropZone));
         if (there.length > 1 && typeof openPlayCostModal === "function") {
           openPlayCostModal(cardId);
+          move = null;
+        } else if (there.length === 1 && there[0].moveId === "hideCard") {
+          // Dropping on a battlefield where the ONLY option is Hide: confirm it
+          // explicitly ("Hide at …" button) rather than silently turning a drag
+          // the player may have meant as "play here" into a face-down hide.
+          hideOnlyAfterDrop = there;
           move = null;
         } else {
           move = there[0] ?? null;
@@ -448,6 +455,8 @@ document.addEventListener("pointerup", (e) => {
     }
     if (targetingMoves) {
       beginTargetingOrPlay(targetingMoves, cardId);
+    } else if (hideOnlyAfterDrop && typeof enterHideOnlySelected === "function") {
+      enterHideOnlySelected(cardId, hideOnlyAfterDrop);
     }
   } else {
     // Was just a click (didn't cross drag threshold) — handle as card click
