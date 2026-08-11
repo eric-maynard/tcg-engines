@@ -561,6 +561,12 @@ export interface SetupState {
   mulliganedBy?: PlayerId[];
 
   /**
+   * rule 114 — both decks are shuffled before the opening draw (116), so the
+   * sequence records who has shuffled and the draw is refused until they have.
+   */
+  shuffledBy?: PlayerId[];
+
+  /**
    * Battlefield kept by each player during setup, keyed by player id.
    * rule 485.4.a: each player selects exactly one — "only 1 will be used".
    * rule 485.5: the selections are placed simultaneously, so a choice stays
@@ -1286,6 +1292,19 @@ export type PendingResume =
       readonly effect: unknown;
       readonly playerId: PlayerId;
       readonly sourceCardId: CardId;
+    }
+  /**
+   * rule 356.4.b / 356.4.c.1 — the answer names which half of an "[N] or
+   * [rainbow] less" discount this play elects. The engine already paid
+   * `elected`; picking the other key restores `pool` (the pre-payment snapshot)
+   * and pays `alternative` instead.
+   */
+  | {
+      readonly kind: "cost-election";
+      readonly playerId: PlayerId;
+      readonly cardId: CardId;
+      readonly alternative: unknown;
+      readonly pool: unknown;
     }
   /**
    * rule 372 / 465.2.c.5 — the answer orders the damage replacements (Double /

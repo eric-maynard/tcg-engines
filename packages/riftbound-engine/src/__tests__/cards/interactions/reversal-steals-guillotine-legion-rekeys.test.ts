@@ -104,7 +104,7 @@ describe("Mystic Reversal steals Noxian Guillotine — Legion re-keys to the new
     expect(game.chain()).toEqual([expect.objectContaining({ cardId: "guil", controller: P2, targets: ["V"] })]);
   });
 
-  test.failing("BUG: (a) Legion reads the NEW controller's finalized cards — P2 finalized Mystic Reversal, so 'Kill it now instead' applies: V dies on resolution and NO delayed kill is armed (812.1.c, 419.4.b, 158.2)", async () => {
+  test("(a) Legion reads the NEW controller's finalized cards — P2 finalized Mystic Reversal, so 'Kill it now instead' applies: V dies on resolution and NO delayed kill is armed (812.1.c, 419.4.b, 158.2)", async () => {
     // Expected: V → P1's trash immediately; activeReplacements has nothing from Guillotine.
     // Actual: the engine's Legion check wants ≥2 plays for a spell resolving from the chain (it assumes the
     // spell itself was tallied for its controller); the stolen Guillotine was never P2's play, so P2's single

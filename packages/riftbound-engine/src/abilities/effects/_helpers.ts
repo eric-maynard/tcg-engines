@@ -12,6 +12,7 @@ import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import { recordPublicReveal } from "../../operations/public-reveal";
 import { randomizedRecycleOrder } from "../../operations/recycle-order";
 import { additionalCostWasPaid } from "../../operations/additional-costs-paid";
+import { playedIdsThisTurn } from "../../operations/plays-this-turn";
 import { effectiveTags } from "../card-tags";
 import { scoreWithinConditionMet } from "../../operations/score-within";
 import type { TargetDescriptor } from "../target-resolver";
@@ -224,6 +225,9 @@ export function getTargetIds(effect: ExecutableEffect, ctx: EffectContext): stri
   const resolved = resolveTarget(effect.target, {
     battlefieldZone,
     cards: ctx.cards,
+    // rule 355.13 (rule-id: sfd-023-221) — "one OTHER unit" drops the objects
+    // an earlier slot of this instruction already chose.
+    chosenTargetIds: ctx.chosenTargetIds,
     draft: ctx.draft,
     // rule 811.1.d.2 (sfd-139-221) — a card played from Hidden chooses only at
     // the battlefield it was facedown at ("attach it to a unit you control
@@ -1112,10 +1116,17 @@ export function evaluateEffectCondition(
       return (ctx as { ifYouDoPerformed?: boolean }).ifYouDoPerformed === true;
     }
     case "legion": {
-      // rule-id: ogn-254-298 / rule 724 — "if you've played another card this
-      // turn". A spell resolving from the chain was itself already counted by
-      // playSpell, so it needs one play beyond its own.
+      // rule-id: ogn-254-298 / rule 724 / 812.1.c — "if you've played another card
+      // this turn", read against the CURRENT controller (rule 419.4.b): a spell
+      // whose control changed on the chain (Mystic Reversal) re-keys, and the
+      // thief's own plays decide it. The per-card ledger answers "another card"
+      // directly; only when it is unpopulated do we fall back to the count, where
+      // a spell resolving from the chain was itself already tallied by playSpell.
       const played = ctx.draft.cardsPlayedThisTurn?.[ctx.playerId] ?? 0;
+      const ids = playedIdsThisTurn(ctx.draft, ctx.playerId);
+      if (ids.length > 0) {
+        return ids.some((id) => id !== ctx.sourceCardId);
+      }
       const onChain = ctx.zones.getCardZone(ctx.sourceCardId as CoreCardId) === "chain";
       return played >= (onChain ? 2 : 1);
     }

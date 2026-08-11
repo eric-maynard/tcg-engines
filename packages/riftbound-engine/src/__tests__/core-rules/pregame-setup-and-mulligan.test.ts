@@ -256,7 +256,7 @@ describe("1. The pregame sequence runs in the order 110–118 (110, 111, 112, 11
     expect(pg.engine.getState().setup).toBeUndefined();
   });
 
-  test.failing("BUG: 110–118 — a move belonging to a LATER step must be refused and change nothing; the pregame moves have no step gate at all", async () => {
+  test("110–118 — a move belonging to a LATER step must be refused and change nothing; the pregame moves have no step gate at all", async () => {
     // Expected: success === false and a byte-identical state for each early move.
     // Actual: drawInitialHand runs before any shuffle, mulligan runs before the opening draw, and
     // transitionToPlay runs before either mulligan (setup.step / setup.pendingMulligan are never

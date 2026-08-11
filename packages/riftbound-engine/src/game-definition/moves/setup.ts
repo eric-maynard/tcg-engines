@@ -75,6 +75,20 @@ function firstPlayerContributesNoBattlefield(
 }
 
 /**
+ * rules 110–118: the Setup Process runs in a fixed order, so a move belonging to
+ * a LATER step is illegal while an earlier one is outstanding. The ordering is
+ * only policed for a pregame actually driven through the engine's own sequence
+ * moves — one whose Turn Order was determined by `rollForFirst` /
+ * `chooseFirstPlayer` (115), which is what advances `setup.step` off its
+ * initial value. Fixtures and hosts that seed a position directly (patching
+ * `setup.firstPlayer`, dealing hands themselves) are not executing the
+ * sequence at all and stay permissive.
+ */
+function setupSequenceIsDriven(state: RiftboundGameState): boolean {
+  return state.status === "setup" && state.setup !== undefined && state.setup.step !== "rollForFirst";
+}
+
+/**
  * Setup move definitions
  */
 export const setupMoves: Partial<
@@ -452,9 +466,18 @@ export const setupMoves: Partial<
    * Shuffles the main deck and rune deck for a player.
    */
   shuffleDecks: {
-    reducer: (_draft, context) => {
+    reducer: (draft, context) => {
       const { playerId } = context.params;
       const { zones } = context;
+
+      // rule 114: record the shuffle so the opening draw (116) can refuse to
+      // run ahead of it.
+      if (draft.setup) {
+        draft.setup.shuffledBy ??= [];
+        if (!draft.setup.shuffledBy.includes(playerId as never)) {
+          draft.setup.shuffledBy.push(playerId as never);
+        }
+      }
 
       zones.shuffleZone("mainDeck" as CoreZoneId, playerId as CorePlayerId);
       zones.shuffleZone("runeDeck" as CoreZoneId, playerId as CorePlayerId);
@@ -469,13 +492,21 @@ export const setupMoves: Partial<
   drawInitialHand: {
     // rule 116: the opening draw happens exactly once per player. A player who
     // already holds cards has drawn (or mulliganed) — drawing again is illegal.
-    condition: (_state, context) => {
+    condition: (state, context) => {
       const { playerId } = context.params;
       const hand = context.zones.getCardsInZone(
         "hand" as CoreZoneId,
         playerId as CorePlayerId,
       );
-      return (hand?.length ?? 0) === 0;
+      if ((hand?.length ?? 0) !== 0) {
+        return false;
+      }
+      // rules 110–118 / 114: the opening draw is step 116 — it may not run
+      // before the decks have been shuffled (114).
+      if (setupSequenceIsDriven(state) && !(state.setup?.shuffledBy ?? []).includes(playerId as never)) {
+        return false;
+      }
+      return true;
     },
 
     reducer: (_draft, context) => {
@@ -524,6 +555,15 @@ export const setupMoves: Partial<
       // rule 117.1: "up to two" — naming more than two cards is not a legal
       // mulligan request; it is refused, never silently truncated.
       if (requested.length > 2) {
+        return false;
+      }
+
+      // rules 110–118: the Mulligan is step 117 — it may not run before the
+      // opening hand has been drawn (116). A player with no cards has not drawn.
+      if (
+        setupSequenceIsDriven(state) &&
+        (context.zones?.getCardsInZone("hand" as CoreZoneId, playerId as CorePlayerId)?.length ?? 0) === 0
+      ) {
         return false;
       }
 
@@ -676,6 +716,16 @@ export const setupMoves: Partial<
    * Also sets up first-turn rules (rule 644.7: second player channels extra rune).
    */
   transitionToPlay: {
+    // rules 110–118 / 118: play begins only after the LAST setup step is done —
+    // every player must have taken their mulligan (117) first.
+    condition: (state) => {
+      if (!setupSequenceIsDriven(state)) {
+        return true;
+      }
+      const done = state.setup?.mulliganedBy ?? [];
+      return Object.keys(state.players).every((p) => done.includes(p as never));
+    },
+
     reducer: (draft, context) => {
       // Determine first player from setup state or fallback to first player ID
       const firstPlayer = (draft.setup?.firstPlayer ??
