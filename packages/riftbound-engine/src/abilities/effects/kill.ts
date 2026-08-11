@@ -411,8 +411,14 @@ function raiseGroupSubsetRepick(
   if (total <= limit) {
     return false;
   }
+  // rule 355.11.b (last sentence) — under a location-scoped group restriction
+  // ("units AT A BATTLEFIELD with total Might N or less") a unit that left the
+  // chosen battlefield stays affectable, but only "as long as those units are
+  // all located at the same battlefield": the subset may never mix locations.
+  const location = (effect.target as { location?: string } | undefined)?.location;
+  const oneLocation = location === "battlefield" || location === "here" || location === "same";
   ctx.draft.pendingChoice = {
-    constraint: { totalMightAtMost: limit },
+    constraint: { totalMightAtMost: limit, ...(oneLocation ? { sameLocation: true } : {}) },
     max: bound.length,
     min: 0,
     // A unit that alone breaks the cap can be in no legal subset.

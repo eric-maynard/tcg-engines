@@ -173,7 +173,7 @@ describe("Draven's attack trigger — optional [fury] payment and its legal [Add
   // Pay is demanded and the prompt must remain OPEN across them. Engine: with an empty pool the payment
   // Decision is never surfaced at all — the trigger silently resolves with no buff, so a controller holding
   // a Gold token can never convert it into the [fury] this instruction is asking for.
-  test.failing("BUG: (429.3) with an empty pool and a Gold token on board the payment prompt must still be surfaced, listing exactly {Gold} as its [Add] source — the engine skips the prompt entirely and offers nothing", async () => {
+  test("(429.3) with an empty pool and a Gold token on board the payment prompt must still be surfaced, listing exactly {Gold} as its [Add] source", async () => {
     const game = await board().build();
     await attackAndOptIn(game);
     await resolveTrigger(game);
@@ -200,6 +200,8 @@ describe("Draven's attack trigger — optional [fury] payment and its legal [Add
     expect(game.p1.resources()).toMatchObject({ energy: 2, power: { fury: 0, rainbow: 0 } });
     await resolveTrigger(game);
     expect(game.state("draven").might).toBe(4);
+    // 444.2: the Pay is still asked (canAccept false — Energy is not Power); decline it.
+    await game.p1.no();
     const settled = await game.settle();
     expect(settled.reason).toBe("open");
     expect(game.p1.energy()).toBe(2); // still unspent — nothing here could take it
@@ -250,6 +252,8 @@ describe("Draven's attack trigger — optional [fury] payment and its legal [Add
     expect(game.state("draven").might).toBe(4);
     expect(game.p1.resources()).toMatchObject({ energy: 0, power: { fury: 0, rainbow: 0 } });
     expect(game.chain()).toEqual([]);
+    // 444.2: the unpayable Pay is still asked (canAccept false); decline it.
+    await game.p1.no();
     const settled = await game.settle();
     expect(settled.reason).toBe("open");
     expect(game.zoneOf("draven")).toBe("trash"); // 4 < the Defender's 5
@@ -259,7 +263,7 @@ describe("Draven's attack trigger — optional [fury] payment and its legal [Add
   // 444.2 / 355.10.c.1: the Pay is a Game Action that is still ASKED — it is simply not acceptable. The
   // Decision must be recorded (canAccept false) rather than the whole payment moment being skipped, which
   // is what makes the 429.3 window above unreachable.
-  test.failing("BUG: with nothing to pay with, the payment Decision is still recorded as unpayable (canAccept false) instead of being skipped without a prompt (444.2 / 355.10.c.1)", async () => {
+  test("with nothing to pay with, the payment Decision is still recorded as unpayable (canAccept false) (444.2 / 355.10.c.1)", async () => {
     const game = await board({ butcher: false, gold: false }).build();
     await attackAndOptIn(game);
     await resolveTrigger(game);

@@ -1,42 +1,6 @@
 // Effect handler: "conditional"
-import { canAffordPower } from "../../game-definition/moves/chain/effect-context";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import { type EffectHelpers, evaluateEffectCondition, getTargetIds } from "./_helpers";
-
-/**
- * rule 356.1 / 429.3 (ven-152-166 Rebuttal) — whether the effect's controller
- * could actually meet a "you may pay …" cost demanded while a spell resolves.
- * Energy earmarked "use only to play spells/gear" never funds it.
- */
-function payCostIsPayable(
-  draft: EffectContext["draft"],
-  payer: string,
-  cost: Record<string, unknown>,
-): boolean {
-  const pool = draft.runePools[payer];
-  if (!pool) {
-    return false;
-  }
-  const earmarked = Object.values(
-    (draft as { restrictedEnergy?: Record<string, Partial<Record<string, number>>> })
-      .restrictedEnergy?.[payer] ?? {},
-  ).reduce<number>((sum, amount) => sum + (amount ?? 0), 0);
-  if (pool.energy - Math.min(earmarked, pool.energy) < ((cost.energy as number) ?? 0)) {
-    return false;
-  }
-  const powerCost = cost.power as string[] | undefined;
-  if (powerCost && powerCost.length > 0) {
-    const needed: Record<string, number> = {};
-    for (const d of powerCost) {
-      needed[d] = (needed[d] ?? 0) + 1;
-    }
-    if (!canAffordPower(pool.power, needed)) {
-      return false;
-    }
-  }
-  const xpCost = (cost.xp as number) ?? 0;
-  return !(xpCost > 0 && (draft.players[payer]?.xp ?? 0) < xpCost);
-}
 
 /**
  * rule 354.2 (sfd-154-221 Guards!) — does this branch name what the enclosing
@@ -76,18 +40,16 @@ export function handle_conditional(effect: ExecutableEffect, ctx: EffectContext,
   // rule 356.1 (ven-152-166) — "You may pay [rainbow]. If you do, X.
   // Otherwise, Y." is a cost paid WITHIN the instructions: the controller is
   // asked, and only an accepted (and charged) payment takes the `then` branch.
-  // An unpayable cost is no choice at all — it goes straight to `else`.
+  // rule 444.2 / 355.10.c.1 / 429.3 — the Pay is a Game Action that is still
+  // ASKED even when nothing in the pool can meet it: the prompt is surfaced
+  // with `canAccept:false` (the enumerator withholds "accept") so its
+  // controller may still activate Reaction [Add] abilities while it is open.
+  // Declining runs `else`, exactly as an unpayable cost used to do silently.
   const payCost =
     condition?.type === "pay-cost" && condition.cost && typeof condition.cost === "object"
       ? (condition.cost as Record<string, unknown>)
       : undefined;
   if (payCost) {
-    if (!payCostIsPayable(ctx.draft, ctx.playerId, payCost)) {
-      if (elseEffect) {
-        executeEffect(elseEffect, ctx);
-      }
-      return;
-    }
     // rule 354.2 / 205 (sfd-154-221) — the linked instruction names the object
     // the sequence's source step just produced, so the parked Pay carries that
     // object rather than re-resolving from the board when it is answered.

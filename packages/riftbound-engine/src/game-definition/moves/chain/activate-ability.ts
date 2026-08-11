@@ -279,12 +279,17 @@ function eligibleDiscardCards(hand: readonly unknown[], spec: { cardType?: strin
  */
 export function isPaymentPromptFor(pendingChoice: unknown, playerId: string): boolean {
   const pc = pendingChoice as
-    | { type?: string; playerId?: string; counterRansom?: unknown }
+    | { type?: string; playerId?: string; counterRansom?: unknown; payChoice?: unknown }
     | undefined;
   if (!pc || pc.playerId !== playerId) {
     return false;
   }
-  return pc.type === "pay-x" || (pc.type === "opt-in" && pc.counterRansom !== undefined);
+  // rule 355.10.c.1 / 444.2 — a `payChoice` opt-in is the "you may pay [C]. If
+  // you do, …" Pay elected AS the item resolves; it is a payment moment too.
+  return (
+    pc.type === "pay-x" ||
+    (pc.type === "opt-in" && (pc.counterRansom !== undefined || pc.payChoice !== undefined))
+  );
 }
 
 export function isImmediateAddEffect(effect: unknown): boolean {

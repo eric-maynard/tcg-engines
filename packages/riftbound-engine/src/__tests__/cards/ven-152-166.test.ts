@@ -51,6 +51,10 @@ describe("Rebuttal (ven-152-166)", () => {
 
   test("declining the [rainbow] payment counters the chosen spell", async () => {
     const game = await cleaveThenRebuttal({ mind: 1 });
+    // rule 444.2 / 355.10.c.1 — with no power left the Pay is still ASKED (canAccept
+    // false); settle hands that prompt back once, then declines it into the counter.
+    const asked = await game.settle();
+    expect(asked.decision).toMatchObject({ canAccept: false, kind: "yes-no", seat: P1 });
     await game.settle();
     // No second power to pay with — the counter branch lands.
     expect(game.state("theirs").grantedKeywords).toEqual([]);
@@ -83,6 +87,8 @@ describe("Rebuttal (ven-152-166)", () => {
     expect(offered?.length).toBe(2);
     // Choose the BOTTOM spell, not the topmost the fallback would take.
     await game.p1.cast("reb", { targets: "cleave" });
+    // rule 444.2 — the unpayable Pay is asked once before it can be declined.
+    await game.settle();
     await game.settle();
     // Cleave was countered (no [Assault 3]); the untargeted Boost resolved.
     expect(game.state("theirs").grantedKeywords ?? []).toEqual([]);
