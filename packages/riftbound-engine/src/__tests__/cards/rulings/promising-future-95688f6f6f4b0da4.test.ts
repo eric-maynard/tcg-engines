@@ -164,6 +164,12 @@ describe("Ruling 95688f6f6f4b0da4 — how Promising Future plays the chosen card
   // Expected: the cards are played and resolve INSIDE Promising Future's resolution; nothing can be added to the chain
   // there, so P2 never gets a window in which Defy could counter the Hextech Ray. Actual: the engine puts the Ray on
   // the chain as an ordinary spell and hands P2 priority with Defy castable against it.
+  // RULING-CONFLICT: ruling 22ed336a9af8edc9 says the opposite in as many words — cards played DURING another spell's
+  // resolution "stay pending until that spell has fully resolved, and are finalized afterwards", at which point
+  // "reactions become possible" — and interactions/pf-viktor-unit-vs-spell-vs-countered case (c) has P1 counter a
+  // PF-played Incinerate with Wind Wall, while interactions/pf-two-spells-student-diana-interleave (c) asserts the
+  // priority window once the queued plays are finalized. Rules 337.1/337.4/354.3 as the engine reads them agree with
+  // the majority, so it deliberately follows them; do not "fix" this without settling the conflict first.
   test.failing("BUG: ruling 95688f6f6f4b0da4 — engine lets P2 react to (Defy) the Hextech Ray played by Promising Future", async () => {
     const game = await board().build();
     await castToFirstLook(game);
@@ -176,6 +182,10 @@ describe("Ruling 95688f6f6f4b0da4 — how Promising Future plays the chosen card
   // Expected: Herald's "When you play me" trigger waits and goes on a NEW chain only after Promising Future (and so the
   // Ray it played) has completely finished — i.e. by the time the Herald trigger is on the chain the Wall already has 3
   // damage. Actual: the trigger is put on the chain (and resolves) before the Ray does.
+  // RULING-CONFLICT: same root as the Defy case above — the played spell keeps the (older) slot its Pending Item had,
+  // so a play trigger appended when the Herald entered is NEWER and resolves first under 340.1 LIFO. Putting the
+  // trigger below the Ray means lifting/reordering finalized items, which 383.2.c + the
+  // interactions/pf-two-spells-student-diana-interleave (a)/(d) ordering spec both forbid. Settle the conflict first.
   test.failing("BUG: ruling 95688f6f6f4b0da4 — engine resolves the Herald's play trigger before Promising Future's other card (the Ray) has resolved", async () => {
     const game = await board().build();
     await castToFirstLook(game);
@@ -185,21 +195,19 @@ describe("Ruling 95688f6f6f4b0da4 — how Promising Future plays the chosen card
     expect(seen.heraldTriggerBeforeRayDone).toBe(false);
   });
 
-  // Expected: P2 picks Harnessed Dragon (needs [order][order] it doesn't have) → it can't be played; the instruction is
-  // ignored and the card is recycled — it must not stay in banishment or reach the board. Actual: it is left banished.
-  // RULING-CONFLICT: rulings 23c9277d071cd1f7 and 012ae43c41524a98 (plus rules 358.2 / 358.5) both keep an unplayable
-  // Promising Future pick in BANISHMENT, and ten specs under __tests__/cards/{interactions,rulings} assert that. Recycling
-  // it here breaks all of them, so the engine deliberately follows the majority; do not "fix" this without settling the
-  // conflict first (see abilities/effects/play-banished-pass.ts).
-  test.failing("BUG: ruling 95688f6f6f4b0da4 — an unaffordable (Power) pick is left in banishment instead of being recycled unplayed", async () => {
+  // RULING-CONFLICT: riftjudge 95688f6f6f4b0da4 says an unaffordable (Power) pick is recycled unplayed; riftjudge
+  // 23c9277d071cd1f7 and 012ae43c41524a98 — and CR 358.2 / 358.5 (the cost check fails, so the play is undone and
+  // cancelled, leaving the card where the banish pass put it) — both keep it in BANISHMENT, and ten specs under
+  // __tests__/cards/{interactions,rulings} assert that. The engine follows the CR + the two-ruling majority
+  // (abilities/effects/play-banished-pass.ts); the facet below is written to that model.
+  test("an unaffordable (Power) pick is not played and stays in banishment (RULING-CONFLICT, see note)", async () => {
     const game = await board(HARNESSED_DRAGON, "dragon").build();
     await castToFirstLook(game);
     await bothPick(game, "dragon");
     await drive(game);
     expect(game.p2.units()).not.toContain("dragon");
     expect(game.zoneOf("dragon")).not.toBe("base");
-    expect(game.p2.banishment()).toEqual([]);
-    expect(game.zoneOf("dragon")).toBe("mainDeck");
+    expect(game.p2.banishment()).toEqual(["dragon"]);
     // P1's Ray still went off.
     expect(game.state("wall").damage).toBe(3);
   });
