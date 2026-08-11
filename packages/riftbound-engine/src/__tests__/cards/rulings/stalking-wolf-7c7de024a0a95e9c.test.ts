@@ -42,6 +42,11 @@ describe("Ruling 7c7de024a0a95e9c — Stalking Wolf's pet-kill is a cost of PLAY
   // cost kills the lone friendly unit at the destination empties it before Finalization, so the granted [Reaction]
   // is void at Check Legality (822.1.b / 822.3 / 813.4.b). Until the conflict is resolved the Wolf's whole line is
   // unavailable here, so all three facets are tracked as failing.
+  // RULING-CONFLICT: riftjudge 7c7de024a0a95e9c would make the Wolf playable to the emptied battlefield at
+  // Reaction speed; official ruling 57b3e2849ef0109a ("It is not legal on the battlefield you are attacking")
+  // and 822.3 / 813.4.b say the card's "its battlefield" clause grants LOCATION validity, not TIMING — engine
+  // follows 57b3e2849ef0109a, which `cards/unl-166-219.test.ts`, `interactions/stalking-wolf-lone-poro-ambush-
+  // rollback.test.ts` and `core-rules/play-options-parity.test.ts` all pin.
   test.failing("BUG: holding Focus after the Poro attacks, playing the Wolf is merely an OPTION next to passing — P1 may simply pass, the Poro is not killed and wins its combat", async () => {
     const game = await board().build();
     await poroAttacks(game);
