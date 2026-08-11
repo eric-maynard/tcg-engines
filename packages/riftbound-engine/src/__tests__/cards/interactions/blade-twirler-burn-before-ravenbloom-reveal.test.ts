@@ -89,12 +89,13 @@ function burnOutBoard() {
  */
 async function twirlInChoosing(game: Game, who: Seat): Promise<void> {
   await game.p1.move("twirler", "rc");
+  // rule 355.10 / 402.2 — the player is a target of the trigger, named as it is finalized.
+  expect(game.decision()).toMatchObject({ kind: "pick", seat: P1 });
+  await game.p1.pick(who);
   expect(game.chain()).toEqual([expect.objectContaining({ cardId: "twirler", controller: P1, triggered: true })]);
   await game.p1.passPriority();
   expect(game.decision()).toMatchObject({ context: "chain", kind: "action", seat: P2 }); // P2 may respond first
   await game.p2.passPriority();
-  expect(game.decision()).toMatchObject({ kind: "pick", seat: P1 });
-  await game.p1.pick(who);
 }
 
 /** Pass priority until the chain is empty and the combat showdown's Focus window is open. */
@@ -112,6 +113,9 @@ describe("Blade Twirler burns BEFORE Ravenbloom Conservatory reveals", () => {
   test("(a) on the move only Twirler's trigger is on the chain: rc is contested but no showdown has begun and Ravenbloom has NOT triggered yet (344, 323.12); P2 gets priority to respond before it resolves", async () => {
     const game = await board().build();
     await game.p1.move("twirler", "rc");
+    // rule 355.10 / 402.2 — the burned player is named at finalization, before anyone holds priority.
+    expect(game.decision()).toMatchObject({ kind: "pick", seat: P1 });
+    await game.p1.pick(P2);
     expect(game.zoneOf("twirler")).toBe("battlefield-rc");
     expect(game.chain().map((c) => c.name)).toEqual(["Blade Twirler"]);
     expect(game.gameState.battlefields.rc).toMatchObject({ contested: true, contestedBy: P1, controller: P2 });

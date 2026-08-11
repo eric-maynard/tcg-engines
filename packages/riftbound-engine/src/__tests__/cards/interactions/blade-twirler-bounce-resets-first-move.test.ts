@@ -143,7 +143,7 @@ describe("Blade Twirler — 'the first time I move each turn' vs Ride the Wind (
     expect(burnsSince(game, d0)).toEqual({ p1: 0, p2: 0 });
   });
 
-  test.failing("BUG: (a) 'choose a player' is a TARGET of the triggered ability (355.10) — P1 should be asked to name the player at FINALIZATION (timing FIN, both players offered, not declinable), before anyone holds priority (402.2)", async () => {
+  test("(a) 'choose a player' is a TARGET of the triggered ability (355.10) — P1 should be asked to name the player at FINALIZATION (timing FIN, both players offered, not declinable), before anyone holds priority (402.2)", async () => {
     // Expected: right after the move the open decision is P1's FIN pick {player-1, player-2}; priority only afterwards.
     // Actual: the item is finalized with no choice; P1 gets priority at once and the player is asked at RESOLUTION (timing RES).
     const game = await board().build();
@@ -252,7 +252,7 @@ describe("Blade Twirler — 'the first time I move each turn' vs Ride the Wind (
     expect(burnsSince(game, d0)).toEqual({ p1: 0, p2: 1 });
   });
 
-  test.failing("BUG: (c) the re-played Twirler is a NEW OBJECT with no memory of this turn's moves (124 / 124.1) — Ride the Wind #2 moving it base → bf1 is 'the first time I move' for THIS object → the trigger fires again, P1 names a player, they Burn 1 → total burns this turn: P2 2 (not 1, not 3)", async () => {
+  test("(c) the re-played Twirler is a NEW OBJECT with no memory of this turn's moves (124 / 124.1) — Ride the Wind #2 moving it base → bf1 is 'the first time I move' for THIS object → the trigger fires again, P1 names a player, they Burn 1 → total burns this turn: P2 2 (not 1, not 3)", async () => {
     // Expected: after RtW #2's destination is chosen a Blade Twirler trigger goes on the chain; naming P2 burns a second card.
     // Actual: the engine keys the "first move this turn" memory to the card id across the hand round-trip, so the
     // fresh Twirler's first move is treated as its fourth — no trigger, burns stay at 1.

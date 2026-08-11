@@ -949,6 +949,31 @@ export function orderBatchTriggersByTurnOrder(
   collapseTriggerBatch(draft.interaction, chainLenBefore);
 }
 
+/**
+ * rule 124 / 124.1 (rule-id: ven-002-166 Blade Twirler) — a card bounced or
+ * recycled off the board becomes a NEW OBJECT with no memory of what the old one
+ * did: drop its per-card `turnEventCounts` tallies so a re-played copy's first
+ * move this turn is again "the first time I move each turn". Player- and
+ * type-scoped tallies belong to the player, not the object, and stay; a card in
+ * the trash or banishment keeps its tallies, since abilities that function from
+ * there (and the death batch itself) still read them.
+ */
+function forgetPerCardTallies(draftLike: unknown, cardIds: readonly string[]): void {
+  const counts = (draftLike as { turnEventCounts?: Record<string, number> }).turnEventCounts;
+  if (!counts) {
+    return;
+  }
+  for (const cardId of cardIds) {
+    const marker = `|c:${cardId}`;
+    for (const key of Object.keys(counts)) {
+      const at = key.indexOf(marker);
+      if (at >= 0 && (key.length === at + marker.length || key[at + marker.length] === "|")) {
+        delete counts[key];
+      }
+    }
+  }
+}
+
 export function emitLeaveEvents(
   ctx: LeaveBoardContext,
   results: readonly LeaveResult[],
@@ -1006,6 +1031,10 @@ export function emitLeaveEvents(
     clearLKI(
       ctx.draft,
       gone.map((r) => r.cardId),
+    );
+    forgetPerCardTallies(
+      ctx.draft,
+      gone.filter((r) => r.to === "hand" || r.to === "deck-top" || r.to === "deck-bottom").map((r) => r.cardId),
     );
   }
   return total;

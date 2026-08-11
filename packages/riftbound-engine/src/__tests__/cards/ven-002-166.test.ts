@@ -47,6 +47,18 @@ function board() {
 }
 
 /** If the engine asks who burns, name `who`; otherwise do nothing (engine currently auto-picks the opponent). */
+/** rule 355.10 / 402.2 — name the burned player at FINALIZATION, leaving the item on the chain. */
+async function namePlayerAtFinalization(
+  game: Awaited<ReturnType<ReturnType<typeof board>["build"]>>,
+  who: string,
+) {
+  const d = game.decision();
+  if (d?.kind === "pick") {
+    const key = (d as PickDecision).options.find((o) => o.seatRef === who)?.key ?? who;
+    await game.seat(d.seat).pick(key);
+  }
+}
+
 async function chooseIfAsked(game: Awaited<ReturnType<ReturnType<typeof board>["build"]>>, who: string) {
   const d = game.decision();
   if (d?.kind === "pick") {
@@ -229,6 +241,7 @@ describe("Blade Twirler (ven-002-166)", () => {
   test("the trigger is a chain item the opponent may answer: sniping Blade Twirler in response does not stop the burn", async () => {
     const game = await board().hand(P2, SNIPE, "snipe").build();
     await game.p1.move("bt", "bf1");
+    await namePlayerAtFinalization(game, P2);
     expect(game.actingSeat()).toBe(P1);
     await game.p1.passPriority();
     expect(game.actingSeat()).toBe(P2);
@@ -248,6 +261,7 @@ describe("Blade Twirler (ven-002-166)", () => {
       .deck(P2, [FILLER, FILLER], ["theirTop", "their2"])
       .build();
     await game.p1.move("bt", "bf1");
+    await namePlayerAtFinalization(game, P2);
     expect(game.decision()).toMatchObject({ context: "chain", kind: "action", seat: P1, source: { cardId: "bt" } });
     await game.settle();
     await chooseIfAsked(game, P2);

@@ -1369,9 +1369,11 @@ export function finalizePendingItems(draftLike: unknown, ctx: FinalizationContex
     // player" is one of the choices made as an ability is ACTIVATED: the seat is
     // named before anyone receives Priority, not when the item resolves. The
     // answer rides on the item's effect as `ownerId`.
+    // rule 355.10 (rule-id: ven-002-166 Blade Twirler) — a player named in a
+    // TRIGGERED ability's text is a target of that ability too, so it is named
+    // as the item is finalized, not when it resolves.
     if (
       item.type === "ability" &&
-      item.triggered !== true &&
       (item.effect as { player?: string } | undefined)?.player === "choose" &&
       (item.effect as { ownerId?: string } | undefined)?.ownerId === undefined
     ) {
