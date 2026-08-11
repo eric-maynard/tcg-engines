@@ -107,7 +107,7 @@ describe("Ruling 3ca6ecc40b74e438 — Quick-Draw an Equipment in response to Fal
   // The engine instead attaches synchronously inside the play pipeline (playPermanent's Quick-Draw branch),
   // so the chain never grows past Falling Star and the interposed reaction window is missing. The observable
   // end state (attached, Squire 4, before Falling Star resolves) is already correct — see the test above.
-  test.failing("BUG: step 6: the Quick-Draw attach is its own chain link ABOVE Falling Star — Blade unattached (Squire 2) until it resolves first (LIFO), then attached (Squire 4) with Falling Star still waiting", async () => {
+  test("step 6: the Quick-Draw attach is its own chain link ABOVE Falling Star — Blade unattached (Squire 2) until it resolves first (LIFO), then attached (Squire 4) with Falling Star still waiting", async () => {
     const game = await starOnTheChain();
     await quickDrawOntoSquire(game);
     if (game.decision()?.kind === "pick") {

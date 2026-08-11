@@ -56,7 +56,14 @@ async function attachTo(game: Game, unit: string): Promise<void> {
     }
     if (d.kind === "pick" && d.seat === P1) {
       await game.p1.pick(unit);
-    } else if (d.kind === "action" && d.context === "chain" && game.chain().every((c) => c.cardId === "cloth")) {
+    } else if (
+      d.kind === "action" &&
+      d.context === "chain" &&
+      // rule 819.1.d / 383.4.a.2 — the attach is a triggered item on top of the
+      // Chain; pass until it (and only it) has resolved, leaving anything the
+      // opponent already had there untouched.
+      game.chain().at(-1)?.cardId === "cloth"
+    ) {
       await game.seat(d.seat).pass();
     } else {
       return;

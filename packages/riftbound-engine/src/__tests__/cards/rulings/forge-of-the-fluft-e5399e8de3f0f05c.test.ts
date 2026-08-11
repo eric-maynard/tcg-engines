@@ -79,6 +79,10 @@ describe("Ruling e5399e8de3f0f05c — Forge of the Fluft's granted legend abilit
     expect(d).toMatchObject({ kind: "pick", seat: P1 });
     expect(d?.kind === "pick" ? d.options.map((o) => o.key).sort() : []).toEqual(["holder", "squire"]);
     await game.p1.pick("holder");
+    // rule 819.1.d / 383.4.a.2 — the attach is a triggered Chain item: it takes
+    // a pass from each player before the sword is actually worn.
+    await game.p1.passPriority();
+    await game.p2.passPriority();
     expect(game.state("swordInHand").attachedTo).toBe("holder");
     expect(game.state("holder").attachments).toContain("swordInHand");
     expect(game.state("holder").might).toBeGreaterThan(before);

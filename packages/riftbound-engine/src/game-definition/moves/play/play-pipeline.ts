@@ -35,6 +35,7 @@ import { notePlayThisTurn } from "../../../operations/plays-this-turn";
 import { battlefieldForbidsUnitPlays } from "../../../abilities/play-restrictions";
 import { attachEquipment } from "../../../abilities/effects/_attachment";
 import { hasKeyword } from "../movement/helpers";
+import { collectSequenceTargetSlots, pairEffectRoles } from "./targeting";
 import {
   cleanupAndFireDeaths,
   type PostMoveCleanupContext,
@@ -58,6 +59,7 @@ import {
   battlefieldIsAttackedBy,
   battlefieldIsOccupiedEnemy,
   battlefieldIsOpen,
+  battlefieldMatchesOccupiedPermission,
   battlefieldRedirectPowerFor,
   boardEntersReadyGrantApplies,
   canPayResourceCost,
@@ -69,6 +71,7 @@ import {
   consumeEntersReadyReplacement,
   createMetaAccessor,
   getEffectiveSpellRepeatCost,
+  getOccupiedBattlefieldPermission,
   getOptionalPlayCost,
   getSacrificeCostDiscount,
   hasStaticEffect,
@@ -343,31 +346,29 @@ export function enterPlayedPermanent(io: PlayIO, spec: EnterPlayedPermanentSpec)
         }
       }
     }
-    if (units.length === 1) {
-      // rule 818.2 / 819.1.d — the Quick-Draw attach IS "attaching an
-      // Equipment", so it must fire attach-equipment triggers (Jax,
-      // Unrelenting) exactly as the [Equip] path does.
-      attachEquipment(
+    // rule 819.1.d / 383.4.a.2 — the attach is a TRIGGERED ability, not part of
+    // the gear's own resolution: the Gear itself resolves at once (337.2) and
+    // the attach goes on the Chain as a Pending item above whatever is already
+    // there. Its unit is chosen at finalization (337.1 / 355.5), then both
+    // players may respond to it before it resolves (337.4) — rule 818.2 /
+    // 819.1.d attach-equipment triggers still fire, from the `attach` handler.
+    if (units.length > 0) {
+      draft.interaction = addToChain(
+        draft.interaction ?? createInteractionState(),
         {
-          cards,
-          counters,
-          draft,
-          fireTriggers: (event: Parameters<typeof fireTriggers>[0]) => fireTriggers(event, trig),
-          playerId,
-          zones,
-        } as never,
-        cardId,
-        units[0] as string,
+          cardId,
+          controller: playerId,
+          effect: {
+            holderCandidates: units,
+            target: { filter: { idIn: units }, quantity: 1, type: "permanent" },
+            type: "attach",
+          } as never,
+          status: "pending",
+          triggered: true,
+          type: "ability",
+        },
+        Object.keys(draft.players ?? {}),
       );
-    } else if (units.length > 1 && !draft.pendingChoice) {
-      draft.pendingChoice = {
-        effect: { holderCandidates: units, type: "attach" },
-        options: units,
-        playerId,
-        remaining: 1,
-        sourceCardId: cardId,
-        type: "choose-target",
-      } as RiftboundGameState["pendingChoice"];
     }
   }
   return entryZone;
@@ -476,13 +477,26 @@ export function putPlayedSpellOnChain(
   const spellEffect = (getGlobalCardRegistry().getAbilities(spec.cardId) ?? []).find(
     (a) => a.type === "spell",
   )?.effect;
+  // rule 820.2 / 820.3.a — an elected [Repeat] runs the SAME instructions again
+  // from ONE Chain item, and each execution owns its own choices (820.2.a). The
+  // executions must be on the item BEFORE it is finalized, so finalization asks
+  // a target slot per execution and charges [Deflect] per choice (809.1.c).
+  const repeatN = Math.max(0, spec.repeatCount ?? 0);
+  const chainEffect =
+    repeatN > 0 && spellEffect
+      ? {
+          _repeatExecutions: true,
+          effects: Array.from({ length: 1 + repeatN }, () => structuredClone(spellEffect)),
+          type: "sequence",
+        }
+      : spellEffect;
   zones.moveCard({ cardId: spec.cardId as CoreCardId, targetZoneId: "chain" as CoreZoneId });
   (draft as { interaction?: RiftboundGameState["interaction"] }).interaction = addToChain(
     draft.interaction ?? createInteractionState(),
     {
       cardId: spec.cardId,
       controller: spec.playerId,
-      effect: spellEffect,
+      effect: chainEffect,
       resolveTo: spec.resolveTo ?? "trash",
       type: "spell",
     },
@@ -503,27 +517,204 @@ export function putPlayedSpellOnChain(
     draft.cardsPlayedThisTurn[spec.playerId] = (draft.cardsPlayedThisTurn[spec.playerId] ?? 0) + 1;
   }
   notePlayThisTurn(draft, spec.playerId, spec.cardId);
-  bindPlayedSpellTarget(io, spec.cardId, spec.playerId, spellEffect as SpellTargetShape | undefined);
-  // rule 820.2 / 820.3.a — an elected [Repeat] runs the SAME instructions again
-  // from ONE Chain item. The targets named while the item was finalized belong
-  // to the whole play, so every execution runs against them; the copies are
-  // distinct objects because each execution owns its own mode/target locks
-  // (820.2), and no Cleanup runs between them (ruling 87d4521ad1764eb1).
-  const repeatN = Math.max(0, spec.repeatCount ?? 0);
-  if (repeatN > 0 && spellEffect) {
-    const items = draft.interaction?.chain?.items as { id: string; cardId: string; effect?: unknown }[] | undefined;
-    const idx = (items?.length ?? 0) - 1;
-    if (items && idx >= 0 && items[idx]?.cardId === spec.cardId) {
-      items[idx] = {
-        ...items[idx],
-        effect: {
-          _repeatExecutions: true,
-          effects: Array.from({ length: 1 + repeatN }, () => structuredClone(spellEffect)),
-          type: "sequence",
-        },
-      } as (typeof items)[number];
+  // rule 820.2.a / 809.1.c — with [Repeat] elected each execution names its OWN
+  // object, so the play asks one target slot per execution (and owes [Deflect]
+  // per choice) instead of one shared target for all of them. rule 419.3.b /
+  // 355.5: a ROLE-PAIR spell an effect plays ("a friendly unit and an enemy
+  // unit … they deal damage to each other") must name its pair as it is played
+  // too, repeated or not — the engine may not bind the roles on its own.
+  const roles = spellExecutionRoles(spellEffect as SpellTargetShape | undefined, repeatN > 0);
+  if (roles.length > 0 && (repeatN > 0 || roles.length > 1)) {
+    const items = draft.interaction?.chain?.items;
+    const item = items?.[items.length - 1];
+    if (item && item.cardId === spec.cardId) {
+      (item as { repeatTargetSlots?: number; repeatRoleCount?: number }).repeatTargetSlots =
+        roles.length * (1 + repeatN);
+      (item as { repeatRoleCount?: number }).repeatRoleCount = roles.length;
+      continueRepeatSpellSlots(io);
+      return;
     }
   }
+  bindPlayedSpellTarget(io, spec.cardId, spec.playerId, spellEffect as SpellTargetShape | undefined);
+}
+
+/**
+ * rule 355.5 / 820.2.a — the caster-chosen role descriptors ONE execution of a
+ * spell names, in the order they are asked: a `fight` names [attacker,
+ * defender], a two-role spell (swap-might / swap-locations / "increase its
+ * Might to another unit's") names [first, second], and everything else names at
+ * most one object.
+ */
+function spellExecutionRoles(
+  spellEffect: SpellTargetShape | undefined,
+  includeSequenceSlots = false,
+): readonly unknown[] {
+  const effect = spellEffect as
+    | {
+        type?: string;
+        attacker?: unknown;
+        defender?: unknown;
+        target?: unknown;
+      }
+    | undefined;
+  if (!effect) {
+    return [];
+  }
+  if (
+    effect.type === "fight" &&
+    typeof effect.attacker === "object" &&
+    effect.attacker !== null &&
+    typeof effect.defender === "object" &&
+    effect.defender !== null
+  ) {
+    return [effect.attacker, effect.defender];
+  }
+  const pair = pairEffectRoles(effect as Parameters<typeof pairEffectRoles>[0]);
+  if (pair) {
+    return [pair.first, pair.second];
+  }
+  if (singleObjectSpellTarget(spellEffect)) {
+    return [effect.target];
+  }
+  // rule 820.2.a (rule-id: sfd-023-221 Piercing Light) — a SEQUENCE spell
+  // ("Deal 2 to a unit at a battlefield, then deal 2 to up to one other unit")
+  // names EVERY caster-chosen slot of one execution as it is played, exactly as
+  // a hand cast does. Without this an effect-played [Repeat] bound one shared
+  // target set and the second execution hit nothing new.
+  if (!includeSequenceSlots) {
+    return [];
+  }
+  const slots =
+    collectSequenceTargetSlots(effect as Parameters<typeof collectSequenceTargetSlots>[0]) ?? [];
+  return slots.length > 0 && slots.every((s) => isCasterChosenSlot(s)) ? slots : [];
+}
+
+/** A descriptor one execution names on its own: a single caster-chosen object (possibly "up to one"). */
+function isCasterChosenSlot(descriptor: unknown): boolean {
+  const d = descriptor as { quantity?: { upTo?: number }; type?: string } | undefined;
+  if (d === undefined || typeof d !== "object") {
+    return false;
+  }
+  const singular = d.quantity === undefined || d.quantity.upTo === 1;
+  return singular && !["battlefield", "player", "self", "trigger-source"].includes(d.type ?? "");
+}
+
+/** A spell whose whole effect names exactly ONE caster-chosen object per execution. */
+function singleObjectSpellTarget(spellEffect: SpellTargetShape | undefined): boolean {
+  const descriptor = spellEffect?.target as
+    | { quantity?: unknown; type?: string }
+    | undefined;
+  return (
+    descriptor !== undefined &&
+    typeof descriptor === "object" &&
+    descriptor.quantity === undefined &&
+    !["self", "player", "battlefield", "trigger-source"].includes(descriptor.type ?? "")
+  );
+}
+
+/**
+ * rule 820.2.a — walks the per-execution target slots of a [Repeat]ed spell an
+ * effect played: slot i is the object execution i names, each one a fresh
+ * choice that owes its own [Deflect] surcharge (809.1.c). Called again after
+ * every pick until the item holds one target per execution, at which point the
+ * executions are marked `independentTargets` so execution i hits target i.
+ */
+export function continueRepeatSpellSlots(io: PlayIO): void {
+  const { draft } = io;
+  if (draft.pendingChoice) {
+    return;
+  }
+  const items = draft.interaction?.chain?.items as
+    | { id: string; cardId: string; controller: string; effect?: unknown; targets?: readonly string[]; repeatTargetSlots?: number; repeatRoleCount?: number }[]
+    | undefined;
+  const idx = items?.findIndex((it) => typeof it.repeatTargetSlots === "number") ?? -1;
+  if (!items || idx < 0) {
+    return;
+  }
+  const item = items[idx] as NonNullable<(typeof items)[number]>;
+  const need = item.repeatTargetSlots ?? 0;
+  const have = item.targets?.length ?? 0;
+  const spellEffect = (getGlobalCardRegistry().getAbilities(item.cardId) ?? []).find(
+    (a) => a.type === "spell",
+  )?.effect as SpellTargetShape | undefined;
+  const roles = spellExecutionRoles(spellEffect, true);
+  const roleCount = Math.max(1, item.repeatRoleCount ?? 1);
+  const descriptor = roles[have % roleCount] ?? spellEffect?.target;
+  // rule 355.9 — the roles of ONE execution name DIFFERENT objects (a unit
+  // cannot fight itself), so the partner already named is off this slot's list.
+  const partners = (item.targets ?? []).slice(have - (have % roleCount), have);
+  const sameZoneOf =
+    (descriptor as { location?: unknown } | undefined)?.location === "same" && partners[0] !== undefined
+      ? (io.zones?.getCardZone?.(partners[0] as CoreCardId) as string | undefined)
+      : undefined;
+  const options =
+    have < need && descriptor !== undefined && typeof io.zones?.getCardsInZone === "function"
+      ? (resolveTarget(
+          { ...(descriptor as object), quantity: "all" } as Parameters<typeof resolveTarget>[0],
+          {
+            cards: io.cards,
+            choosing: true,
+            draft,
+            playerId: item.controller,
+            ...(sameZoneOf === undefined ? {} : { sameZone: sameZoneOf, sourceZone: sameZoneOf }),
+            sourceCardId: item.cardId,
+            zones: io.zones,
+          } as Parameters<typeof resolveTarget>[1],
+        ) as string[]).filter((id) => !partners.includes(id))
+      : [];
+  if (options.length === 0) {
+    // Done (or nothing left to name): the walk is over.
+    const { repeatRoleCount: _dropRoles, repeatTargetSlots: _drop, ...rest } = item;
+    const complete = have === need && need > roleCount && rest.effect !== undefined;
+    // rule 820.2.a — execution i acts on the objects IT named: a one-object
+    // spell reads slot i positionally, a role-pair spell hands each copy of the
+    // instructions its own [first, second] slice.
+    const executionEffect =
+      complete && roleCount > 1
+        ? sliceRepeatExecutionTargets(rest.effect, item.targets ?? [], roleCount)
+        : complete
+          ? { ...(rest.effect as object), independentTargets: true }
+          : undefined;
+    items[idx] = {
+      ...rest,
+      ...(executionEffect === undefined ? {} : { effect: executionEffect }),
+    } as (typeof items)[number];
+    return;
+  }
+  draft.pendingChoice = {
+    bindSlotIndex: have,
+    bindToChainItemId: item.id,
+    deflectTax: true as const,
+    effect: spellEffect,
+    options,
+    playerId: item.controller,
+    remaining: 1,
+    sourceCardId: item.cardId,
+    type: "choose-target",
+  } as unknown as typeof draft.pendingChoice;
+}
+
+/**
+ * rule 820.2.a — hand each copy of a [Repeat]ed role-pair spell the slice of the
+ * play-time target list its own execution named, exactly as a hand cast does.
+ */
+function sliceRepeatExecutionTargets(
+  effect: unknown,
+  targets: readonly string[],
+  roleCount: number,
+): unknown {
+  const copies = (effect as { effects?: unknown[] } | undefined)?.effects;
+  if (!Array.isArray(copies)) {
+    return effect;
+  }
+  return {
+    ...(effect as object),
+    effects: copies.map((copy, i) => ({
+      boundTargetsOverride: targets.slice(i * roleCount, (i + 1) * roleCount),
+      effects: [copy],
+      type: "sequence",
+    })),
+  };
 }
 
 interface SpellTargetShape {
@@ -1029,6 +1220,7 @@ function locationCandidatesFor(io: PlayIO, spec: EffectPlaySpec): string[] {
     io,
     sourceCardId: spec.sourceCardId,
   });
+  console.log("DBGLOC", spec.cardId, JSON.stringify({extra: selfGrantedPlayLocations(io, spec), out}));
   if (getGlobalCardRegistry().getCardType(spec.cardId) === "unit") {
     for (const bfId of Object.keys(draft.battlefields ?? {})) {
       const zone = `battlefield-${bfId}`;
@@ -1138,12 +1330,20 @@ function selfGrantedPlayLocations(io: PlayIO, spec: EffectPlaySpec): string[] {
   }
   const openOk = canPlayToOpenBattlefield(draft, zones, spec.cardId, spec.playerId);
   const enemyOk = canPlayToOccupiedEnemyBattlefield(spec.cardId);
+  console.log("DBGPERM", spec.cardId, getGlobalCardRegistry().getCardType(spec.cardId), {openOk, enemyOk}, Object.keys(draft.battlefields ?? {}).map((b)=>[b, battlefieldIsOccupiedEnemy(draft, zones, b, spec.playerId)]));
   // rule 355.2 (unl-120-219 Rengar, Trophy Hunter) — "I can be played to a
   // battlefield where there are enemy units" needs no enemy CONTROL of the
   // battlefield, so it is a separate permission from `enemyOk`.
   const enemyUnitsOk = canPlayToEnemyOccupiedBattlefield(spec.cardId);
   const attackedOk = canPlayToAttackedBattlefield(spec.cardId);
-  if (!openOk && !enemyOk && !enemyUnitsOk && !attackedOk) {
+  // rule 355.2 / 740.2.a (unl-117-219 Arachnoid Horror) — "can be played to an
+  // occupied battlefield if an enemy unit is alone there", whether the card
+  // says it about itself (live even from banishment — 366.1) or a permanent on
+  // this player's board grants it to every friendly unit. Each unit of a
+  // multi-unit instructed play runs its own steps (419.3.b), so this is read
+  // afresh per play and sees units that entered earlier in the same resolution.
+  const occupiedPermission = getOccupiedBattlefieldPermission(draft, zones, spec.cardId, spec.playerId);
+  if (!openOk && !enemyOk && !enemyUnitsOk && !attackedOk && occupiedPermission === undefined) {
     return [];
   }
   const getController = (id: CoreCardId): string | undefined =>
@@ -1155,7 +1355,9 @@ function selfGrantedPlayLocations(io: PlayIO, spec: EffectPlaySpec): string[] {
       (openOk && battlefieldIsOpen(draft, zones, bfId)) ||
       (enemyOk && battlefieldIsOccupiedEnemy(draft, zones, bfId, spec.playerId)) ||
       (enemyUnitsOk && battlefieldHasEnemyUnits(zones, getController, bfId, spec.playerId)) ||
-      (attackedOk && battlefieldIsAttackedBy(draft, bfId, spec.playerId))
+      (attackedOk && battlefieldIsAttackedBy(draft, bfId, spec.playerId)) ||
+      (occupiedPermission !== undefined &&
+        battlefieldMatchesOccupiedPermission(zones, getController, bfId, spec.playerId, occupiedPermission))
     ) {
       out.push(`battlefield-${bfId}`);
     }

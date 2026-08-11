@@ -169,8 +169,10 @@ describe("Fire Below the Mountain (sfd-189-221)", () => {
     }
     expect(game.p1.resources().energy).toBe(0);
     expect(game.p1.power()).toBe(0);
-    expect(game.state("squire").might).toBe(5);
+    // rule 819.1.d / 383.4.a.2 — the Quick-Draw attach resolves off the Chain.
+    expect(game.state("squire").might).toBe(2);
     await game.settle();
+    expect(game.state("squire").might).toBe(5);
     expect(game.zoneOf("raider")).toBe("trash");
     expect(game.zoneOf("squire")).toBe("battlefield-bf1");
     expect(game.gameState.battlefields.bf1?.controller).toBe(P1);

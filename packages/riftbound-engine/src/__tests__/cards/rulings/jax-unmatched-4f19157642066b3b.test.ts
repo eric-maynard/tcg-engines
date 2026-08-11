@@ -53,6 +53,10 @@ async function starCrossedThenSpectacles(): Promise<Game> {
   expect(d).toMatchObject({ kind: "pick", seat: P1, source: { cardId: "specs" } }); // "attach it to a unit you control"
   expect(d?.kind === "pick" ? d.options.map((o) => o.card ?? o.key).toSorted() : []).toEqual(["bruiser", "jax"]);
   await game.p1.pick("jax");
+  // rule 819.1.d / 383.4.a.2 — the attach trigger sits ABOVE Star-Crossed and
+  // resolves first (LIFO); Star-Crossed keeps waiting with its locked targets.
+  await game.p1.passPriority();
+  await game.p2.passPriority();
   return game;
 }
 

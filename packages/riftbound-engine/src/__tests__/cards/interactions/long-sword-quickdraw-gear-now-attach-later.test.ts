@@ -94,7 +94,7 @@ describe("(b) the Quick-Draw attach is a TRIGGERED ability: target chosen at onc
   // X is still 3, and P1 holds priority; P1 passes → P2 holds priority with that trigger still pending.
   // Actual: the engine attaches the sword the instant it is played (X = 5 immediately), no trigger item
   // ever appears, so P2 gets no window against the attach.
-  test.failing("BUG: the attach trigger should be chain item #2 above Hextech Ray (P1's, triggered, target X locked), sword not yet attached, priority P1 → then P2 (383.4.a.2, 337.4)", async () => {
+  test("the attach trigger should be chain item #2 above Hextech Ray (P1's, triggered, target X locked), sword not yet attached, priority P1 → then P2 (383.4.a.2, 337.4)", async () => {
     const game = await swordPlayed();
     expect(game.chain()).toEqual([
       expect.objectContaining({ cardId: "ray", controller: P2, triggered: false }),
@@ -131,7 +131,7 @@ describe("(c) walking the chain: trigger resolves first (X = 5), then priority t
   // the chain not being empty, priority goes to P2 (controller of the newest remaining item, Hextech Ray)
   // with listing [Hextech Ray]. Actual: there is no trigger item, so after those two passes the Ray
   // itself has already resolved and the chain is empty.
-  test.failing("BUG: after P1 pass + P2 pass the listing should be [Hextech Ray] with priority on P2 and X freshly at 5 Might, undamaged (340.4)", async () => {
+  test("after P1 pass + P2 pass the listing should be [Hextech Ray] with priority on P2 and X freshly at 5 Might, undamaged (340.4)", async () => {
     const game = await swordPlayed();
     await game.p1.passPriority();
     await game.p2.passPriority();

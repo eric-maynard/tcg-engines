@@ -87,6 +87,11 @@ describe("Riven, Shattered — 'Deal 2 for each Equipment' is ONE instance count
       await game.p1.pick("riven");
     }
     expect(game.p1.resources()).toEqual({ energy: 0, power: { fury: 0 } });
+    // rule 819.1.d / 383.4.a.2 — the attach is a triggered item above Riven's
+    // attack trigger and resolves first (LIFO), leaving the attack pending.
+    expect(game.chain().map((c) => c.cardId)).toEqual(["riven", "sword2"]);
+    await game.p1.passPriority();
+    await game.p2.passPriority();
     expect(game.state("sword2").attachedTo).toBe("riven");
     expect(game.state("riven")).toMatchObject({ attachments: ["sword1", "sword2"], might: 7 });
     expect(game.chain().map((c) => c.cardId)).toEqual(["riven"]);

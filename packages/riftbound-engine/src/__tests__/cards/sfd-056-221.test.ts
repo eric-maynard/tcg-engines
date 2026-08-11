@@ -102,7 +102,9 @@ describe("Sterak's Gage (sfd-056-221)", () => {
   test("a Gear resolves as soon as it is finalized (337.2): no chain item, the opponent gets no window, and once worn its printed [Equip] is inactive (718.2) — no equip option remains", async () => {
     const game = await scenario().resources(P1, { energy: 3, power: { calm: 3 } }).unit(P1, "base", { might: 2 }, "solo").hand(P1, CARD, "gage").build();
     await game.p1.play("gage");
-    expect(game.chain()).toEqual([]);
+    // rule 819.1.d / 383.4.a.2 — the GEAR is never a chain item; its Quick-Draw
+    // attach is, as a triggered item that resolves before anyone else acts.
+    expect(game.chain().some((i) => i.cardId === "gage" && i.triggered !== true)).toBe(false);
     await game.settle(); // lone unit: locked in
     expect(game.state("gage").attachedTo).toBe("solo");
     expect(game.state("solo").might).toBe(5);
@@ -121,10 +123,15 @@ describe("Sterak's Gage (sfd-056-221)", () => {
     if (game.decision()?.kind === "pick") {
       await game.p1.pick("a");
     }
-    expect(game.state("gage").attachedTo).toBe("a"); // already worn while the bolt is still pending
-    expect(game.state("a").might).toBe(6);
-    expect(game.chain().map((i) => i.cardId)).toEqual(["bolt"]); // the gear never sat on the chain
+    // rule 819.1.d / 383.4.a.2 — the attach is a triggered item above the bolt;
+    // the gear itself never sat on the chain (337.2).
+    expect(game.chain().map((i) => i.cardId)).toEqual(["bolt", "gage"]);
     expect(game.actingSeat()).toBe(P1); // finalizing/resolving my gear did not pass my priority (337.1.a)
+    await game.p1.passPriority();
+    await game.p2.passPriority(); // the attach resolves, the bolt stays
+    expect(game.state("gage").attachedTo).toBe("a");
+    expect(game.state("a").might).toBe(6);
+    expect(game.chain().map((i) => i.cardId)).toEqual(["bolt"]);
     await game.settle();
     expect(game.zoneOf("a")).toBe("base");
     expect(game.state("a")).toMatchObject({ damage: 3, might: 6 });
@@ -143,8 +150,9 @@ describe("Sterak's Gage (sfd-056-221)", () => {
     if (game.decision()?.kind === "pick") {
       await game.p1.pick("a");
     }
-    expect(game.state("a").might).toBe(6);
     await game.p1.passPriority();
+    await game.p2.passPriority(); // rule 340.4 — the attach trigger resolves first
+    expect(game.state("a").might).toBe(6);
     expect(game.chain().map((i) => i.cardId)).toEqual(["bolt"]);
     expect(game.decision()).toMatchObject({ context: "chain", kind: "action", seat: P2 });
     expect(game.state("a").damage).toBe(0);
@@ -168,6 +176,8 @@ describe("Sterak's Gage (sfd-056-221)", () => {
     const d = game.decision() as PickDecision;
     expect(d.options.map((o) => o.key).sort()).toEqual(["holder", "home"]); // any unit I control, not just "here"
     await game.p1.pick("holder");
+    await game.p1.passPriority();
+    await game.p2.passPriority(); // the Quick-Draw attach trigger resolves
     expect(game.state("holder").might).toBe(6);
     expect(game.zoneOf("gage")).toBe("battlefield-bf1"); // worn gear is where its wearer is (719.3)
     await game.settle();

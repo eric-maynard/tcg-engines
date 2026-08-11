@@ -130,8 +130,11 @@ describe("Long Sword (sfd-022-221)", () => {
     if (game.decision()?.kind === "pick") {
       await game.p1.pick("squire");
     }
-    expect(game.state("squire").might).toBe(4);
+    // rule 819.1.d / 383.4.a.2 — the attach is a triggered ability on the Chain:
+    // Squire is still 2 until it resolves, and only then wins the showdown.
+    expect(game.state("squire").might).toBe(2);
     await game.settle();
+    expect(game.state("squire").might).toBe(4);
     expect(game.zoneOf("raider")).toBe("trash");
     expect(game.zoneOf("squire")).toBe("battlefield-bf1");
     expect(game.gameState.battlefields.bf1?.controller).toBe(P1);

@@ -133,8 +133,11 @@ describe("Spinning Axe (sfd-186-221)", () => {
     await game.p1.move("ally", "bf1");
     expect(game.decision()).toMatchObject({ context: "showdown", seat: P1 });
     await game.p1.play("axe");
-    expect(game.state("ally").might).toBe(5);
+    // rule 819.1.d / 383.4.a.2 — the Quick-Draw attach is a triggered Chain
+    // item, so Ally only grows once it resolves.
+    expect(game.state("ally").might).toBe(2);
     await game.settle();
+    expect(game.state("ally").might).toBe(5);
     expect(game.zoneOf("foe")).toBe("trash");
     expect(game.zoneOf("ally")).toBe("battlefield-bf1");
     expect(game.zoneOf("axe")).toBe("battlefield-bf1");
