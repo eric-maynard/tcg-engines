@@ -2,10 +2,72 @@
 import type { CardId as CoreCardId } from "@tcg/core";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
+import { resolveTarget } from "../target-resolver";
+import { legalBoundIds } from "../target-slots";
 import { attachedUnitOf, isEquipmentCard } from "./_attachment";
 import { type EffectHelpers, getTargetIds } from "./_helpers";
 
+/**
+ * rule 355.13 / 355.17 — "ready up to N runes" reached as a nested instruction
+ * (a branch of Hwei's discarded-card-type conditional, unl-080-219) is a choice
+ * its controller makes AS THE INSTRUCTION RESOLVES, over the objects on the
+ * board at that moment. The item-level planning in `chain/resolve.ts` only
+ * lifts a lead/branch descriptor, so a buried "up to N" node raises its own
+ * accumulate prompt here instead of the resolver silently taking the first N.
+ */
+function offerUpToPick(effect: ExecutableEffect, ctx: EffectContext): boolean {
+  const target = effect.target as { quantity?: unknown } | string | undefined;
+  if (typeof target !== "object" || target === null) {
+    return false;
+  }
+  const quantity = target.quantity;
+  const upTo =
+    typeof quantity === "object" && quantity !== null && typeof (quantity as { upTo?: unknown }).upTo === "number"
+      ? (quantity as { upTo: number }).upTo
+      : undefined;
+  if (
+    upTo === undefined ||
+    upTo < 2 ||
+    ctx.boundTargets !== undefined ||
+    // rule 355.15 / 402.2 — a set already named at finalization (an ability's
+    // `targetSlots` pick, Arise!'s reflexive ready) is never re-asked.
+    legalBoundIds(effect, ctx) !== undefined ||
+    ctx.draft.pendingChoice !== undefined ||
+    (effect as { _upToPrompted?: boolean })._upToPrompted === true
+  ) {
+    return false;
+  }
+  const options = resolveTarget({ ...(target as object), quantity: "all" } as Parameters<typeof resolveTarget>[0], {
+    cards: ctx.cards,
+    choosing: true,
+    draft: ctx.draft,
+    playerId: ctx.playerId,
+    sourceCardId: ctx.sourceCardId,
+    sourceZone: ctx.sourceZone,
+    triggerSourceId: ctx.triggerSourceId,
+    zones: ctx.zones,
+  });
+  if (options.length < 2) {
+    return false;
+  }
+  ctx.draft.pendingChoice = {
+    anyNumber: true,
+    effect: { ...effect, _upToPrompted: true },
+    maxPicks: upTo,
+    options,
+    picked: [],
+    playerId: ctx.playerId,
+    remaining: Math.min(upTo, options.length),
+    sourceCardId: ctx.sourceCardId,
+    type: "choose-target",
+  } as typeof ctx.draft.pendingChoice;
+  return true;
+}
+
 export function handle_ready(effect: ExecutableEffect, ctx: EffectContext, _h: EffectHelpers): void {
+  if (offerUpToPick(effect, ctx)) {
+    return;
+  }
   const targets = getTargetIds(effect, ctx);
   // Only fall back to the source card when the ability has NO target
   // descriptor ("ready me"). A targeted ready that finds no legal targets

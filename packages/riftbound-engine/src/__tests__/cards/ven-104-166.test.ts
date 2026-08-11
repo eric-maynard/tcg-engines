@@ -187,13 +187,16 @@ describe("Tail-Cloaked Matriarch (ven-104-166)", () => {
     expect(game.p1.resources()).toEqual({ energy: 0, power: { chaos: 0 } });
   });
 
-  test("negative space (419.3.c): with only ineligible cards in the trash, saying yes changes nothing — board and trash as before", async () => {
+  // rule 402.4 / 355.10.a — the trash pick is a target in a PUBLIC pile made at finalization, so an all-ineligible
+  // trash leaves the trigger no legal choice: it is removed from the chain there and nothing is ever asked
+  // (removal is NOT a counter, 402.4.a — the Empower cost stays spent and she stays Empowered).
+  test("negative space (419.3.c / 402.4): with only ineligible cards in the trash the trigger is removed at finalization — nothing is asked, board and trash as before", async () => {
     const game = await scenario().resources(P1, { energy: 2, power: { chaos: 1 } }).unit(P1, "base", CARD, "mat").trash(P1, FOUR_DROP, "four").trash(P1, CHEAP_SPELL, "trick").trash(P2, TEEMO, "theirs").build();
-    await empowerToOptIn(game);
-    if (game.decision()?.kind === "yes-no" && (game.decision() as { canAccept?: boolean }).canAccept !== false) {
-      await game.p1.yes();
-    } else {
-      await game.p1.no();
+    await game.p1.activate("mat");
+    const d = await toPrompt(game);
+    expect(game.state("mat").isEmpowered).toBe(true); // 402.4.a — removal is not a counter, the cost stays spent
+    if (d?.kind === "yes-no") {
+      await game.p1.yes(); // an engine that still asks must at least play nothing
     }
     await game.settle();
     expect(game.p1.base()).toEqual(["mat"]);

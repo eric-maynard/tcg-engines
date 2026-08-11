@@ -37,8 +37,10 @@ const abilities: Ability[] = [
               },
               type: "conditional",
             },
+            // rule 355.13/355.17: "up to 2" is a choice the controller makes on
+            // resolution over the runes on the board at that moment.
             then: {
-              target: { controller: "friendly", quantity: 2, type: "rune" },
+              target: { controller: "friendly", quantity: { upTo: 2 }, type: "rune" },
               type: "ready",
             },
             type: "conditional",
