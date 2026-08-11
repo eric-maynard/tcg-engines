@@ -98,7 +98,7 @@ describe("Tornado Warrior × Gust — the empower trigger and its end-of-turn 'D
   // still at bf1, so on resolution X becomes Empowered (402.2, 383.3, 441.1).
   // Actual: once the Warrior has left the board the trigger resolves doing nothing — X stays un-empowered
   // (the engine re-reads "here" from the absent source instead of honouring the locked choice).
-  test.failing("BUG: Case A (a) — X still becomes Empowered when the trigger resolves although the Warrior was Gusted first (402.2, 383.3, 441.1)", async () => {
+  test("Case A (a) — X still becomes Empowered when the trigger resolves although the Warrior was Gusted first (402.2, 383.3, 441.1)", async () => {
     const game = await flippedChoosingX();
     await game.p2.cast("gust", { targets: "tw" });
     const s = await game.settle();
@@ -114,7 +114,7 @@ describe("Tornado Warrior × Gust — the empower trigger and its end-of-turn 'D
   // even Gust again); on resolution X is Disempowered (442.1). Not a silent duration expiry.
   // Actual: blocked by the bug above — X was never empowered and no delayed trigger was created, so the
   // turn ends straight into P2's turn with an empty chain.
-  test.failing("BUG: Case A (b) — at end of turn a respondable 'Disempower X' chain item appears (P1 then P2 get priority) and X ends the turn disempowered, Warrior still in hand (390.2, 392, 317.1.a, 442.1)", async () => {
+  test("Case A (b) — at end of turn a respondable 'Disempower X' chain item appears (P1 then P2 get priority) and X ends the turn disempowered, Warrior still in hand (390.2, 392, 317.1.a, 442.1)", async () => {
     const game = await flippedChoosingX();
     await game.p2.cast("gust", { targets: "tw" });
     await game.settle();

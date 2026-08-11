@@ -155,7 +155,19 @@ function filterBoundByLocation(bound: string[], tgt: unknown, ctx: EffectContext
   // the board is nowhere, so nothing is "here" and its bound target is illegal.
   if (location === "here") {
     const OFF_BOARD: readonly string[] = ["hand", "mainDeck", "trash", "banishment"];
-    return typeof ctx.sourceZone === "string" && OFF_BOARD.includes(ctx.sourceZone) ? [] : bound;
+    if (!(typeof ctx.sourceZone === "string" && OFF_BOARD.includes(ctx.sourceZone))) {
+      return bound;
+    }
+    // rule 359.3.f.3 / 811.1.d.2 (ven-099-166 Tornado Warrior × Gust) — a card
+    // played from face down anchors "here" at the battlefield it was FACE DOWN
+    // at, and a triggered ability is independent of its source (383.3), so
+    // bouncing the source in response does not empty that scope: the object
+    // locked at finalization (402.2) stays legal while it still stands there.
+    const anchor = ctx.hiddenZone ?? ctx.triggerBattlefieldZone;
+    if (typeof anchor === "string" && anchor.startsWith("battlefield-")) {
+      return bound.filter((id) => ctx.zones.getCardZone(id as CoreCardId) === anchor);
+    }
+    return [];
   }
   if (location !== "battlefield" && location !== "base") {
     // rule 359.3.e.2 (unl-134-219 Existential Dread × [Repeat]) — an object
