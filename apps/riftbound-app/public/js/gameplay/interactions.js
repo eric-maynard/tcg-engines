@@ -872,6 +872,51 @@ function enterChampionSelected(cardId) {
   showActionBar(card?.name || cardId, playMoves, `Champion: ${String(card?.name || cardId).replace(/^player-[12]-/, "")}`);
 }
 
+/**
+ * rule 723 — the card can only be HIDDEN right now (no legal play): select it,
+ * light up the battlefields it may be hidden at, and offer one explicit
+ * "Hide at <battlefield>" button per variant (clicking a lit battlefield or
+ * dragging the card onto it does the same). Nothing happens without that choice.
+ */
+function enterHideOnlySelected(cardId, hideMoves) {
+  const card = findCard(cardId);
+  const targets = [];
+  for (const m of hideMoves) {
+    const bf = String(m.params?.battlefieldId ?? "");
+    if (bf && !targets.includes(bf)) targets.push(bf);
+  }
+  interaction = {
+    mode: "cardSelected",
+    sourceCardId: cardId,
+    sourceZone: "hand",
+    action: "hideCard",
+    validTargets: targets,
+    matchingMoves: hideMoves,
+  };
+  selectedCard = cardId;
+  render();
+  for (const bfId of targets) {
+    document.querySelector(`[data-bf-id="${CSS.escape(bfId)}"]`)?.classList.add("valid-target");
+  }
+  const bar = document.getElementById("actionBar");
+  const label = document.getElementById("actionBarLabel");
+  const btns = document.getElementById("actionBarBtns");
+  const name = String(card?.name || cardId).replace(/^player-[12]-/, "");
+  const why = typeof playTimingBlockReason === "function" ? playTimingBlockReason(card) : "";
+  label.textContent = `${name} — can't be played right now${why ? ` (${why})` : ""}; it has [Hidden], so you may hide it face-down:`;
+  btns.innerHTML = hideMoves.map((m, i) =>
+    `<button class="action-bar-btn" data-hide-at="${esc(String(m.params?.battlefieldId ?? ""))}" onclick='executeHideVariant(${i})' title="rule 723: pay the Hide cost and put this card face-down here; reveal it from your next turn">${esc(`Hide at ${getBattlefieldName(String(m.params?.battlefieldId ?? ""))}`)}</button>`
+  ).join("") + `<button class="action-bar-btn" style="background:#1e1b30;border-color:#4a4566;color:#a8a0c6;" onclick="cancelInteraction()">Cancel</button>`;
+  bar.classList.remove("hidden");
+}
+
+function executeHideVariant(i) {
+  const m = (interaction.matchingMoves || [])[i];
+  if (!m) return;
+  executeMove(m.moveId, m.params, m.playerId);
+  cancelInteraction();
+}
+
 /** hideCard variants for a hand card (rule 723: Hide at a battlefield you control). */
 function hideMovesFor(cardId) {
   return availableMoves.filter(m => m.moveId === "hideCard" && m.params?.cardId === cardId);
@@ -922,10 +967,17 @@ function enterHandCardSelected(cardId) {
   // sacrifice / destination / hide) open the play-options modal instead of
   // silently picking one.
   if (playMoves.length > 0 || hideMoves.length > 0) {
+    if (playMoves.length === 0) {
+      // Only "Hide" is legal (can't afford / wrong timing for the play): never
+      // hide on a bare click — hiding commits the card face-down and spends the
+      // Hide cost, so it must be an explicit "Hide at …" choice.
+      enterHideOnlySelected(cardId, hideMoves);
+      return;
+    }
     if (playMoves.length + hideMoves.length > 1 && typeof openPlayCostModal === "function") {
       openPlayCostModal(cardId);
     } else {
-      const m = playMoves[0] ?? hideMoves[0];
+      const m = playMoves[0];
       executeMove(m.moveId, m.params, m.playerId);
     }
     return;
@@ -1270,6 +1322,10 @@ function applyValidTargetHighlights() {
     // Highlight the player base zone
     const baseEl = document.getElementById("player-base");
     if (baseEl) baseEl.classList.add("valid-target");
+  } else if (interaction.action === "hideCard") {
+    for (const bfId of interaction.validTargets || []) {
+      document.querySelector(`[data-bf-id="${CSS.escape(bfId)}"]`)?.classList.add("valid-target");
+    }
   } else if (interaction.action === "moveUnit") {
     // Highlight valid destinations: battlefields, or the base row (rule 144.4.b).
     for (const bfId of interaction.validTargets) {
