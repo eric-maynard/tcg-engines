@@ -89,6 +89,11 @@ async function makeChoices(game: Game, repeat: boolean, pairs: readonly string[]
       await game.p1.answer(repeat);
     } else if (d.kind === "pick" && isPairPrompt(d)) {
       asked = true;
+      // rule 820.2.a — every execution declares its OWN pair at play time, so a
+      // caller that names one pair means "the same pair again" for the rest.
+      if (queue.length === 0) {
+        queue.push(...pairs);
+      }
       const n = Math.max(1, Math.min(d.max, queue.length));
       const wanted = queue.splice(0, n);
       // a pair may be asked as one tuple pick or slot by slot — offer what this prompt can take
@@ -167,7 +172,7 @@ describe("Kai'Sa's conquer effect-play of Marching Orders — Repeat still offer
   // is played — a P1 prompt naming Kai'Sa / E1 / E2 before anyone gets priority, and the finalized item carries
   // them. Actual: the effect-play of a fight spell never asks for its pair; the item is finalized with no targets
   // and the engine binds "first friendly unit / first enemy unit at a battlefield" on its own at resolution.
-  test.failing("BUG: (a) after electing Repeat, P1 is asked to declare the (friendly, enemy) pair for each execution BEFORE the priority window, and the chain item records them (820.2, 820.2.a)", async () => {
+  test("(a) after electing Repeat, P1 is asked to declare the (friendly, enemy) pair for each execution BEFORE the priority window, and the chain item records them (820.2, 820.2.a)", async () => {
     const game = await conquerIntoMarchingOrders();
     const asked = await makeChoices(game, true, ["kaisa", "e1", "kaisa", "e2"]);
     expect(asked).toBe(true);
@@ -209,7 +214,7 @@ describe("Kai'Sa's conquer effect-play of Marching Orders — Repeat still offer
   // BUG — expected (820.2.a): execution 2 may name a DIFFERENT pair. (Kai'Sa,E1) then (Kai'Sa,E2): E1 6/4, E2 6/1,
   // Kai'Sa 4+1 = 5/6 → Cleanup: E1 and E2 die, Kai'Sa survives with 5 damage. Actual: no pair can be declared on
   // the effect-play (see the BUG above); the engine fights Kai'Sa into E1 twice, so Kai'Sa dies and E2 lives.
-  test.failing("BUG: (c) exec 1 = (Kai'Sa, E1), exec 2 = (Kai'Sa, E2): E1 and E2 both die, Kai'Sa SURVIVES at bf1 with exactly 5 damage (820.2.a, 417.6.b.3)", async () => {
+  test("(c) exec 1 = (Kai'Sa, E1), exec 2 = (Kai'Sa, E2): E1 and E2 both die, Kai'Sa SURVIVES at bf1 with exactly 5 damage (820.2.a, 417.6.b.3)", async () => {
     const game = await conquerIntoMarchingOrders();
     await makeChoices(game, true, ["kaisa", "e1", "kaisa", "e2"]);
     await resolveChain(game);

@@ -190,7 +190,7 @@ describe("Fizz → Frigid Touch from trash × Marai Spire × Pouty Poro — cost
   // Expected (419.3.b, 356.2.b, 356.4.c, 809.1.c, 820.2): the trash play still runs Make Choices, so P1 may elect
   // [Repeat]: +[2] −[1] Spire = +[1]; naming the Poro for both executions = +2 power → exactly 1 energy + 2 calm.
   // Actual: the effect-play path never offers a spell's Repeat — P1 goes straight to a single-target pick.
-  test.failing("BUG: (a) the Fizz-played Frigid Touch offers its [Repeat]; paying it and naming the Poro for BOTH executions costs exactly 1 energy + 2 power under Marai Spire", async () => {
+  test("(a) the Fizz-played Frigid Touch offers its [Repeat]; paying it and naming the Poro for BOTH executions costs exactly 1 energy + 2 power under Marai Spire", async () => {
     const game = await fizzIntoFrigidTouch();
     const offered = await makeChoices(game, true, ["poro", "poro"]);
     expect(offered).toBe(true);
@@ -209,7 +209,7 @@ describe("Fizz → Frigid Touch from trash × Marai Spire × Pouty Poro — cost
   // ── (b) Repeat paid, Poro + Vanilla ───────────────────────────────────────────────────
 
   // Expected: one Deflect choice → 1 energy + 1 power; Poro −2 (→0), Vanilla −2 (→2). Actual: no Repeat offer.
-  test.failing("BUG: (b) Repeat paid, Poro for the first execution and Vanilla for the second: 1 energy + 1 power; Poro → 0, Vanilla → 2 (820.2.a)", async () => {
+  test("(b) Repeat paid, Poro for the first execution and Vanilla for the second: 1 energy + 1 power; Poro → 0, Vanilla → 2 (820.2.a)", async () => {
     const game = await fizzIntoFrigidTouch();
     expect(await makeChoices(game, true, ["poro", "vanilla"])).toBe(true);
     expect(game.p1.resources()).toEqual({ energy: 1, power: { calm: 1, chaos: 0 } });
@@ -221,7 +221,7 @@ describe("Fizz → Frigid Touch from trash × Marai Spire × Pouty Poro — cost
   // ── (d) as (a) without Marai Spire ────────────────────────────────────────────────────
 
   // Expected: no Spire discount → Repeat +[2] in full → 2 energy + 2 power. Actual: no Repeat offer.
-  test.failing("BUG: (d) without Marai Spire the same play (Repeat, Poro ×2) costs 2 energy + 2 power", async () => {
+  test("(d) without Marai Spire the same play (Repeat, Poro ×2) costs 2 energy + 2 power", async () => {
     const game = await fizzIntoFrigidTouch({ spire: false });
     expect(await makeChoices(game, true, ["poro", "poro"])).toBe(true);
     expect(game.p1.resources()).toEqual({ energy: 0, power: { calm: 0, chaos: 0 } });

@@ -523,7 +523,7 @@ export function putPlayedSpellOnChain(
   // 355.5: a ROLE-PAIR spell an effect plays ("a friendly unit and an enemy
   // unit … they deal damage to each other") must name its pair as it is played
   // too, repeated or not — the engine may not bind the roles on its own.
-  const roles = spellExecutionRoles(spellEffect as SpellTargetShape | undefined, repeatN > 0);
+  const roles = spellExecutionRoles(spellEffect as SpellTargetShape | undefined);
   if (roles.length > 0 && (repeatN > 0 || roles.length > 1)) {
     const items = draft.interaction?.chain?.items;
     const item = items?.[items.length - 1];
@@ -545,10 +545,7 @@ export function putPlayedSpellOnChain(
  * Might to another unit's") names [first, second], and everything else names at
  * most one object.
  */
-function spellExecutionRoles(
-  spellEffect: SpellTargetShape | undefined,
-  includeSequenceSlots = false,
-): readonly unknown[] {
+function spellExecutionRoles(spellEffect: SpellTargetShape | undefined): readonly unknown[] {
   const effect = spellEffect as
     | {
         type?: string;
@@ -581,9 +578,8 @@ function spellExecutionRoles(
   // names EVERY caster-chosen slot of one execution as it is played, exactly as
   // a hand cast does. Without this an effect-played [Repeat] bound one shared
   // target set and the second execution hit nothing new.
-  if (!includeSequenceSlots) {
-    return [];
-  }
+  // rule 355.5 — the same walk runs WITHOUT a [Repeat] too: one execution's
+  // slots are still play-time choices, never deferred to resolution.
   const slots =
     collectSequenceTargetSlots(effect as Parameters<typeof collectSequenceTargetSlots>[0]) ?? [];
   return slots.length > 0 && slots.every((s) => isCasterChosenSlot(s)) ? slots : [];
@@ -625,7 +621,7 @@ export function continueRepeatSpellSlots(io: PlayIO): void {
     return;
   }
   const items = draft.interaction?.chain?.items as
-    | { id: string; cardId: string; controller: string; effect?: unknown; targets?: readonly string[]; repeatTargetSlots?: number; repeatRoleCount?: number }[]
+    | { id: string; cardId: string; controller: string; effect?: unknown; targets?: readonly string[]; repeatTargetSlots?: number; repeatRoleCount?: number; repeatSlotSkips?: readonly number[] }[]
     | undefined;
   const idx = items?.findIndex((it) => typeof it.repeatTargetSlots === "number") ?? -1;
   if (!items || idx < 0) {
@@ -633,22 +629,29 @@ export function continueRepeatSpellSlots(io: PlayIO): void {
   }
   const item = items[idx] as NonNullable<(typeof items)[number]>;
   const need = item.repeatTargetSlots ?? 0;
-  const have = item.targets?.length ?? 0;
+  const picked = item.targets ?? [];
+  // rule 355.13 — a declined "up to one …" slot names nothing, so the walk
+  // tracks the slots ANSWERED (picked + declined), not just the ids bound.
+  const skips = item.repeatSlotSkips ?? [];
+  const answered = picked.length + skips.length;
   const spellEffect = (getGlobalCardRegistry().getAbilities(item.cardId) ?? []).find(
     (a) => a.type === "spell",
   )?.effect as SpellTargetShape | undefined;
-  const roles = spellExecutionRoles(spellEffect, true);
+  const roles = spellExecutionRoles(spellEffect);
   const roleCount = Math.max(1, item.repeatRoleCount ?? 1);
-  const descriptor = roles[have % roleCount] ?? spellEffect?.target;
-  // rule 355.9 — the roles of ONE execution name DIFFERENT objects (a unit
-  // cannot fight itself), so the partner already named is off this slot's list.
-  const partners = (item.targets ?? []).slice(have - (have % roleCount), have);
+  const roleIndex = answered % roleCount;
+  const descriptor = roles[roleIndex] ?? spellEffect?.target;
+  // rule 355.9 / 355.13 — the roles of ONE execution name DIFFERENT objects (a
+  // unit cannot fight itself, "one OTHER unit" is not the one just named), so
+  // the partners this execution already named are off this slot's list.
+  const skippedBeforeExec = skips.filter((s) => s < answered - roleIndex).length;
+  const partners = picked.slice(answered - roleIndex - skippedBeforeExec);
   const sameZoneOf =
     (descriptor as { location?: unknown } | undefined)?.location === "same" && partners[0] !== undefined
       ? (io.zones?.getCardZone?.(partners[0] as CoreCardId) as string | undefined)
       : undefined;
   const options =
-    have < need && descriptor !== undefined && typeof io.zones?.getCardsInZone === "function"
+    answered < need && descriptor !== undefined && typeof io.zones?.getCardsInZone === "function"
       ? (resolveTarget(
           { ...(descriptor as object), quantity: "all" } as Parameters<typeof resolveTarget>[0],
           {
@@ -662,16 +665,31 @@ export function continueRepeatSpellSlots(io: PlayIO): void {
           } as Parameters<typeof resolveTarget>[1],
         ) as string[]).filter((id) => !partners.includes(id))
       : [];
+  // rule 355.13 / 355.8 — an "up to one" slot may legally name nothing, so it
+  // is offered with a decline; an OPTIONAL slot with no candidate left is
+  // simply skipped and the walk moves on to the next slot.
+  const optionalSlot =
+    typeof (descriptor as { quantity?: { upTo?: number } } | undefined)?.quantity?.upTo === "number";
+  if (options.length === 0 && optionalSlot && answered < need) {
+    items[idx] = { ...item, repeatSlotSkips: [...skips, answered] } as (typeof items)[number];
+    continueRepeatSpellSlots(io);
+    return;
+  }
   if (options.length === 0) {
     // Done (or nothing left to name): the walk is over.
-    const { repeatRoleCount: _dropRoles, repeatTargetSlots: _drop, ...rest } = item;
-    const complete = have === need && need > roleCount && rest.effect !== undefined;
+    const {
+      repeatRoleCount: _dropRoles,
+      repeatSlotSkips: _dropSkips,
+      repeatTargetSlots: _drop,
+      ...rest
+    } = item;
+    const complete = answered === need && need > roleCount && rest.effect !== undefined;
     // rule 820.2.a — execution i acts on the objects IT named: a one-object
     // spell reads slot i positionally, a role-pair spell hands each copy of the
     // instructions its own [first, second] slice.
     const executionEffect =
       complete && roleCount > 1
-        ? sliceRepeatExecutionTargets(rest.effect, item.targets ?? [], roleCount)
+        ? sliceRepeatExecutionTargets(rest.effect, repeatExecutionSlices(picked, skips, need, roleCount))
         : complete
           ? { ...(rest.effect as object), independentTargets: true }
           : undefined;
@@ -682,16 +700,46 @@ export function continueRepeatSpellSlots(io: PlayIO): void {
     return;
   }
   draft.pendingChoice = {
-    bindSlotIndex: have,
+    bindSlotIndex: answered,
     bindToChainItemId: item.id,
     deflectTax: true as const,
     effect: spellEffect,
     options,
     playerId: item.controller,
     remaining: 1,
+    ...(optionalSlot ? { optional: true as const, repeatSlot: true as const } : {}),
     sourceCardId: item.cardId,
     type: "choose-target",
   } as unknown as typeof draft.pendingChoice;
+}
+
+/**
+ * rule 820.2.a / 355.13 — the ids each execution actually named, in order:
+ * declined ("up to one …") slots consume a slot but no id, so the flat
+ * play-time list is dealt back out execution by execution.
+ */
+function repeatExecutionSlices(
+  picked: readonly string[],
+  skips: readonly number[],
+  need: number,
+  roleCount: number,
+): readonly (readonly string[])[] {
+  const out: string[][] = [];
+  let cursor = 0;
+  for (let slot = 0; slot < need; slot++) {
+    if (slot % roleCount === 0) {
+      out.push([]);
+    }
+    if (skips.includes(slot)) {
+      continue;
+    }
+    const id = picked[cursor];
+    cursor += 1;
+    if (id !== undefined) {
+      (out[out.length - 1] as string[]).push(id);
+    }
+  }
+  return out;
 }
 
 /**
@@ -700,8 +748,7 @@ export function continueRepeatSpellSlots(io: PlayIO): void {
  */
 function sliceRepeatExecutionTargets(
   effect: unknown,
-  targets: readonly string[],
-  roleCount: number,
+  slices: readonly (readonly string[])[],
 ): unknown {
   const copies = (effect as { effects?: unknown[] } | undefined)?.effects;
   if (!Array.isArray(copies)) {
@@ -710,7 +757,7 @@ function sliceRepeatExecutionTargets(
   return {
     ...(effect as object),
     effects: copies.map((copy, i) => ({
-      boundTargetsOverride: targets.slice(i * roleCount, (i + 1) * roleCount),
+      boundTargetsOverride: [...(slices[i] ?? [])],
       effects: [copy],
       type: "sequence",
     })),
@@ -1244,7 +1291,6 @@ function locationCandidatesFor(io: PlayIO, spec: EffectPlaySpec): string[] {
     io,
     sourceCardId: spec.sourceCardId,
   });
-  console.log("DBGLOC", spec.cardId, JSON.stringify({extra: selfGrantedPlayLocations(io, spec), out}));
   if (getGlobalCardRegistry().getCardType(spec.cardId) === "unit") {
     for (const bfId of Object.keys(draft.battlefields ?? {})) {
       const zone = `battlefield-${bfId}`;
@@ -1354,7 +1400,6 @@ function selfGrantedPlayLocations(io: PlayIO, spec: EffectPlaySpec): string[] {
   }
   const openOk = canPlayToOpenBattlefield(draft, zones, spec.cardId, spec.playerId);
   const enemyOk = canPlayToOccupiedEnemyBattlefield(spec.cardId);
-  console.log("DBGPERM", spec.cardId, getGlobalCardRegistry().getCardType(spec.cardId), {openOk, enemyOk}, Object.keys(draft.battlefields ?? {}).map((b)=>[b, battlefieldIsOccupiedEnemy(draft, zones, b, spec.playerId)]));
   // rule 355.2 (unl-120-219 Rengar, Trophy Hunter) — "I can be played to a
   // battlefield where there are enemy units" needs no enemy CONTROL of the
   // battlefield, so it is a separate permission from `enemyOk`.

@@ -85,6 +85,7 @@ import { completeSuspendedPlay } from "./play/play-unit";
 import {
   beginPlay,
   canPerformEffectPlay,
+  continueRepeatSpellSlots,
   type EffectPlaySpec,
   recordEffectPlayAnswer,
 } from "./play/play-pipeline";
@@ -2852,6 +2853,35 @@ export const pendingChoiceMoves: Partial<
         // rule 402.2 (ogn-289-298) — an "up to N" finalization pick accumulates
         // first (below) and binds the whole set at once.
         if (choice.bindToChainItemId !== undefined && choice.anyNumber !== true) {
+          // rule 355.13 / 820.2.a (sfd-023-221 Piercing Light) — declining an
+          // "up to one …" PLAY-TIME slot of a spell an effect played skips THAT
+          // SLOT only: the item stays on the Chain and the walk resumes at the
+          // next slot (contrast the Kharox "you may" below, where the decline
+          // is the whole instruction).
+          if (
+            (choice as { repeatSlot?: boolean }).repeatSlot === true &&
+            context.params.accept === false
+          ) {
+            draft.pendingChoice = undefined;
+            const slotItems = draft.interaction?.chain?.items;
+            const slotIdx = slotItems?.findIndex((it) => it.id === choice.bindToChainItemId) ?? -1;
+            if (slotItems && slotIdx >= 0) {
+              const prev =
+                (slotItems[slotIdx] as { repeatSlotSkips?: readonly number[] }).repeatSlotSkips ?? [];
+              slotItems[slotIdx] = {
+                ...slotItems[slotIdx],
+                repeatSlotSkips: [...prev, choice.bindSlotIndex ?? prev.length],
+              } as (typeof slotItems)[number];
+            }
+            continueRepeatSpellSlots({
+              cards: context.cards,
+              counters: context.counters,
+              draft,
+              zones: context.zones,
+            } as Parameters<typeof continueRepeatSpellSlots>[0]);
+            postChoiceCleanup(draft, context);
+            return;
+          }
           // rule 402.1 (ven-114-166 Kharox) — declining the "you may" this pick
           // IS: the item never finalizes, so it leaves the Chain instead of
           // waiting to resolve into nothing.
@@ -2900,6 +2930,17 @@ export const pendingChoiceMoves: Partial<
               counters: context.counters,
               zones: context.zones,
             });
+          }
+          // rule 820.2.a / 355.5 — the next play-time slot of a spell an effect
+          // played (the next role of this execution, or the next execution's
+          // own object) is named right away, before anyone receives priority.
+          if (!draft.pendingChoice) {
+            continueRepeatSpellSlots({
+              cards: context.cards,
+              counters: context.counters,
+              draft,
+              zones: context.zones,
+            } as Parameters<typeof continueRepeatSpellSlots>[0]);
           }
           postChoiceCleanup(draft, context);
           return;

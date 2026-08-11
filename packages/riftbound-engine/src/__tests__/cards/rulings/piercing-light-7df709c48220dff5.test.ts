@@ -124,7 +124,7 @@ describe("Ruling 7df709c48220dff5 — Fizz replays Piercing Light from trash; En
   // second execution names its own "…then deal 2 to up to one other unit" — X and Y each take 2 twice and both die.
   // Actual: an effect-played spell binds ONE target set at finalization and both executions run against it, so the
   // second execution's "other unit" is never named and Y is only damaged once.
-  test.failing("BUG: with Repeat both executions name their own targets, so X and Y each take 2+2 and both die (820.2)", async () => {
+  test("with Repeat both executions name their own targets, so X and Y each take 2+2 and both die (820.2)", async () => {
     const game = await board().build();
     await fizzPlaysLight(game, async (d) => {
       if (d.seat === P1 && d.source?.cardId === "pl" && (d.kind === "yes-no" || d.kind === "integer")) {

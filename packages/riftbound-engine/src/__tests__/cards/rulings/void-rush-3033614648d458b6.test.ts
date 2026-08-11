@@ -107,7 +107,7 @@ describe("Ruling 3033614648d458b6 — Void Rush discounts only the base cost of 
   // only one target prompt is raised and BOTH executions hit allyA. The hand-cast path gets this right via
   // `independentTargets` because `cast` supplies 1+repeatN targets up front; the effect-driven path has no equivalent
   // per-execution slot walk (the `finalizePendingItems` multi-slot walk only runs for status="pending" items).
-  test.failing("BUG: ruling 3033614648d458b6 — Repeat's SECOND execution is never given its own target on a card played via Void Rush (820.2.a)", async () => {
+  test("ruling 3033614648d458b6 — Repeat's SECOND execution is never given its own target on a card played via Void Rush (820.2.a)", async () => {
     const game = await rushIntoBloodRush(4); // 2 energy left — enough for Repeat [1] but proves it is not free either
     let offered = false;
     // rule 820.2.a — each execution picks its own object; spend them on different allies.
