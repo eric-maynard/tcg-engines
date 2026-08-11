@@ -170,13 +170,10 @@ describe("Angle Shot × Ruin Runner × Doran's Blade — you can't choose the Ru
     expect(game.p2.hand()).toHaveLength(p2Hand - 1 + 1);
   });
 
-  // Expected (ruling 9576 — "you must choose one of the two options"; 434.1.g): for an already-attached pair the caster
-  // may pick ATTACH, which does nothing to the board, and still draws 1. Actual: the engine derives the mode from the
-  // board (attached → detach) and offers no attach/detach choice, so `mode` is not a legal argument and the Blade
-  // always comes off.
-  // NOTE (w4·i1): the fix is written in play-spell.ts in the working tree but still cannot be landed —
-  // play-spell.ts also carries another lane's in-progress Cull-the-Weak work that is red against HEAD.
-  test.failing("BUG: (c) Angle Shot should let its controller pick attach-vs-detach — choosing ATTACH on the Blade's current wearer changes nothing (434.1.g) yet P2 still draws 1", async () => {
+  // ruling 9576 ("you must choose one of the two options") / rule 434.1.g: for an already-attached pair the caster
+  // may pick ATTACH (`mode` 0), which does nothing to the board, and still draws 1; omitting `mode` derives it
+  // from the board (attached → detach).
+  test("(c) Angle Shot lets its controller pick attach-vs-detach — choosing ATTACH on the Blade's current wearer changes nothing (434.1.g) yet P2 still draws 1", async () => {
     const game = await board().active(P2).build();
     const p2Hand = game.p2.hand().length;
     await game.p2.cast("p2Shot", { mode: 0, targets: ["runner", "blade"] }); // printed order: attach (0) / detach (1)

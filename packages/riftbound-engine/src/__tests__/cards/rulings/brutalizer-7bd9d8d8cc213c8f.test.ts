@@ -85,7 +85,9 @@ describe("Ruling 7bd9d8d8cc213c8f — re-equipping Brutalizer with Jax gives +3 
     expect(game.state("page")).toMatchObject({ baseMight: 2, might: 5 }); // the new bearer is "attached this turn" too
   });
 
-  test("next turn the 'this turn' +2 lapses (Squire reads 3); a Jax re-equip then makes it 'attached this turn' again → back to exactly 5", async () => {
+  // RULING-CONFLICT resolved to CR 434.1.g (rulings 8146463710b7352b / 8e5e17c0e8fd31f9): attaching an Equipment to the
+  // unit ALREADY wearing it has no effect, so a same-host "re-equip" cannot refresh the +2; moving it to Page does.
+  test("next turn the 'this turn' +2 lapses (Squire reads 3); a Jax re-equip onto the SAME Squire changes nothing (434.1.g), onto Page it is 'attached this turn' again → Page exactly 5", async () => {
     const game = await equipped();
     await game.advanceTurn();
     await game.advanceTurn();
@@ -93,6 +95,13 @@ describe("Ruling 7bd9d8d8cc213c8f — re-equipping Brutalizer with Jax gives +3 
     expect(game.state("squire")).toMatchObject({ attachments: ["brut"], might: 3 });
     await jaxReequip(game, ["brut", "squire"]);
     expect(game.state("brut").attachedTo).toBe("squire");
-    expect(game.state("squire").might).toBe(5);
+    expect(game.state("squire").might).toBe(3);
+    const other = await equipped();
+    await other.advanceTurn();
+    await other.advanceTurn();
+    await jaxReequip(other, ["brut", "page"]);
+    expect(other.state("brut").attachedTo).toBe("page");
+    expect(other.state("squire")).toMatchObject({ attachments: [], might: 2 });
+    expect(other.state("page")).toMatchObject({ attachments: ["brut"], baseMight: 2, might: 5 });
   });
 });

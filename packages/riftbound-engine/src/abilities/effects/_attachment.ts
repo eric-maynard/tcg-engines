@@ -65,6 +65,11 @@ export function attachEquipment(ctx: EffectContext, equipmentId: string, unitId:
   }
 
   const previous = attachedUnitOf(ctx, equipmentId);
+  // rule 434.1: attaching a card to the unit it is already attached to has no effect —
+  // no refreshed "attached this turn" stamp and no "when you attach" trigger.
+  if (previous === unitId) {
+    return;
+  }
   if (previous) {
     detachEquipment(ctx, equipmentId);
   }

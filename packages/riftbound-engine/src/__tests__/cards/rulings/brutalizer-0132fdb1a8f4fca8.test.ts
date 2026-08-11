@@ -90,9 +90,10 @@ describe("Ruling 0132fdb1a8f4fca8 — Brutalizer re-equipped by Jax: 5 Might, th
     expect(game.state("squire")).toMatchObject({ attachments: ["brut"], baseMight: 2, might: 5 });
   });
 
-  // Expected: next turn the "this turn" +2 is gone (3); Jax re-equipping makes it "attached this turn" again → 5.
-  // Actual: stays 3 after the re-equip.
-  test("ruling 0132fdb1a8f4fca8 — next turn it is 3 (+1 only); a Jax re-equip should refresh 'attached this turn' → 5; engine stays 3", async () => {
+  // Next turn the "this turn" +2 is gone (3). RULING-CONFLICT resolved to CR 434.1.g (rulings 8146463710b7352b /
+  // 8e5e17c0e8fd31f9): Jax "re-equipping" Brutalizer onto the unit it is ALREADY attached to has no effect, so the
+  // +2 cannot be refreshed in place — the Squire stays 3. Only a move to a DIFFERENT unit re-arms it.
+  test("ruling 0132fdb1a8f4fca8 — next turn it is 3 (+1 only); a Jax re-equip onto the SAME Squire changes nothing (434.1.g) — still 3", async () => {
     const game = await equipped();
     await game.advanceTurn();
     await game.advanceTurn();
@@ -100,6 +101,6 @@ describe("Ruling 0132fdb1a8f4fca8 — Brutalizer re-equipped by Jax: 5 Might, th
     expect(game.state("squire")).toMatchObject({ attachments: ["brut"], might: 3 });
     await jaxReequip(game, ["brut", "squire"]);
     expect(game.state("brut").attachedTo).toBe("squire");
-    expect(game.state("squire").might).toBe(5);
+    expect(game.state("squire").might).toBe(3);
   });
 });

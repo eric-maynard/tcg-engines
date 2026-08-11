@@ -378,6 +378,22 @@ function modesExcludedThisTurn(
 }
 
 /**
+ * rule 434.1.g / 435 (rule-id: sfd-011-221 Angle Shot) — an `attach-or-detach`
+ * instruction offers its caster a real two-way choice ("Attach that Equipment to
+ * that unit OR detach it"), so the play accepts a `mode` (0 = attach, 1 = detach)
+ * even though the card carries no bulleted mode list. Returns the node itself so
+ * the reducer can lock the named half onto the chain item's effect.
+ */
+function attachOrDetachNode(effect: unknown): Record<string, unknown> | undefined {
+  const node = effect as { type?: string; effects?: unknown } | undefined;
+  if (node?.type === "attach-or-detach") {
+    return node as Record<string, unknown>;
+  }
+  const subs = Array.isArray(node?.effects) ? (node.effects as { type?: string }[]) : [];
+  return subs.find((e) => e?.type === "attach-or-detach") as Record<string, unknown> | undefined;
+}
+
+/**
  * rule 355.3 — "For Spells … with a bulleted list of modes to choose from, make
  * the appropriate choices now": every hand spell is offered once as printed and,
  * when its caster picks the mode, once more PER MODE so the enumerator can plan
@@ -691,7 +707,15 @@ export const playSpell: Defs["playSpell"] = {
     const chosenMode = context.params.mode as number | undefined;
     const chosenModes = context.params.modes as readonly number[] | undefined;
     if ((chosenMode !== undefined || chosenModes !== undefined) && !modal) {
-      return false;
+      // rule 434.1.g (rule-id: sfd-011-221) — Angle Shot's attach-vs-detach is a
+      // named half, not a bulleted mode list; `mode` 0 = attach, 1 = detach.
+      if (
+        chosenModes !== undefined ||
+        (chosenMode !== 0 && chosenMode !== 1) ||
+        attachOrDetachNode(printedSpellAbility?.effect) === undefined
+      ) {
+        return false;
+      }
     }
     if (modal && (chosenMode !== undefined || chosenModes !== undefined)) {
       const excluded = modesExcludedThisTurn(
@@ -1625,6 +1649,16 @@ export const playSpell: Defs["playSpell"] = {
               playerId: context.playerId as string,
               targets: [u, e],
             });
+            // rule 434.1.g (ruling 9576) — the caster picks the half: attach (0) or
+            // detach (1). Omitting `mode` still derives it from the board.
+            for (const m of [0, 1]) {
+              baseVariants.push({
+                cardId: cardId as string,
+                mode: m,
+                playerId: context.playerId as string,
+                targets: [u, e],
+              });
+            }
           }
         }
       } else if (!isCardTarget && fightAtk && fightDef) {
@@ -2883,6 +2917,16 @@ export const playSpell: Defs["playSpell"] = {
     // per execution as `modes`) is locked onto the chain item's effect now — its
     // targets already ride on the item — and anything still unnamed is ASKED now
     // (bound to the item), never as the spell resolves.
+    // rule 434.1.g (rule-id: sfd-011-221) — the attach-vs-detach half named on the
+    // play is locked onto the chain item now, exactly like a bulleted mode.
+    if (effectToStore && casterModeChoice(spellEffect) === undefined && context.params.mode !== undefined) {
+      const items = draft.interaction?.chain?.items ?? [];
+      const item = [...items].reverse().find((it) => it?.cardId === cardId);
+      const node = item ? attachOrDetachNode(item.effect) : undefined;
+      if (node) {
+        node.mode = context.params.mode === 0 ? "attach" : "detach";
+      }
+    }
     if (effectToStore && casterModeChoice(spellEffect) !== undefined) {
       const items = draft.interaction?.chain?.items ?? [];
       const item = [...items].reverse().find((it) => it?.cardId === cardId);

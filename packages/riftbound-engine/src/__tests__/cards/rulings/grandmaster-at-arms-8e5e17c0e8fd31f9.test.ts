@@ -76,9 +76,8 @@ describe("Ruling 8e5e17c0e8fd31f9 — Jax's legend cannot 're-attach' an Equipme
     expect(game.violations()).toEqual([]);
   });
 
-  // Expected (434.1): naming Aphelios — Brutalizer's current host — does nothing: Aphelios stays 5.
-  // Actual: the engine re-stamps the attachment as "attached this turn" and Aphelios jumps to 4 + 1 + 2 = 7.
-  test.failing("BUG: ruling 8e5e17c0e8fd31f9 — re-attaching Brutalizer to its own host refreshes the +2 (Aphelios 5 → 7); expected no effect (434.1)", async () => {
+  // rule 434.1 — naming Aphelios, Brutalizer's current host, does nothing: no fresh "attached this turn", Aphelios stays 5.
+  test("ruling 8e5e17c0e8fd31f9 — re-attaching Brutalizer to its own host has no effect: Aphelios stays 5, never 7 (434.1)", async () => {
     const game = await board().build();
     await reattachTo(game, "aphelios");
     // whatever else is pending, the Might must not have moved
@@ -88,10 +87,9 @@ describe("Ruling 8e5e17c0e8fd31f9 — Jax's legend cannot 're-attach' an Equipme
     expect(game.state("aphelios")).toMatchObject({ attachments: ["brut"], might: 5 });
   });
 
-  // Expected (434.1): no attach happened, so Aphelios's "When you attach an Equipment to me" does not trigger — no mode prompt,
+  // rule 434.1 — no attach happened, so Aphelios's "When you attach an Equipment to me" does not trigger — no mode prompt,
   // nothing on the chain, runes stay exhausted, nobody buffed.
-  // Actual: the engine fires Aphelios's trigger and asks P1 to choose one of his three modes.
-  test.failing("BUG: ruling 8e5e17c0e8fd31f9 — re-attaching to the same unit still triggers Aphelios's mode choice; expected no trigger at all (434.1)", async () => {
+  test("ruling 8e5e17c0e8fd31f9 — re-attaching to the same unit does not trigger Aphelios's mode choice at all (434.1)", async () => {
     const game = await board().build();
     await reattachTo(game, "aphelios");
     expect(isAphPrompt(game.decision())).toBe(false);

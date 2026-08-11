@@ -87,9 +87,8 @@ describe("Ruling 8146463710b7352b — Jax moving Brutalizer to a different unit 
     expect(game.state("second")).toMatchObject({ attachments: ["brut"], might: 5 });
   });
 
-  // BUG (434.1.g): re-attaching Brutalizer to the unit it is ALREADY on must have no effect at all — First
-  // should stay at 2 + 1 = 3. The engine treats it as a fresh attach and re-arms the +2 (First reads 5).
-  test.failing("BUG: ruling 8146463710b7352b — Jax 'moving' Brutalizer onto its current holder refreshes the +2 (engine: 5) instead of doing nothing (rules: stays 3)", async () => {
+  // rule 434.1.g — re-attaching Brutalizer to the unit it is ALREADY on has no effect at all: First stays at 2 + 1 = 3.
+  test("ruling 8146463710b7352b — Jax 'moving' Brutalizer onto its current holder does nothing: no re-armed +2, First stays 3 (434.1.g)", async () => {
     const game = await equippedOnAnEarlierTurn();
     await jaxMoveTo(game, ["brut", "first"]);
     expect(game.state("brut").attachedTo).toBe("first");
