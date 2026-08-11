@@ -8,8 +8,13 @@
  * A: Neither. The Blade still resolves, but Jinx — now at a different location — is an illegal target, so it resolves with no
  *    effect; it does not jump to Tideturner, who survives. (Tideturner's choice ignores the hidden "here" restriction because it
  *    can only ever pick a unit at ANOTHER location.)
- * Rules: 811.1.d.2 (Tideturner exception to hidden targeting), 355.11 / 359.3.f (target legality re-checked on resolution; no
- *        retargeting), 340.1 (LIFO).
+ * Rules: 811.1.d.2 (Tideturner exception to hidden targeting; the Blade's own choice is locked to the battlefield it was
+ *        hidden at), 355.11 / 359.3.e.4-5 (target legality re-checked on resolution; no retargeting), 340.1 (LIFO).
+ *
+ * The ruling's Blade is ON THE BATTLEFIELD (played from Hidden) — that is where the fizzle comes from, and it is the CR's own
+ * worked example (359.3.e.5). A Blade cast from HAND has no such scope: 359.3.e.4 spells out that "a unit at a battlefield"
+ * stops being legal only when it is no longer AT A battlefield, so a swap between two battlefields leaves it killable. Both
+ * boards are covered below.
  */
 import { describe, expect, test } from "bun:test";
 import type { Game } from "../../../harness";
@@ -35,6 +40,27 @@ function board() {
     .unit(P1, "base", { might: 1, name: "Reserve" }, "reserve") // a second swap candidate so the choice is a real prompt
     .unit(P2, "base", { might: 2, name: "Bystander" }, "bystander")
     .hand(P2, HIDDEN_BLADE, "blade")
+    .deck(P1, ["ogn-175-298", "ogn-175-298", "ogn-175-298"], ["d1", "d2", "d3"]);
+}
+
+/**
+ * The ruling's own board: the Blade is on the battlefield — hidden at bf1, where Jinx stands — instead of held in hand.
+ * Playing it from Hidden costs [0] and locks its choice to bf1 (rule 811.1.d.2), which is what makes the swapped-away Jinx
+ * illegal on resolution.
+ */
+function hiddenBoard() {
+  return scenario()
+    .turn(3)
+    .active(P2)
+    .resources(P2, { energy: 2, power: { order: 1 } })
+    .battlefield("bf1", { controller: P1 })
+    .battlefield("bf2", { controller: P1 })
+    .unit(P1, "bf1", { might: 4, name: "Jinx", tags: ["Jinx"] }, "jinx")
+    .unit(P1, "bf2", { might: 3, name: "Anchor" }, "anchor")
+    .facedown(P1, "bf2", TIDETURNER, "tide")
+    .unit(P1, "base", { might: 1, name: "Reserve" }, "reserve")
+    .unit(P2, "base", { might: 2, name: "Bystander" }, "bystander")
+    .facedown(P2, "bf1", HIDDEN_BLADE, "blade")
     .deck(P1, ["ogn-175-298", "ogn-175-298", "ogn-175-298"], ["d1", "d2", "d3"]);
 }
 
@@ -84,15 +110,30 @@ describe("Ruling 7e1aed74ef764c48 — Tideturner swaps the Hidden Blade target a
     expect(game.state("tide").damage).toBe(0);
   });
 
-  // BUG: expected — Jinx, having changed location since she was chosen, is an illegal target when the Blade resolves, so it
-  // resolves with no effect: Jinx lives and nobody draws. Actual — the engine still treats Jinx (at bf2, "a unit at a
-  // battlefield") as legal: she is killed and P1 draws 2.
-  test.failing("BUG: ruling 7e1aed74ef764c48 — engine still kills the relocated Jinx (and P1 draws 2) instead of resolving Hidden Blade to no effect", async () => {
-    const game = await board().build();
-    await bladeThenSwap(game);
+  // The ruling ("Hidden Blade ON THE BATTLEFIELD targets Jinx") is about a Blade played from the facedown zone, and so is
+  // the CR's own worked example of it (359.3.e.5). The fizzle comes from rule 811.1.d.2: a hidden play may only choose
+  // among objects at the battlefield it was hidden at, and that scope is re-read on resolution — a Jinx swapped to bf2 is
+  // no longer at bf1. Cast from HAND (the tests above) there is no such scope, and 359.3.e.4 keeps "a unit at a
+  // battlefield" legal after a battlefield-to-battlefield swap, so that Blade does kill her.
+  test("ruling 7e1aed74ef764c48 — a Blade played from Hidden at bf1 resolves to no effect once Jinx is swapped to bf2: she lives, nobody draws, Tideturner survives", async () => {
+    const game = await hiddenBoard().build();
+    await game.p2.reveal("blade"); // rule 811.1.d.2: Jinx, alone at bf1, is the only choice — auto-bound
+    expect(game.chain()).toEqual([expect.objectContaining({ cardId: "blade", controller: P2, targets: ["jinx"] })]);
+    await game.p2.passPriority();
+    await game.p1.reveal("tide");
+    await game.p1.yes();
+    await game.p1.pick("jinx");
+    for (let i = 0; i < 4 && game.chain().some((c) => c.cardId === "tide"); i++) {
+      await game.acting().passPriority();
+    }
+    expect(game.locationOf("jinx")).toBe("bf2");
+    expect(game.locationOf("tide")).toBe("bf1");
     await game.settle();
     expect(game.chain()).toEqual([]);
+    expect(game.zoneOf("blade")).toBe("trash");
     expect(game.zoneOf("jinx")).toBe("battlefield-bf2");
+    expect(game.zoneOf("tide")).toBe("battlefield-bf1");
+    expect(game.state("tide").damage).toBe(0);
     expect(game.p1.hand()).toEqual([]); // no "its controller draws 2"
     expect(game.p1.deck()[0]).toBe("d1");
   });

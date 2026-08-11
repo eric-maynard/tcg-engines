@@ -187,6 +187,10 @@ describe("Ruling 95688f6f6f4b0da4 — how Promising Future plays the chosen card
 
   // Expected: P2 picks Harnessed Dragon (needs [order][order] it doesn't have) → it can't be played; the instruction is
   // ignored and the card is recycled — it must not stay in banishment or reach the board. Actual: it is left banished.
+  // RULING-CONFLICT: rulings 23c9277d071cd1f7 and 012ae43c41524a98 (plus rules 358.2 / 358.5) both keep an unplayable
+  // Promising Future pick in BANISHMENT, and ten specs under __tests__/cards/{interactions,rulings} assert that. Recycling
+  // it here breaks all of them, so the engine deliberately follows the majority; do not "fix" this without settling the
+  // conflict first (see abilities/effects/play-banished-pass.ts).
   test.failing("BUG: ruling 95688f6f6f4b0da4 — an unaffordable (Power) pick is left in banishment instead of being recycled unplayed", async () => {
     const game = await board(HARNESSED_DRAGON, "dragon").build();
     await castToFirstLook(game);

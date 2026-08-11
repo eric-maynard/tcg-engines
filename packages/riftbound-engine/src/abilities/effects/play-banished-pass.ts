@@ -26,7 +26,10 @@ type DraftWithLookBanish = {
  * (337.1.b: location, targets, remaining Power cost — 356.1.b) with nobody
  * receiving Priority in between (337.1.a / 337.4). A permanent enters at once
  * (337.2); a spell keeps its slot as a Finalized item and resolves LIFO (340.1).
- * A card its owner cannot play right now simply stays banished (419.2.a).
+ * A card its owner cannot play right now simply stays banished (419.2.a):
+ * RULING-CONFLICT — riftjudge 95688f6f6f4b0da4 says an unaffordable pick is
+ * recycled, but rulings 23c9277d071cd1f7 and 012ae43c41524a98 (and 358.2 /
+ * 358.5) both keep it in banishment, so the engine follows the majority.
  */
 export function handle_playBanishedPass(
   effect: ExecutableEffect,
