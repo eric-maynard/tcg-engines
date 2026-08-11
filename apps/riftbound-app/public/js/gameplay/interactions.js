@@ -738,23 +738,41 @@ function enterLegendSelected(cardId) {
  * rule 507-510: only Reactions (and Reaction-timed play) are legal in a closed
  * state; outside our main phase nothing standard-timed may be played.
  */
+function cardPlaySpeed(card) {
+  const text = card?.rulesText || "";
+  if (/\[\s*Reaction\s*\]/i.test(text)) return "reaction";
+  if (/\[\s*Action\s*\]/i.test(text)) return "action";
+  return "standard";
+}
+
 function playTimingBlockReason(card) {
   if (!card) return null;
-  const isReaction = /\[\s*Reaction\s*\]/i.test(card.rulesText || "");
-  if (isReaction) return null;
+  const speed = cardPlaySpeed(card);
   const chain = gameState?.interaction?.chain;
   if (chain?.active) {
+    if (speed === "reaction") return null;
     const holder = chain.activePlayer;
     return holder && holder !== viewingPlayer
-      ? `${pName(holder)} has priority — only Reactions can be played while the chain is open`
-      : "Only Reactions can be played while the chain is open";
+      ? `${pName(holder)} has priority — only [Reaction] cards can be played while the chain is open`
+      : "Only [Reaction] cards can be played while the chain is open";
   }
+  // rule 510: a showdown is an open state that only [Action] (and [Reaction]) speed enters.
+  if (gameState?.interaction?.showdown || gameState?.interaction?.showdownStack?.length) {
+    if (speed === "reaction" || speed === "action") return null;
+    return "Showdown in progress — only [Action] and [Reaction] cards can be played now";
+  }
+  if (speed === "reaction") return null;
   if (gameState?.turn?.activePlayer && gameState.turn.activePlayer !== viewingPlayer) {
-    return "Not your turn — only Reactions can be played now";
+    return "Not your turn — only [Reaction] cards can be played now";
   }
   const phase = gameState?.turn?.phase;
   if (phase && phase !== "main") return `Not during the ${phase} phase`;
   return null;
+}
+
+// Exported for the play-block-reason unit test (browser: `module` is undefined).
+if (typeof module !== "undefined" && module && module.exports) {
+  module.exports = { playTimingBlockReason, cardPlaySpeed };
 }
 
 /**
