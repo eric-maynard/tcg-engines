@@ -5,7 +5,11 @@ import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import { getLKI } from "../../operations/leave-board";
 import { playNamesPublicPile } from "../play-from-pile";
 import { resolveTarget } from "../target-resolver";
-import { getOptionalPlayCost } from "../../game-definition/moves/play/cost";
+import {
+  type CostExtras,
+  computePlayResourceCost,
+  getOptionalPlayCost,
+} from "../../game-definition/moves/play/cost";
 import {
   beginPlay,
   canPerformEffectPlay,
@@ -16,7 +20,11 @@ import {
   type PlayVia,
   putPlayedSpellOnChain,
 } from "../../game-definition/moves/play/play-pipeline";
-import { spellEffectHasLegalTargets, type SpellEffectTargetShape } from "../../game-definition/moves/play/targeting";
+import {
+  findSequenceLeadTarget,
+  spellEffectHasLegalTargets,
+  type SpellEffectTargetShape,
+} from "../../game-definition/moves/play/targeting";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import { isEquipmentCard } from "./_attachment";
 import { type EffectHelpers, getTargetIds } from "./_helpers";
@@ -475,6 +483,57 @@ function energyReductionOf(eff: PlayEffectShape, ctx: EffectContext): number {
  * goes on the chain with no bound targets — its controller picks them as it
  * resolves (rule 355.10).
  */
+/**
+ * rule 356.1.a then 356.3 / 356.1.b.3 (unl-186-219 × ven-045-166 Helm of
+ * Suppression) — "play this … for [C]" replaces the BASE cost, but every
+ * increase still applies on top of the replacement. Price the replay through
+ * the one play-cost pipeline (`altCost` = the named cost) so an enemy "your
+ * spells cost [1] more" static is charged here exactly as on a hand cast.
+ */
+function replayOptInCost(
+  ctx: EffectContext,
+  cardId: string,
+  playerId: string,
+  cost: unknown,
+): Record<string, unknown> | undefined {
+  if (cost === undefined || typeof cost !== "object" || cost === null) {
+    return cost as Record<string, unknown> | undefined;
+  }
+  const named = cost as { energy?: number; power?: readonly string[] };
+  // `ignoreBaseCost` prices the INCREASES alone (no discount rider is read):
+  // "for [C]" already fixed the base, and 356.1.b.3 stacks increases on top of
+  // a replaced base without letting a discount eat into the named price.
+  const increase = computePlayResourceCost(
+    ctx.draft,
+    playerId,
+    cardId,
+    {
+      board: { cards: ctx.cards, zones: ctx.zones },
+      ignoreBaseCost: true,
+    } as unknown as CostExtras,
+    undefined,
+    false,
+  );
+  if (increase.free) {
+    return cost as Record<string, unknown>;
+  }
+  const power: string[] = [...(named.power ?? [])];
+  for (const [domain, pips] of Object.entries(increase.named)) {
+    for (let i = 0; i < (pips ?? 0); i++) {
+      power.push(domain);
+    }
+  }
+  for (let i = 0; i < increase.any; i++) {
+    power.push("rainbow");
+  }
+  const energy = (named.energy ?? 0) + increase.energy;
+  return {
+    ...(cost as Record<string, unknown>),
+    ...(energy > 0 ? { energy } : {}),
+    ...(power.length > 0 ? { power } : {}),
+  };
+}
+
 function replaySelfSpell(effect: ExecutableEffect, ctx: EffectContext): void {
   const cardId = ctx.sourceCardId;
   const { optional, cost, from, player, escalate, accepted } = effect as {
@@ -530,7 +589,9 @@ function replaySelfSpell(effect: ExecutableEffect, ctx: EffectContext): void {
           type: "play",
           ...(escalate === true ? { escalate: true } : {}),
         },
-        ...(cost !== undefined ? { optInCost: cost } : {}),
+        ...(cost !== undefined
+          ? { optInCost: replayOptInCost(ctx, cardId, replayPlayer, cost) }
+          : {}),
         type: "ability",
       },
       sourceCardId: cardId,
@@ -544,8 +605,15 @@ function replaySelfSpell(effect: ExecutableEffect, ctx: EffectContext): void {
   // rule 354.3 / 359.3.d — the card is being played again, so the parked
   // "place it in the trash" step of the resolution it is leaving no longer
   // applies; dropping it keeps the replayed card on the chain.
-  if (ctx.draft.deferredSpellSettle?.cardId === cardId) {
-    ctx.draft.deferredSpellSettle = undefined;
+  // rule 350.1 / 419.4.a — but that first cast WAS a completed play: its "when
+  // you play a spell" triggers are still owed, so keep the parked entry alive
+  // for them alone rather than dropping it wholesale.
+  const parkedSettle = ctx.draft.deferredSpellSettle;
+  if (parkedSettle?.cardId === cardId) {
+    ctx.draft.deferredSpellSettle =
+      parkedSettle.playTriggersPending === true
+        ? { ...parkedSettle, playTriggersOnly: true }
+        : undefined;
   }
   // rule 715.1 / 317.2.c (rule-id: unl-020-219) — "this deals 1 additional
   // Bonus Damage for each time this spell has dealt damage this turn": one
@@ -586,7 +654,11 @@ function bindReplayTarget(
   replayPlayer: string,
   spellEffect: SpellEffectTargetShape | undefined,
 ): void {
-  const descriptor = spellEffect?.target;
+  // rule 355.5 / 419.3.b (unl-186-219) — a `sequence` spell carries its
+  // caster-chosen target on a sub-effect, not on the sequence node: read the
+  // lead descriptor the play-time enumerator uses, or a replay would go on the
+  // Chain target-less and only ask once both players had passed.
+  const descriptor = spellEffect?.target ?? findSequenceLeadTarget(spellEffect);
   if (!descriptor || typeof descriptor !== "object" || (descriptor as { quantity?: unknown }).quantity === "all") {
     return;
   }
@@ -783,6 +855,10 @@ export function castSpellFromTrash(
   putPlayedSpellOnChain(bag as unknown as PlayIO, {
     cardId,
     playerId,
+    // rule 419.1 / 811.1 — a spell an effect plays out of the trash is not a
+    // play from hand, and its `play-card` event carries that origin.
+    playedFrom: "trash",
+    playedFromHand: false,
     resolveTo: recycleAfter ? "mainDeck" : "trash",
     via: "effect",
   });
