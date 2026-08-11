@@ -1,6 +1,23 @@
 // render/modals.js — Choice modals (pending choice, play-cost) and the chain
 // overlay. Classic script: everything is global. Split out of renderer.js.
 
+// rule 465.2.c — the combat-damage ordered lane lives in its own classic script
+// (gameplay/combat-assign.js, unit-tested by bun). Loaded from here so the page
+// template needs no extra tag; until it arrives the button renderer is used,
+// and a prompt already open re-renders once it has.
+(function loadCombatAssignScript() {
+  if (typeof document === "undefined" || typeof renderCombatDamageLane === "function" || document.querySelector("script[data-combat-assign]")) return;
+  const s = document.createElement("script");
+  s.src = "/js/gameplay/combat-assign.js";
+  s.dataset.combatAssign = "";
+  s.onload = () => {
+    try {
+      if (typeof gameState !== "undefined" && gameState?.pendingChoice?.type === "combat-damage") renderPendingChoiceModal();
+    } catch (_) { /* not in a game yet */ }
+  };
+  document.head.appendChild(s);
+})();
+
 // Choice Modals — shared Arena-style overlay for pending choices and
 // optional-cost play prompts.
 
@@ -245,6 +262,8 @@ function renderPendingChoiceModal() {
   overlay.dataset.mode = "pending";
   overlay.dataset.pendingType = pending.type ?? "";
   box.classList.toggle("rp-wide", pending.type === "reveal-and-pick");
+  const useLane = pending.type === "combat-damage" && typeof renderCombatDamageLane === "function";
+  box.classList.toggle("cd-wide", useLane);
   // Card picks are mirrored as board glows (applyPendingChoiceHighlights); let
   // clicks reach the board by making the backdrop pass-through for those prompts.
   const hasBoardPicks = pending.type === "choose-target" || availableMoves.some(m =>
@@ -262,6 +281,13 @@ function renderPendingChoiceModal() {
   }
   if (pending.type === "reveal-and-pick") {
     renderRevealAndPick(pending, box);
+    overlay.classList.add("visible");
+    return;
+  }
+  // rule 465.2.c — combat damage: an ordered drag lane with live per-unit
+  // numbers (combat-assign.js). Non-combat splits (355.14) keep the buttons below.
+  if (useLane) {
+    renderCombatDamageLane(pending, box);
     overlay.classList.add("visible");
     return;
   }
