@@ -446,7 +446,13 @@ export function handle_move(effect: ExecutableEffect, ctx: EffectContext, h: Eff
     const paidPayerId = (effect as unknown as { _payerId?: string })._payerId;
     if (paidPayerId !== undefined) {
       const paidZone = ctx.zones.getCardZone(paidPayerId as CoreCardId);
-      if (paidZone === undefined || paidZone === moverZone) {
+      // rule 359.3.e.12 / 359.3.e.6 — a payer that left the board has no
+      // LOCATION, so "the location of the unit you exhausted" is null and the
+      // move instruction is simply ignored (never re-aimed at a non-board zone,
+      // and never downgraded to a Recall); the ability still counts as played
+      // with its costs paid (359.3.e.10).
+      const payerOnBoard = paidZone === "base" || (paidZone?.startsWith("battlefield-") ?? false);
+      if (paidZone === undefined || !payerOnBoard || paidZone === moverZone) {
         return;
       }
       arriveByEffect(ctx, [moverId], moveCardWithEvent(ctx, moverId, paidZone));
@@ -866,6 +872,13 @@ export function handle_move(effect: ExecutableEffect, ctx: EffectContext, h: Eff
     const deferred = (effect as unknown as { deferredMoverId?: string }).deferredMoverId;
     const cardId = deferred ?? moveTargets[0];
     if (cardId === undefined) {
+      return;
+    }
+    // rule 355.4 / 355.15 — the destination was named as the spell was PLAYED
+    // (`play-time-destinations.ts`) and is re-checked, never re-asked, here: an
+    // answer the board has since made illegal simply performs no move
+    // (359.3.e.6) rather than handing the caster a fresh menu.
+    if (moveToBoundDestination(effect, ctx, h, cardId)) {
       return;
     }
     // rule 820.2.a (sfd-129-221) — a [Repeat] runs the instruction twice in one
