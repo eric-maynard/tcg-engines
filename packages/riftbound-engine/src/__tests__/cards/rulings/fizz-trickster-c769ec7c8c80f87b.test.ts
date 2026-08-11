@@ -6,10 +6,18 @@
  *     its cost. Deal 3 to an enemy unit at a battlefield. Banish this."   × Wind Wall (ogn-064-298) "Counter a spell."
  *
  * Q: If the spell Fizz replays from trash is countered, is it still recycled?
- * A: No. A countered spell is cleared from the chain into the trash (425.1.a.1) and is not considered played (425.1.b), so
- *    Fizz's "recycle it after you play it" replacement never applies. If instead the spell resolves (or tries to banish
- *    itself, like Arcane Shift), it IS recycled.
- * Rules: 425.1.a/.b, 419.4.b (Legion-style tallies still count a finalized-then-countered play), 369–372 (replacement).
+ *
+ * RULING-CONFLICT: riftjudge c769ec7c8c80f87b answers "no — countered goes to the trash, and a resolved Arcane Shift is
+ * recycled instead of banishing itself". CR 390.3.a says the opposite on BOTH halves: "recycle it after you play it" is a
+ * DELAYED REPLACEMENT reading "if it would leave the chain after becoming a finalized chain item, and leaving the chain
+ * wasn't instructed by its own execution, perform the specified game action instead".
+ *   - Countered (425.1.a/.a.1): the spell was finalized and leaves the chain for a reason that is NOT its own execution,
+ *     so the recycle DOES replace the trip to the trash — bottom of the main deck.
+ *   - Arcane Shift's closing "Banish this.": leaving the chain IS instructed by its own execution, so the recycle does
+ *     NOT apply — it banishes itself.
+ * The engine follows the CR; the same reading is encoded by rulings 625922c455e3ac96 / a077a40206465b5c /
+ * a6ee6747d4217583 and interactions/fizz-replayed-spell-countered-recycled (3 rulings + 1 interaction vs this one).
+ * Rules: 390.3.a, 425.1.a/.a.1/.b, 419.4.b (tallies still count a finalized-then-countered play), 369–372, 416.1.
  */
 import { describe, expect, test } from "bun:test";
 import type { Decision, Game } from "../../../harness";
@@ -63,11 +71,12 @@ async function fizzReplays(spellInTrash: string): Promise<Game> {
   return game;
 }
 
-describe("Ruling c769ec7c8c80f87b — a countered Fizz-replayed spell goes to trash; only a played (resolved) one is recycled", () => {
-  // Expected (ruling): Wind Wall counters Arcane Shift → Arcane Shift is put in P1's trash (425.1.a.1); Fizz's recycle
-  // rider does not apply because the spell was never "played" (425.1.b). Actual: the engine treats the rider as a
-  // leave-the-chain replacement and recycles the countered spell to the bottom of the deck.
-  test.failing("BUG: ruling c769ec7c8c80f87b — a countered Fizz-replayed spell goes to the trash, not the deck", async () => {
+describe("Ruling c769ec7c8c80f87b (RULING-CONFLICT) — CR 390.3.a: a countered Fizz-replayed spell is still recycled; one that banishes itself is not", () => {
+  // RULING-CONFLICT: riftjudge c769ec7c8c80f87b sends the countered spell to the trash because it was never "played"
+  // (425.1.b). The rider is not conditioned on being played: rule 390.3.a makes it a delayed replacement on LEAVING THE
+  // CHAIN, and a countered spell is a finalized chain item leaving the chain other than by its own execution — engine
+  // follows the CR (same reading as rulings 625922c455e3ac96 / a077a40206465b5c / a6ee6747d4217583).
+  test("ruling c769ec7c8c80f87b — a countered Fizz-replayed spell is recycled to the bottom of the deck (390.3.a)", async () => {
     const game = await fizzReplays(ARCANE_SHIFT);
     expect(game.p2.can("cast", "windwall")).toBe(true);
     await game.p2.cast("windwall", { targets: "spell" });
@@ -80,14 +89,16 @@ describe("Ruling c769ec7c8c80f87b — a countered Fizz-replayed spell goes to tr
     expect(game.zoneOf("windwall")).toBe("trash");
     // 419.4.b — the finalized play still counts for non-triggered "played a card" tallies (Fizz + the spell).
     expect(game.gameState.cardsPlayedThisTurn?.[P1]).toBe(2);
-    // The ruling: countered → trash, NOT recycled.
-    expect(game.p1.deck()).not.toContain("spell");
-    expect(game.zoneOf("spell")).toBe("trash");
+    // rule 390.3.a: the recycle replaces the trip to the trash — bottom of the main deck (416.1).
+    expect(game.p1.trash()).not.toContain("spell");
+    expect(game.zoneOf("spell")).toBe("mainDeck");
+    expect(game.p1.deck().at(-1)).toBe("spell");
   });
 
-  // Expected (ruling nuance): when Arcane Shift resolves, its closing "Banish this." is overridden by Fizz's pending
-  // "recycle that spell" — it goes to the bottom of P1's main deck. Actual: the engine banishes it.
-  test.failing("BUG: ruling c769ec7c8c80f87b — a resolved Arcane Shift replayed by Fizz is recycled, not banished", async () => {
+  // RULING-CONFLICT: riftjudge c769ec7c8c80f87b has Fizz's recycle override Arcane Shift's closing "Banish this."
+  // rule 390.3.a exempts a departure "instructed by its own execution", so the self-banish stands and the recycle
+  // never applies (matches rulings a077a40206465b5c / a6ee6747d4217583) — engine follows the CR.
+  test("ruling c769ec7c8c80f87b — a resolved Arcane Shift replayed by Fizz banishes itself; the recycle does not apply (390.3.a)", async () => {
     const game = await fizzReplays(ARCANE_SHIFT);
     await game.settle({ policy: "first" });
     for (let i = 0; i < 8; i++) {
@@ -109,9 +120,8 @@ describe("Ruling c769ec7c8c80f87b — a countered Fizz-replayed spell goes to tr
     }
     expect(game.chain()).toEqual([]);
     expect(game.state("wall").damage).toBe(3); // it resolved
-    expect(game.p1.banishment()).not.toContain("spell");
-    expect(game.zoneOf("spell")).toBe("mainDeck");
-    expect(game.p1.deck().at(-1)).toBe("spell");
+    expect(game.p1.deck()).not.toContain("spell");
+    expect(game.p1.banishment()).toContain("spell");
   });
 
   test("control: a replayed spell that simply resolves (Hextech Ray) is recycled to the bottom of the deck, not trashed", async () => {
