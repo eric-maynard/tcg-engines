@@ -66,23 +66,24 @@ describe("Ruling d99d3d262c465680 — attack/defend triggers go on the chain by 
     expect(game.decision()).toMatchObject({ context: "showdown", kind: "action" });
   });
 
-  // RULING-CONFLICT note: the ruling has the optional cost ("kill me") decided and PAID AT RESOLUTION, with the item on the chain
-  // regardless. CR 383.3.a/.b(.1) makes a leading "you may [cost] to …" the trigger's base cost, decided and paid while the item is
-  // FINALIZED — which is what the engine does: the Fan is already in the trash while its item still awaits resolution.
-  // Expected (ruling): Fan still on bf1 while the item sits on the chain; it dies only as the item resolves.
-  test.failing("BUG: ruling d99d3d262c465680 — engine pays Overzealous Fan's 'kill me' at finalization instead of at resolution", async () => {
+  // RULING-CONFLICT: riftjudge d99d3d262c465680 says the optional cost ("kill me") is decided and PAID AT RESOLUTION, with the item
+  // on the chain regardless. CR 383.3.a/.b(.1) — and 204.3.a, which names Overzealous Fan — makes a leading "you may [cost] to …"
+  // the trigger's BASE COST, decided and paid while the item is FINALIZED. The engine follows the CR: the Fan is already in the
+  // trash while its item still awaits resolution, and only the MOVE waits for the item to resolve.
+  test("the 'kill me' cost is the trigger's BASE COST, paid at finalization (CR 383.3.b / 204.3.a): the Fan is in the trash while its item still sits on the chain, and Charger only goes home when it resolves", async () => {
     const game = await fanBoard().build();
     await game.p1.move("charger", "bf1");
     await game.p2.yes();
     if (game.decision()?.kind === "pick") {
       await game.p2.pick("charger");
     }
-    // Item finalized and awaiting resolution (priority window open) — per the ruling the cost is not paid yet.
+    // Item finalized and awaiting resolution (priority window open) — the base cost has already been paid.
     expect(game.decision()).toMatchObject({ context: "chain", kind: "action" });
     expect(game.chain().map((c) => c.cardId)).toEqual(["fan"]);
-    expect(game.zoneOf("fan")).toBe("battlefield-bf1");
+    expect(game.zoneOf("fan")).toBe("trash");
+    expect(game.locationOf("charger")).toBe("bf1"); // the move itself is the EFFECT — it waits for resolution
     await game.p2.passPriority();
-    await game.p1.passPriority(); // resolves: NOW kill the Fan and move Charger
+    await game.p1.passPriority(); // resolves: NOW move Charger
     expect(game.zoneOf("fan")).toBe("trash");
     expect(game.locationOf("charger")).toBe("base");
   });
