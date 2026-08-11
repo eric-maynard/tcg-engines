@@ -14,7 +14,7 @@ export interface CreateLobbyBody {
   name?: string;
   sandbox?: boolean;
   gameMode?: string;
-  /** {kind:"goldfish"} | {kind:"claude", model, apiKey?} plus optional `deck` (server/opponent-deck.ts). */
+  /** {kind:"goldfish", mode?:"passive"|"active"} | {kind:"claude", model, apiKey?} plus optional `deck` (server/opponent-deck.ts). */
   opponent?: unknown;
   /** Tournament switch: refuse to start with a not-tournament-legal deck (default false — warn only). */
   enforceLegality?: boolean;
@@ -31,13 +31,14 @@ export interface CreateLobbyBody {
  */
 export function createLobby(body: CreateLobbyBody, userId: string | null): { status: number; body: { error: string } | { code: string; lobbyId: string } } {
   const isSandbox = body.sandbox === true;
-  // Solo opponent: Goldfish (default) or a Claude seat. A request-supplied
-  // API key stays inside the driver instance in memory; nothing here logs,
-  // persists or echoes it.
-  const parsed = isSandbox ? parseOpponentSpec(body.opponent) : ({ ok: true, spec: { kind: "goldfish" } } as const);
+  // Solo opponent: Goldfish (passive = auto-passes, default; active = the host
+  // plays both seats) or a Claude seat. A request-supplied API key stays inside
+  // the driver instance in memory; nothing here logs, persists or echoes it.
+  const parsed = isSandbox ? parseOpponentSpec(body.opponent) : ({ ok: true, spec: { kind: "goldfish", mode: "passive" } } as const);
   if (!parsed.ok) {
     return { body: { error: parsed.error }, status: parsed.status };
   }
+  const hotSeat = isSandbox && parsed.spec.kind === "goldfish" && parsed.spec.mode === "active";
   // Which deck the practice seat plays — ownership resolved from `userId`, never the body.
   const deckRaw = isSandbox && body.opponent && typeof body.opponent === "object" ? (body.opponent as { deck?: unknown }).deck : undefined;
   const oppDeck = parseOpponentDeck(deckRaw, userId);
@@ -47,7 +48,7 @@ export function createLobby(body: CreateLobbyBody, userId: string | null): { sta
   const opponent = createOpponent(parsed.spec);
   const lobbyId = crypto.randomUUID();
   const code = generateLobbyCode();
-  console.log(`[Lobby] create id=${lobbyId.slice(0, 8)} sandbox=${isSandbox} opponent=${opponent ? `claude:${opponent.info.model}` : "goldfish"} oppDeck=${oppDeck.spec.mode}`);
+  console.log(`[Lobby] create id=${lobbyId.slice(0, 8)} sandbox=${isSandbox} opponent=${opponent ? `claude:${opponent.info.model}` : hotSeat ? "goldfish:active" : "goldfish"} oppDeck=${oppDeck.spec.mode}`);
   const lobby: Lobby = {
     code,
     coinFlip: null,
@@ -55,12 +56,15 @@ export function createLobby(body: CreateLobbyBody, userId: string | null): { sta
     enforceLegality: body.enforceLegality === true,
     gameId: null,
     gameMode: body.gameMode === "match" ? "match" : "duel",
+    // Active Goldfish: the seat is played by the host, so it is named as a seat
+    // ("Player 2") — match-log lines attribute its actions to the seat.
     guest: isSandbox
-      ? { connId: "", deckId: "default", name: opponent?.info.label ?? "Goldfish", ready: true, ws: null }
+      ? { connId: "", deckId: "default", name: opponent?.info.label ?? (hotSeat ? "Player 2" : "Goldfish"), ready: true, ws: null }
       : null,
     // Never echo the client-supplied name (may be an email). Resolve the
     // authenticated user's stored displayName so opponents only ever see that.
     host: { connId: "", deckId: null, name: (getUserById(userId ?? "")?.displayName) || (body.name?.split("@")[0]) || "Player 1", ready: false, ws: null },
+    ...(hotSeat ? { hotSeat: true } : {}),
     id: lobbyId,
     opponent,
     ...(isSandbox ? { opponentDeck: oppDeck.spec } : {}),

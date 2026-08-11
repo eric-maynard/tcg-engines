@@ -36,6 +36,7 @@ function saveSession() {
     sessionStorage.setItem("rb_game", JSON.stringify({
       gameId, viewingPlayer, lobbyRole: typeof lobbyRole !== "undefined" ? lobbyRole : null,
       isSandbox: typeof isSandboxGame !== "undefined" ? isSandboxGame : false,
+      isHotSeat: typeof isHotSeatGame !== "undefined" ? isHotSeatGame : false,
       playerNames,
     }));
   } else {
@@ -118,6 +119,20 @@ function setSandboxGame(value) {
   if (typeof renderActionPanel === "function") {
     renderActionPanel();
   }
+}
+
+/**
+ * Goldfish — ACTIVE ("hot seat"): this one browser plays BOTH seats. The
+ * server marks the session `hotSeat` (every sync frame carries it) and lets
+ * the socket `switch_seat`; hotseat.js follows whichever seat owes the next
+ * decision. Always a sandbox game too.
+ */
+let isHotSeatGame = false;
+function setHotSeatGame(value) {
+  const next = Boolean(value);
+  if (next === isHotSeatGame) return;
+  isHotSeatGame = next;
+  if (typeof hotSeatRenderBanner === "function") hotSeatRenderBanner();
 }
 
 // Coin flip state

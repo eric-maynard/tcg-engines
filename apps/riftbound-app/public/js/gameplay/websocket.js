@@ -214,6 +214,10 @@ function connectWs() {
         break;
     }
 
+    // Goldfish — active: latch hot-seat mode from the frame and follow the seat
+    // that owes the next decision (may send switch_seat; the reply is a sync).
+    if (typeof hotSeatOnFrame === "function") hotSeatOnFrame(msg);
+
     // Run follow-up work registered for "once the server has answered", now
     // that gameState/availableMoves reflect this frame.
     if (typeof notifyMoveSettled === "function") notifyMoveSettled();

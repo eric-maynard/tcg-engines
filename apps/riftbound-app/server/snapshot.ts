@@ -626,8 +626,10 @@ export function buildGameSnapshot(session: GameSession, viewingPlayer?: string) 
   // (state.visibilityGrants, e.g. unl-053-219 "you can look at their facedown
   // cards this turn") or the game has ended (rule 421.4: facedown cards are
   // revealed to all players when the game ends). Deck order is never granted.
+  // Goldfish — active (hot seat): the human sees exactly what the seat it is
+  // acting as would see — the OTHER seat's hand/decks/facedown cards are redacted.
   const vsAi = session.opponent?.info.kind === "claude";
-  const redactFor = (!session.sandbox || vsAi) && viewingPlayer ? viewingPlayer : undefined;
+  const redactFor = (!session.sandbox || vsAi || session.hotSeat) && viewingPlayer ? viewingPlayer : undefined;
   const grantKind = (zoneId: string): "hand" | "facedown" | undefined =>
     zoneId === "hand" ? "hand" : zoneId.startsWith("facedown-") ? "facedown" : undefined;
   const hasGrant = (viewer: string, owner: string, zoneId: string): boolean => {
@@ -771,6 +773,8 @@ export function buildGameSnapshot(session: GameSession, viewingPlayer?: string) 
     canRedo: session.engine.canRedo(),
     canUndo: session.engine.canUndo() && (state.status === "playing" || (session.sandbox && state.status === "finished")),
     gameId: state.gameId,
+    // Goldfish — active: tells the client to follow the acting seat (banner, seat switch, per-seat view).
+    ...(session.hotSeat ? { hotSeat: true } : {}),
     interaction: {
       ...state.interaction,
       // Compute active showdown from stack for client compatibility

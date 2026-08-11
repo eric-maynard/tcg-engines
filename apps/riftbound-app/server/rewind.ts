@@ -15,6 +15,7 @@
  *  - vs-Claude sandbox: one action per Rewind (the AI's included); the AI seat
  *    is re-armed after a debounce and any decision it was computing on the
  *    pre-rewind position is discarded (`rewindEpoch(session)`).
+ *  - Goldfish — active (hot seat): one action per Rewind, whichever seat made it.
  *  - The match log stays consistent by construction: move narration is derived
  *    from the engine's APPLIED replay prefix, side lines ("Turn passed to …",
  *    AI rationale) are anchored to the replay entry they follow and disappear
@@ -83,9 +84,13 @@ function nextRedoActor(session: GameSession, goldfish?: string): string | undefi
   return actorOf(session.engine.peekRedo(), goldfish);
 }
 
-/** The Goldfish seat of a Goldfish sandbox session (undefined for duels and vs-Claude). */
+/**
+ * The Goldfish seat of a PASSIVE Goldfish sandbox session (undefined for duels,
+ * vs-Claude and the active Goldfish's hot seat — there every action is the
+ * human's, so one Rewind = one action of whichever seat made it).
+ */
 function goldfishSeat(session: GameSession, humanSeat: string): string | undefined {
-  if (!session.sandbox || session.opponent?.info.kind === "claude") {
+  if (!session.sandbox || session.hotSeat || session.opponent?.info.kind === "claude") {
     return undefined;
   }
   return session.players.find((p) => p !== humanSeat);

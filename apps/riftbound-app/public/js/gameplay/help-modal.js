@@ -17,6 +17,7 @@ const HELP_PRESS_KEYS = [
   { keys: ["Q"], action: "End showdown / conquer the battlefield" },
   { keys: ["W"], action: "Pass focus in the current showdown" },
   { keys: ["Shift+C"], action: "Duplicate a visible card" },
+  { keys: ["Tab"], action: "Switch seat (Goldfish — active: you play both seats)" },
   { keys: ["?"], action: "Open this help dialog" },
   { keys: ["Esc"], action: "Cancel selection / close dialogs" },
 ];

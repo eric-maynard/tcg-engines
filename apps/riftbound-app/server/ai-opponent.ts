@@ -121,8 +121,14 @@ export function redactKey(text: string, key?: string): string {
 // Opponent spec (request body → validated)
 // ---------------------------------------------------------------------------
 
+/**
+ * Goldfish modes: "passive" (default) — the auto-pass policy in turn.ts drives
+ * player-2; "active" — NO driver: the human plays both seats (hot seat).
+ */
+export type GoldfishMode = "passive" | "active";
+
 export type OpponentSpec =
-  | { kind: "goldfish" }
+  | { kind: "goldfish"; mode: GoldfishMode }
   | { kind: "claude"; model: ModelKey; apiKey?: string };
 
 export type ParsedOpponent =
@@ -132,14 +138,17 @@ export type ParsedOpponent =
 /** Validate the `opponent` field of a create request. Absent → Goldfish. */
 export function parseOpponentSpec(raw: unknown): ParsedOpponent {
   if (raw === undefined || raw === null) {
-    return { ok: true, spec: { kind: "goldfish" } };
+    return { ok: true, spec: { kind: "goldfish", mode: "passive" } };
   }
   if (typeof raw !== "object") {
     return { error: "opponent must be an object", ok: false, status: 400 };
   }
-  const o = raw as { kind?: unknown; model?: unknown; apiKey?: unknown };
+  const o = raw as { kind?: unknown; model?: unknown; apiKey?: unknown; mode?: unknown };
   if (o.kind === undefined || o.kind === "goldfish") {
-    return { ok: true, spec: { kind: "goldfish" } };
+    if (o.mode !== undefined && o.mode !== "passive" && o.mode !== "active") {
+      return { error: "opponent.mode must be 'passive' or 'active'", ok: false, status: 400 };
+    }
+    return { ok: true, spec: { kind: "goldfish", mode: o.mode === "active" ? "active" : "passive" } };
   }
   if (o.kind !== "claude") {
     return { error: "opponent.kind must be 'goldfish' or 'claude'", ok: false, status: 400 };
@@ -1827,7 +1836,8 @@ function describeAnswer(session: GameSession, d: Decision, a: Answer): string {
  * above (fire-and-forget; one in flight per game).
  */
 export function runOpponent(session: GameSession, opts: { humanSeat?: string; gameId?: string; goldfish?: boolean } = {}): void {
-  if (!session.sandbox || session.pregame) {
+  // Goldfish — active (hot seat): no driver at all; the human answers for both seats.
+  if (!session.sandbox || session.pregame || session.hotSeat) {
     return;
   }
   const ai = session.opponent;

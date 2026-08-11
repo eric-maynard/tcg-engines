@@ -90,7 +90,7 @@ describe("model allowlist + opponent spec", () => {
     expect(resolveModel("claude-sonnet-5")).toBeUndefined();
     expect(parseOpponentSpec({ kind: "claude", model: "claude-3-opus", apiKey: "sk-ant-xxxxxxxxxxxx" })).toMatchObject({ ok: false, status: 400 });
     expect(parseOpponentSpec({ kind: "skynet" })).toMatchObject({ ok: false, status: 400 });
-    expect(parseOpponentSpec(undefined)).toEqual({ ok: true, spec: { kind: "goldfish" } });
+    expect(parseOpponentSpec(undefined)).toEqual({ ok: true, spec: { kind: "goldfish", mode: "passive" } });
     expect(parseOpponentSpec({ apiKey: "sk-ant-api03-abcdefghijkl", kind: "claude", model: "sonnet" })).toEqual({
       ok: true,
       spec: { apiKey: "sk-ant-api03-abcdefghijkl", kind: "claude", model: "sonnet" },

@@ -46,7 +46,14 @@ export interface Lobby {
   guest: LobbyPlayer | null;
   status: "waiting" | "ready" | "started";
   gameId: string | null; // Set when game starts
-  sandbox: boolean; // Hot-seat mode — host controls both players
+  sandbox: boolean; // Practice mode — the guest seat is a bot (Goldfish / Claude) or, with `hotSeat`, the host
+  /**
+   * Goldfish — ACTIVE: the host plays BOTH seats (no driver is attached to
+   * player-2; the host's game socket may `switch_seat` and answer every
+   * decision — moves and pregame choices — for either seat). Absent/false =
+   * the passive Goldfish (auto-passes) or a Claude seat.
+   */
+  hotSeat?: boolean;
   gameMode: "duel" | "match"; // Bo1 duel or Bo3 match
   /** D20 roll result: both rolls, who won, and who they chose to go first */
   coinFlip: { winner: string; firstPlayer: string; p1Roll: number; p2Roll: number } | null;
@@ -148,6 +155,7 @@ export function lobbyView(lobby: Lobby, viewer: "host" | "guest") {
       : null,
     host: { hasDeck: Boolean(lobby.host.deckId), legality: lobbySeatLegality(lobby.host.deckId, viewer === "host"), name: lobby.host.name, ready: lobby.host.ready },
     id: lobby.id,
+    hotSeat: lobby.hotSeat === true,
     ...(lobby.sandbox ? { opponentDeck: { deckId: lobby.opponentDeck?.deckId, deckName: lobby.opponentDeck?.deckName, mode: lobby.opponentDeck?.mode ?? "default" } } : {}),
     sandbox: lobby.sandbox,
     sideboardBeforeGame1: lobby.sideboardBeforeGame1 === true,
@@ -215,15 +223,40 @@ export interface SideboardSeatState {
   deck: DeckConfig;
 }
 
+/**
+ * Who takes the first turn, decided inside the pregame (rule 115: Mode of Play
+ * specifies the First Player). `roll`: a d20 each, higher roll CHOOSES (game 1
+ * of a match, a rematch); `loser_chooses`: the previous game's loser chooses
+ * (games 2–3, OP convention — see server/match.ts). Rolled/asked when the
+ * `initiative` phase is entered — after battlefields (113 / 486.5) and
+ * sideboarding, before hands are drawn (116) — and `decided` once chosen.
+ */
+export interface InitiativeState {
+  kind: "roll" | "loser_chooses";
+  /** Seat that chooses who goes first (roll winner / previous loser); null until rolled. */
+  chooser: string | null;
+  p1Roll?: number;
+  p2Roll?: number;
+  /** `loser_chooses`: the game the chooser lost. */
+  afterGame?: number;
+  decided: boolean;
+}
+
 export interface PregameState {
-  phase: "battlefield_select" | "sideboard" | "mulligan" | "ready";
+  phase: "battlefield_select" | "sideboard" | "initiative" | "mulligan" | "ready";
   gameMode: "duel" | "match";
   firstPlayer: string;
   secondPlayer: string;
   /** Each player's available battlefield definition IDs (from their deck) */
   battlefieldOptions: Record<string, string[]>;
+  /** rule 486.5 — per seat, battlefield ids already used this match in a game somebody won: listed but not selectable. */
+  battlefieldExcluded?: Record<string, string[]>;
   /** Each player's selected battlefield card ID (once chosen) */
   battlefieldSelections: Record<string, string>;
+  /** Present when the first player is decided inside this pregame (see InitiativeState); absent = fixed at creation. */
+  initiative?: InitiativeState;
+  /** Opening hands (rule 116) already drawn? Deferred past sideboarding / the initiative step when those run. */
+  handsDrawn?: boolean;
   /**
    * rule 485.5 — true when the GAME picked each player's battlefield at random
    * (Duel / Bo1, seeded engine RNG): the client shows "Battlefield selected at
@@ -257,6 +290,13 @@ export interface GameSession {
   pregame?: PregameState;
   /** Whether this is a sandbox (goldfish) game */
   sandbox: boolean;
+  /**
+   * Goldfish — ACTIVE ("hot seat"): one human plays both seats. No opponent
+   * driver runs, the bot-pregame hook stays off, any connected socket may
+   * `switch_seat` between the two seats, snapshots are redacted per acting
+   * seat, and Rewind takes back one action of whichever seat made it.
+   */
+  hotSeat?: boolean;
   /**
    * Solo opponent driver for sandbox games. Absent / kind "goldfish" → the
    * passive Goldfish policy in turn.ts; kind "claude" → server/ai-opponent.ts.

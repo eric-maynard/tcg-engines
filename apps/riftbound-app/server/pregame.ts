@@ -93,6 +93,13 @@ export function createGameFromDecks(
     gameMode?: "duel" | "match";
     firstPlayer?: string;
     sandbox?: boolean;
+    /**
+     * Goldfish — active: one human plays both seats. The session stays a
+     * sandbox (practice tools, REST hooks) but NO bot answers for player-2:
+     * `pregame.sandbox` is false (both seats pick battlefields / sideboard /
+     * mulligan themselves) and `session.hotSeat` is set (no driver, seat switching).
+     */
+    hotSeat?: boolean;
     names?: Record<string, string>;
     /** Initiative roll results for match log narration. */
     initiativeRoll?: { p1Roll: number; p2Roll: number; winner: string };
@@ -105,6 +112,9 @@ export function createGameFromDecks(
   const P1 = "player-1";
   const P2 = "player-2";
   const gameNumber = Math.max(1, Math.floor(options?.gameNumber ?? 1));
+  const hotSeat = options?.hotSeat === true;
+  /** A bot (Goldfish / Claude) answers for player-2 — false for duels AND for the active Goldfish. */
+  const botSeated = (options?.sandbox ?? false) && !hotSeat;
 
   // Deck construction legality (rule 103: copy limit, 40-card minimum, domain
   // identity, sideboard policy…) is ADVISORY — see server/deck-rules.ts. Only
@@ -178,7 +188,7 @@ export function createGameFromDecks(
         // opponent seat (Goldfish / Claude) never sideboards for now.
         // TODO(vs-Claude): model-driven sideboarding hook — ask the seat's
         // driver for swaps here instead of auto-locking.
-        locked: side.length === 0 || ((options?.sandbox ?? false) && pid === P2),
+        locked: side.length === 0 || (botSeated && pid === P2),
         main: mainDeckIds.map((id, i) => ({ defId: deck.mainDeckCardIds[i] as string, id })),
         side,
       };
@@ -333,7 +343,7 @@ export function createGameFromDecks(
     gameMode,
     mulliganComplete: new Set(),
     phase: gameMode === "match" ? "battlefield_select" : "mulligan",
-    sandbox: isSandbox,
+    sandbox: botSeated,
     secondPlayer,
     ...(sideboarding ? { sideboard: sideboardSeats } : {}),
   };
@@ -373,7 +383,7 @@ export function createGameFromDecks(
   );
 
   const names = options?.names ?? { [P1]: "Player 1", [P2]: "Player 2" };
-  const session: GameSession = { clients: new Map(), decks: { [P1]: deck1, [P2]: deck2 }, engine, gameNumber, log, playerNames: names, players: [P1, P2], pregame, sandbox: isSandbox, seq: 0 };
+  const session: GameSession = { clients: new Map(), decks: { [P1]: deck1, [P2]: deck2 }, engine, gameNumber, ...(hotSeat ? { hotSeat: true } : {}), log, playerNames: names, players: [P1, P2], pregame, sandbox: isSandbox, seq: 0 };
   // Duel: legends, champions and the random battlefields are all known now —
   // sideboard (if anyone can) before the mulligan. Match waits for battlefield_select.
   if (gameMode === "duel") {advancePastReveal(session);}
@@ -787,9 +797,9 @@ export function selectBattlefield(session: GameSession, playerId: string, battle
   return { completed: true, ok: true };
 }
 
-/** The seat the sandbox bot (Goldfish / Claude) plays, if this is a sandbox game. */
+/** The seat the sandbox bot (Goldfish / Claude) plays, if this is a sandbox game (none in the active Goldfish's hot seat). */
 export function botSeat(session: GameSession): string | undefined {
-  return session.sandbox ? session.players[1] : undefined;
+  return session.sandbox && !session.hotSeat ? session.players[1] : undefined;
 }
 
 const botPregameInFlight = new WeakSet<GameSession>();

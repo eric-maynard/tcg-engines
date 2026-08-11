@@ -41,11 +41,17 @@ function aiKeyAvailable() {
   return Boolean(aiServerStatus.envKey || aiServerStatus.mock || getStoredApiKey());
 }
 
+/** Picker values for the two Goldfish flavours (everything else is a Claude model key). */
+const GOLDFISH_PASSIVE = "goldfish";
+const GOLDFISH_ACTIVE = "goldfish-active";
+function isGoldfishValue(v) { return v === GOLDFISH_PASSIVE || v === GOLDFISH_ACTIVE; }
+
 /** The `opponent` field for /api/lobby/create from the picker's current value. */
 function buildOpponentRequest() {
   const sel = document.getElementById("soloOpponent");
   const value = sel ? sel.value : getStoredOpponent();
-  if (!value || value === "goldfish") return { kind: "goldfish" };
+  if (!value || value === GOLDFISH_PASSIVE) return { kind: "goldfish", mode: "passive" };
+  if (value === GOLDFISH_ACTIVE) return { kind: "goldfish", mode: "active" };
   const req = { kind: "claude", model: value };
   const key = getStoredApiKey();
   if (key) req.apiKey = key;
@@ -117,10 +123,16 @@ function _aiFillOpponentOptions() {
   const want = sel.value || getStoredOpponent();
   const canAi = aiKeyAvailable();
   sel.textContent = "";
+  // Goldfish — Passive: player-2 auto-passes (the driver in server/turn.ts);
+  // Goldfish — Active: no driver, YOU play both seats (hot seat, hotseat.js).
   const gold = document.createElement("option");
-  gold.value = "goldfish";
-  gold.textContent = "Goldfish (passive)";
+  gold.value = GOLDFISH_PASSIVE;
+  gold.textContent = "Goldfish — Passive (auto-passes)";
   sel.appendChild(gold);
+  const goldActive = document.createElement("option");
+  goldActive.value = GOLDFISH_ACTIVE;
+  goldActive.textContent = "Goldfish — Active (you play both seats)";
+  sel.appendChild(goldActive);
   for (const m of aiServerStatus.models) {
     const o = document.createElement("option");
     o.value = m.key;
@@ -128,7 +140,7 @@ function _aiFillOpponentOptions() {
     if (!canAi) { o.disabled = true; o.title = "Add an API key in Settings or .env"; }
     sel.appendChild(o);
   }
-  sel.value = [...sel.options].some(o => o.value === want && !o.disabled) ? want : "goldfish";
+  sel.value = [...sel.options].some(o => o.value === want && !o.disabled) ? want : GOLDFISH_PASSIVE;
   const hint = document.getElementById("soloOpponentHint");
   if (hint) {
     hint.textContent = canAi
@@ -170,7 +182,7 @@ function _aiSyncPickerTitle() {
   const h = document.querySelector("#soloDeckPicker h2");
   if (!sel || !h) return;
   const opt = sel.options[sel.selectedIndex];
-  h.textContent = sel.value === "goldfish" ? "Goldfish" : `VS ${opt ? opt.textContent.replace(/ \(mock\)$/, "") : "Claude"}`;
+  h.textContent = sel.value === GOLDFISH_ACTIVE ? "Goldfish — play both seats" : isGoldfishValue(sel.value) ? "Goldfish" : `VS ${opt ? opt.textContent.replace(/ \(mock\)$/, "") : "Claude"}`;
 }
 
 /** Called by lobby.js showSoloDeckPicker(mode): preselect goldfish or the last Claude model. */
@@ -180,11 +192,13 @@ function aiPreparePicker(mode) {
   if (!sel) return;
   if (mode === "claude" || mode === "ai") {
     const stored = getStoredOpponent();
-    const preferred = stored !== "goldfish" ? stored : "haiku";
-    const ok = [...sel.options].find(o => o.value === preferred && !o.disabled) || [...sel.options].find(o => o.value !== "goldfish" && !o.disabled);
-    sel.value = ok ? ok.value : "goldfish";
+    const preferred = !isGoldfishValue(stored) ? stored : "haiku";
+    const ok = [...sel.options].find(o => o.value === preferred && !o.disabled) || [...sel.options].find(o => !isGoldfishValue(o.value) && !o.disabled);
+    sel.value = ok ? ok.value : GOLDFISH_PASSIVE;
   } else {
-    sel.value = "goldfish";
+    // Goldfish card: keep the remembered passive/active flavour (default passive).
+    const stored = getStoredOpponent();
+    sel.value = stored === GOLDFISH_ACTIVE ? GOLDFISH_ACTIVE : GOLDFISH_PASSIVE;
   }
   _aiSyncPickerTitle();
   _aiFillOpponentOptions();

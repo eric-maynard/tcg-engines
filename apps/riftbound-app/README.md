@@ -14,6 +14,18 @@ bun test server/__tests__/                  # server unit tests
 Play → **VS Claude** → pick a deck, an opponent (**Claude Haiku 4.5 · Claude Sonnet 5 · Claude Opus 5**) and the
 **Opponent's deck** → Play. Claude takes the `player-2` seat; you always win the initiative roll.
 
+**Goldfish — Passive / Active.** The solo picker's *Opponent* selector offers *Goldfish — Passive (auto-passes)* (default:
+the server's Goldfish driver plays `player-2` — passes, answers its prompts, ends its turn) and *Goldfish — Active (you play
+both seats)*: no driver is attached, the session is a **hot seat** (`opponent: {kind:"goldfish", mode:"active"}` on
+`POST /api/lobby/create`; default `"passive"`, other values → 400). In active mode the browser follows whichever seat owes the
+next decision — it re-binds its game socket with `{type:"switch_seat", playerId}` (answered by that seat's own `sync`; refused
+with `NOT_HOT_SEAT` in any other game), flips the board to that seat, shows a top strip *"Acting as Player 2 (Goldfish —
+active)"* with **Switch seat** (`Tab`), and answers the pregame for both seats (Bo3 battlefield pick, sideboard lock, mulligan,
+and the go-first choice when player-2 wins the roll). Each seat's view is the per-seat snapshot (the other seat's hand/decks are
+card backs); Rewind takes back one action of whichever seat made it. Server: `server/ws-game.ts` (`switch_seat`),
+`server/routes-lobby.ts` / `server/pregame.ts` (`hotSeat`), client `public/js/gameplay/hotseat.js`; test
+`server/__tests__/goldfish-mode.test.ts`.
+
 **The bot's deck (Goldfish and Claude alike).** The *Opponent's deck* dropdown under the Opponent selector offers
 *Same as mine (mirror)*, *Random from my decks*, any of **Your Saved Decks**, **Public Decks**, or the **Default
 starter**; the choice is remembered in this browser. The server only accepts decks you own or public decks
@@ -64,7 +76,7 @@ Latency is ~1–3 s per action for Haiku, more for larger models, plus the 0.6 s
 index 0 / first option), which is also what `server/__tests__/ai-opponent.test.ts` injects.
 
 REST clients can pass the same field to `POST /api/game/create` / `POST /api/lobby/create`:
-`opponent: {kind:"goldfish"} | {kind:"claude", model:"haiku"|"sonnet"|"opus", apiKey?}` (unknown models → 400).
+`opponent: {kind:"goldfish", mode?:"passive"|"active"} | {kind:"claude", model:"haiku"|"sonnet"|"opus", apiKey?}` (unknown models / modes → 400).
 On `/api/lobby/create` (sandbox lobbies) `opponent.deck` picks the practice seat's deck:
 `{mode:"default"}` (starter, also when absent) | `{mode:"mirror"}` (the host's pick) | `{mode:"random-mine"}` (one of
 the caller's playable saved decks; 401 anonymous / 400 none) | `{mode:"deck", deckId}` (own or public deck; 404

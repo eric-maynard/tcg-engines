@@ -88,6 +88,7 @@ document.addEventListener("click", (e) => {
       viewingPlayer = s.viewingPlayer || P1;
       lobbyRole = s.lobbyRole || null;
       setSandboxGame(s.isSandbox || false);
+      if (typeof setHotSeatGame === "function") setHotSeatGame(s.isHotSeat || false);
       if (s.playerNames) playerNames = s.playerNames;
       document.getElementById("startScreen").classList.add("hidden");
       connectWs();

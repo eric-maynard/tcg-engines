@@ -180,7 +180,8 @@ export function lobbyWsMessage(ws: ServerWebSocket<WsData>, msg: Record<string, 
     lobby.coinFlip = { firstPlayer: "", p1Roll, p2Roll, winner: flipWinner };
     // The practice seat (Goldfish / Claude) has no socket to answer with: when
     // it wins the roll it elects to go first (rule 115) and the game starts now.
-    if (lobby.sandbox && flipWinner === "player-2") {
+    // Active Goldfish (hot seat): the host answers for player-2 (choose_first below).
+    if (lobby.sandbox && !lobby.hotSeat && flipWinner === "player-2") {
       startLobbyGame(lobby, "player-2");
       return;
     }
@@ -194,11 +195,15 @@ export function lobbyWsMessage(ws: ServerWebSocket<WsData>, msg: Record<string, 
       return;
     }
     const winnerRole = lobby.coinFlip.winner === "player-1" ? "host" : "guest";
-    if (role !== winnerRole) { console.log("[Lobby] choose_first rejected: not winner"); return; }
+    // Hot seat (active Goldfish): the host plays both seats, so it answers for
+    // whichever seat won — the choice reads relative to the WINNER ("self" =
+    // the roll winner takes the first turn).
+    const hostForBoth = lobby.hotSeat === true && role === "host";
+    if (role !== winnerRole && !hostForBoth) { console.log("[Lobby] choose_first rejected: not winner"); return; }
 
-    const chosen = msg.choice === "opponent"
-      ? (role === "host" ? "player-2" : "player-1")
-      : (role === "host" ? "player-1" : "player-2");
+    const chooser = hostForBoth ? lobby.coinFlip.winner : (role === "host" ? "player-1" : "player-2");
+    const otherSeat = chooser === "player-1" ? "player-2" : "player-1";
+    const chosen = msg.choice === "opponent" ? otherSeat : chooser;
     startLobbyGame(lobby, chosen);
   }
 
@@ -245,6 +250,7 @@ function startLobbyGame(lobby: Lobby, chosen: string): void {
   const session = createGameFromDecks(deck1, deck2, undefined, {
     firstPlayer: chosen,
     gameMode: lobby.gameMode,
+    hotSeat: lobby.hotSeat === true,
     initiativeRoll: {
       p1Roll: lobby.coinFlip.p1Roll,
       p2Roll: lobby.coinFlip.p2Roll,
@@ -270,7 +276,7 @@ function startLobbyGame(lobby: Lobby, chosen: string): void {
     guestDeckId: lobby.guest?.deckId,
     hostDeckId: lobby.host.deckId,
     lobbyCode: lobby.code,
-    opponent: session.opponent ? `claude:${session.opponent.info.model ?? "?"}` : "goldfish",
+    opponent: session.opponent ? `claude:${session.opponent.info.model ?? "?"}` : session.hotSeat ? "goldfish:active" : "goldfish",
     ...(lobby.sandbox ? { opponentDeckMode: lobby.opponentDeck?.mode ?? "default" } : {}),
     sandbox: lobby.sandbox,
     source: "lobby",

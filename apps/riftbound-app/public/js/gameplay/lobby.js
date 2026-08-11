@@ -43,6 +43,7 @@ async function hostLobby() {
   lobbyCode = data.code;
   lobbyRole = "host";
   viewingPlayer = P1;
+  if (typeof setHotSeatGame === "function") setHotSeatGame(false);
 
   document.getElementById("lobbyMenu").classList.add("hidden");
   document.getElementById("lobbyRoom").classList.remove("hidden");
@@ -137,10 +138,16 @@ function connectLobbyWs(onOpen) {
       // Practice games may skip the roll overlay entirely ("Skip animations in practice games").
       const instant = _soloAutoStart && typeof pregameAnimationsSkipped === "function" && pregameAnimationsSkipped();
 
+      // Goldfish — active: the server says this lobby is a hot seat (survives a lobby reconnect).
+      if (typeof setHotSeatGame === "function" && typeof msg.lobby.hotSeat === "boolean") setHotSeatGame(msg.lobby.hotSeat);
+
       // Step 1: Coin flip happened — show flip overlay (winner chooses)
       if (msg.lobby.coinFlip && !msg.lobby.coinFlip.firstPlayer && msg.lobby.status !== "started") {
         playerNames[P1] = msg.lobby.host?.name || "Player 1";
         playerNames[P2] = msg.lobby.guest?.name || "Player 2";
+        // Hot seat: we answer for whichever seat won the roll — take its perspective so the
+        // overlay offers the go-first choice (the server reads it relative to the winner).
+        if (typeof isHotSeatGame !== "undefined" && isHotSeatGame && msg.lobby.coinFlip.winner) viewingPlayer = msg.lobby.coinFlip.winner;
         if (instant) {
           lobbyWs.send(JSON.stringify({ choice: "self", type: "choose_first" }));
         } else {
@@ -151,6 +158,8 @@ function connectLobbyWs(onOpen) {
       // Step 2: Game started (winner chose) — update overlay, then dismiss and connect
       if (msg.lobby.status === "started" && msg.lobby.gameId) {
         gameId = msg.lobby.gameId;
+        // Hot seat: enter as player-1; hotseat.js then follows whichever seat owes the next decision.
+        if (typeof isHotSeatGame !== "undefined" && isHotSeatGame) viewingPlayer = P1;
 
         playerNames[P1] = msg.lobby.host?.name || "Player 1";
         playerNames[P2] = msg.lobby.guest?.name || "Player 2";
@@ -733,7 +742,9 @@ async function startSoloGame() {
   const deckId = document.getElementById("soloDeckSelect").value || "default";
   const gameMode = document.querySelector('input[name="soloMode"]:checked')?.value || "duel";
   // The API key (if any) travels only in this request body; the server keeps it in memory for the game.
-  const opponent = typeof buildOpponentRequest === "function" ? buildOpponentRequest() : { kind: "goldfish" };
+  // Goldfish comes in two flavours: {mode:"passive"} auto-passes (a driver plays player-2),
+  // {mode:"active"} = hot seat: no driver, this browser plays both seats (hotseat.js).
+  const opponent = typeof buildOpponentRequest === "function" ? buildOpponentRequest() : { kind: "goldfish", mode: "passive" };
   // Which deck the bot plays (mirror / random of mine / a saved or public deck / starter) — validated server-side.
   opponent.deck = soloOpponentDeckSpec();
   const data = await api("/api/lobby/create", "POST", { gameMode, name: currentUsername || "Player 1", opponent, sandbox: true });
@@ -748,6 +759,7 @@ async function startSoloGame() {
   lobbyCode = data.code;
   lobbyRole = "host";
   setSandboxGame(true);
+  if (typeof setHotSeatGame === "function") setHotSeatGame(opponent.kind === "goldfish" && opponent.mode === "active");
   viewingPlayer = P1;
 
   // Open the WS, and once open: set deck → start. The lobby_update handler
@@ -778,6 +790,7 @@ async function hostSandbox() {
   lobbyCode = data.code;
   lobbyRole = "host";
   setSandboxGame(true);
+  if (typeof setHotSeatGame === "function") setHotSeatGame(false);
   viewingPlayer = P1;
 
   document.getElementById("lobbyMenu").classList.add("hidden");

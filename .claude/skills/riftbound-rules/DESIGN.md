@@ -6,6 +6,19 @@ Product decisions the visual observer agents must check FOR (not just "is it bro
 - 4 mode cards: Host Lobby, Join Lobby, Goldfish, VS AI (disabled)
 - Goldfish/VS AI skip the lobby entirely — deck picker → Play → mulligan (no code, no d20)
 - Solo picker offers Bo1/Bo3; Bo3 shows battlefield selection in pregame
+- Solo picker **Opponent** selector: *Goldfish — Passive (auto-passes)* (default; the server's Goldfish driver plays
+  player-2: passes priority/focus, resolves its prompts, ends its turn), *Goldfish — Active (you play both seats)*, then the
+  Claude models. Remembered in `localStorage["rb-opponent"]` (`goldfish` | `goldfish-active` | model key); sent as
+  `opponent: {kind:"goldfish", mode:"passive"|"active"}` (default passive; anything else → 400). **Active** = hot seat: the
+  server attaches NO driver to player-2, marks the lobby/session `hotSeat`, never auto-picks player-2's pregame choices
+  (battlefield, sideboard lock, mulligan, go-first when player-2 wins the roll — the host answers all of them), and lets the
+  game socket `{type:"switch_seat", playerId}` re-bind to either seat (refused outside hot-seat games). The client FOLLOWS the
+  seat that owes the next decision (turn / priority / focus / prompt owner; pregame chooser): it switches seat automatically,
+  flips the whole board to that seat's perspective, and shows a persistent top strip **"Acting as Player 2 (Goldfish —
+  active)"** with a **Switch seat** button (`Tab`; the sidebar seat buttons too). Hidden information stays honest: each
+  seat's view is the server's per-seat snapshot, so acting as player-2 you see player-2's hand and player-1's hand as card
+  BACKS (and vice versa). Rewind takes back one action of whichever seat made it. Log lines name the seat ("Player 2 …").
+  The Opponent's-deck selector applies to player-2 in both modes.
 - Solo modes — the bot's deck: under the Opponent (Goldfish / Claude model) selector the picker has an
   **Opponent's deck** dropdown (same rich deck picker as the player's: name, "Legend · Champion" chip, domain
   pips) with, in order: *Same as mine (mirror)* (chip follows the player's pick), *Random from my decks* (only
@@ -80,7 +93,7 @@ Rule 383.3.d ("the controller selects the order to place simultaneous triggers o
   order").
 
 ## Interactions
-- Hover on any card → floating enlarged card image ONLY (no name/type/rules-text panel)
+- Hover on any card (hand, board, battlefield, legend/champion, runes, prompt tiles, trash top) → floating preview with the enlarged art PLUS name/type and full rules text (+ state chips); position:fixed, pointer-events:none, never shifts layout, auto-hides on mouseout/detach/modal (user request 2026-08-10: 'mouse over battlefield to see more clearly should work')
 - No fly-animation on zone change — cards appear at destination immediately
 - Drag from hand/base directly to a target zone (no click-then-click)
 - Click a rune to exhaust it (turn sideways + energy +1)

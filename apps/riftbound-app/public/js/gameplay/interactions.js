@@ -3,6 +3,11 @@
 // DESIGN.md §Resource management: no auto-pay module is loaded.
 
 function switchPlayer(pid) {
+  // Goldfish — active: same socket, re-bound server-side (hotseat.js) — no reconnect.
+  if (typeof isHotSeatGame !== "undefined" && isHotSeatGame && typeof hotSeatSwitchSeat === "function") {
+    hotSeatSwitchSeat(pid, { manual: true });
+    return;
+  }
   viewingPlayer = pid;
   resetInteractionSilent();
   // Reconnect WebSocket as new player to get correct moves

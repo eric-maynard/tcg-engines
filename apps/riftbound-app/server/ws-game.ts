@@ -60,6 +60,38 @@ export function gameWsMessage(ws: ServerWebSocket<WsData>, msg: Record<string, u
   const session = gameSessions.get(gameId);
   if (!session) {return;}
 
+  // Goldfish — active (hot seat): the one human answers for BOTH seats. Rather
+  // than reconnecting per decision, the socket re-binds to the seat that owes
+  // the next decision and receives that seat's own (redacted) view — pregame
+  // payload included, so battlefield pick / sideboard lock / mulligan for
+  // player-2 go through the ordinary per-seat handlers below. Refused outside
+  // hot-seat sessions: there a socket keeps the seat it connected as.
+  if (msg.type === "switch_seat") {
+    const seat = typeof msg.playerId === "string" ? msg.playerId : "";
+    if (!session.hotSeat) {
+      ws.send(JSON.stringify({ error: "Seat switching is only available in Goldfish — active (play both seats) games", errorCode: "NOT_HOT_SEAT", requestId: msg.requestId, type: "error" }));
+      return;
+    }
+    if (!session.players.includes(seat)) {
+      ws.send(JSON.stringify({ error: "Unknown seat", errorCode: "BAD_SEAT", requestId: msg.requestId, type: "error" }));
+      return;
+    }
+    ws.data.playerId = seat;
+    const entry = session.clients.get(connId);
+    if (entry) {entry.playerId = seat;} else {session.clients.set(connId, { playerId: seat, ws });}
+    ws.send(JSON.stringify({
+      hotSeat: true,
+      moves: buildAvailableMoves(session, seat),
+      pregame: buildPregamePayload(session, seat),
+      requestId: msg.requestId,
+      seat,
+      seq: session.seq,
+      state: buildGameSnapshot(session, seat),
+      type: "sync",
+    }));
+    return;
+  }
+
   // ---- Pregame message handlers ----
   if (session.pregame) {
     if (handlePregameMessage(ws, msg, session, gameId, playerId)) {return;}
@@ -258,6 +290,7 @@ export function gameWsOpen(ws: ServerWebSocket<WsData>): void {
   const moves = buildAvailableMoves(session, playerId);
 
   ws.send(JSON.stringify({
+    ...(session.hotSeat ? { hotSeat: true } : {}),
     moves,
     pregame: buildPregamePayload(session, playerId),
     seq: session.seq,
