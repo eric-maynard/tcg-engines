@@ -99,7 +99,7 @@ describe("Stormbringer vs Last Breath with Annie, Fiery — spell-sourced vs uni
     expect(game.chain()).toEqual([expect.objectContaining({ cardId: "storm", controller: P1, targets: ["f", "bf1"] })]);
   });
 
-  test.failing("BUG: (a) with Annie: the SPELL is the source (417.6.a) and it is P1's → +1 Bonus Damage to EACH target (715.2): E1 (4) and E2 (5) both take 5 and die → P2's trash", async () => {
+  test("(a) with Annie: the SPELL is the source (417.6.a) and it is P1's → +1 Bonus Damage to EACH target (715.2): E1 (4) and E2 (5) both take 5 and die → P2's trash", async () => {
     const game = await board().build();
     await game.p1.cast("storm", { targets: ["f", "bf1"] });
     await resolveChain(game);
@@ -117,7 +117,7 @@ describe("Stormbringer vs Last Breath with Annie, Fiery — spell-sourced vs uni
     expect(game.state("e2")).toMatchObject({ damage: 4, zone: "battlefield-bf1" });
   });
 
-  test.failing("BUG: (a) the Cleanup kills are credited to a SPELL with P1 responsible (428.5.c/.c.1): P1's Immortal Phoenix 'When you kill a unit with a spell' triggers — once per unit killed", async () => {
+  test("(a) the Cleanup kills are credited to a SPELL with P1 responsible (428.5.c/.c.1): P1's Immortal Phoenix 'When you kill a unit with a spell' triggers — once per unit killed", async () => {
     const game = await board().build();
     await game.p1.cast("storm", { targets: ["f", "bf1"] });
     await resolveChain(game);
@@ -126,7 +126,7 @@ describe("Stormbringer vs Last Breath with Annie, Fiery — spell-sourced vs uni
     expect(game.decision()).toMatchObject({ kind: "yes-no", seat: P1, source: { cardId: "phoenix" } });
   });
 
-  test.failing("BUG: (a) '…then move your unit there': F ends up at the now-empty bf1", async () => {
+  test("(a) '…then move your unit there': F ends up at the now-empty bf1", async () => {
     const game = await board().build();
     await game.p1.cast("storm", { targets: ["f", "bf1"] });
     await resolveChain(game);
@@ -162,7 +162,7 @@ describe("Stormbringer vs Last Breath with Annie, Fiery — spell-sourced vs uni
 
   // ── (c) under Unyielding Spirit ───────────────────────────────────────────────────────────────
 
-  test.failing("BUG: (c) Unyielding Spirit resolved first: Stormbringer's SPELL damage is fully prevented — E1 and E2 take 0 and stay (437.4); no kill, no Phoenix trigger", async () => {
+  test("(c) Unyielding Spirit resolved first: Stormbringer's SPELL damage is fully prevented — E1 and E2 take 0 and stay (437.4); no kill, no Phoenix trigger", async () => {
     const game = await board().autoProcedures(false).build();
     await game.p1.cast("storm", { targets: ["f", "bf1"] });
     await p2ShieldsThenResolve(game);
@@ -184,7 +184,7 @@ describe("Stormbringer vs Last Breath with Annie, Fiery — spell-sourced vs uni
     expect(game.decision()).toMatchObject({ context: "showdown", kind: "action", seat: P1 });
   });
 
-  test.failing("BUG: (c) that combat then resolves on unit (combat) damage, which Spirit does not touch: F (4) into E1 (4) + E2 (5) dies; bf1 stays P2's", async () => {
+  test("(c) that combat then resolves on unit (combat) damage, which Spirit does not touch: F (4) into E1 (4) + E2 (5) dies; bf1 stays P2's", async () => {
     const game = await board().build();
     await game.p1.cast("storm", { targets: ["f", "bf1"] });
     await p2ShieldsThenResolve(game);

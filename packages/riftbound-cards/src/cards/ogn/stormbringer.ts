@@ -16,6 +16,10 @@ const abilities: Ability[] = [
       effects: [
         {
           amount: { might: { ...chosenBaseUnit } },
+          // rule 417.6.b.2 — "Deal damage equal to its Might" names no dealer:
+          // the chosen unit only supplies the NUMBER and the spell deals the
+          // damage, so it counts as spell damage for prevention effects.
+          dealer: "source",
           target: { controller: "enemy", location: "battlefield", quantity: "all", type: "unit" },
           type: "damage",
         },

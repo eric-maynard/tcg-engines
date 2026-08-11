@@ -114,7 +114,7 @@ describe("Ruling 812807956bed9097 — Unyielding Spirit: fights (Challenge, Snap
   // Expected: Stormbringer's "Deal damage equal to its Might" has no unit subject — the SPELL deals it (417.6.b.2), so
   // Unyielding Spirit prevents it (Wall 0). Actual: the engine attributes the damage to the chosen unit and lets the 4
   // through the shield.
-  test.failing("BUG: ruling 812807956bed9097 — Stormbringer's damage should be spell damage prevented by Unyielding Spirit; engine deals it anyway", async () => {
+  test("ruling 812807956bed9097 — Stormbringer's damage should be spell damage prevented by Unyielding Spirit; engine deals it anyway", async () => {
     const game = await board().build();
     await game.p1.cast("storm", { targets: ["bruiser", "bf1"] });
     await spiritInResponseThenResolve(game);
