@@ -252,6 +252,11 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
     // chain item that keeps the turn closed (rule 355.2 location choice).
     let pending: readonly string[] | undefined =
       seq.pendingValueBound ??
+      // rule 354.2 (sfd-154-221) — a remainder resumed after the source step's
+      // own play-time prompt names what that step created ("… to ready IT").
+      ((seq as { pendingValueFromCreated?: boolean }).pendingValueFromCreated === true
+        ? (ctx.draft as { lastCreatedTokenIds?: readonly string[] }).lastCreatedTokenIds
+        : undefined) ??
       (ctx as { pendingSequenceValue?: readonly string[] }).pendingSequenceValue;
     // rule-id: ogn-220-298 — "Stun a friendly unit and an enemy unit at the
     // same battlefield": a later `location: "same"` step resolves against the
@@ -1136,7 +1141,19 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
                       pendingValueBound: pvCarry,
                       type: "sequence",
                     }
-                  : { effects: rest, independentExecution: true, type: "sequence" },
+                  : {
+                      effects: rest,
+                      independentExecution: true,
+                      type: "sequence",
+                      // rule 354.2 / 805.2 (sfd-154-221 × sfd-029-221) — the
+                      // source step parked BEFORE producing anything (its
+                      // granted-Accelerate election is answered while the token
+                      // is still being played), so the remainder's pending value
+                      // is whatever that step plays once it resumes.
+                      ...(seq.pendingValue?.source === i
+                        ? { pendingValueFromCreated: true }
+                        : {}),
+                    },
             // The continuation is the REST OF THE SEQUENCE, not the prompt's
             // own follow-up: it must still run when an optional prompt is
             // declined ("you may [Predict], then reveal the top card").

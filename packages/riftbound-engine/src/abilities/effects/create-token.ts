@@ -249,7 +249,13 @@ export function handle_createToken(effect: ExecutableEffect, ctx: EffectContext,
   }
   // rule 811.1.d.3: a hidden spell / hidden permanent's play effect that plays
   // a unit must play it at the battlefield the card was facedown at.
-  const hiddenUnitZone = tokenDef.type !== "gear" && !effect.location ? ctx.hiddenZone : undefined;
+  // rule 811.1.d.3 again: the Accelerate election below re-enters this handler
+  // from a prompt with `ctx.hiddenZone` gone, so the hidden lock rides along on
+  // the carried effect — otherwise the token's destination would become free.
+  const hiddenUnitZone =
+    tokenDef.type !== "gear" && !effect.location
+      ? (ctx.hiddenZone ?? (effect as { resolvedHiddenZone?: string }).resolvedHiddenZone)
+      : undefined;
   let targetZone: string;
   if (hiddenUnitZone) {
     targetZone = hiddenUnitZone;
@@ -336,6 +342,7 @@ export function handle_createToken(effect: ExecutableEffect, ctx: EffectContext,
     accelerateAsked?: number;
     acceleratePaidCount?: number;
     skipAccelerateOffer?: boolean;
+    resolvedHiddenZone?: string;
     resolvedTokenZone?: string;
   };
   // rule 185.2.a: "play three … tokens" is three plays, so each token gets its
@@ -346,7 +353,9 @@ export function handle_createToken(effect: ExecutableEffect, ctx: EffectContext,
   if (
     tokenDef.type !== "gear" &&
     asked < count &&
-    !tokenEntersReady &&
+    // rule 805.5: having Accelerate is a characteristic of the unit, so the
+    // election is offered even when the token is already told to enter ready
+    // (805.6 then simply replaces a state it was already going to have).
     accel.skipAccelerateOffer !== true &&
     !ctx.draft.pendingChoice
   ) {
@@ -356,6 +365,7 @@ export function handle_createToken(effect: ExecutableEffect, ctx: EffectContext,
         ...effect,
         accelerateAsked: asked + 1,
         resolvedTokenZone: targetZone,
+        ...(hiddenUnitZone ? { resolvedHiddenZone: hiddenUnitZone } : {}),
       } as Record<string, unknown>;
       ctx.draft.pendingChoice = {
         declineEffect: { ...carry, acceleratePaidCount: paidAccelerateCount },
@@ -590,6 +600,13 @@ export function handle_createToken(effect: ExecutableEffect, ctx: EffectContext,
   const sink = (ctx as { playedSink?: { ids: string[] } }).playedSink;
   if (sink && createdIds.length > 0) {
     sink.ids.push(...createdIds);
+  }
+  // rule 354.2 / 805.2 (sfd-154-221 × sfd-029-221) — when the step was
+  // interrupted by its own play-time election (a granted Accelerate), the
+  // sequence's sink is long gone by the time the answer resumes it, so the ids
+  // are recorded here for a remainder carrying `pendingValueFromCreated`.
+  if (createdIds.length > 0) {
+    (ctx.draft as { lastCreatedTokenIds?: readonly string[] }).lastCreatedTokenIds = [...createdIds];
   }
   // rule-id: sfd-081-221 — a follow-up instruction printed on the same
   // sentence ("… and each opponent may …") rides along as `then`, and waits

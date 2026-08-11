@@ -38,6 +38,25 @@ function payCostIsPayable(
   return !(xpCost > 0 && (draft.players[payer]?.xp ?? 0) < xpCost);
 }
 
+/**
+ * rule 354.2 (sfd-154-221 Guards!) — does this branch name what the enclosing
+ * sequence's source step produced ("Play a … token. You may pay [order] to
+ * ready IT")? The reference may sit anywhere inside the branch.
+ */
+function namesPendingValue(effect: unknown): boolean {
+  if (effect === null || typeof effect !== "object") {
+    return false;
+  }
+  for (const value of Object.values(effect as Record<string, unknown>)) {
+    if (value !== null && typeof value === "object") {
+      if ((value as { type?: unknown }).type === "pending-value" || namesPendingValue(value)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 export function handle_conditional(effect: ExecutableEffect, ctx: EffectContext, h: EffectHelpers): void {
   const executeEffect = h.executeEffect;
   // If condition is met, execute "then"; otherwise execute "else"
@@ -69,17 +88,31 @@ export function handle_conditional(effect: ExecutableEffect, ctx: EffectContext,
       }
       return;
     }
+    // rule 354.2 / 205 (sfd-154-221) — the linked instruction names the object
+    // the sequence's source step just produced, so the parked Pay carries that
+    // object rather than re-resolving from the board when it is answered.
+    const pendingValue = (ctx as { pendingSequenceValue?: readonly string[] }).pendingSequenceValue;
+    const namedPending =
+      pendingValue !== undefined &&
+      pendingValue.length > 0 &&
+      (namesPendingValue(thenEffect) || namesPendingValue(elseEffect));
     if (!ctx.draft.pendingChoice) {
       ctx.draft.pendingChoice = {
         payChoice: {
-          boundTargets: ctx.boundTargets ? [...ctx.boundTargets] : undefined,
+          boundTargets: namedPending
+            ? [...(pendingValue as readonly string[])]
+            : ctx.boundTargets
+              ? [...ctx.boundTargets]
+              : undefined,
           else: elseEffect,
           sourcePlayerId: ctx.playerId,
           then: thenEffect,
         },
         playerId: ctx.playerId,
         resolved: { optInCost: payCost },
-        sourceCardId: ctx.sourceCardId,
+        // rule 205 — the Pay is asked about the object the linked instruction
+        // acts on, so a pending-value rider names the card it just produced.
+        sourceCardId: namedPending ? ((pendingValue as readonly string[])[0] as string) : ctx.sourceCardId,
         type: "opt-in",
       } as typeof ctx.draft.pendingChoice;
     }
