@@ -502,8 +502,15 @@ export function deriveFromPendingChoice(ctx: DecisionContext, pc: PendingChoice)
   const fin = pc as {
     finalizationChainItemId?: string;
     bindToChainItemId?: string;
+    playItemId?: string;
     resume?: { kind?: string; itemId?: string };
   };
+  // rule 354.2 / 355.1.a — every step of the dialog of a play an EFFECT
+  // instructed (location, mandatory cost object, the optional-additional-cost
+  // election such as [Repeat]) is Make Choices on a still-pending chain item,
+  // so it is FIN too — it just names the item as `playItemId` instead of
+  // binding a target to it.
+  const playItemId = fin.playItemId;
   const chainItemId =
     fin.finalizationChainItemId ??
     fin.bindToChainItemId ??
@@ -542,7 +549,9 @@ export function deriveFromPendingChoice(ctx: DecisionContext, pc: PendingChoice)
   const base = {
     seat,
     source,
-    timing: genericTiming ?? (chainItemId !== undefined ? ("FIN" as const) : ("RES" as const)),
+    timing:
+      genericTiming ??
+      (chainItemId !== undefined || playItemId !== undefined ? ("FIN" as const) : ("RES" as const)),
   };
 
   switch (pc.type) {
@@ -956,7 +965,12 @@ export function deriveFromPendingChoice(ctx: DecisionContext, pc: PendingChoice)
         consequence: "Perform the optional triggered ability",
         id: decisionId(ctx.seq, seat, "yes-no"),
         kind: "yes-no",
-        prompt: `${costText} ${ctx.label(pc.sourceCardId)}'s optional ability?${laterPay}`,
+        // rule 805.1.a — a granted [Accelerate] is one of SEVERAL optional
+        // additional costs a play may carry, so its prompt names the keyword
+        // rather than the card's own "optional ability".
+        prompt: /^accelerate/.test((pc as { playCostId?: string }).playCostId ?? "")
+          ? `${costText} ${ctx.label(pc.sourceCardId)}'s [Accelerate]?${laterPay}`
+          : `${costText} ${ctx.label(pc.sourceCardId)}'s optional ability?${laterPay}`,
       };
       return d;
     }
@@ -1615,6 +1629,10 @@ const DEFAULT_PREFS: { param: string; keep: (v: unknown) => boolean }[] = [
   { keep: (v) => v !== true, param: "paidAdditionalCost" },
   { keep: (v) => !v, param: "repeatCount" },
   { keep: (v) => v !== true, param: "viaFlow" },
+  // rule 829.1.c.3 (ven-113-166) — a card with two [Flow] costs is offered
+  // once per election; a plain `cast(card, { flow: true })` takes the printed
+  // instance unless the test names `costs: { alternativeId: "flow-N" }`.
+  { keep: (v) => !v, param: "flowIndex" },
   // rule 356.1 (unl-089-219) — an alternate play cost is opt-in: plain
   // `play(card)` takes the printed cost unless the test asks for it.
   { keep: (v) => v !== true, param: "altCost" },
@@ -1700,6 +1718,22 @@ export function narrowVariants(ctx: DecisionContext, option: ActionOption, args:
     const kept = variants.filter((v) => pref.keep(v.params[pref.param]));
     if (kept.length > 0) {
       variants = kept;
+    }
+  }
+  // rule 356.4.c.1 (sfd-149-221 Ezreal) — one optional additional cost may be
+  // priced several ways when a flexible "[1] or [A] less" discount applies, and
+  // the inert half (nothing to shave, 356.6) keeps the full-price shape. A play
+  // that names no `additionalCostSpec` takes the most discounted shape; a test
+  // that wants another names it explicitly.
+  if (!specified.has("additionalCostSpec")) {
+    const weigh = (v: FlatMove): number => {
+      const s = v.params.additionalCostSpec as { energy?: number; power?: readonly string[] } | undefined;
+      return (s?.energy ?? 0) + (s?.power?.length ?? 0);
+    };
+    const priced = variants.filter((v) => v.params.additionalCostSpec !== undefined);
+    if (priced.length > 1) {
+      const min = Math.min(...priced.map(weigh));
+      variants = variants.filter((v) => v.params.additionalCostSpec === undefined || weigh(v) === min);
     }
   }
   // A supplied `targets` list matches either order (set match) so tests need not

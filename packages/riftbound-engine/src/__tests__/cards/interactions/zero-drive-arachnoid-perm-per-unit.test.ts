@@ -258,11 +258,11 @@ describe("The Zero Drive mass-play × Arachnoid Horror permissions × Rek'Sai Ac
     const prompts = await runMassPlay(game);
     expect(prompts).toEqual([
       "Choose a destination for Arachnoid Horror [arach]",
-      "Pay [1][body] to use Arachnoid Horror [arach]'s optional ability?",
+      "Pay [1][body] to use Arachnoid Horror [arach]'s [Accelerate]?",
       "Choose a destination for Van One [van1]",
-      "Pay [1][body] to use Van One [van1]'s optional ability?",
+      "Pay [1][body] to use Van One [van1]'s [Accelerate]?",
       "Choose a destination for Van Two [van2]",
-      "Pay [1][body] to use Van Two [van2]'s optional ability?",
+      "Pay [1][body] to use Van Two [van2]'s [Accelerate]?",
     ]);
     // 356.1.b.1: the units' printed Energy costs (6 / 2 / 2) were ignored; only the three
     // Accelerate elections (356.1.b.3) were paid on top of the activation cost.
@@ -279,7 +279,7 @@ describe("The Zero Drive mass-play × Arachnoid Horror permissions × Rek'Sai Ac
     expect(game.p1.resources()).toEqual({ energy: 1, power: { body: 1, mind: 0 } });
     const prompts = await runMassPlay(game);
     expect(prompts.filter((p) => p.startsWith("Pay "))).toEqual([
-      "Pay [1][body] to use Arachnoid Horror [arach]'s optional ability?",
+      "Pay [1][body] to use Arachnoid Horror [arach]'s [Accelerate]?",
     ]);
     expect(game.state("arach").isReady).toBe(true);
     expect(game.state("van1").isExhausted).toBe(true);
