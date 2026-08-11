@@ -290,6 +290,11 @@ describe("Brazen Buccaneer's optional discard × Flame Chompers — the discard 
     expect(game.zoneOf("fc")).toBe("trash");
   });
 
+  // WONTFIX (same RULING-CONFLICT as (b) above): under the CR model this file adopts, the [fury] is the trigger's
+  // BASE COST, so rule 404.2 says an unpaid item is REMOVED and never becomes a Finalized Chain Item — it can have
+  // no "priority window ... on resolution". The engine's convention for an unpayable opt-in is to surface it with
+  // `canAccept:false` (asserted by the end-state test below and ~200 other tests), not to hide it; 355.8 is about
+  // targets, not costs, so it does not require hiding the prompt.
   test.failing("BUG: (d) 0 fury: no yes/no is ever shown — the item gets its priority window and on resolution the unpayable 'pay [fury] to' simply does nothing", async () => {
     // Expected: never a P1 yes/no about Chompers; after both pass the chain is empty and Chompers is in the trash.
     // Actual: the engine raises a finalization-time yes/no ("Pay [fury] …?", canAccept:false) before any priority.
