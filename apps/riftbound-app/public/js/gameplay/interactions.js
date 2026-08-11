@@ -1244,8 +1244,30 @@ function enterBaseCardSelected(cardId) {
   );
 }
 
+/**
+ * Clicking anywhere on a domain's rune stack taps the TOP-MOST READY rune of that
+ * stack — the one the player sees on top — so repeated clicks in one spot tap
+ * runes top-down instead of jumping around as tapped runes rotate out from under
+ * the cursor. (Right-click still recycles the exact rune under the pointer.)
+ */
+function topmostReadyRuneOfSameStack(cardId) {
+  const card = findCard(cardId);
+  if (!card) return cardId;
+  const dom = (Array.isArray(card.domain) ? card.domain[0] : card.domain) || "unknown";
+  const pool = (typeof zoneForPlayer === "function" ? zoneForPlayer("runePool", card.owner) : []) || [];
+  // Fan order = pool order; later = drawn on top. Take the last ready rune of
+  // this domain that the engine actually offers an exhaust for.
+  const ready = pool.filter((c) => {
+    const d = (Array.isArray(c.domain) ? c.domain[0] : c.domain) || "unknown";
+    return d === dom && !c.meta?.exhausted && availableMoves.some(m =>
+      m.moveId === "exhaustRune" && (m.params?.runeId === c.id || m.params?.cardId === c.id));
+  });
+  return ready.length ? ready[ready.length - 1].id : cardId;
+}
+
 /** Enter selected mode for a rune in rune pool (left-click = exhaust) */
-function enterRuneSelected(cardId) {
+function enterRuneSelected(clickedId) {
+  const cardId = topmostReadyRuneOfSameStack(clickedId);
   const exhaustMove = availableMoves.find(m =>
     m.moveId === "exhaustRune" && (m.params?.runeId === cardId || m.params?.cardId === cardId)
   );
@@ -1257,8 +1279,8 @@ function enterRuneSelected(cardId) {
     return;
   }
 
-  // No exhaust available — explain why
-  const card = findCard(cardId);
+  // No exhaust available — explain why (about the rune actually clicked)
+  const card = findCard(clickedId);
   if (card?.meta?.exhausted) {
     showToast("Rune is already exhausted");
   } else if (gameState?.turn?.phase && gameState.turn.phase !== "main") {
@@ -1268,7 +1290,7 @@ function enterRuneSelected(cardId) {
   } else {
     showToast("No rune actions available right now");
   }
-  selectedCard = cardId;
+  selectedCard = clickedId;
   render();
 }
 
