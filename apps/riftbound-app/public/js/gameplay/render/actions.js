@@ -138,7 +138,15 @@ function humanizeEffect(e) {
     if (each) return each;
   }
   switch (e.type) {
-    case "damage": return `Deal ${n ?? "damage"} to ${noun || "a unit"}`;
+    // rule 355.5 — "Deal N damage divided as you choose" hits SEVERAL targets for
+    // a share each; "→ A, B" alone reads as N to each, so say "split".
+    case "damage": {
+      const splash = typeof e.splashOthers === "number"
+        ? `, then ${e.splashOthers} to each other enemy unit there`
+        : "";
+      if (e.split) return `Deal ${n ?? "damage"} split among ${noun || "units"}${splash}`;
+      return `Deal ${n ?? "damage"} to ${noun || "a unit"}${splash}`;
+    }
     case "draw": return `Draw ${n ?? 1}`;
     case "counter": return "Counter a spell";
     case "create-token": {
@@ -163,6 +171,23 @@ function humanizeEffect(e) {
     case "stun": return `Stun ${noun || "a unit"}`;
     case "ready": return `Ready ${noun || "a permanent"}`;
     case "exhaust": return `Exhaust ${noun || "a permanent"}`;
+    // rule 355.4 — a move names a DESTINATION as well as a mover; the default
+    // "Move — a friendly unit" hides where the unit lands.
+    case "move": {
+      const dest = e.to === "choose" || e.to == null
+        ? "base or a battlefield"
+        : e.to === "target-battlefield"
+          ? "that unit's battlefield"
+          : e.to === "base"
+            ? "base"
+            : e.to === "battlefield"
+              ? "a battlefield"
+              : String(e.to);
+      if (e.swap) return `Swap ${noun || "a unit"} with ${targetNoun(e.partner) || "another unit"}`;
+      if (e.toOrFromBase) return `Move ${noun || "a friendly unit"} to or from its base`;
+      return `Move ${noun || "a friendly unit"} to ${dest}`;
+    }
+    case "recall": return `Recall ${noun || "a unit"} to base${e.exhausted ? " exhausted" : ""}`;
     case "modify-might": return `Give ${noun || "a unit"} ${n != null && n >= 0 ? "+" : ""}${n ?? ""} Might${turn}`;
     // rule 385.2: an ability that functions from the trash must say where the card
     // is returned FROM, and target:"self" names the source card, not "a unit".
@@ -222,7 +247,12 @@ function splitChainTargets(effect, names) {
 /** rule 355.5 — the one-line "what this item will do" text for a chain item. */
 function chainWhatText(effect, names, modeText) {
   const split = splitChainTargets(effect, names);
-  const base = [modeText || "", split.targets.length ? `→ ${split.targets.join(", ")}` : ""].filter(Boolean).join(" ");
+  // rule 355.5 — a divided-damage set shares ONE amount out; "→ A, B" would read
+  // as the full amount to each, so label the list as the split.
+  const arrow = effect && typeof effect === "object" && effect.type === "damage" && effect.split
+    ? "split:"
+    : "→";
+  const base = [modeText || "", split.targets.length ? `${arrow} ${split.targets.join(", ")}` : ""].filter(Boolean).join(" ");
   if (!split.reference) return base;
   return [base, `(compared to ${split.reference})`].filter(Boolean).join(" ");
 }

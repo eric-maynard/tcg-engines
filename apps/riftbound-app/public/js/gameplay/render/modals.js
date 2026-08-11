@@ -1171,7 +1171,11 @@ function renderChainOverlay() {
           ? modeIdxs.map(ix => modeOptionText({ effect: eff }, ix)).join(" + ")
           : "mode chosen on resolution")
         : (eff && typeof humanizeEffect === "function" ? humanizeEffect(eff) : "");
-      const what = [modeText, targetNames.length ? `→ ${targetNames.join(", ")}` : ""].filter(Boolean).join(" ");
+      // rule 355.8 — chainWhatText (render/actions.js) peels off a reference-pair
+      // spell's yardstick so it isn't listed as one of the effect's victims.
+      const what = typeof chainWhatText === "function"
+        ? chainWhatText(eff, targetNames, modeText)
+        : [modeText, targetNames.length ? `→ ${targetNames.join(", ")}` : ""].filter(Boolean).join(" ");
       html += `
         <div class="chain-item ${isTop ? "top-item" : ""}">
           <div class="ci-order">${isTop ? "Next" : items.length - i}</div>
