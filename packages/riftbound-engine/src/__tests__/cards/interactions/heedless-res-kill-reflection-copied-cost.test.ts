@@ -111,29 +111,26 @@ describe("Heedless Resurrection killing a Reflection — the COPIED cost sets th
     const sac = game.p1.option("cast", "hr")?.fields.find((f) => f.arg === "sacrifice");
     expect(sac?.required).toBe(true);
     expect(sac?.options ?? []).toContain(refl);
-    await game.p1.cast("hr", { sacrifice: refl });
+    await game.p1.cast("hr", { sacrifice: refl, targets: "big" });
     expect(game.p1.base()).not.toContain(refl);
     expect(game.p1.resources()).toEqual({ energy: 0, power: { mind: 0, order: 0, chaos: 0 } });
     expect(game.chain().some((c) => c.cardId === "hr" && c.controller === P1 && !c.triggered)).toBe(true);
   });
 
-  test("(a) budget = the COPIED cost (206): on resolution P1 is offered exactly the 6/[fury] unit and the 2/– unit — NOT the 7-cost decoy, NOT the 6/[fury][fury] decoy", async () => {
+  // rule 355.5 / 355.10.a — the trash is public, so the unit to resurrect is named as Heedless is PLAYED.
+  test("(a) budget = the COPIED cost (206): P1 is offered exactly the 6/[fury] unit and the 2/– unit — NOT the 7-cost decoy, NOT the 6/[fury][fury] decoy", async () => {
     const { game, refl } = await withReflection();
-    await game.p1.cast("hr", { sacrifice: refl });
-    const settled = await game.settle();
-    expect(settled.reason).toBe("unanswered");
-    expect(game.decision()).toMatchObject({ kind: "pick", seat: P1 });
-    expect(resurrectOffer(game)).toEqual(["big", "small"]);
-    expect(resurrectOffer(game)).not.toContain("seven");
-    expect(resurrectOffer(game)).not.toContain("sixtwo");
-    await expect(game.p1.pick("seven")).rejects.toThrow();
+    const offers = game.p1.option("cast", "hr")?.fields.find((f) => f.arg === "targets")?.options ?? [];
+    const flat = [...new Set((offers as unknown[]).flat() as string[])].sort();
+    expect(flat).toEqual(expect.arrayContaining(["big", "small"]));
+    expect(flat).not.toContain("seven");
+    expect(flat).not.toContain("sixtwo");
+    await expect(game.p1.cast("hr", { sacrifice: refl, targets: "seven" })).rejects.toThrow();
   });
 
   test("(a) picking the 6-cost/1-power unit plays it from the trash to P1's base, exhausted, for free — P1's pool was already empty (356.1.b.1, 143.4)", async () => {
     const { game, refl } = await withReflection();
-    await game.p1.cast("hr", { sacrifice: refl });
-    await game.settle();
-    await game.p1.pick("big");
+    await game.p1.cast("hr", { sacrifice: refl, targets: "big" });
     const settled = await game.settle();
     expect(settled.reason).toBe("open");
     expect(game.zoneOf("big")).toBe("base");
@@ -148,7 +145,7 @@ describe("Heedless Resurrection killing a Reflection — the COPIED cost sets th
 
   test("(b) killing it AS A COST is still a death: the copied Deathknell is queued as P1's trigger ABOVE Heedless on the chain, while the token itself has ceased to exist — in no trash, not 'has' at all (808.1.d.2/.3, 186.1)", async () => {
     const { game, refl } = await withReflection();
-    await game.p1.cast("hr", { sacrifice: refl });
+    await game.p1.cast("hr", { sacrifice: refl, targets: "big" });
     expect(game.chain().map((c) => [c.cardId, c.controller, c.triggered])).toEqual([
       ["hr", P1, false],
       [refl, P1, true], // newest item = resolves first
@@ -161,7 +158,7 @@ describe("Heedless Resurrection killing a Reflection — the COPIED cost sets th
 
   test("(b) the Deathknell resolves FIRST: two exhausted 3-Might Mech tokens appear in P1's base (182 — not P2's) while Heedless is still waiting on the chain", async () => {
     const { game, refl } = await withReflection();
-    await game.p1.cast("hr", { sacrifice: refl });
+    await game.p1.cast("hr", { sacrifice: refl, targets: "big" });
     expect(p1Mechs(game)).toEqual([]);
     await game.p1.passPriority();
     await game.p2.passPriority(); // Deathknell resolves
@@ -177,9 +174,7 @@ describe("Heedless Resurrection killing a Reflection — the COPIED cost sets th
 
   test("(b) end state of the whole line: Sprite + two Mechs + the resurrected Big in P1's base; P2's real Forerunner never died and made no Mechs", async () => {
     const { game, refl } = await withReflection();
-    await game.p1.cast("hr", { sacrifice: refl });
-    await game.settle();
-    await game.p1.pick("big");
+    await game.p1.cast("hr", { sacrifice: refl, targets: "big" });
     await game.settle();
     expect(p1Mechs(game)).toHaveLength(2);
     expect(game.p1.units("base").sort()).toEqual(["big", "sprite", ...p1Mechs(game)].sort());
@@ -194,7 +189,7 @@ describe("Heedless Resurrection killing a Reflection — the COPIED cost sets th
     const { game, refl } = await withReflection({ withZero: true });
     const sac = game.p1.option("cast", "hr")?.fields.find((f) => f.arg === "sacrifice");
     expect([...(sac?.options ?? [])].sort()).toEqual([refl, "sprite"].sort());
-    await game.p1.cast("hr", { sacrifice: "sprite" });
+    await game.p1.cast("hr", { sacrifice: "sprite", targets: "zero" });
     expect(game.zoneOf("sprite")).toBe("gone"); // a token: ceased to exist, no Deathknell, no Mechs
     expect(game.chain().map((c) => c.cardId)).toEqual(["hr"]);
     await game.settle();

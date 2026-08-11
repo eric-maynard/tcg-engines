@@ -98,7 +98,8 @@ async function heedless(game: Game, spell: string, victim: string, bones: string
   if (game.actingSeat() === P1) {
     await game.p1.passPriority();
   }
-  await game.p2.cast(spell, { sacrifice: victim });
+  // rule 355.5 / 355.10.a — the trash unit is a target named as the spell is played.
+  await game.p2.cast(spell, { sacrifice: victim, targets: bones });
   expect(game.zoneOf(victim)).toBe("trash"); // 356.2 — the kill is a COST, paid on finalize
   await resolveTop(game);
   for (let i = 0; i < 4; i++) {

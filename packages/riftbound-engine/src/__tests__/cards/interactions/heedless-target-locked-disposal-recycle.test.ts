@@ -122,7 +122,7 @@ describe("Heedless Resurrection — trash target locked at play time × Disposal
   // 355.5 / 355.10.a: the trash is public, so "a unit from your trash" is a target chosen in step 2 of playing the
   // spell — the cast option must carry a `targets` field. Engine: the option only has `sacrifice`; the unit is asked
   // for at RESOLUTION as "Pick a revealed card to play", after P2's reaction window (and hidden from P2 until then).
-  test.failing("BUG: (a) the trash unit is a play-time TARGET (355.5 / 355.10.a) — the cast option has a `targets` field and it offers exactly {T2, T5}: T7 (7 > Big's 6) and T5F2 (2 fury > Big's 1) are absent, not merely rejected later (355.16)", async () => {
+  test("(a) the trash unit is a play-time TARGET (355.5 / 355.10.a) — the cast option has a `targets` field and it offers exactly {T2, T5}: T7 (7 > Big's 6) and T5F2 (2 fury > Big's 1) are absent, not merely rejected later (355.16)", async () => {
     const game = await board().build();
     expect(field(game, P1, "hr", "targets")).toBeDefined();
     expect(offered(game, P1, "hr", "targets")).toEqual(["t2", "t5"]);
@@ -133,7 +133,7 @@ describe("Heedless Resurrection — trash target locked at play time × Disposal
   });
 
   // 355.15 + ruling 15742de493366d50: the opponent reacts KNOWING the target. Engine: the chain item has no targets.
-  test.failing("BUG: (a/b) after P1 plays Heedless (T5, kill Big) the finalized chain item publicly shows target = T5 before P2 receives priority", async () => {
+  test("(a/b) after P1 plays Heedless (T5, kill Big) the finalized chain item publicly shows target = T5 before P2 receives priority", async () => {
     const game = await board().build();
     await castHeedlessT5KillBig(game);
     expect(game.chain()).toHaveLength(1);
@@ -159,7 +159,7 @@ describe("Heedless Resurrection — trash target locked at play time × Disposal
 
   // 357.3: given the locked target, the kill may not deterministically strand it. Engine: no target at play time, so
   // the (target, kill) pairing cannot be expressed — only bare kills {mid, big} are enumerated.
-  test.failing("BUG: (b) legal (target / kill) pairs are exactly T5/Big, T2/Mid, T2/Big — T5 cannot be paired with Mid (3 < 5) and nothing pairs with the Sprite (357.3 / 355.16)", async () => {
+  test("(b) legal (target / kill) pairs are exactly T5/Big, T2/Mid, T2/Big — T5 cannot be paired with Mid (3 < 5) and nothing pairs with the Sprite (357.3 / 355.16)", async () => {
     const game = await board().build();
     expect(pairs(game)).toEqual(["t2/big", "t2/mid", "t5/big"]);
     await expect(game.p1.cast("hr", { sacrifice: "mid", targets: "t5" })).rejects.toThrow();
@@ -208,7 +208,7 @@ describe("Heedless Resurrection — trash target locked at play time × Disposal
   // never re-chosen, so neither Big (now in the trash) nor T2 may be taken instead. Heedless simply finishes and goes
   // to the trash. Engine: having deferred the choice, it now prompts "Pick a revealed card to play" offering T2
   // (min 1, no decline) — P1 dodges the Disposal Order entirely.
-  test.failing("BUG: (c) Heedless then resolves doing NOTHING — no unit is played and P1 gets no re-pick (Big and T2 stay in the trash); Heedless → P1's trash; P1 is simply out 2 energy + [chaos] + Big", async () => {
+  test("(c) Heedless then resolves doing NOTHING — no unit is played and P1 gets no re-pick (Big and T2 stay in the trash); Heedless → P1's trash; P1 is simply out 2 energy + [chaos] + Big", async () => {
     const game = await board().build();
     await castHeedlessT5KillBig(game);
     await game.p1.passPriority();

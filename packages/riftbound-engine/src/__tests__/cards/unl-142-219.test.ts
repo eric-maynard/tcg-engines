@@ -69,7 +69,7 @@ describe("Heedless Resurrection (unl-142-219)", () => {
     // Only MY units are sacrifice candidates — and of those only Victim: killing Cheap (1 energy, no
     // Power) would cap the resurrection below every unit in the trash (357.3, see the last test).
     expect(sac).toEqual(["victim"]);
-    await game.p1.play("hr", { sacrifice: "victim" });
+    await game.p1.play("hr", { sacrifice: "victim", targets: "two" });
     expect(game.p1.resources()).toEqual({ energy: 0, power: { chaos: 0 } });
     expect(game.zoneOf("victim")).toBe("trash"); // paid as a cost, already gone while hr sits on the chain
     expect(game.chain()).toEqual([expect.objectContaining({ cardId: "hr", controller: P1, triggered: false })]);
@@ -156,17 +156,12 @@ describe("Heedless Resurrection (unl-142-219)", () => {
     expect(game.decision()).toMatchObject({ context: "main", kind: "action", seat: P2 });
   });
 
-  test("resolves by playing the chosen eligible unit from your trash to your base, ignoring its cost (356.1.b.1) — the play effect currently does nothing", async () => {
-    // Expected: after killing Victim (3 + chaos), P1 picks Two Drop from the trash; it enters the base
-    // (exhausted, a normal play) and the pool stays at 0/0 — nothing beyond 2 + [chaos] was paid.
-    // Actual: the spell resolves with no prompt and every trash card stays in the trash.
+  test("resolves by playing the chosen eligible unit from your trash to your base, ignoring its cost (356.1.b.1)", async () => {
+    // After killing Victim (3 + chaos), Two Drop — named as the spell was played (355.5) — enters the base
+    // (exhausted, a normal play) and the pool stays at 0/0: nothing beyond 2 + [chaos] was paid.
     const game = await board().build();
-    await game.p1.play("hr", { sacrifice: "victim" });
+    await game.p1.play("hr", { sacrifice: "victim", targets: "two" });
     await game.settle();
-    if (game.decision()?.kind === "pick") {
-      await game.p1.pick("two");
-      await game.settle();
-    }
     expect(game.zoneOf("two")).toBe("base");
     expect(game.state("two").isExhausted).toBe(true);
     expect(game.p1.resources()).toEqual({ energy: 0, power: { chaos: 0 } });
@@ -175,16 +170,14 @@ describe("Heedless Resurrection (unl-142-219)", () => {
   });
 
   test("eligibility — killing a 3-energy/1-power unit offers exactly the ≤3-energy AND ≤1-power units in MY trash (not Five, not the 2-power card, not P2's, not the sacrificed unit)", async () => {
-    // Expected offered set: threep (3,[chaos]) and two (2,[]). Excluded: five (5 energy > 3), twopp (2 power > 1),
+    // Offered set: threep (3,[chaos]) and two (2,[]). Excluded: five (5 energy > 3), twopp (2 power > 1),
     // theirs (opponent's trash), victim (chosen as the cost AFTER targets are locked — 355.5 before 357).
-    // Actual: no choice is ever presented.
+    // rule 355.5 / 355.10.a: the trash is public, so the choice is made as the spell is PLAYED.
     const game = await board().build();
-    await game.p1.play("hr", { sacrifice: "victim" });
-    await game.settle();
-    const d = game.decision();
-    expect(d).toMatchObject({ kind: "pick", seat: P1 });
-    const offered = d?.kind === "pick" ? d.options.map((o) => o.card ?? o.key).sort() : [];
-    expect(offered).toEqual(["threep", "two"]);
+    const offered = game.p1.option("cast", "hr")?.fields.find((f) => f.arg === "targets")?.options ?? [];
+    expect([...new Set(offered.flat() as string[])].sort()).toEqual(["threep", "two"]);
+    await expect(game.p1.play("hr", { sacrifice: "victim", targets: "five" })).rejects.toThrow();
+    expect(game.zoneOf("hr")).toBe("hand");
   });
 
   test("'no more Power' is its own cap — killing a 1-energy/0-power unit with only a 2-power 2-drop and a 5-drop in trash leaves no legal play, so the spell is not castable off that sacrifice (357.3)", async () => {

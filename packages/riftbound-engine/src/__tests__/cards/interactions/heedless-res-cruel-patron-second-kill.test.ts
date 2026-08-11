@@ -83,14 +83,13 @@ describe("Heedless Resurrection × Cruel Patron — the resurrected unit's own m
     expect(game.p1.resources()).toEqual({ energy: 0, power: { chaos: 0 } });
   });
 
-  test("(a) on resolution Patron is the unit named from P1's trash; it becomes a pending play on the chain only after Heedless itself has finished and gone to the trash (354.2–354.3)", async () => {
+  // rule 355.5 / 355.10.a — Patron is named from the PUBLIC trash as Heedless is played, not on resolution.
+  test("(a) Patron is the unit named from P1's trash; it becomes a pending play on the chain only after Heedless itself has finished and gone to the trash (354.2–354.3)", async () => {
     const game = await board({ withC: true }).build();
-    await game.p1.cast("hr", { sacrifice: "victimA" });
+    const offers = game.p1.option("cast", "hr")?.fields.find((f) => f.arg === "targets")?.options ?? [];
+    expect([...new Set((offers as unknown[]).flat() as string[])]).toEqual(["patron"]);
+    await game.p1.cast("hr", { sacrifice: "victimA", targets: "patron" });
     await game.settle();
-    const d = game.decision();
-    expect(d).toMatchObject({ allowDecline: false, kind: "pick", min: 1, seat: P1 });
-    expect(d?.kind === "pick" ? d.options.map((o) => o.card ?? o.key) : []).toEqual(["patron"]);
-    await game.p1.pick("patron");
     expect(game.zoneOf("hr")).toBe("trash");
     expect(game.chain().map((c) => c.cardId)).toEqual(["patron"]);
     expect(game.zoneOf("patron")).not.toBe("base"); // still being finalized — its cost is unpaid

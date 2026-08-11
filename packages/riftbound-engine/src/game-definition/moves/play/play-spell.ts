@@ -323,19 +323,53 @@ function mandatoryKillCandidates(
   if (spell?.effect?.type !== "play" || spell.effect.from !== "trash") {
     return all;
   }
-  const registry = getGlobalCardRegistry();
   const wantType = spell.effect.target?.type;
-  const trash = (context.zones.getCardsInZone("trash" as CoreZoneId, playerId as CorePlayerId) as readonly string[]).filter(
-    (id) => !wantType || wantType === "card" || registry.getCardType(id) === wantType,
+  return all.filter(
+    (victim) => cappedTrashPlayTargets(context.zones, playerId, victim, wantType).length > 0,
   );
-  const enables = (victim: string): boolean => {
-    const capEnergy = registry.getEnergyCost(victim) ?? 0;
-    const capPower = (registry.getPowerCost(victim) ?? []).length;
-    return trash.some(
-      (id) => (registry.getEnergyCost(id) ?? 0) <= capEnergy && (registry.getPowerCost(id) ?? []).length <= capPower,
-    );
-  };
-  return all.filter(enables);
+}
+
+/**
+ * rule 355.5 / 355.10.a (rule-id: unl-142-219) — the shape "kill a friendly unit
+ * … play a unit from your trash that costs no more than the killed unit": the
+ * trash is PUBLIC, so which card is played is a TARGET named as the spell is
+ * played, capped by the named sacrifice. `undefined` for any other spell.
+ */
+function killCappedTrashPlay(cardId: string): { readonly type?: string } | undefined {
+  if (mandatoryKillCost(cardId) === undefined) {
+    return undefined;
+  }
+  const spell = (getGlobalCardRegistry().getAbilities(cardId) ?? []).find((a) => a.type === "spell") as
+    | { effect?: { type?: string; from?: string; target?: { type?: string; quantity?: unknown } } }
+    | undefined;
+  const eff = spell?.effect;
+  if (eff?.type !== "play" || eff.from !== "trash" || eff.target?.quantity === "all") {
+    return undefined;
+  }
+  return { type: eff.target?.type };
+}
+
+/**
+ * rule 355.16 / 356.1.b.1 — the trash cards `victim`'s printed Energy and Power
+ * costs both cap in. The victim itself is never one of them: targets are locked
+ * (355.5) before the additional cost is paid (357.2).
+ */
+function cappedTrashPlayTargets(
+  zones: { getCardsInZone: (z: CoreZoneId, p?: CorePlayerId) => readonly string[] },
+  playerId: string,
+  victim: string,
+  wantType: string | undefined,
+): string[] {
+  const registry = getGlobalCardRegistry();
+  const capEnergy = registry.getEnergyCost(victim) ?? 0;
+  const capPower = (registry.getPowerCost(victim) ?? []).length;
+  return [...(zones.getCardsInZone("trash" as CoreZoneId, playerId as CorePlayerId) as readonly string[])].filter(
+    (id) =>
+      id !== victim &&
+      (!wantType || wantType === "card" || registry.getCardType(id) === wantType) &&
+      (registry.getEnergyCost(id) ?? 0) <= capEnergy &&
+      (registry.getPowerCost(id) ?? []).length <= capPower,
+  );
 }
 
 /**
@@ -578,6 +612,22 @@ export const playSpell: Defs["playSpell"] = {
         ).includes(sacrificeId)
       ) {
         return false;
+      }
+      // rule 355.5 / 355.10.a / 355.16 / 357.3 (rule-id: unl-142-219) — the unit
+      // to play is a target named as the spell is played; a supplied one must be
+      // capped in by the very unit named to pay the kill.
+      const capped = killCappedTrashPlay(context.params.cardId);
+      const supplied = context.params.targets ?? [];
+      if (capped && supplied.length > 0) {
+        const legal = cappedTrashPlayTargets(
+          context.zones,
+          context.params.playerId,
+          sacrificeId as string,
+          capped.type,
+        );
+        if (supplied.length !== 1 || !legal.includes(supplied[0] as string)) {
+          return false;
+        }
       }
     }
 
@@ -854,10 +904,15 @@ export const playSpell: Defs["playSpell"] = {
     // ≥1-legal-target gate above only proves SOME candidate exists.
     const spellEffectShapeForTgt = spellAbility?.effect as SpellEffectTargetShape | undefined;
     const spellTgt =
-      spellEffectShapeForTgt?.target ??
-      // rule-id: ven-008-166 (rule 355.8) — the unit named by both conditional
-      // branches is the spell's play-time target, so validate against it too.
-      findConditionalBranchTarget(spellEffectShapeForTgt);
+      // rule-id: unl-142-219 — this spell's target is a card in the TRASH, not a
+      // board object; it was validated against the named sacrifice's caps above,
+      // so the board-pool checks below must not judge it.
+      killCappedTrashPlay(context.params.cardId) !== undefined
+        ? undefined
+        : (spellEffectShapeForTgt?.target ??
+          // rule-id: ven-008-166 (rule 355.8) — the unit named by both conditional
+          // branches is the spell's play-time target, so validate against it too.
+          findConditionalBranchTarget(spellEffectShapeForTgt));
     const counterSpec = counterChainTarget(spellAbility?.effect);
     const isCounterSpell = counterSpec !== undefined;
     // rule-id: ogn-045-298 (rule 355.8) — a counter's supplied target names a
@@ -2380,9 +2435,25 @@ export const playSpell: Defs["playSpell"] = {
       // rule 357.2 — the mandatory kill is paid once per play, so every
       // variant of this card is offered once per legal sacrifice.
       if (killChoices) {
+        // rule 355.5 / 355.10.a (rule-id: unl-142-219) — "play a unit from your
+        // trash that costs no more than the killed unit" names a card in a
+        // PUBLIC pile, so it is a target chosen (and locked) as the spell is
+        // played: enumerate one variant per legal (sacrifice, trash card) pair.
+        const capped = killCappedTrashPlay(cardId as string);
         const withKill = results
           .slice(cardResultsStart)
-          .flatMap((base) => killChoices.map((sacrificeId) => ({ ...base, sacrificeId })));
+          .flatMap((base) =>
+            killChoices.flatMap((sacrificeId) =>
+              capped === undefined
+                ? [{ ...base, sacrificeId }]
+                : cappedTrashPlayTargets(
+                    context.zones,
+                    context.playerId as string,
+                    sacrificeId,
+                    capped.type,
+                  ).map((targetId) => ({ ...base, sacrificeId, targets: [targetId] })),
+            ),
+          );
         results.length = cardResultsStart;
         results.push(...withKill);
       }

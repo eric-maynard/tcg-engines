@@ -203,7 +203,7 @@ describe("Kharox empowered by Sanction — trigger, Burn 3, reflexive 'do this',
     if (game.decision()?.seat === P1) {
       await game.p1.passPriority();
     }
-    await game.p2.cast("hr", { sacrifice: "f" });
+    await game.p2.cast("hr", { sacrifice: "f", targets: "u" }); // rule 355.5: named as it is played
     expect(game.zoneOf("f")).toBe("trash"); // paid at play time
     expect(game.p2.resources()).toEqual({ energy: 0, power: { chaos: 0 } });
     await game.p2.passPriority();

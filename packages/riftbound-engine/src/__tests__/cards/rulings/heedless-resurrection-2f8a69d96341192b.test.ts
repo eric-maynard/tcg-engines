@@ -37,21 +37,21 @@ describe("Ruling 2f8a69d96341192b — Heedless kills Baron, plays Soulgorger, So
 
     // Baron is the only friendly unit → the only sacrifice.
     expect(game.p1.option("cast", "hr")?.fields.find((f) => f.arg === "sacrifice")?.options).toEqual(["baron"]);
-    await game.p1.play("hr", { sacrifice: "baron" });
+    // rule 355.5 / 355.10.a — the unit to play is a target named from the PUBLIC trash as Heedless is
+    // played: Soulgorger only, Baron (the killed unit) is never offered.
+    expect([
+      ...new Set(
+        ((game.p1.option("cast", "hr")?.fields.find((f) => f.arg === "targets")?.options ?? []) as unknown[]).flat() as string[],
+      ),
+    ]).toEqual(["sg"]);
+    await game.p1.play("hr", { sacrifice: "baron", targets: "sg" });
     expect(game.zoneOf("baron")).toBe("trash"); // cost paid up front
     expect(game.p1.resources()).toEqual({ energy: 0, power: { chaos: 3 } });
     expect(game.chain().map((c) => c.cardId)).toEqual(["hr"]);
 
-    // Heedless resolves: the unit to play is Soulgorger — Baron (the killed unit) is NOT offered.
+    // Heedless resolves: Soulgorger is played (cost ignored) — P1 chooses where it enters.
     await game.settle();
     let d = game.decision();
-    expect(d).toMatchObject({ kind: "pick", seat: P1 });
-    expect(d?.kind === "pick" ? d.options.map((o) => o.card ?? o.key) : []).toEqual(["sg"]);
-    await game.p1.pick("sg");
-
-    // Soulgorger is played (cost ignored) — P1 chooses where it enters.
-    await game.settle();
-    d = game.decision();
     if (d?.kind === "pick" && d.semantics === "destination") {
       expect(d.seat).toBe(P1);
       await game.p1.pick("base");
