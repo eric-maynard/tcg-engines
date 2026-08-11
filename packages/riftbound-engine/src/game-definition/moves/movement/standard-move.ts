@@ -11,13 +11,15 @@ import type {
 import { collapseTriggerBatch, createInteractionState, getTurnState } from "../../../chain";
 import { type ArrivalIO, noteArrival } from "../../../operations/arrive-at-battlefield";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../../types";
+import type { PlayerId } from "../../../types/game-state";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
+import { areAllies } from "../../../operations/teams";
 import { fireTriggers } from "../../../abilities/trigger-runner";
 import {
   battlefieldAcceptsMoveFromAnywhere,
   getMoveEscalationSurcharge,
   hasKeyword,
-  isBlockedByTwoOtherPlayers,
+  isInvalidMoveDestination,
   payMoveEscalationSurcharge,
   relocateAttachedEquipment,
   totalPowerAvailable,
@@ -75,13 +77,15 @@ export const standardMove: Defs["standardMove"] = {
     const toBase = destination === "base";
     // rule 144.4.a.1 / 410.1.b.3 — a battlefield already holding units of two
     // OTHER players is never a Standard Move destination.
+    // rule 447.2.b — nor is one a TEAMMATE occupies.
     if (
       !toBase &&
-      isBlockedByTwoOtherPlayers(
+      isInvalidMoveDestination(
         destination,
         playerId,
         (zoneId) => context.zones.getCardsInZone(zoneId),
         (cardId) => controllerOf(context.cards, cardId as CoreCardId),
+        (other) => areAllies(state, playerId as PlayerId, other as PlayerId),
       )
     ) {
       return false;
@@ -250,12 +254,14 @@ export const standardMove: Defs["standardMove"] = {
     for (const bfId of Object.keys(state.battlefields || {})) {
       // rule 144.4.a.1 / 410.1.b.3 — never offer a destination already holding
       // units of two other players.
+      // rule 447.2.b — nor one a TEAMMATE occupies.
       if (
-        isBlockedByTwoOtherPlayers(
+        isInvalidMoveDestination(
           bfId,
           context.playerId as string,
           (zoneId) => context.zones.getCardsInZone(zoneId),
           (cardId) => controllerOf(context.cards, cardId as CoreCardId),
+          (other) => areAllies(state, context.playerId as PlayerId, other as PlayerId),
         )
       ) {
         continue;
