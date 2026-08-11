@@ -50,7 +50,10 @@ export function hasCasterChosenDestination(effect: unknown): boolean {
   // rule 355.4 (rule-id: unl-054-219) — "…to a single location" is one
   // caster-chosen destination shared by the whole group, so it is a play-time
   // choice exactly like a single mover's "choose".
-  if (to === "choose" || to === "any-battlefield" || to === "single-location") {
+  // rule 355.4 (rule-id: sfd-129-221 Temptation) — "to a location where there's
+  // a unit with the same controller" is still a free choice of the caster among
+  // several Locations, so it is named when the spell is PLAYED like any other.
+  if (to === "choose" || to === "any-battlefield" || to === "single-location" || to === "same-controller-unit") {
     return true;
   }
   return typeof to === "object" && to !== null && typeof to.battlefield === "string";
@@ -70,6 +73,34 @@ export function singleLocationOptions(movers: readonly string[], ctx: EffectCont
     "base",
     ...Object.keys(ctx.draft.battlefields ?? {}).map((bfId) => `battlefield-${bfId}`),
   ].filter((z) => z !== shared);
+}
+
+/**
+ * rule 449.1 / 355.4.a (rule-id: sfd-129-221 Temptation) — "to a location where
+ * there's a unit with the same controller": the places the MOVED unit's own
+ * controller already occupies (their base when another of their cards stands
+ * there, or a battlefield holding one of their units), never the mover's
+ * current location and never a place only the caster holds.
+ */
+export function sameControllerUnitOptions(moverId: string, ctx: EffectContext): string[] {
+  const controllerOf = (id: string): string | undefined =>
+    (ctx.cards.getCardController?.(id as CoreCardId) ??
+      ctx.cards.getCardOwner(id as CoreCardId)) as string | undefined;
+  const mine = controllerOf(moverId);
+  const currentZone = ctx.zones.getCardZone(moverId as CoreCardId) as string | undefined;
+  const occupiedBy = (zoneId: string): boolean =>
+    ctx.zones
+      .getCardsInZone(zoneId as CoreZoneId)
+      .some((id) => (id as string) !== moverId && controllerOf(id as string) === mine);
+  const baseHasAlly = (
+    ctx.zones.getCardsInZone("base" as CoreZoneId, mine as never) as unknown as string[]
+  ).some((id) => id !== moverId && controllerOf(id) === mine);
+  return [
+    ...(baseHasAlly ? ["base"] : []),
+    ...Object.keys(ctx.draft.battlefields ?? {})
+      .map((bfId) => `battlefield-${bfId}`)
+      .filter((z) => occupiedBy(z)),
+  ].filter((z) => z !== currentZone);
 }
 
 /**
@@ -171,6 +202,13 @@ export function moveDestinationOptions(
       return undefined;
     }
     return singleLocationOptions([moverId], ctx);
+  }
+
+  if (to === "same-controller-unit") {
+    if (!onBoard) {
+      return undefined;
+    }
+    return sameControllerUnitOptions(moverId, ctx);
   }
 
   if (typeof to !== "object" || to === null || typeof to.battlefield !== "string") {

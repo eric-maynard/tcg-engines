@@ -156,9 +156,12 @@ describe("Temptation (sfd-129-221)", () => {
   test("[Repeat] executes the move twice (820.1.d / 820.2.a): Foe → base, then Buddy → bf3; bf1 ends empty of P2 units", async () => {
     const game = await board(4).build();
     await game.p1.cast("tempt", { repeat: 1, targets: ["foe", "buddy"] });
+    // rule 355.4 / 355.5 — BOTH destinations are named as the spell is played, before
+    // anything moves: at that moment Foe and Buddy both stand at bf1, so each is offered
+    // the same pair.
     await expectDestinationsAndPick(game, ["base", "battlefield-bf3"], "base");
-    expect(game.locationOf("foe")).toBe("base");
     await expectDestinationsAndPick(game, ["base", "battlefield-bf3"], "battlefield-bf3");
+    expect(game.locationOf("foe")).toBe("base");
     expect(game.locationOf("buddy")).toBe("bf3");
     expect(game.p2.units("bf1")).toEqual([]);
     expect(game.zoneOf("tempt")).toBe("trash");
