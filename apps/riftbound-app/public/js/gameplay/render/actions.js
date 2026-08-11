@@ -625,7 +625,10 @@ function renderActions() {
             </button>`;
           targetPlayGroups.push({ moves: variants, sourceCardId: cid });
         }
-      } else if (moves.length === 1) {
+      } else if (moves.length === 1 && moveId !== "recycleRune") {
+        // recycleRune never takes this shortcut: a lone ready rune must still go
+        // through the rune branch below so it auto-taps for +1 energy first
+        // (rule 164.2) instead of forfeiting it.
         const m = moves[0];
         const paramStr = formatMoveDescription(moveId, m.params) || formatParamsFallback(m.params);
         const onclick = `executeMove(${JSON.stringify(moveId)}, ${JSON.stringify(m.params)}, ${JSON.stringify(m.playerId)})`;

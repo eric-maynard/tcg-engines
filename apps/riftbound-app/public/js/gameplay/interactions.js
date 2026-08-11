@@ -733,6 +733,31 @@ function enterLegendSelected(cardId) {
 }
 
 /**
+ * Why the state — not the pool — blocks playing this hand card right now, or
+ * null when timing is fine and the reason really is cost/targets.
+ * rule 507-510: only Reactions (and Reaction-timed play) are legal in a closed
+ * state; outside our main phase nothing standard-timed may be played.
+ */
+function playTimingBlockReason(card) {
+  if (!card) return null;
+  const isReaction = /\[\s*Reaction\s*\]/i.test(card.rulesText || "");
+  if (isReaction) return null;
+  const chain = gameState?.interaction?.chain;
+  if (chain?.active) {
+    const holder = chain.activePlayer;
+    return holder && holder !== viewingPlayer
+      ? `${pName(holder)} has priority — only Reactions can be played while the chain is open`
+      : "Only Reactions can be played while the chain is open";
+  }
+  if (gameState?.turn?.activePlayer && gameState.turn.activePlayer !== viewingPlayer) {
+    return "Not your turn — only Reactions can be played now";
+  }
+  const phase = gameState?.turn?.phase;
+  if (phase && phase !== "main") return `Not during the ${phase} phase`;
+  return null;
+}
+
+/**
  * Why a printed activated ability is not usable right now — shown on the
  * greyed-out button so "nothing happens" never has to be guessed at.
  */
@@ -891,6 +916,16 @@ function enterHandCardSelected(cardId) {
   if (playMoves.length === 0) {
     const card = findCard(cardId);
 
+    // rule 507-510: when the state is closed to this card (chain open and it is
+    // not a Reaction, not our turn, wrong phase) the engine withholds the play
+    // for a timing reason — never blame the energy pool for it.
+    const stateReason = playTimingBlockReason(card);
+    if (stateReason) {
+      showToast(stateReason);
+      selectedCard = cardId;
+      render();
+      return;
+    }
 
     // Fall back to the existing manual cost-payment mode (users who prefer clicking
     // runes manually still get the old flow).
