@@ -471,6 +471,8 @@ function renderActions() {
     // Prompt answers are rendered by the pending / trigger-order block above the
     // sections — never as an anonymous "Other" group.
     if (move.moveId === "resolvePendingChoice") continue;
+    // Concede lives in the sidebar header (match.js: Concede game / Concede match, with a confirm).
+    if (move.moveId === "concede" && typeof matchConcedeButtonsHtml === "function") continue;
     let placed = false;
     for (const section of Object.values(sections)) {
       if (section.moveIds.includes(move.moveId)) {

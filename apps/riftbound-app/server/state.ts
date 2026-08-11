@@ -9,6 +9,7 @@ import type { Server, ServerWebSocket } from "bun";
 import type { LogEntry } from "../src/narrator";
 import type { DeckLegality } from "./deck-rules";
 import { deckLegalityForId } from "./decks";
+import type { MatchState } from "./match-state";
 import type { OpponentDeckSpec } from "./opponent-deck";
 
 export type Engine = RuleEngine<RiftboundGameState, RiftboundMoves, unknown, RiftboundCardMeta>;
@@ -313,8 +314,16 @@ export interface GameSession {
    * be created from these (falling back to `decks`) with `gameNumber` + 1.
    */
   postSideboardDecks?: Record<string, DeckConfig>;
-  /** Each seat's registered deck (as passed to createGameFromDecks) — lets the AI seat describe ITS list. */
+  /** Each seat's deck for THIS game (as passed to createGameFromDecks) — lets the AI seat describe ITS list. */
   decks?: Record<string, DeckConfig>;
+  /** Each seat's deck as registered for game 1 (pre-sideboarding) — what a Rematch is built from. */
+  registeredDecks?: Record<string, DeckConfig>;
+  /** Bo1 duel or Bo3 match (drives server/match.ts); mirrors the lobby's gameMode. */
+  gameMode?: "duel" | "match";
+  /** Kitchen-table switch carried over to every game of the match / a rematch (server/pregame.ts). */
+  sideboardBeforeGame1?: boolean;
+  /** Match bookkeeping (score, games, used battlefields, votes) — server/match-state.ts; created lazily by ensureMatch. */
+  match?: MatchState;
 }
 
 /** Data attached to each WebSocket connection */

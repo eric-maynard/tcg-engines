@@ -241,7 +241,10 @@ function renderGameOver() {
   if (!overlay || !box || !gameState) return;
 
   if (gameState.status !== "finished") {
-    overlay.classList.remove("visible");
+    // Match conceded between games keeps its post-match box (match.js); otherwise nothing to show.
+    if (!(typeof matchState !== "undefined" && matchState && matchState.decided && box.dataset.decided === "1" && gameState.status !== "playing")) {
+      overlay.classList.remove("visible");
+    }
     return;
   }
 
@@ -268,6 +271,12 @@ function renderGameOver() {
   const isWinner = winner === viewingPlayer;
 
   const winnerName = pName(winner) || winner || "Unknown";
+
+  // Match play (match.js): game N result + match score + Continue / Back to menu / Rematch.
+  if (typeof renderMatchGameOver === "function" && renderMatchGameOver(box, { winner, isWinner, viewerVP, opponentVP, targetVP })) {
+    overlay.classList.add("visible");
+    return;
+  }
 
   box.innerHTML = `
     <div class="go-result ${isWinner ? "win" : "lose"}">${isWinner ? "Victory!" : "Defeat"}</div>

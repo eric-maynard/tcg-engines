@@ -137,14 +137,53 @@ widely published organized-play policy and states its assumptions here and at th
 - The phase appears **only if some seat has a non-empty sideboard** (starter decks have none, so default flows are
   unchanged). Seats with nothing to swap and the practice opponent (Goldfish / Claude) lock in immediately
   (TODO: model-driven sideboarding for the Claude seat). Swaps are per game — nothing is written to the deck DB.
-- **Bo3 between games (TODO):** `session.postSideboardDecks` holds each seat's post-swap main/side and
-  `session.gameNumber` the game just played; the game-2 flow (not wired end-to-end yet) should call
-  `createGameFromDecks(post[P1] ?? decks[P1], post[P2] ?? decks[P2], seed, { …, gameNumber: n + 1 })` —
-  `gameNumber > 1` is what opens the window (`sideboardWindowOpen`), so between-game sideboarding arrives with that flow.
+- **Bo3 between games:** `session.postSideboardDecks` holds each seat's post-swap main/side; the next game of the
+  match is built from it by `server/match.ts startNextGame` with `gameNumber: n + 1`, which is what opens the
+  window (`sideboardWindowOpen`). See §Match play.
+
+## Match play (Bo1 duel / Bo3 match)
+
+`server/match-state.ts` (bookkeeping + the public `match` summary carried on every frame) and `server/match.ts`
+(flow) — client `public/js/gameplay/match.js`.
+
+- **Format.** A lobby's `gameMode` is `duel` (Bo1, rule 485.6: the game is the match) or `match` (Bo3, rule 486.6:
+  a game win each, first to **2** wins the match). `session.match = {format, winsNeeded, games:[{gameNumber, winner,
+  reason, concededBy?}], usedBattlefields, concededBy?, continueVotes, rematchVotes}`; the current game's result is
+  read live from the engine (`getGameEndResult()` / `state.winner`), so a sandbox Rewind of the winning move simply
+  un-finishes it. Every `sync` / `move_accepted` / `state_update` frame carries `match` (score includes the current
+  finished game); pushes: `game_over` (match continues), `match_over` (decided), `match_update` (votes / withdrawn).
+- **Concede GAME vs concede MATCH** (rule 650: any time). WS `concede_game` = the engine `concede` move for that seat
+  (651.1: the other seat wins the game) → in a Bo3 the score updates and, unless that decided it, the match goes on;
+  in a Bo1 it is the match. WS `concede_match` ends everything now whatever the score (a running game is conceded
+  too; between games the pending pregame is dropped). The legacy `{type:"move", moveId:"concede"}` from a client is a
+  game concession. The sidebar header shows **Concede game** + **Concede match** in a Bo3, **Concede** in a Bo1, each
+  behind a confirm that names which.
+- **Game over → next game.** When a game ends (points, burn-out, concession) both seats get the interstitial
+  ("Game 1 · Defeat · Match 0–1 · Continue to game 2" / Leave match). `match_continue` from every human seat (any
+  one in a sandbox) builds game N+1 **in the same session** (same game id, sockets, AI driver): the finished game is
+  committed to `match.games`, then `createGameFromDecks(postSideboard ?? decks, …, {gameNumber: N+1, initiative:
+  {kind:"loser_chooses", chooser: <previous loser>}, excludedBattlefields: match.usedBattlefields})` replaces
+  `session.engine` / `pregame` / `log` — nothing of the old game state survives (rule 486.6 "reset the game state"),
+  so Undo can never cross a game boundary. The bot seat (Goldfish / Claude) answers its game-2/3 pregame through the
+  same `runBotPregame` hook (battlefield among its remaining ones, sideboard lock, and — when it is the chooser —
+  "go first").
+- **Battlefields (rule 486.5).** After a game somebody won, BOTH seats' battlefields from that game are out for the
+  rest of the match: game 2/3's picker still lists them, disabled with a "Used this match" badge, and the server
+  refuses them (`battlefieldExcluded`). 486.5.a (nobody won ⇒ reusable) is honoured by only recording games with a
+  winner. If exclusion would leave a seat no choice (short/duplicate list) it is waived for that seat.
+- **Who goes first in games 2–3.** The Core Rules leave it to the Mode of Play (115.1.a) and 486 is silent, so the app
+  follows the usual organized-play convention: the **loser of the previous game chooses** who takes the first turn
+  (pregame phase `initiative`, `pregame_choose_first {choice:"self"|"opponent"}`; only the chooser may answer; a bot
+  chooser elects to go first). Order inside a match game's pregame: battlefield select (113 / 486.5) → sideboard
+  window (game 2+) → first player (115) → hands drawn (116) → mulligan (117) — hands are deferred until the first
+  player is known.
+- **Post-match.** `match_over` → "You win the match 2–1" / "X wins the match" with **Back to menu** and **Rematch**
+  (`match_rematch`, all human seats; rebuilds game 1 from the registered decks with a fresh score and a roll).
+- Tests: `server/__tests__/match-flow.test.ts`.
 
 **Try it.** Deck builder (`/builder`): turn on **Add to: Sideboard** above the Sideboard list and click cards (or
 import a list with a `Sideboard:` section — export writes it back), save, then create the game with
-`sideboardBeforeGame1: true` (until the Bo3 game-2 flow lands, that is the only way to reach the phase). After the
+`sideboardBeforeGame1: true`, or play game 2 of a Bo3 (concede game 1 vs the Goldfish to get there fast). After the
 battlefield reveal the pregame overlay shows *Sideboarding*: dense Main | Side lists, one row per distinct card with a
 quantity and **−** / **+** steppers (Main: − sends one copy to the sideboard, + pulls one back / in; Side symmetric).
 Rows never move or re-sort during the step — copies arriving in the other column show as ghost rows at its bottom

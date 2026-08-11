@@ -187,6 +187,9 @@ function chooseTurnOrder(choice) {
     coinDetail.textContent = choice === "self" ? "You go first!" : "Opponent goes first";
   }
 
+  // In-pregame first-player step (match play): the answer goes to the GAME socket.
+  if (pregameState && pregameState.phase === "initiative" && typeof sendChooseFirst === "function" && sendChooseFirst(choice)) return;
+
   console.log("[Lobby] Sending choose_first:", choice, "lobbyWs open:", lobbyWs?.readyState === WebSocket.OPEN);
   if (lobbyWs && lobbyWs.readyState === WebSocket.OPEN) {
     lobbyWs.send(JSON.stringify({ type: "choose_first", choice }));
@@ -220,6 +223,15 @@ function handlePregameSync(pregame, state) {
   pregameState = pregame;
   gameState = state;
 
+  // Match play (match.js): the "who goes first" step — d20 roll for game 1 /
+  // previous loser chooses for games 2–3 — may take the screen (roll overlay or
+  // its own prompt); it re-enters here once the decision has been shown.
+  if (typeof matchHandlePregame === "function"
+      && matchHandlePregame(pregame, state, () => { if (pregameState === pregame) handlePregameSync(pregame, state); })) {
+    ensurePregameLeaveButton();
+    return;
+  }
+
   const overlay = document.getElementById("pregameOverlay");
   const content = document.getElementById("pregameContent");
   overlay.classList.add("visible");
@@ -248,24 +260,26 @@ function renderBattlefieldSelection(pregame, container) {
   let html = `
     <div class="pregame-title">Choose Your Battlefield</div>
     <div class="pregame-subtitle">Each player contributes 1 battlefield to the arena &mdash; hover a card for its full text</div>
-    <div class="pregame-info">${esc(firstLabel)} will go first</div>
+    ${pregame.firstPlayer ? `<div class="pregame-info">${esc(firstLabel)} will go first</div>` : `<div class="pregame-info">${pregame.gameMode === "match" && (pregame.gameNumber || 1) > 1 ? `Game ${pregame.gameNumber} &mdash; ` : ""}First player is decided after battlefields are locked</div>`}
     <div class="bf-choices${locked ? " bf-choices--locked" : ""}" id="bfChoices" style="margin-top:16px;">
   `;
 
   for (const bf of options) {
     const isSelected = selected === bf.id;
+    // rule 486.5 — a battlefield already used this match is shown but cannot be picked again.
+    const used = Boolean(bf.used);
     html += `
-      <button type="button" class="bf-choice${isSelected ? " selected" : ""}${locked && !isSelected ? " bf-choice--dimmed" : ""}"
-              data-bf-id="${esc(bf.id)}" data-def-id="${esc(bf.id)}" data-card-type="battlefield"
-              data-rules-text="${esc(bf.rulesText || "")}" title="${esc(bf.name)}" aria-pressed="${isSelected}"
-              ${locked ? "disabled" : `onclick="selectBattlefield('${esc(bf.id)}')"`}>
+      <button type="button" class="bf-choice${isSelected ? " selected" : ""}${(locked && !isSelected) || used ? " bf-choice--dimmed" : ""}${used ? " bf-choice--used" : ""}"
+              data-bf-id="${esc(bf.id)}" data-def-id="${esc(bf.id)}" data-card-type="battlefield"${used ? ' data-used="1"' : ""}
+              data-rules-text="${esc(bf.rulesText || "")}" title="${esc(bf.name)}${used ? " — already used this match (rule 486.5)" : ""}" aria-pressed="${isSelected}"
+              ${locked || used ? "disabled" : `onclick="selectBattlefield('${esc(bf.id)}')"`}>
         <span class="bf-choice-art">
           <img class="bf-choice-img" src="/card-image/${encodeURIComponent(bf.id)}" alt="${esc(bf.name)}" draggable="false"
                onerror="this.parentElement.classList.add('bf-choice-art--missing')">
           <span class="bf-choice-fallback">${iconify(bf.rulesText || "")}</span>
         </span>
         <span class="bf-name">${esc(bf.name)}</span>
-        ${isSelected ? '<span class="bf-choice-badge">Locked in</span>' : ""}
+        ${isSelected ? '<span class="bf-choice-badge">Locked in</span>' : used ? '<span class="bf-choice-badge bf-choice-badge--used">Used this match</span>' : ""}
       </button>
     `;
   }

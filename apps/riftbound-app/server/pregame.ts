@@ -41,12 +41,15 @@
  *   the sandbox opponent seat (Goldfish / Claude), lock in immediately.
  * - Nothing is persisted: swaps are per game. `session.postSideboardDecks`
  *   keeps the post-swap configuration for the next game of the match.
- *   TODO(Bo3 game-2 flow): no end-to-end "next game" flow exists yet. When it
- *   does, create game N+1 with `createGameFromDecks(post[P1] ?? decks[P1],
- *   post[P2] ?? decks[P2], seed, { …, gameNumber: N + 1 })` — `gameNumber > 1`
- *   is what arms this phase, so between-game sideboarding arrives with that
- *   flow and needs no further change here (DESIGN: the gate lives in
- *   `sideboardWindowOpen`, the mechanics below are game-number agnostic).
+ *   server/match.ts `startNextGame` builds game N+1 with `createGameFromDecks(
+ *   post[P1] ?? decks[P1], post[P2] ?? decks[P2], …, { gameNumber: N + 1 })` —
+ *   `gameNumber > 1` is what arms this phase (the gate lives in
+ *   `sideboardWindowOpen`; the mechanics below are game-number agnostic).
+ *
+ * ## Match game pregame order (rules 113 → 117)
+ * battlefield_select (113 / 486.5) → sideboard (game 2+) → initiative (115:
+ * d20 roll for game 1 when the lobby did not roll, previous game's LOSER
+ * chooses for games 2–3 — README §Match play) → hands drawn (116) → mulligan.
  */
 
 import { getGlobalCardRegistry, riftboundDefinition } from "@tcg/riftbound";
@@ -59,10 +62,12 @@ import { chooseBotBattlefield, runOpponent } from "./ai-opponent";
 import { allCards, makeLookupPayload, registerCard, registry } from "./cards";
 import { MAX_SIDEBOARD_SIZE, summarizeLegality, validateDeckConfig } from "./deck-rules";
 import { gameLogger } from "./log";
+import { matchSummary, newMatchState } from "./match-state";
 import { buildAvailableMoves, buildGameSnapshot } from "./snapshot";
 import {
   type DeckConfig,
   type GameSession,
+  type InitiativeState,
   type PregameState,
   type SideboardCardRef,
   type SideboardSeatState,
@@ -107,6 +112,17 @@ export function createGameFromDecks(
     gameNumber?: number;
     /** Testing / kitchen-table switch: allow sideboarding before game 1 too (default false). */
     sideboardBeforeGame1?: boolean;
+    /**
+     * Decide the first player INSIDE the pregame (phase `initiative`, after
+     * battlefields + sideboarding, before hands are drawn — rules 113→116):
+     * `roll` = d20 each, higher roll chooses (game 1 of a lobby Match, a
+     * rematch); `loser_chooses` = the previous game's loser chooses (games 2–3,
+     * server/match.ts). Absent ⇒ `firstPlayer` is fixed now (Bo1 lobby roll,
+     * REST, tests) and there is no such phase.
+     */
+    initiative?: { kind: "roll" } | { kind: "loser_chooses"; chooser: string; afterGame?: number };
+    /** rule 486.5 — per seat, battlefield ids already used this match: still listed, not selectable. */
+    excludedBattlefields?: Record<string, readonly string[]>;
   },
 ): GameSession {
   const P1 = "player-1";
@@ -115,6 +131,11 @@ export function createGameFromDecks(
   const hotSeat = options?.hotSeat === true;
   /** A bot (Goldfish / Claude) answers for player-2 — false for duels AND for the active Goldfish. */
   const botSeated = (options?.sandbox ?? false) && !hotSeat;
+  const initiative: InitiativeState | undefined = options?.initiative
+    ? options.initiative.kind === "roll"
+      ? { chooser: null, decided: false, kind: "roll" }
+      : { ...(options.initiative.afterGame ? { afterGame: options.initiative.afterGame } : {}), chooser: options.initiative.chooser, decided: false, kind: "loser_chooses" }
+    : undefined;
 
   // Deck construction legality (rule 103: copy limit, 40-card minimum, domain
   // identity, sideboard policy…) is ADVISORY — see server/deck-rules.ts. Only
@@ -160,6 +181,8 @@ export function createGameFromDecks(
   // Game 1 always plays the registered main deck — sideboards ride along
   // untouched in `session.decks` for the next game of the match.
   const sideboarding = sideboardWindowOpen(options) && decks.some(([, d]) => (d.sideboardCardIds?.length ?? 0) > 0);
+  // rule 116 after 115: hands wait for sideboarding and/or the first-player decision.
+  const deferHands = sideboarding || initiative !== undefined;
   const sideboardSeats: Record<string, SideboardSeatState> = {};
   for (const [pid, deck] of decks) {
     // Register and initialize main deck
@@ -252,8 +275,8 @@ export function createGameFromDecks(
       playerId: pid as PlayerId,
     });
 
-    // Draw initial hand of 4 (Rule 116) — after sideboarding when that phase runs.
-    if (!sideboarding) {
+    // Draw initial hand of 4 (Rule 116) — after sideboarding / the first-player step when those run (enterMulligan).
+    if (!deferHands) {
       engine.executeMove("drawInitialHand", {
         params: { playerId: pid },
         playerId: pid as PlayerId,
@@ -332,7 +355,17 @@ export function createGameFromDecks(
     }
   }
 
+  // rule 486.5 — battlefields used earlier this match (in a game somebody won)
+  // stay listed but cannot be picked; if that would leave a seat no choice at
+  // all (short / duplicate battlefield list) the restriction is waived for it.
+  const battlefieldExcluded: Record<string, string[]> = {};
+  for (const [pid, deck] of decks) {
+    const ex = [...new Set(options?.excludedBattlefields?.[pid] ?? [])].filter((id) => deck.battlefieldIds.includes(id));
+    if (ex.length > 0 && deck.battlefieldIds.some((id) => !ex.includes(id))) {battlefieldExcluded[pid] = ex;}
+  }
+
   const pregame: PregameState = {
+    ...(Object.keys(battlefieldExcluded).length > 0 ? { battlefieldExcluded } : {}),
     battlefieldOptions: {
       [P1]: deck1.battlefieldIds,
       [P2]: deck2.battlefieldIds,
@@ -341,6 +374,8 @@ export function createGameFromDecks(
     battlefieldSelections: gameMode === "duel" ? { ...randomSelections } : {},
     firstPlayer,
     gameMode,
+    handsDrawn: !deferHands,
+    ...(initiative ? { initiative } : {}),
     mulliganComplete: new Set(),
     phase: gameMode === "match" ? "battlefield_select" : "mulligan",
     sandbox: botSeated,
@@ -376,14 +411,32 @@ export function createGameFromDecks(
     );
   }
 
-  log.push(
-    makeLogEntry(
-      `Chose ${firstPlayerName} to take the first turn.`,
-    ),
-  );
+  // With an in-pregame first-player step the choice is logged when it is made (chooseFirstPlayer).
+  if (!initiative) {
+    log.push(
+      makeLogEntry(
+        `Chose ${firstPlayerName} to take the first turn.`,
+      ),
+    );
+  }
 
   const names = options?.names ?? { [P1]: "Player 1", [P2]: "Player 2" };
-  const session: GameSession = { clients: new Map(), decks: { [P1]: deck1, [P2]: deck2 }, engine, gameNumber, ...(hotSeat ? { hotSeat: true } : {}), log, playerNames: names, players: [P1, P2], pregame, sandbox: isSandbox, seq: 0 };
+  const session: GameSession = {
+    clients: new Map(),
+    decks: { [P1]: deck1, [P2]: deck2 },
+    engine,
+    gameMode,
+    gameNumber,
+    ...(hotSeat ? { hotSeat: true } : {}),
+    log,
+    playerNames: names,
+    players: [P1, P2],
+    pregame,
+    sandbox: isSandbox,
+    seq: 0,
+    ...(options?.sideboardBeforeGame1 === true ? { sideboardBeforeGame1: true } : {}),
+  };
+  session.match = newMatchState(gameMode);
   // Duel: legends, champions and the random battlefields are all known now —
   // sideboard (if anyone can) before the mulligan. Match waits for battlefield_select.
   if (gameMode === "duel") {advancePastReveal(session);}
@@ -412,6 +465,102 @@ export function advancePastReveal(session: GameSession): void {
     return;
   }
   if (seats) {completeSideboard(session);}
+  advancePastSideboard(session);
+}
+
+/**
+ * Decks are final (sideboarding done or skipped): decide who goes first if
+ * this pregame owns that decision (phase `initiative` — rule 115 comes after
+ * 113/114 and before the draw, 116), else straight to the mulligan.
+ */
+export function advancePastSideboard(session: GameSession): void {
+  const { pregame } = session;
+  if (!pregame) {return;}
+  if (pregame.initiative && !pregame.initiative.decided) {
+    enterInitiative(session);
+    return;
+  }
+  enterMulligan(session);
+}
+
+/** d20 each, re-rolled on ties (rule 115: any fair random method). */
+function rollInitiative(): { p1Roll: number; p2Roll: number } {
+  let p1Roll = 0;
+  let p2Roll = 0;
+  do {
+    p1Roll = Math.floor(Math.random() * 20) + 1;
+    p2Roll = Math.floor(Math.random() * 20) + 1;
+  } while (p1Roll === p2Roll);
+  return { p1Roll, p2Roll };
+}
+
+/**
+ * Enter the first-player step. `roll`: roll now, the higher roll becomes the
+ * chooser (narrated like the lobby roll). `loser_chooses`: the chooser is
+ * already known. Either way the phase then waits for `chooseFirstPlayer`
+ * (the bot seat answers through runBotPregame).
+ */
+export function enterInitiative(session: GameSession): void {
+  const { pregame } = session;
+  const ini = pregame?.initiative;
+  if (!pregame || !ini) {return;}
+  const [P1, P2] = session.players;
+  if (ini.kind === "roll" && !ini.chooser) {
+    const { p1Roll, p2Roll } = rollInitiative();
+    ini.p1Roll = p1Roll;
+    ini.p2Roll = p2Roll;
+    ini.chooser = p1Roll > p2Roll ? P1 : P2;
+    const loser = ini.chooser === P1 ? P2 : P1;
+    const w = actorName(ini.chooser, session.playerNames);
+    const l = actorName(loser, session.playerNames);
+    const wr = ini.chooser === P1 ? p1Roll : p2Roll;
+    const lr = ini.chooser === P1 ? p2Roll : p1Roll;
+    session.log.push(makeLogEntry(`${w} rolled a d20.`));
+    session.log.push(makeLogEntry(`${w} rolled ${wr}. ${l} rolled ${lr}.`));
+    session.log.push(makeLogEntry(`${w} wins initiative (${wr} vs ${lr}) and decides who plays first.`));
+  } else if (ini.kind === "loser_chooses" && ini.chooser) {
+    session.log.push(makeLogEntry(`${actorName(ini.chooser, session.playerNames)} lost game ${ini.afterGame ?? (session.gameNumber ?? 2) - 1} and decides who plays first.`));
+  }
+  pregame.phase = "initiative";
+}
+
+export type ChooseFirstResult = { ok: true } | { ok: false; error: string };
+
+/**
+ * The chooser names who takes the first turn (`firstPlayerId` = a seat id).
+ * Refused outside the step / from the wrong seat / twice. Then hands are
+ * drawn and the mulligan begins. Callers bump `seq` and broadcast.
+ */
+export function chooseFirstPlayer(session: GameSession, playerId: string, firstPlayerId: string): ChooseFirstResult {
+  const pregame = session.pregame;
+  const ini = pregame?.initiative;
+  if (!pregame || !ini || pregame.phase !== "initiative" || ini.decided) {
+    return { error: "Not choosing who goes first right now", ok: false };
+  }
+  if (ini.chooser !== playerId) {
+    return { error: `Only ${actorName(ini.chooser ?? "", session.playerNames)} chooses who goes first`, ok: false };
+  }
+  if (!session.players.includes(firstPlayerId)) {
+    return { error: "Unknown seat", ok: false };
+  }
+  ini.decided = true;
+  pregame.firstPlayer = firstPlayerId;
+  pregame.secondPlayer = session.players.find((p) => p !== firstPlayerId) ?? pregame.secondPlayer;
+  session.log.push(makeLogEntry(`Chose ${actorName(firstPlayerId, session.playerNames)} to take the first turn.`, { rewindable: false }));
+  enterMulligan(session);
+  return { ok: true };
+}
+
+/** Draw the opening hands if they were deferred (rule 116), then the mulligan (117). */
+export function enterMulligan(session: GameSession): void {
+  const { pregame, engine } = session;
+  if (!pregame) {return;}
+  if (pregame.handsDrawn === false) {
+    for (const pid of session.players) {
+      engine.executeMove("drawInitialHand", { params: { playerId: pid }, playerId: pid as PlayerId });
+    }
+    pregame.handsDrawn = true;
+  }
   pregame.phase = "mulligan";
 }
 
@@ -506,7 +655,7 @@ export function lockSideboard(session: GameSession, playerId: string): Sideboard
   }
   if (!session.players.every((p) => seats[p]?.locked)) {return { ok: true };}
   completeSideboard(session);
-  pregame.phase = "mulligan";
+  advancePastSideboard(session);
   return { completed: true, ok: true };
 }
 
@@ -525,6 +674,7 @@ export function completeSideboard(session: GameSession): void {
   const internal = getInternalSnapshot(engine);
   const cardReg = getGlobalCardRegistry();
   const post: Record<string, DeckConfig> = {};
+  const drawNow = !(pregame.initiative && !pregame.initiative.decided);
 
   for (const pid of session.players) {
     const seat = seats[pid];
@@ -556,9 +706,10 @@ export function completeSideboard(session: GameSession): void {
         playerId: pid as PlayerId,
       });
     }
-    // Shuffle (rule 114) with the seeded engine RNG, then the opening hand (116).
+    // Shuffle (rule 114) with the seeded engine RNG, then the opening hand (116)
+    // — unless the first player is still to be decided (115 before 116: enterMulligan draws then).
     engine.executeMove("shuffleDecks", { params: { playerId: pid }, playerId: pid as PlayerId });
-    engine.executeMove("drawInitialHand", { params: { playerId: pid }, playerId: pid as PlayerId });
+    if (drawNow) {engine.executeMove("drawInitialHand", { params: { playerId: pid }, playerId: pid as PlayerId });}
     post[pid] = {
       ...seat.deck,
       mainDeckCardIds: seat.main.map((c) => c.defId),
@@ -566,7 +717,8 @@ export function completeSideboard(session: GameSession): void {
     };
   }
   session.postSideboardDecks = post;
-  session.log.push(makeLogEntry("Sideboarding complete. Decks shuffled; opening hands drawn."));
+  if (drawNow) {pregame.handsDrawn = true;}
+  session.log.push(makeLogEntry(drawNow ? "Sideboarding complete. Decks shuffled; opening hands drawn." : "Sideboarding complete. Decks shuffled."));
 }
 
 /** Public card descriptor for the acting seat's own overlay lists. */
@@ -630,6 +782,7 @@ function sendPregameTo(session: GameSession, playerId: string): void {
     if (client.playerId !== playerId) {continue;}
     try {
       client.ws.send(JSON.stringify({
+        match: matchSummary(session),
         moves: buildAvailableMoves(session, client.playerId),
         pregame: buildPregamePayload(session, client.playerId),
         seq: session.seq,
@@ -705,12 +858,14 @@ export function finalizePregame(session: GameSession): void {
  * Broadcast a pregame update to all connected clients.
  */
 export function broadcastPregameUpdate(session: GameSession): void {
+  const match = matchSummary(session);
   for (const [, client] of session.clients) {
     const snapshot = buildGameSnapshot(session, client.playerId);
     const pregameData = buildPregamePayload(session, client.playerId);
     const moves = buildAvailableMoves(session, client.playerId);
     try {
       client.ws.send(JSON.stringify({
+        match,
         moves,
         pregame: pregameData,
         seq: session.seq,
@@ -730,10 +885,13 @@ export function buildPregamePayload(session: GameSession, playerId: string): Rec
 
   // Look up battlefield names for the selection UI
   const bfOptions = pregame.battlefieldOptions[playerId] ?? [];
+  const bfUsed = pregame.battlefieldExcluded?.[playerId] ?? [];
   const bfDetails = bfOptions.map((defId) => {
     const def = registry.get(defId);
-    return { id: defId, name: def?.name ?? defId, rulesText: def?.rulesText ?? "" };
+    // rule 486.5 — `used`: played earlier this match, shown but not selectable.
+    return { id: defId, name: def?.name ?? defId, rulesText: def?.rulesText ?? "", ...(bfUsed.includes(defId) ? { used: true } : {}) };
   });
+  const ini = pregame.initiative;
 
   const selectedId = pregame.battlefieldSelections[playerId] ?? null;
   // rule 485.5 — Duel: name every player's randomly selected battlefield so the
@@ -751,8 +909,11 @@ export function buildPregamePayload(session: GameSession, playerId: string): Rec
     ...(pregame.battlefieldRandom ? { battlefieldRandom: true, battlefieldRandomSelections: randomSelections } : {}),
     battlefieldSelected: selectedId,
     battlefieldSelectedName: selectedId ? (registry.get(selectedId)?.name ?? selectedId) : null,
-    firstPlayer: pregame.firstPlayer,
+    // Unknown (null) while this pregame still has to decide it (phase `initiative`).
+    firstPlayer: ini && !ini.decided ? null : pregame.firstPlayer,
     gameMode: pregame.gameMode,
+    gameNumber: session.gameNumber ?? 1,
+    ...(ini ? { initiative: { ...ini, firstPlayer: ini.decided ? pregame.firstPlayer : null } } : {}),
     mulliganComplete: [...pregame.mulliganComplete],
     phase: pregame.phase,
     sandbox: pregame.sandbox,
@@ -783,6 +944,9 @@ export function selectBattlefield(session: GameSession, playerId: string, battle
   const options = pregame.battlefieldOptions[playerId] ?? [];
   if (typeof battlefieldId !== "string" || !options.includes(battlefieldId)) {
     return { error: "Invalid battlefield choice", ok: false };
+  }
+  if (pregame.battlefieldExcluded?.[playerId]?.includes(battlefieldId)) {
+    return { error: "That battlefield was already used this match — choose one of the others (rule 486.5)", ok: false };
   }
   pregame.battlefieldSelections[playerId] = battlefieldId;
   const bfName = registry.get(battlefieldId)?.name ?? battlefieldId;
@@ -819,7 +983,8 @@ export async function runBotPregame(session: GameSession, opts: { gameId?: strin
     return;
   }
   if (pregame.phase === "battlefield_select" && !pregame.battlefieldSelections[seat]) {
-    const options = pregame.battlefieldOptions[seat] ?? [];
+    const excluded = pregame.battlefieldExcluded?.[seat] ?? [];
+    const options = (pregame.battlefieldOptions[seat] ?? []).filter((id) => !excluded.includes(id));
     if (options.length === 0) {
       return;
     }
@@ -849,6 +1014,17 @@ export async function runBotPregame(session: GameSession, opts: { gameId?: strin
   if (session.pregame === pregame && pregame.phase === "sideboard" && pregame.sideboard?.[seat] && !pregame.sideboard[seat].locked) {
     const r = lockSideboard(session, seat);
     if (r.ok) {
+      session.seq++;
+      broadcastPregameUpdate(session);
+    }
+  }
+  // First player: when the bot is the chooser (won the roll / lost the previous game) it elects to go first (rule 115).
+  if (session.pregame === pregame && pregame.phase === "initiative" && pregame.initiative && !pregame.initiative.decided && pregame.initiative.chooser === seat) {
+    const how = pregame.initiative.kind === "roll" ? "won the roll" : `lost game ${pregame.initiative.afterGame ?? ""}`.trim();
+    session.log.push(makeLogEntry(`${actorName(seat, session.playerNames)} ${how} and chooses to go first.`));
+    const r = chooseFirstPlayer(session, seat, seat);
+    if (r.ok) {
+      if (opts.gameId) {gameLogger.logStateChange(opts.gameId, "initiative", pregame.phase);}
       session.seq++;
       broadcastPregameUpdate(session);
     }
@@ -947,7 +1123,25 @@ export function handlePregameMessage(
       ws.send(JSON.stringify({ error: result.error, errorCode: "SIDEBOARD_LOCK", type: "error" }));
       return true;
     }
-    if (result.completed) {gameLogger.logStateChange(gameId, "sideboard", "mulligan");}
+    if (result.completed) {gameLogger.logStateChange(gameId, "sideboard", session.pregame.phase);}
+    session.seq++;
+    broadcastPregameUpdate(session);
+    // The bot seat may now owe the first-player choice (games 2–3: it lost the previous game).
+    if (result.completed) {void runBotPregame(session, { gameId });}
+    return true;
+  }
+
+  if (msg.type === "pregame_choose_first") {
+    // The chooser (roll winner / previous game's loser) names who goes first:
+    // `choice: "self" | "opponent"` relative to the SENDER, or an explicit `firstPlayer` seat id.
+    const other = session.players.find((p) => p !== playerId) ?? playerId;
+    const first = typeof msg.firstPlayer === "string" ? msg.firstPlayer : msg.choice === "opponent" ? other : playerId;
+    const result = chooseFirstPlayer(session, playerId, first);
+    if (!result.ok) {
+      ws.send(JSON.stringify({ error: result.error, errorCode: "CHOOSE_FIRST", type: "error" }));
+      return true;
+    }
+    gameLogger.logStateChange(gameId, "initiative", "mulligan");
     session.seq++;
     broadcastPregameUpdate(session);
     return true;
@@ -1018,6 +1212,7 @@ export function handlePregameMessage(
         const clientMoves = buildAvailableMoves(session, client.playerId);
         try {
           client.ws.send(JSON.stringify({
+            match: matchSummary(session),
             moves: clientMoves,
             pregame: null,
             seq: session.seq,
@@ -1043,6 +1238,7 @@ export function handlePregameMessage(
       const snapshot = buildGameSnapshot(session, playerId);
       const moves = buildAvailableMoves(session, playerId);
       ws.send(JSON.stringify({
+        match: matchSummary(session),
         moves,
         pregame: buildPregamePayload(session, playerId),
         seq: session.seq,

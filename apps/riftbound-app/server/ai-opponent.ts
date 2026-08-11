@@ -44,6 +44,7 @@ import { makeLogEntry } from "../src/narrator";
 import { registry } from "./cards";
 import { APP_DIR } from "./config";
 import { gameLogger } from "./log";
+import { noteGameState } from "./match";
 import { anchorKeyAfterLastMove, buildAvailableMoves, buildGameSnapshot, handPlayCost } from "./snapshot";
 import { type DeckConfig, type GameSession, type OpponentHandle, type OpponentInfo, broadcast, getInternalSnapshot } from "./state";
 import { rewindEpoch } from "./rewind";
@@ -1787,6 +1788,8 @@ export class ClaudeOpponent implements OpponentHandle {
       gameLogger.logStateChange(this.gameId, "playing", "finished");
       const scores = Object.fromEntries(Object.entries(after.players ?? {}).map(([pid, p]) => [pid, (p as { victoryPoints?: number }).victoryPoints ?? 0]));
       gameLogger.logGameCompleted(this.gameId, after.winner ?? after.turn.activePlayer ?? null, scores, session.engine.getReplayHistory().length, startTime ? Date.now() - startTime : 0);
+      // Match flow: announce game_over / match_over (server/match.ts).
+      noteGameState(session, this.gameId);
     }
   }
 }

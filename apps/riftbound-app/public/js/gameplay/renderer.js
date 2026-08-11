@@ -82,7 +82,9 @@ function renderSidebarHeader() {
       <div class="turn-badge" style="flex:1;">
         <span class="turn-number">Turn ${turnNum}</span>
         <span class="phase-badge phase-${phase}">${phase}</span>
+        ${typeof matchHeaderHtml === "function" ? matchHeaderHtml() : ""}
       </div>
+      ${typeof matchConcedeButtonsHtml === "function" ? matchConcedeButtonsHtml() : ""}
       <button class="leave-btn" onclick="showLeaveConfirm()">Leave</button>
     </div>
     <div class="game-status${myCursor && !isActive && status === "playing" ? " game-status--cursor" : ""}" data-cursor="${esc(cursor || "")}">

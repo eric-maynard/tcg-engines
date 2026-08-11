@@ -87,6 +87,8 @@ function connectWs() {
     else window.__rbInFlightMove = null;
     // vs-Claude: opponent descriptor + "thinking" flag ride on state frames and ai_status.
     if (typeof aiOnServerFrame === "function") aiOnServerFrame(msg);
+    // Match play: latch the match summary (`match` on frames; game_over / match_over / match_update pushes).
+    if (typeof matchOnServerFrame === "function" && msg.match) matchState = msg.match;
 
     switch (msg.type) {
       case "sync":
@@ -209,6 +211,12 @@ function connectWs() {
         // The AI seat started/stopped deciding — aiOnServerFrame already updated the pill.
         break;
 
+      case "game_over":
+      case "match_over":
+      case "match_update":
+        // Match play (match.js): interstitial / post-match screen from the carried summary.
+        break;
+
       case "game_ping":
         handlePing(msg);
         break;
@@ -217,6 +225,8 @@ function connectWs() {
     // Goldfish — active: latch hot-seat mode from the frame and follow the seat
     // that owes the next decision (may send switch_seat; the reply is a sync).
     if (typeof hotSeatOnFrame === "function") hotSeatOnFrame(msg);
+    // Match play: react to game_over / match_over / match_update and to a new game's pregame sync.
+    if (typeof matchOnServerFrame === "function") matchOnServerFrame(msg);
 
     // Run follow-up work registered for "once the server has answered", now
     // that gameState/availableMoves reflect this frame.

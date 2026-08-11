@@ -8,6 +8,8 @@ import { actorName, makeLogEntry } from "../src/narrator";
 import { SERVER_ONLY_MOVES } from "./config";
 import { json } from "./http";
 import { gameLogger } from "./log";
+import { handleMatchMessage, noteGameState } from "./match";
+import { matchSummary } from "./match-state";
 import { buildPregamePayload, handlePregameMessage, runBotPregame } from "./pregame";
 import { buildAvailableMoves, buildGameSnapshot } from "./snapshot";
 import { type RouteCtx, type RouteResult, type WsData, broadcast, gameSessions } from "./state";
@@ -97,6 +99,10 @@ export function gameWsMessage(ws: ServerWebSocket<WsData>, msg: Record<string, u
     if (handlePregameMessage(ws, msg, session, gameId, playerId)) {return;}
   }
 
+  // ---- Match-level messages: concede_game / concede_match / match_continue / match_rematch ----
+  if (handleMatchMessage(ws, msg, session, gameId, playerId)) {return;}
+  // Legacy `concede` engine move from a client = concede the GAME (server/match.ts owns the match flow either way).
+
   if (msg.type === "move") {
     const { moveId, params, requestId } = msg;
     if (!moveId || !params) {
@@ -155,6 +161,7 @@ export function gameWsMessage(ws: ServerWebSocket<WsData>, msg: Record<string, u
 
     session.seq++;
     const snapshot = buildGameSnapshot(session, playerId);
+    const match = matchSummary(session);
 
     // Detect phase change for WebSocket messages
     const newPhase = session.engine.getState().turn.phase;
@@ -166,6 +173,7 @@ export function gameWsMessage(ws: ServerWebSocket<WsData>, msg: Record<string, u
     const actorMoves = buildAvailableMoves(session, playerId);
 
     ws.send(JSON.stringify({
+      match,
       moveId,
       moves: actorMoves,
       phaseChange,
@@ -182,6 +190,7 @@ export function gameWsMessage(ws: ServerWebSocket<WsData>, msg: Record<string, u
       const clientMoves = buildAvailableMoves(session, client.playerId);
       try {
         client.ws.send(JSON.stringify({
+          match,
           moveId,
           moves: clientMoves,
           phaseChange,
@@ -193,10 +202,15 @@ export function gameWsMessage(ws: ServerWebSocket<WsData>, msg: Record<string, u
       } catch { /* Disconnected */ }
     }
 
+    // Game over? Announce it once (game_over / match_over with the match summary).
+    noteGameState(session, gameId);
+
     // Sandbox opponent seat: the Goldfish policy or the Claude driver takes
     // over whenever the cursor (turn / priority / focus / prompt) is theirs.
     if (session.sandbox) {
       runOpponent(session, { gameId, humanSeat: playerId });
+      // The Goldfish acts synchronously and may have ended the game (a Hold/Conquer point).
+      noteGameState(session, gameId);
     }
   }
 
@@ -206,6 +220,7 @@ export function gameWsMessage(ws: ServerWebSocket<WsData>, msg: Record<string, u
     const moves = buildAvailableMoves(session, playerId);
 
     ws.send(JSON.stringify({
+      match: matchSummary(session),
       moves,
       seq: session.seq,
       state: snapshot,
@@ -235,7 +250,10 @@ export function gameWsMessage(ws: ServerWebSocket<WsData>, msg: Record<string, u
     const r = rewindSession(session, msg.type, { actor: playerId, gameId });
     if (!r.ok) {
       ws.send(JSON.stringify({ error: r.error, requestId: msg.requestId, type: "error" }));
+      return;
     }
+    // A sandbox Rewind may take back the game-winning action (or a Redo re-apply it).
+    noteGameState(session, gameId);
     return;
   }
 
@@ -291,6 +309,7 @@ export function gameWsOpen(ws: ServerWebSocket<WsData>): void {
 
   ws.send(JSON.stringify({
     ...(session.hotSeat ? { hotSeat: true } : {}),
+    match: matchSummary(session),
     moves,
     pregame: buildPregamePayload(session, playerId),
     seq: session.seq,
