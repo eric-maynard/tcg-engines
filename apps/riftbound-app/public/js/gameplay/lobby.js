@@ -191,8 +191,9 @@ function connectLobbyWs(onOpen) {
           _soloAutoStart = false;
           connectWs();
         };
-        if (instant) {
-          // Preference: no overlay was shown — nothing to linger on.
+        if (instant || !flip) {
+          // Preference: no overlay was shown — nothing to linger on. Match (Bo3):
+          // no lobby roll at all — battlefields come first, the roll follows in the pregame.
           proceed();
         } else if (!_coinFlipShown && flip) {
           // The other seat won and already decided (Goldfish / Claude elect to go

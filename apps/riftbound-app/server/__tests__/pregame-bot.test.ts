@@ -112,18 +112,51 @@ describe("Bo3 vs Goldfish: the bot seat picks its battlefield server-side", () =
     expect(session.pregame?.phase).toBe("battlefield_select"); // still waiting for the HUMAN, not the bot
     expect(session.log.some((e) => /picked a battlefield at random/.test(e.text))).toBe(true);
 
+    // Match: the lobby did NOT roll — battlefields come first (rule 113 / 486.5), then the roll (115) in the pregame.
+    expect(lobby.coinFlip).toBeNull();
+    expect(session.log.some((e) => /rolled a d20/.test(e.text))).toBe(false);
     const me = fakeGameWs(session, P1, lobby.gameId as string);
-    expect(handlePregameMessage(me.ws, { battlefieldId: BASE.battlefieldIds[1], type: "pregame_battlefield_select" }, session, lobby.gameId as string, P1)).toBe(true);
+    // Both battlefields locked → d20 roll (forced: the Goldfish rolls higher) → it elects to go first → mulligan.
+    withRolls([0.1, 0.99], () => expect(handlePregameMessage(me.ws, { battlefieldId: BASE.battlefieldIds[1], type: "pregame_battlefield_select" }, session, lobby.gameId as string, P1)).toBe(true));
     expect(session.pregame?.phase).toBe("mulligan");
-    const frame = me.sent.at(-1) as { type: string; pregame: { phase: string; battlefieldSelected: string } };
+    expect(session.pregame?.initiative).toMatchObject({ chooser: P2, decided: true, kind: "roll", p1Roll: 3, p2Roll: 20 });
+    expect(session.pregame?.firstPlayer).toBe(P2);
+    expect(session.log.some((e) => /Goldfish wins initiative \(20 vs 3\)/.test(e.text))).toBe(true);
+    expect(session.log.some((e) => /Goldfish won the roll and chooses to go first/.test(e.text))).toBe(true);
+    const frame = me.sent.at(-1) as { type: string; pregame: { phase: string; battlefieldSelected: string; firstPlayer: string; initiative: { decided: boolean } } };
     expect(frame.type).toBe("sync");
     expect(frame.pregame.phase).toBe("mulligan");
+    expect(frame.pregame.firstPlayer).toBe(P2);
+    expect(frame.pregame.initiative.decided).toBe(true);
     expect(frame.pregame.battlefieldSelected).toBe(BASE.battlefieldIds[1] as string);
 
     // Mulligan: the human's decision completes the bot's too → game on.
     handlePregameMessage(me.ws, { sendBack: [], type: "pregame_mulligan" }, session, lobby.gameId as string, P1);
     expect(session.pregame).toBeUndefined();
     expect(session.engine.getState().status).toBe("playing");
+  });
+
+  test("Bo3 order when the HUMAN rolls higher: battlefield_select → initiative (waits for the human's pregame_choose_first; hands not drawn yet) → mulligan", async () => {
+    const { lobby, session } = startSolo({ gameMode: "match" });
+    await tick();
+    const me = fakeGameWs(session, P1, lobby.gameId as string);
+    withRolls([0.99, 0.1], () => handlePregameMessage(me.ws, { battlefieldId: BASE.battlefieldIds[0], type: "pregame_battlefield_select" }, session, lobby.gameId as string, P1));
+    expect(session.pregame?.phase).toBe("initiative");
+    expect(session.pregame?.initiative).toMatchObject({ chooser: P1, decided: false, p1Roll: 20, p2Roll: 3 });
+    expect(session.pregame?.handsDrawn).toBe(false);
+    const frame = me.sent.at(-1) as { pregame: { phase: string; firstPlayer: string | null; initiative: { chooser: string; p1Roll: number; p2Roll: number } } };
+    expect(frame.pregame).toMatchObject({ firstPlayer: null, initiative: { chooser: P1, p1Roll: 20, p2Roll: 3 }, phase: "initiative" });
+    // The bot may not answer for the human.
+    await runBotPregame(session);
+    expect(session.pregame?.phase).toBe("initiative");
+    expect(handlePregameMessage(me.ws, { choice: "opponent", type: "pregame_choose_first" }, session, lobby.gameId as string, P1)).toBe(true);
+    expect(session.pregame?.phase).toBe("mulligan");
+    expect(session.pregame?.firstPlayer).toBe(P2);
+    expect(session.pregame?.handsDrawn).toBe(true);
+    // A second answer is refused.
+    handlePregameMessage(me.ws, { choice: "self", type: "pregame_choose_first" }, session, lobby.gameId as string, P1);
+    expect((me.sent.at(-1) as { errorCode?: string }).errorCode).toBe("CHOOSE_FIRST");
+    expect(session.pregame?.firstPlayer).toBe(P2);
   });
 
   test("the seeded pick is deterministic per game seed and is not always the same battlefield across seeds", async () => {

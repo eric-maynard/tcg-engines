@@ -172,8 +172,10 @@ describe("Goldfish — active: the host plays both seats", () => {
   });
 
   test("host socket: switch_seat → player-2's own view; player-2 battlefield pick + both mulligans go through the per-seat handlers; then a player-2 MOVE is accepted and nothing auto-plays player-1", async () => {
-    const { gameId, session } = startSolo({ choice: "opponent", gameMode: "match", opponent: { kind: "goldfish", mode: "active" } });
-    expect(session.pregame?.firstPlayer).toBe(P2); // host chose: player-2 goes first
+    const { gameId, lobby, session } = startSolo({ gameMode: "match", opponent: { kind: "goldfish", mode: "active" } });
+    // Match: no lobby roll — battlefields first (rule 113 / 486.5), the roll follows in the pregame (115).
+    expect(lobby.coinFlip).toBeNull();
+    expect(session.pregame?.initiative).toMatchObject({ decided: false, kind: "roll" });
     const sock = openGameWs(gameId, P1);
     const hello = sock.last("sync")!;
     expect(hello.hotSeat).toBe(true);
@@ -197,9 +199,15 @@ describe("Goldfish — active: the host plays both seats", () => {
     expect([...session.clients.values()].map((c) => c.playerId)).toEqual([P2]);
     expect(swapped.pregame?.battlefieldSelected).toBeNull();
     expect(swapped.pregame?.battlefieldOptions.map((o) => o.id)).toEqual(session.pregame?.battlefieldOptions[P2] as string[]);
-    gameWsMessage(sock.ws, { battlefieldId: session.pregame?.battlefieldOptions[P2]?.[1], type: "pregame_battlefield_select" });
-    expect(session.pregame?.phase).toBe("mulligan");
+    // Both locked → the d20 roll (forced: player-2 rolls higher) → player-2, answered by the human on this socket, chooses to go first.
+    withRolls([0.1, 0.99], () => gameWsMessage(sock.ws, { battlefieldId: session.pregame?.battlefieldOptions[P2]?.[1], type: "pregame_battlefield_select" }));
     expect(session.log.some((e) => /^Player 2 locked in a battlefield/.test(e.text))).toBe(true);
+    expect(session.pregame?.phase).toBe("initiative");
+    expect(session.pregame?.initiative).toMatchObject({ chooser: P2, decided: false, p1Roll: 3, p2Roll: 20 });
+    expect(sock.last("sync")!.pregame?.phase).toBe("initiative");
+    gameWsMessage(sock.ws, { choice: "self", type: "pregame_choose_first" });
+    expect(session.pregame?.phase).toBe("mulligan");
+    expect(session.pregame?.firstPlayer).toBe(P2); // the human chose for player-2: player-2 goes first
 
     // Mulligan: player-2's decision does NOT complete player-1's (no bot) — switch back and answer it too.
     gameWsMessage(sock.ws, { sendBack: [], type: "pregame_mulligan" });

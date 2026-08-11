@@ -53,6 +53,10 @@ function hotSeatActingSeat() {
       if (!done.includes(other)) return other;
       return me;
     }
+    if (pg.phase === "initiative") {
+      // Match play: the roll winner / previous game's loser chooses who goes first.
+      return (pg.initiative && pg.initiative.chooser) || me;
+    }
     return me;
   }
   const gs = typeof gameState !== "undefined" ? gameState : null;

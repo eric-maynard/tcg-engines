@@ -5,7 +5,7 @@ Product decisions the visual observer agents must check FOR (not just "is it bro
 ## Play menu
 - 4 mode cards: Host Lobby, Join Lobby, Goldfish, VS AI (disabled)
 - Goldfish/VS AI skip the lobby entirely — deck picker → Play → mulligan (no code, no d20)
-- Solo picker offers Bo1/Bo3; Bo3 shows battlefield selection in pregame
+- Solo picker offers Bo1/Bo3; Bo3 shows battlefield selection in pregame FIRST, then the d20 roll (see §Pregame order)
 - Solo picker **Opponent** selector: *Goldfish — Passive (auto-passes)* (default; the server's Goldfish driver plays
   player-2: passes priority/focus, resolves its prompts, ends its turn), *Goldfish — Active (you play both seats)*, then the
   Claude models. Remembered in `localStorage["rb-opponent"]` (`goldfish` | `goldfish-active` | model key); sent as
@@ -135,6 +135,26 @@ Rule 383.3.d ("the controller selects the order to place simultaneous triggers o
   board) and places both at once; there is NO battlefield-choice UI — the mulligan overlay just states
   "Battlefield selected at random: X" (+ the opponent's). Match / Bo3 keeps the manual `battlefield_select`
   picker (486.5). Sandbox is unchanged: its solo picker offers Bo1 (random) or Bo3 (manual pick).
+- **Match (Bo3) pregame ORDER** — battlefields FIRST, then who goes first, then the hand (rules 113 → 117):
+  `battlefield_select` (113 / 486.5; game 2–3: battlefields used in a game somebody won are shown disabled "Used this
+  match" and refused, 486.5) → `sideboard` (game 2+ only) → `initiative` (115: game 1 = the d20 roll overlay
+  `#coinOverlay` shown AFTER both battlefields are locked — never before Play like a Bo1; games 2–3 = the previous game's
+  LOSER chooses "I'll go first / Opponent goes first" (`#initiativeStep`), a bot chooser elects to go first) → hands drawn
+  (116) → mulligan (117). The battlefield picker therefore never says who goes first ("First player is decided after
+  battlefields are locked"). Bo1 keeps its order (lobby roll → random battlefields → mulligan).
+
+## Match play (Bo1 duel / Bo3 match) — apps/riftbound-app/server/match.ts, public/js/gameplay/match.js
+- Sidebar header: Bo3 shows a chip "Bo3 · Game N · a–b" and TWO buttons **Concede game** (opponent wins this game, match
+  goes on unless that decides it) and **Concede match** (ends everything now); Bo1 shows one **Concede**. Each opens a
+  confirm (`#confirmConcede`) whose title/text names WHICH ("Concede game 2?" / "Concede the match?"). The engine's
+  `concede` entry is no longer listed under "Other" in the actions panel.
+- Game over in a Bo3 that is not decided: `#gameOverBox[data-format=bo3][data-decided=0]` — "Game N · Best of 3",
+  Victory!/Defeat for THIS game, VP boxes, "Match: You a–b Opp", **Continue to game N+1** (`#goContinueBtn`; both humans
+  must continue, any one seat in a sandbox; "Waiting for your opponent to continue…") and **Leave match**. Continue ⇒ the
+  next game's pregame (battlefield pick) replaces the box; NOTHING of the previous board survives; Rewind cannot cross it.
+- Match decided (2 wins, or a match concession, or any Bo1 game end): `data-decided=1` — "You win the match!" / "X wins the
+  match" (+ "— X conceded the match"), **Back to menu** (`#goMenuBtn`) and **Rematch** (`#goRematchBtn`, all humans; new
+  match, game 1, 0–0, registered decks). A match conceded BETWEEN games shows the same box over the (dropped) pregame.
 
 ## Performance
 - All deck card images preloaded at first sync — no blank cards after t+1s

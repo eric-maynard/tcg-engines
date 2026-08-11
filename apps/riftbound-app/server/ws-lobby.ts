@@ -169,7 +169,14 @@ export function lobbyWsMessage(ws: ServerWebSocket<WsData>, msg: Record<string, 
         return;
       }
     }
-    // D20 roll to determine who CHOOSES first player (rule 115). Reroll on tie.
+    // Match (Bo3): battlefields are chosen BEFORE turn order (rules 113 / 486.5
+    // then 115), so the game starts now at battlefield_select and the d20 roll
+    // happens inside the pregame (`initiative` phase, server/pregame.ts).
+    if (lobby.gameMode === "match") {
+      startLobbyGame(lobby, null);
+      return;
+    }
+    // Duel (Bo1): D20 roll to determine who CHOOSES first player (rule 115). Reroll on tie.
     let p1Roll = 0;
     let p2Roll = 0;
     do {
@@ -232,13 +239,20 @@ export function lobbyWsMessage(ws: ServerWebSocket<WsData>, msg: Record<string, 
 }
 
 /**
- * Start the lobby's game with `chosen` taking the first turn: build the
- * session from both seats' decks, hand over the solo opponent driver, kick
- * the bot seat's pregame decisions (Bo3 battlefield…), and broadcast.
+ * Start the lobby's game: build the session from both seats' decks, hand over
+ * the solo opponent driver, kick the bot seat's pregame decisions (Bo3
+ * battlefield…), and broadcast. `chosen` = the seat taking the first turn
+ * (Duel: decided by the lobby roll); `null` = the pregame decides it (Match:
+ * roll after battlefield selection).
  */
-function startLobbyGame(lobby: Lobby, chosen: string): void {
-  if (!lobby.coinFlip || !lobby.guest) {return;}
-  lobby.coinFlip = { ...lobby.coinFlip, firstPlayer: chosen };
+function startLobbyGame(lobby: Lobby, chosen: string | null): void {
+  if (!lobby.guest) {return;}
+  if (chosen !== null) {
+    if (!lobby.coinFlip) {return;}
+    lobby.coinFlip = { ...lobby.coinFlip, firstPlayer: chosen };
+  } else {
+    lobby.coinFlip = null;
+  }
 
   // The practice seat's deck was validated at create/select time; re-sync so
   // "mirror" reflects the host's final pick.
@@ -248,14 +262,11 @@ function startLobbyGame(lobby: Lobby, chosen: string): void {
 
   const gameId = crypto.randomUUID();
   const session = createGameFromDecks(deck1, deck2, undefined, {
-    firstPlayer: chosen,
+    ...(chosen !== null && lobby.coinFlip
+      ? { firstPlayer: chosen, initiativeRoll: { p1Roll: lobby.coinFlip.p1Roll, p2Roll: lobby.coinFlip.p2Roll, winner: lobby.coinFlip.winner } }
+      : { initiative: { kind: "roll" as const } }),
     gameMode: lobby.gameMode,
     hotSeat: lobby.hotSeat === true,
-    initiativeRoll: {
-      p1Roll: lobby.coinFlip.p1Roll,
-      p2Roll: lobby.coinFlip.p2Roll,
-      winner: lobby.coinFlip.winner,
-    },
     names: {
       "player-1": lobby.host.name,
       "player-2": lobby.guest?.name ?? "Player 2",
@@ -271,8 +282,8 @@ function startLobbyGame(lobby: Lobby, chosen: string): void {
   }
   gameSessions.set(gameId, session);
   gameLogger.logGameCreated(gameId, session.players, lobby.gameMode, "random", {
-    firstPlayer: chosen,
-    flipWinner: lobby.coinFlip.winner,
+    firstPlayer: chosen ?? "pregame",
+    flipWinner: lobby.coinFlip?.winner ?? "pregame",
     guestDeckId: lobby.guest?.deckId,
     hostDeckId: lobby.host.deckId,
     lobbyCode: lobby.code,

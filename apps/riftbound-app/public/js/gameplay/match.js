@@ -262,6 +262,18 @@ function matchHandlePregame(pregame, state, onDone) {
     }
     if (ini.kind === "roll") {
       _initiativeShownKey = key;
+      const overlay = document.getElementById("coinOverlay");
+      if (_coinFlipShown && overlay && overlay.classList.contains("visible")) {
+        // Already on the roll screen (e.g. a hot-seat switch to the chooser's seat): just (re)arm the prompt.
+        if (iChoose && overlay.dataset.stage === "waiting") {
+          const coinDetail = document.getElementById("coinDetail");
+          const coinChoose = document.getElementById("coinChoose");
+          if (coinDetail) coinDetail.textContent = "Choose who goes first:";
+          if (coinChoose) { coinChoose.style.display = "flex"; coinChoose.style.opacity = "1"; }
+          overlay.dataset.stage = "choose";
+        }
+        return true;
+      }
       showCoinFlip({ p1Roll: ini.p1Roll, p2Roll: ini.p2Roll, winner: ini.chooser, firstPlayer: null }, null);
       return true;
     }
