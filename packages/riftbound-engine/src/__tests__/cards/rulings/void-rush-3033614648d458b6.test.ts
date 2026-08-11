@@ -99,13 +99,19 @@ describe("Ruling 3033614648d458b6 — Void Rush discounts only the base cost of 
     expect(withAssault).toHaveLength(1); // executed once only
   });
 
-  // Expected (820 / 354.2): while Blood Rush is being played off Void Rush with [2] still in P1's pool, P1 is offered its
-  // optional Repeat additional cost at the FULL [1]; accepting charges exactly 1 (2 → 1) and the effect executes twice
-  // (both allies end with Assault 2). Actual: an effect-driven play never offers Repeat — Blood Rush goes straight to its
-  // single target prompt and resolves once, energy stays 2.
-  test.failing("BUG: ruling 3033614648d458b6 — Repeat is never offered on a card played via Void Rush (should be payable at its full [1], un-discounted)", async () => {
+  // Expected (820 / 354.2 / 820.2.a): while Blood Rush is being played off Void Rush with [2] still in P1's pool, P1 is
+  // offered its optional Repeat additional cost at the FULL [1]; accepting charges exactly 1 (2 → 1) and EACH of the two
+  // executions names its own object, so both allies end with Assault 2.
+  // Actual: the Repeat offer and its [1] charge are correct, but an effect-driven play binds ONE target for the whole
+  // item (`putPlayedSpellOnChain` → `bindPlayedSpellTarget` asks once, then wraps the effect in `_repeatExecutions`), so
+  // only one target prompt is raised and BOTH executions hit allyA. The hand-cast path gets this right via
+  // `independentTargets` because `cast` supplies 1+repeatN targets up front; the effect-driven path has no equivalent
+  // per-execution slot walk (the `finalizePendingItems` multi-slot walk only runs for status="pending" items).
+  test.failing("BUG: ruling 3033614648d458b6 — Repeat's SECOND execution is never given its own target on a card played via Void Rush (820.2.a)", async () => {
     const game = await rushIntoBloodRush(4); // 2 energy left — enough for Repeat [1] but proves it is not free either
     let offered = false;
+    // rule 820.2.a — each execution picks its own object; spend them on different allies.
+    const picked: string[] = [];
     for (let i = 0; i < 8; i++) {
       const d = game.decision();
       if (!d || (d.kind === "action" && (d.context === "main" || d.passKey))) {
@@ -121,8 +127,9 @@ describe("Ruling 3033614648d458b6 — Void Rush discounts only the base cost of 
         await game.p1.chooseX(1);
       } else if (d.kind === "pick") {
         // first execution → allyA, repeated execution → allyB
-        const want = d.options.some((o) => o.key === "allyA") && assault(game, "allyA").length === 0 && !game.chain().some((c) => c.targets?.includes("allyA")) ? "allyA" : "allyB";
-        await game.p1.pick(d.options.some((o) => o.key === want) ? want : d.options[0]!.key);
+        const want = d.options.find((o) => !picked.includes(o.key)) ?? d.options[0]!;
+        picked.push(want.key);
+        await game.p1.pick(want.key);
       } else {
         break;
       }
