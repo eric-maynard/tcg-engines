@@ -160,6 +160,17 @@ describe("Soul Shepherd (unl-077-219)", () => {
     expect(game.state("token-s1")).toMatchObject({ damage: 0, might: 4 }); // 2 damage healed at end of combat
   });
 
+  // rule 364: the continuous +1 applies the instant the token enters the board, so a token minted
+  // by the sandbox `addToken` move must already read 2 Might — not stay at its printed 1 until some
+  // later, unrelated move happens to run the static recalc.
+  test("a Recruit token minted by the sandbox addToken move is 2 Might immediately, before any other move runs", async () => {
+    const game = await scenario().unit(P1, "base", CARD, "shep").build();
+    await game.p1.do("addToken", { playerId: P1, tokenName: "Recruit", zoneId: "base" });
+    const token = game.p1.units().find((id) => game.state(id).name === "Recruit");
+    expect(token).toBeDefined();
+    expect(game.state(token as string).might).toBe(2);
+  });
+
   // Expected (108.2): "your token units" are the ones you CONTROL — a P2-owned Sprite under P1's control
   // (the shape Possession leaves behind) is 4 with P1's Shepherd out and 3 with only P2's. Actual: the
   // static's "friendly" test compares OWNER, so P1's Shepherd skips it (3) and P2's pumps it (4).

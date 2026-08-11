@@ -576,12 +576,15 @@
        resolved against the flexed row and the 126px card scrolled inside a
        ~70px row, showing only its art strip). Width follows via aspect-ratio
        so the whole face stays visible instead of letterboxing. */
+    /* ui-bf-units-overflow: cards may narrow (flex-shrink) so a 3rd/4th unit
+       still fits the single non-wrapping row; min-width keeps them tappable
+       and hands the rest to the strip's horizontal scroll. */
     .bf-units .card {
       height: min(126px, calc(100cqb - 6px));
       width: auto;
-      min-width: 0;
+      min-width: 34px;
       aspect-ratio: 90 / 126;
-      flex-shrink: 0;
+      flex-shrink: 1;
     }
     .bf-units .card .card-img {
       object-fit: contain;
@@ -758,6 +761,8 @@
       font-size: 18px;
       color: #3a5a80;
     }
+    .card.facedown .card-back.card-back-art { position: absolute; inset: 0; width: auto; height: auto; }
+    .card.facedown .card-back.card-back-art::after { content: none; }
 
     /* rule-id: ogn-197-298 — owner's view of their own Hidden (facedown) card at a battlefield */
     .bf-facedown {
@@ -808,6 +813,82 @@
       color: #4a6888;
       text-transform: uppercase;
       letter-spacing: 1px;
+    }
+
+    /* [rule:ui-pile-art] Card backs are drawn in CSS (no shipped image):
+       MAIN = deep blue with the rune sigil, RUNE = gold. Shared by the deck
+       piles, facedown hand cards and Hidden cards at battlefields. */
+    .card-back-art {
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      background:
+        url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 84'><g fill='none' stroke='%23c9d6ff' stroke-opacity='.75' stroke-width='1.6'><path d='M30 14 L46 42 L30 70 L14 42 Z'/><path d='M30 24 L40 42 L30 60 L20 42 Z'/><circle cx='30' cy='42' r='4.5' fill='%23c9d6ff' fill-opacity='.55'/></g><rect x='3.5' y='3.5' width='53' height='77' rx='5' fill='none' stroke='%23c9d6ff' stroke-opacity='.35' stroke-width='1.2'/></svg>") center / 78% auto no-repeat,
+        radial-gradient(ellipse at 50% 40%, #26408a 0%, #142457 55%, #0b1533 100%);
+      box-shadow: inset 0 0 0 2px #0b1533, inset 0 0 0 3px rgba(201,214,255,0.25);
+    }
+    .card-back-art--rune {
+      background:
+        url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 84'><g fill='none' stroke='%233a2604' stroke-opacity='.8' stroke-width='1.6'><circle cx='30' cy='42' r='17'/><circle cx='30' cy='42' r='10'/><path d='M30 20 V64 M8 42 H52 M15 27 L45 57 M45 27 L15 57' stroke-opacity='.45'/><circle cx='30' cy='42' r='3.5' fill='%233a2604' fill-opacity='.7'/></g><rect x='3.5' y='3.5' width='53' height='77' rx='5' fill='none' stroke='%233a2604' stroke-opacity='.5' stroke-width='1.2'/></svg>") center / 78% auto no-repeat,
+        radial-gradient(ellipse at 50% 40%, #f1cf72 0%, #c9952e 55%, #7a5410 100%);
+      box-shadow: inset 0 0 0 2px #6a480c, inset 0 0 0 3px rgba(255,240,190,0.35);
+    }
+    .deck-stack--has-cards .deck-count {
+      position: absolute;
+      right: 4px;
+      bottom: 4px;
+      min-width: 26px;
+      padding: 1px 6px;
+      border-radius: 10px;
+      background: rgba(8,6,20,0.86);
+      border: 1px solid rgba(255,255,255,0.18);
+      color: #e8ecff;
+      font-size: 14px;
+      line-height: 18px;
+      text-align: center;
+      z-index: 2;
+    }
+    .deck-stack--has-cards .deck-label {
+      position: absolute;
+      left: 4px;
+      top: 4px;
+      padding: 1px 5px;
+      border-radius: 4px;
+      background: rgba(8,6,20,0.78);
+      color: #cfd6f0;
+      z-index: 2;
+    }
+    .deck-stack--rune.deck-stack--has-cards { border-color: #8a6420; box-shadow: 3px 3px 0 #3a2a0c, 5px 5px 0 #21180a; }
+    .deck-stack--empty {
+      background: transparent;
+      border: 2px dashed #3a4a70;
+      box-shadow: none;
+    }
+    .deck-stack--empty .deck-count { color: #3a4a70; font-size: 16px; }
+    /* Trash: the most recent card's face, name strip, count badge. */
+    .deck-stack--trash.deck-stack--has-cards { background: #120e22; border-color: #5a3a5a; cursor: pointer; overflow: hidden; }
+    .deck-stack-top {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: top center;
+      border-radius: inherit;
+    }
+    .deck-stack-top-name {
+      position: absolute;
+      left: 0; right: 0; bottom: 24px;
+      padding: 1px 4px;
+      font-size: 9px;
+      line-height: 1.2;
+      color: #f0e8ff;
+      background: rgba(8,6,20,0.8);
+      text-align: center;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      z-index: 1;
     }
 
     .legend-label {
@@ -1300,17 +1381,20 @@
     .bf-units {
       display: flex;
       gap: 4px;
-      flex-wrap: wrap;
+      /* ui-bf-units-overflow: NEVER wrap. Each card fills the strip's full
+         height (see .bf-units .card), so a wrapped second row lands entirely
+         below the visible box — the 3rd unit (e.g. a token played "here")
+         simply vanished. One row that narrows its cards keeps every unit on
+         screen; past ~4 units they hit min-width and scroll sideways, which
+         is at least visible and reachable. */
+      flex-wrap: nowrap;
       justify-content: center;
-      /* ui-bf-units-overflow: 3rd/4th wrapped unit (e.g. tokens played
-         "here") must stay reachable — scroll rather than clip. `safe`
-         keeps the first row visible when content overflows. */
       /* [rule:ui-bf-unit-not-clipped] never collapse below a legible card. */
       min-height: 56px;
       flex: 1 1 56px;
-      overflow-y: auto;
+      overflow-x: auto;
+      overflow-y: hidden;
       align-items: center;
-      align-content: safe center;
       position: relative;
       z-index: 1;
       /* Cards inside size to the row via cqb (see .bf-units .card). */

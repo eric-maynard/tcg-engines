@@ -418,6 +418,31 @@ describe("targeted rewinds", () => {
     }
   });
 
+  // rule 315.1.b / 415: the flow's card+zone operations are bound to the engine's internal state
+  // object, so undo() must restore that state IN PLACE. Replacing the object orphaned the flow's
+  // view and every later Awaken (ready all), Channel and Draw silently mutated a dead copy.
+  test("after an undo the beginning-phase procedures keep working: the next turn readies, channels and draws for real", async () => {
+    const game = await scenario({ seed: "undo-then-awaken" })
+      .resources(P1, { energy: 0 })
+      .runes(P1, "fury", 1)
+      .unit(P1, "base", { might: 1 }, "u1")
+      .build();
+    const [rune] = game.p1.runes({ ready: true });
+    expect(rune).toBeDefined();
+
+    await game.p1.tapRune(rune as string);
+    expect(game.state(rune as string).isExhausted).toBe(true);
+    expect(game.undo()).toBe(true);
+    expect(game.state(rune as string).isExhausted).toBe(false);
+    await game.p1.tapRune(rune as string);
+    expect(game.state(rune as string).isExhausted).toBe(true);
+
+    await game.advanceTurn(); // → P2
+    await game.advanceTurn(); // → P1: Awaken readies everything
+    expect(game.turnPlayer()).toBe(P1);
+    expect(game.state(rune as string).isExhausted).toBe(false);
+  });
+
   test("while a pendingChoice is open: undo rewinds to before the move that opened it (prompt gone, card back in hand, energy refunded); redo reopens the very same prompt", async () => {
     const game = await scenario({ seed: "prompt-undo" })
       .resources(P1, { energy: 3, power: { chaos: 1 } })

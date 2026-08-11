@@ -13,6 +13,7 @@ import type {
   ZoneId as CoreZoneId,
   GameMoveDefinitions,
 } from "@tcg/core";
+import { withPostMoveCleanup } from "../../cleanup/post-move-cleanup";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import type {
   RiftboundCardMeta,
@@ -97,10 +98,16 @@ function makeTokenId(name: TokenName, playerId: string): string {
 
 /**
  * Token-spawning move definitions.
+ *
+ * rule 364: a continuous effect ("other friendly units get +1 Might") applies
+ * to a permanent the moment it enters the board, so minting a token must run
+ * the static recalc / state-based checks before the next action — otherwise
+ * the fresh token reads its printed Might until some later cleanup-running
+ * move happens to fix it.
  */
 export const tokenMoves: Partial<
   GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>
-> = {
+> = withPostMoveCleanup({
   addToken: {
     reducer: (_draft, context) => {
       const { playerId, zoneId, tokenName, count = 1 } = context.params;
@@ -174,4 +181,4 @@ export const tokenMoves: Partial<
       }
     },
   },
-};
+});
