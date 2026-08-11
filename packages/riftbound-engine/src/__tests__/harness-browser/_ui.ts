@@ -152,10 +152,17 @@ export async function hitPoint(page: PwPage, cardId: string): Promise<{ x: numbe
     el.scrollIntoView({ block: "nearest" });
     const r = el.getBoundingClientRect();
     const rune = el.getAttribute("data-zone") === "runePool";
-    const x = r.left + r.width / 2, y = rune ? r.top + 3 : r.top + r.height / 2;
-    const hit = document.elementFromPoint(x, y);
-    const ok = hit && (hit === el || el.contains(hit));
-    return { x, y, occludedBy: ok ? null : (hit ? (hit.id ? "#" + hit.id : hit.getAttribute("data-card-id") ? "[card " + hit.getAttribute("data-card-id") + "]" : "." + String(hit.className).split(" ")[0]) : "nothing") };
+    const y = rune ? r.top + 3 : r.top + r.height / 2;
+    const at = (x) => { const hit = document.elementFromPoint(x, y); return { hit, ok: !!hit && (hit === el || el.contains(hit)) }; };
+    // Centre first; in an overlapped battlefield fan ([rule:ui-bf-one-row]) the
+    // centre may sit under the next card, so fall back to the visible strip a
+    // player would aim for (scan from the left edge in), then the right edge.
+    const xs = [r.left + r.width / 2];
+    for (let x = r.left + 6; x < r.right - 4; x += 4) xs.push(x);
+    let x = xs[0], probe = at(x);
+    for (const cx of xs) { const p = at(cx); if (p.ok) { x = cx; probe = p; break; } }
+    const hit = probe.hit;
+    return { x, y, occludedBy: probe.ok ? null : (hit ? (hit.id ? "#" + hit.id : hit.getAttribute("data-card-id") ? "[card " + hit.getAttribute("data-card-id") + "]" : "." + String(hit.className).split(" ")[0]) : "nothing") };
   })()`);
 }
 

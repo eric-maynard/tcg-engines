@@ -1555,6 +1555,8 @@
     }
     .bf-units:hover { z-index: 3; } /* a lifted card may overhang the divider */
     .battlefield--crowded .bf-art { flex-basis: 150px; width: 150px; }
+    /* A crowded battlefield may take more of the row so its fan overlaps less. */
+    .battlefield.battlefield--crowded { max-width: 560px; flex-grow: 1.6; }
 
     /* Battlefield side tints */
     .bf-units.opponent-side {
