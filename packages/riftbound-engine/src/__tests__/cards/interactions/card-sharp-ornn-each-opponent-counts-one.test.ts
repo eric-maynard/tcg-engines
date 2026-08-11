@@ -131,18 +131,17 @@ describe("(b) P1 accepts, P2 declines", () => {
 });
 
 describe("(c) P1 declines, P2 accepts", () => {
-  // Expected (383.3.a.3 — the "may" is distributed over "you AND EACH OPPONENT", so it is a per-player
-  // optional instruction on resolution, not the whole-ability opt-in of 383.3.a): after P1 says no, P2 is
+  // rule 383.3.a.3 — the "may" is distributed over "you AND EACH OPPONENT", so it is a per-player
+  // optional instruction on resolution, not the whole-ability opt-in of 383.3.a: after P1 says no, P2 is
   // still asked; P2 accepts → P2 1 Gold, and "for each opponent who did" pays P1 one bonus Gold → P1 1,
-  // Ornn 5. Actual: the engine models P1's "may" as the 383.3.a finalization opt-in for the ENTIRE
-  // trigger — declining removes the ability, P2 is never asked, nobody gets any Gold, Ornn stays 4.
-  test.failing("BUG: P2 must still get its own may-prompt after P1 declines (the two choices are independent)", async () => {
+  // Ornn 5.
+  test("P2 must still get its own may-prompt after P1 declines (the two choices are independent)", async () => {
     const game = await board().build();
     const asked = await playSharp(game, (seat) => seat === P2);
     expect(asked).toEqual([P1, P2]);
   });
 
-  test.failing("BUG: P2 accepting gives P2 its own Gold AND pays P1 the 'for each opponent who did' bonus — P1 1 Gold, P2 1 Gold (P1's own refusal is irrelevant to the count)", async () => {
+  test("P2 accepting gives P2 its own Gold AND pays P1 the 'for each opponent who did' bonus — P1 1 Gold, P2 1 Gold (P1's own refusal is irrelevant to the count)", async () => {
     const game = await board().build();
     await playSharp(game, (seat) => seat === P2);
     expect(goldOf(game, P2)).toHaveLength(1);
@@ -150,7 +149,7 @@ describe("(c) P1 declines, P2 accepts", () => {
     expect(game.state(goldOf(game, P1)[0] as string)).toMatchObject({ controller: P1, isExhausted: true, isToken: true });
   });
 
-  test.failing("BUG: Ornn should then read 5 (one friendly gear — the bonus Gold)", async () => {
+  test("Ornn should then read 5 (one friendly gear — the bonus Gold)", async () => {
     const game = await board().build();
     await playSharp(game, (seat) => seat === P2);
     expect(game.state("ornn").might).toBe(5);

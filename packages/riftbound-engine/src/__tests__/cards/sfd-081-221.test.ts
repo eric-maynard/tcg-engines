@@ -16,8 +16,10 @@
  *   2. Every token enters EXHAUSTED — nobody can cash Gold the turn Card Sharp is played.
  *   3. The Gold ability is a Reaction with "Kill this" as a cost: usable on the opponent's turn
  *      while a chain is open, and the token is gone afterwards (not in any trash).
- *   4. Engine status: the parsed ability is a bare create-token for the controller — no opt-in,
- *      no opponent offer, no bonus tokens (BUG tests below keep the printed contract).
+ *   4. rule 383.3.a.3 — the "may" is distributed over "you and each opponent": one per-player
+ *      optional instruction answered as the ability RESOLVES (controller first, then each
+ *      opponent), not the whole trigger's finalization-time opt-in — declining your own token
+ *      still leaves every opponent asked.
  *   5. Cost sanity: 3 energy flat, no power.
  */
 
@@ -52,23 +54,33 @@ function board() {
 }
 
 describe("Card Sharp (sfd-081-221)", () => {
-  test("parsed abilities: a play-self trigger that plays an EXHAUSTED Gold gear token", async () => {
+  test("parsed abilities: a play-self trigger whose per-player 'may' plays an EXHAUSTED Gold gear token", async () => {
     const def = (await loadDefaultCardPool()).get(CARD);
     expect(def).toMatchObject({ cardType: "unit", energyCost: 3, might: 3 });
     expect(def?.powerCost ?? []).toEqual([]);
     expect(def?.abilities).toHaveLength(1);
     expect(def?.abilities?.[0]).toMatchObject({
-      effect: { ready: false, token: { name: "Gold", type: "gear" }, type: "create-token" },
+      effect: {
+        effect: { ready: false, token: { name: "Gold", type: "gear" }, type: "create-token" },
+        type: "each-opponent-may",
+      },
       trigger: { event: "play-self" },
       type: "triggered",
     });
   });
 
-  test("parsed ability should carry the printed 'you MAY' and the per-opponent offer, not a bare create-token", async () => {
-    // Expected: the registry payload marks the controller's token optional and models "each opponent may …
-    // for each opponent who did". Actual: a single unconditional create-token for the controller.
+  test("parsed ability carries the printed 'you MAY' (the controller is in the per-player loop), the per-opponent offer and the bonus token", async () => {
+    // rule 383.3.a.3 — "you and each opponent may": the controller is the first seat of the same per-player
+    // loop (`includeSelf`), and every accepting OPPONENT also pays the controller a bonus Gold.
     const ability = (await loadDefaultCardPool()).get(CARD)?.abilities?.[0] as Record<string, unknown> | undefined;
-    expect(ability).toMatchObject({ optional: true });
+    expect(ability).toMatchObject({
+      effect: {
+        bonus: { ready: false, token: { name: "Gold", type: "gear" }, type: "create-token" },
+        includeSelf: true,
+        type: "each-opponent-may",
+      },
+    });
+    expect(ability).not.toMatchObject({ optional: true }); // not the whole trigger's opt-in
     expect(JSON.stringify(ability)).toMatch(/opponent/i);
   });
 
@@ -82,15 +94,18 @@ describe("Card Sharp (sfd-081-221)", () => {
     expect(poor.p1.can("play", "sharp")).toBe(false);
   });
 
-  test("the play effect is a triggered chain item; nothing is created before it resolves", async () => {
+  test("the play effect is a triggered chain item; nobody is asked and nothing is created before it resolves", async () => {
     const game = await board().build();
     await game.p1.play("sharp");
     expect(game.chain()).toEqual([expect.objectContaining({ cardId: "sharp", controller: P1, triggered: true, type: "ability" })]);
     expect(goldOf(game, P1)).toEqual([]);
-    await game.p1.yes(); // rule 402 (finalization): the opt-in is answered before anyone gets priority
-    expect(goldOf(game, P1)).toEqual([]); // still nothing — the effect waits for resolution
+    // rule 383.3.a.3 — each player's "may" is answered as the ability RESOLVES, so no opt-in at finalization.
+    expect(game.decision()?.kind).not.toBe("yes-no");
     await game.p1.passPriority();
     expect(game.actingSeat()).toBe(P2); // the opponent may respond first
+    expect(goldOf(game, P1)).toEqual([]); // still nothing — the effect waits for resolution
+    await game.p2.passPriority(); // the ability resolves: the controller is the first seat asked
+    expect(game.decision()).toMatchObject({ kind: "yes-no", seat: P1 });
   });
 
   test("you accept, the opponent does not: you end with exactly one Gold — a domainless gear TOKEN, in base, exhausted", async () => {

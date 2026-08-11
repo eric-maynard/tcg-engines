@@ -24,12 +24,19 @@ export function handle_eachOpponentMay(
     bonus?: ExecutableEffect;
     remaining?: readonly string[];
     controllerId?: string;
+    includeSelf?: boolean;
   };
   // `then` re-enters with the opponent as ctx.playerId, so the source's
   // controller is carried explicitly once the loop has started.
   const controllerId = spec.controllerId ?? ctx.playerId;
+  const opponents = Object.keys(ctx.draft.players).filter((p) => p !== controllerId);
+  // rule 383.3.a.3 — with `includeSelf` the "may" is distributed over "you AND
+  // each opponent", so the controller is just the first prompt of the same
+  // per-player loop, NOT the whole ability's 383.3.a opt-in: declining it must
+  // leave every opponent still asked. The controller's own acceptance never
+  // feeds "for each opponent who did", so it pays no `bonus`.
   const remaining =
-    spec.remaining ?? Object.keys(ctx.draft.players).filter((p) => p !== controllerId);
+    spec.remaining ?? (spec.includeSelf === true ? [controllerId, ...opponents] : opponents);
   if (remaining.length === 0 || !spec.effect) {
     return;
   }
@@ -37,12 +44,13 @@ export function handle_eachOpponentMay(
   // The opponent's own copy resolves for them; the controller's bonus copy
   // names its owner explicitly (the prompt resolves with the opponent as the
   // effect's controller).
-  const onAccept: ExecutableEffect = spec.bonus
-    ? ({
-        effects: [spec.effect, { ...spec.bonus, ownerId: controllerId }],
-        type: "sequence",
-      } as unknown as ExecutableEffect)
-    : spec.effect;
+  const onAccept: ExecutableEffect =
+    spec.bonus && next !== controllerId
+      ? ({
+          effects: [spec.effect, { ...spec.bonus, ownerId: controllerId }],
+          type: "sequence",
+        } as unknown as ExecutableEffect)
+      : spec.effect;
   ctx.draft.pendingChoice = {
     effect: onAccept,
     playerId: next,
