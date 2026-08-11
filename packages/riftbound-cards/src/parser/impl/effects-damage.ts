@@ -48,7 +48,11 @@ export function parseDamageEffect(text: string): DamageEffect | SequenceEffect |
         effects: [
           damage,
           {
-            condition: { type: "this-kills-target" },
+            // rule 373 — in front of a "do this:" rider the gate is only a
+            // filter for "was anything lethally damaged": the queued item
+            // re-checks the kill after replacements have been assigned, so a
+            // single-use shield must not suppress the item here.
+            condition: { type: "this-kills-target", ...(reflexive ? { deferred: true } : {}) },
             then,
             type: "conditional",
           },

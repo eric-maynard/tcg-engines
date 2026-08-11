@@ -83,7 +83,10 @@ export function handle_reflexive(effect: ExecutableEffect, ctx: EffectContext, _
 
 /** Wrap a queued body in the deferred "did this actually kill them" re-check. */
 function guardOnKill(body: ExecutableEffect, ctx: EffectContext): ExecutableEffect {
-  const ids = lethallyDamagedBoundIds(ctx);
+  // rule 373 — stamp every lethally damaged target, including one a single-use
+  // shield may yet save: which death it replaces is decided at the Cleanup, and
+  // this stamped re-check reads the board once that is settled.
+  const ids = lethallyDamagedBoundIds(ctx, { includeReplaced: true });
   if (ids.length === 0) {
     return body;
   }

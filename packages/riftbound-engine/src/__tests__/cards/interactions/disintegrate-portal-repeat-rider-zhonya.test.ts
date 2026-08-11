@@ -192,11 +192,11 @@ describe("Disintegrate with Portal-granted Repeat — per-execution 'if this kil
     expect(game.violations()).toEqual([]);
   });
 
-  // BUG — expected: X's death was NOT replaced, so Disintegrate killed X (428.5.c) and exec 1's "if this
-  // kills it, do this: draw 1" fires → one reflexive item → P1 draws exactly 1; only Z's rider (replaced
-  // kill, 370.1.a.1 / 359.3.e.14.b) yields nothing. Actual: once the die batch goes through the Hourglass's
-  // replacement-assign prompt, NO reflexive item is created for the un-replaced kill either — P1 draws 0.
-  test.failing("BUG: (c) P2 saves Z → exactly ONE reflexive draw (for X, the un-replaced kill); Z's replaced death yields none — P1 draws exactly 1 (359.3.e.14 / .14.b, 370.1.a.1)", async () => {
+  // X's death was NOT replaced, so Disintegrate killed X (428.5.c) and exec 1's "if this kills it, do
+  // this: draw 1" fires → one reflexive item → P1 draws exactly 1; only Z's rider (replaced kill,
+  // 370.1.a.1 / 359.3.e.14.b) yields nothing. rule 373 — the single-use Hourglass saves ONE of the two,
+  // chosen at the Cleanup, so the gate defers to the queued item's re-check instead of pre-judging.
+  test("(c) P2 saves Z → exactly ONE reflexive draw (for X, the un-replaced kill); Z's replaced death yields none — P1 draws exactly 1 (359.3.e.14 / .14.b, 370.1.a.1)", async () => {
     const { game, hand0 } = await portalDisintegrate(["x", "z"], { zhonyas: true });
     await game.p2.pick("z");
     await game.acceptTriggerOrder();
@@ -215,8 +215,8 @@ describe("Disintegrate with Portal-granted Repeat — per-execution 'if this kil
     expect(game.violations()).toEqual([]);
   });
 
-  // BUG — same defect as above, mirrored: Z's un-replaced kill should still draw P1 one card. Actual: 0.
-  test.failing("BUG: (c′) P2 saves X → Z's kill still happened, so P1 draws exactly 1 (not 0, not 2)", async () => {
+  // Mirrored: Z's un-replaced kill still draws P1 exactly one card.
+  test("(c′) P2 saves X → Z's kill still happened, so P1 draws exactly 1 (not 0, not 2)", async () => {
     const { game, hand0 } = await portalDisintegrate(["x", "z"], { zhonyas: true });
     await game.p2.pick("x");
     await game.settle();

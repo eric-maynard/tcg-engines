@@ -58,8 +58,17 @@ export function unitIsOnBoard(cardId: string, ctx: EffectContext): boolean {
  * A death a CERTAIN replacement will replace never happens (370.1.a.1), so
  * those are excluded here; an optional ("you may pay …") one is only known
  * once it has been answered, which is why the reflexive item re-checks.
+ *
+ * rule 373 — a replacement is only a CERTAINTY for a lone death: a single-use
+ * shield (Zhonya's Hourglass) facing several simultaneous deaths saves exactly
+ * one of them, and which one is its controller's choice at the Cleanup. Callers
+ * that defer the verdict to a queued item (`includeReplaced`) must therefore
+ * take every lethally damaged target and let that item's re-check decide.
  */
-export function lethallyDamagedBoundIds(ctx: EffectContext): readonly string[] {
+export function lethallyDamagedBoundIds(
+  ctx: EffectContext,
+  opts?: { readonly includeReplaced?: boolean },
+): readonly string[] {
   return (ctx.boundTargets ?? []).filter((id) => {
     if (!unitIsOnBoard(id, ctx)) return false;
     const might = getEffectiveMight(id, ctx);
@@ -67,7 +76,8 @@ export function lethallyDamagedBoundIds(ctx: EffectContext): readonly string[] {
     const dmg =
       (ctx.cards.getCardMeta?.(id as CoreCardId) as Partial<RiftboundCardMeta> | undefined)
         ?.damage ?? 0;
-    return dmg >= might && !dieWouldBeReplaced(id, ctx);
+    if (dmg < might) return false;
+    return opts?.includeReplaced === true || !dieWouldBeReplaced(id, ctx);
   });
 }
 
@@ -1042,7 +1052,11 @@ export function evaluateEffectCondition(
       // state-based check that runs after the whole effect resolves, so the
       // bound target is still on board here; it was killed iff the preceding
       // damage step left it with lethal damage.
-      return lethallyDamagedBoundIds(ctx).length > 0;
+      // rule 373 — `deferred` marks the gate in front of a "do this:" rider:
+      // its queued item re-checks the kill for real, so a death a single-use
+      // shield MIGHT replace must not suppress the item up front.
+      const deferred = (condition as { deferred?: boolean }).deferred === true;
+      return lethallyDamagedBoundIds(ctx, { includeReplaced: deferred }).length > 0;
     }
     // rule 355.10 (unl-051-219 Ivern) — "Then if you revealed a Bird, Cat,
     // Dog, or Poro, do this: …": the linked follow-up reads the TAGS of the
