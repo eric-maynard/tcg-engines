@@ -90,18 +90,17 @@ function handleEachPlayerKill(
     if (options.length === 0) {
       continue;
     }
-    if (options.length === 1) {
-      killUnits(options, { ...ctx, playerId: pid }, h);
-      continue;
-    }
     if (ctx.draft.pendingChoice) {
       return;
     }
+    // rule 355.10.d.2 — one legal unit does not make this programmatic: the
+    // player still chooses it (one-click Confirm), so the prompt is raised.
     ctx.draft.pendingChoice = {
       effect: { ...effect, eachRemaining: queue },
       options: options as never,
       playerId: pid as never,
       remaining: 1,
+      ...(options.length === 1 ? { soleOption: true as const } : {}),
       sourceCardId: ctx.sourceCardId as never,
       type: "choose-target",
     };
@@ -172,18 +171,16 @@ function handleEachOtherChoosesKill(
     if (options.length === 0) {
       continue;
     }
-    if (options.length === 1) {
-      chosen.push(options[0] as string);
-      continue;
-    }
     if (ctx.draft.pendingChoice) {
       return;
     }
+    // rule 355.10.d.2 — a sole legal option is still this player's choice.
     ctx.draft.pendingChoice = {
       effect: { ...effect, eachChosen: chosen, eachRemaining: queue },
       options: options as never,
       playerId: pid as never,
       remaining: 1,
+      ...(options.length === 1 ? { soleOption: true as const } : {}),
       sourceCardId: ctx.sourceCardId as never,
       type: "choose-target",
     };
@@ -235,19 +232,17 @@ function handleEachOpponentKill(
     if (options.length === 0) {
       continue;
     }
-    if (options.length === 1) {
-      killUnits(options, { ...ctx, playerId: pid }, h);
-      continue;
-    }
     if (ctx.draft.pendingChoice) {
       return;
     }
+    // rule 355.10.d.2 — a sole legal option is still this player's choice.
     ctx.draft.pendingChoice = {
       effect: { ...effect, eachChooser: pid, eachRemaining: queue },
       options: options as never,
       // rule 422.1.a — the OPPONENT is asked, not the source's controller.
       playerId: pid as never,
       remaining: 1,
+      ...(options.length === 1 ? { soleOption: true as const } : {}),
       sourceCardId: ctx.sourceCardId as never,
       type: "choose-target",
     };
@@ -333,18 +328,16 @@ function handleEachPlayerKeepsOne(
     if (options.length === 0) {
       continue;
     }
-    if (options.length === 1) {
-      kept.push(options[0] as string);
-      continue;
-    }
     if (ctx.draft.pendingChoice) {
       return;
     }
+    // rule 355.10.d.2 — a sole legal option is still this player's choice.
     ctx.draft.pendingChoice = {
       effect: { ...effect, eachKept: kept, eachRemaining: queue },
       options: options as never,
       playerId: pid as never,
       remaining: 1,
+      ...(options.length === 1 ? { soleOption: true as const } : {}),
       sourceCardId: ctx.sourceCardId as never,
       type: "choose-target",
     };

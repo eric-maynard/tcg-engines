@@ -83,6 +83,17 @@ export const passivePolicy: Policy = (d) => {
   // announced choice: hand the offer back instead of taking it silently, so the
   // caller can see the pile the engine offered even when only one card fits.
   const isPlayFromPile = d.kind === "pick" && d.semantics === "from-revealed" && d.meta?.onPicked === "play";
+  // rule 355.10.d.2 — a sole legal option is prompted, never auto-bound. Bots
+  // and unattended tests do not need the confirmation click, so settling takes
+  // the option (the answer a human's one-click Confirm would give).
+  if (d.kind === "pick" && d.soleOption === true && d.options[0] && !isPlayFromPile) {
+    return { keys: [d.options[0].key], kind: "pick" };
+  }
+  // rule 355.14.e — a split with one surviving recipient: the whole amount is
+  // the only legal assignment.
+  if (d.kind === "distribute" && d.soleOption === true && d.buckets[0]) {
+    return { allocation: { [d.buckets[0].key]: d.total }, kind: "distribute" };
+  }
   if (d.kind === "pick" && d.options.length === 1 && d.min === 1 && !isPlayFromPile) {
     return { keys: [d.options[0]?.key as string], kind: "pick" };
   }
@@ -212,6 +223,8 @@ export class Game {
     pool?: CardPool;
     autoProcedures?: boolean;
     invariants?: readonly Invariant[];
+    /** rule 355.10.d.2 — hand sole-option prompts back instead of confirming them. */
+    interactive?: boolean;
   }): Promise<Game> {
     const pool = opts.pool ?? (await loadDefaultCardPool());
     const seed = opts.seed ?? "harness";
@@ -226,6 +239,7 @@ export class Game {
     );
     return Game.attach(engine, {
       autoProcedures: opts.autoProcedures,
+      ...(opts.interactive === true ? { interactive: true } : {}),
       invariants: opts.invariants,
       origin: { decks: { [P1]: opts.p1, [P2]: opts.p2 }, kind: "decks", seed },
       players: [P1, P2],
@@ -1458,6 +1472,7 @@ export class Scenario extends ScenarioBuilder {
     const out = await this.materialize();
     return Game.attach(out.built.engine, {
       autoProcedures: out.autoProcedures,
+      interactive: out.interactive,
       invariants: out.invariants,
       origin: { kind: "scenario", spec: out.built.spec },
       players: out.built.spec.players,

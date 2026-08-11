@@ -21,15 +21,13 @@ export function handle_attach(effect: ExecutableEffect, ctx: EffectContext, _h: 
     if (candidates.length === 0) {
       return;
     }
-    if (candidates.length === 1) {
-      attachEquipment(ctx, candidates[0] as string, ctx.sourceCardId);
-      return;
-    }
+    // rule 355.10.d.2 — a sole legal Equipment is still chosen, not auto-taken.
     ctx.draft.pendingChoice = {
       effect,
       options: [...candidates],
       playerId: ctx.playerId,
       remaining: 1,
+      ...(candidates.length === 1 ? { soleOption: true as const } : {}),
       sourceCardId: ctx.sourceCardId,
       type: "choose-target",
     } as typeof ctx.draft.pendingChoice;
@@ -96,15 +94,13 @@ export function handle_attach(effect: ExecutableEffect, ctx: EffectContext, _h: 
     if (holders.length === 0) {
       return;
     }
-    if (holders.length === 1) {
-      attachEquipment(ctx, ctx.sourceCardId, holders[0] as string);
-      return;
-    }
+    // rule 355.10.d.2 — a sole legal holder is still chosen, not auto-taken.
     ctx.draft.pendingChoice = {
       effect,
       options: [...holders],
       playerId: ctx.playerId,
       remaining: 1,
+      ...(holders.length === 1 ? { soleOption: true as const } : {}),
       sourceCardId: ctx.sourceCardId,
       type: "choose-target",
     } as typeof ctx.draft.pendingChoice;
@@ -176,15 +172,19 @@ export function handle_attach(effect: ExecutableEffect, ctx: EffectContext, _h: 
     if (holders.length === 0) {
       return;
     }
-    if (holders.length === 1 || ctx.draft.pendingChoice) {
+    // Another prompt is already open — that one is answered first, so this
+    // holder is taken now (the choice is re-offered on re-entry).
+    if (ctx.draft.pendingChoice) {
       attachEquipment(ctx, equipmentId, holders[0] as string);
       return;
     }
+    // rule 355.10.d.2 — a sole legal holder is still chosen, not auto-taken.
     ctx.draft.pendingChoice = {
       effect: { ...effect, _attachEquipmentId: equipmentId, _attachPhase: "unit" },
       options: holders,
       playerId: ctx.playerId,
       remaining: 1,
+      ...(holders.length === 1 ? { soleOption: true as const } : {}),
       sourceCardId: ctx.sourceCardId,
       type: "choose-target",
     } as typeof ctx.draft.pendingChoice;

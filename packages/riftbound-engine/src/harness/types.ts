@@ -182,6 +182,13 @@ export interface DecisionBase {
   readonly source?: DecisionSource;
   /** true for harness-generated follow-ups (not an engine prompt). */
   readonly synthetic?: boolean;
+  /**
+   * rule 355.10.d.2 — this decision has exactly ONE legal answer and is asked
+   * anyway: being the only valid choice does not make a selection
+   * programmatic. UIs render it as a one-click Confirm (Cancel = decline where
+   * declining is legal); automated clients answer it without a stall.
+   */
+  readonly soleOption?: true;
 }
 
 export type ActionContext = "main" | "chain" | "showdown" | "free" | "procedure";

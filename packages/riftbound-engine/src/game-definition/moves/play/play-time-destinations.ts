@@ -254,15 +254,14 @@ export function raisePlayTimeDestinationChoice(
         node._dest = null;
         continue;
       }
-      if (options.length === 1) {
-        node._dest = options[0] as string;
-        continue;
-      }
+      // rule 355.10.d.2 — one legal destination is still a Move Destination
+      // choice (355.4), so it is offered as a one-click confirm.
       draft.pendingChoice = {
         bindToChainItemId: item.id,
         cardId: movers[0] as string,
         destinationNodeIndex: index,
         options,
+        ...(options.length === 1 ? { soleOption: true as const } : {}),
         playerId: item.controller as string,
         sourceCardId: item.cardId as string,
         type: "choose-destination",
@@ -290,18 +289,15 @@ export function raisePlayTimeDestinationChoice(
       }
       continue;
     }
-    // rule 355.13 — a "you MAY move" instruction keeps its prompt even with a
-    // single destination: declining is an answer.
-    if (options.length === 1 && node.optional !== true) {
-      node._dest = options[0] as string;
-      continue;
-    }
+    // rule 355.10.d.2 / 355.13 — one legal destination is still a choice (and
+    // a "you MAY move" keeps its decline on top of that).
     draft.pendingChoice = {
       bindToChainItemId: item.id,
       cardId: mover,
       destinationNodeIndex: index,
       ...(node.optional === true ? { optional: true } : {}),
       options,
+      ...(options.length === 1 ? { soleOption: true as const } : {}),
       playerId: item.controller as string,
       sourceCardId: item.cardId as string,
       type: "choose-destination",

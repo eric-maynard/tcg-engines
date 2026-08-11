@@ -948,17 +948,17 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
           { ...(subTarget as TargetDescriptor), quantity: "all" },
           { ...resolverCtx, choosing: true } as Parameters<typeof resolveTarget>[1],
         );
-        // rule 383.3.b.1 (rule-id: ven-082-166) — a cost-payment slot is always
-        // the controller's own choice, so it prompts even with one candidate.
-        const promptSingle =
-          (subTarget as { promptWhenSingle?: boolean }).promptWhenSingle === true;
-        if (options.length > 1 || (promptSingle && options.length === 1)) {
+        // rule 355.10.d.2 — every one of these slots is a CHOICE, so a single
+        // candidate is offered exactly as several are (383.3.b.1 said as much
+        // for cost-payment slots; it is the general rule).
+        if (options.length >= 1) {
           const rest = seq.effects.slice(i + 1);
           ctx.draft.pendingChoice = {
             effect: sub,
             options,
             playerId: ctx.playerId,
             remaining: 1,
+            ...(options.length === 1 ? { soleOption: true as const } : {}),
             sourceCardId: ctx.sourceCardId,
             type: "choose-target",
             // rule 355.13 (rule-id: sfd-023-221) — a later "up to one OTHER

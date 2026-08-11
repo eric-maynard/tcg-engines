@@ -682,6 +682,8 @@ export function deriveFromPendingChoice(ctx: DecisionContext, pc: PendingChoice)
         prompt: pc.prompt ?? `Choose ${pc.min === pc.max ? pc.min : `${pc.min}–${pc.max}`}`,
         // rule 356.4.b — the caster's "[N] or [rainbow] less" election.
         ...(pc.resume?.kind === "cost-election" ? { meta: { arg: "cost-election" } } : {}),
+        // rule 355.10.d.2 — a forced set with one candidate is still chosen.
+        ...((pc as { soleOption?: true }).soleOption === true ? { soleOption: true as const } : {}),
         // rule 355.13 / 355.14.b — a finalization-time target set.
         ...(slotSemantics === "split" ? { targeting: "split-targets" as const } : slotSemantics === "upTo" ? { targeting: "up-to" as const } : {}),
         semantics:
@@ -813,6 +815,9 @@ export function deriveFromPendingChoice(ctx: DecisionContext, pc: PendingChoice)
               ? `Split ${total} damage — 1 each to ${bounded.exactTargets} of the targets (the rest cease being targets)`
               : `Split ${total} damage among the targets`,
           total,
+          // rule 355.10.d.2 — one surviving recipient is still an assignment
+          // the chooser makes, so it is shown rather than applied silently.
+          ...((pc as { soleOption?: true }).soleOption === true ? { soleOption: true as const } : {}),
         };
         return d;
       }
@@ -843,6 +848,9 @@ export function deriveFromPendingChoice(ctx: DecisionContext, pc: PendingChoice)
         options: pc.options.map((id) => ({ card: id, key: id, label: ctx.label(id) })),
         prompt: pc.boundTargets ? "Choose a target to drop" : `Choose a target for ${source.cardId ? ctx.label(source.cardId) : "the effect"}`,
         semantics: pc.boundTargets ? "drop-target" : "target",
+        // rule 355.10.d.2 — one legal option is still a choice; flag it so the
+        // UI can confirm in one click and `settle()` never stalls on it.
+        ...((pc as { soleOption?: true }).soleOption === true ? { soleOption: true as const } : {}),
         // rule 402.1 / 402.2 — a declinable choice made while an item is
         // FINALIZED is the controller's announced choice: hand it back to the
         // caller instead of letting the passive policy decline it silently.
@@ -878,6 +886,10 @@ export function deriveFromPendingChoice(ctx: DecisionContext, pc: PendingChoice)
         ]),
         prompt: `Choose a destination for ${ctx.label(pc.cardId)}`,
         semantics: "destination",
+        // rule 355.10.d.2 — one legal destination is still a choice. (An
+        // optional additional cost can still add a "<zone>+pay" variant, so the
+        // decision may list two answers for that one zone.)
+        ...((pc as { soleOption?: true }).soleOption === true ? { soleOption: true as const } : {}),
         // `cardId` is the MOVER; a play-time choice (rule 355.4) also names its chain item.
         source: { ...base.source, cardId: pc.cardId, pendingChoiceType: pc.type },
       };
@@ -896,6 +908,8 @@ export function deriveFromPendingChoice(ctx: DecisionContext, pc: PendingChoice)
         options: pc.options.map((idx) => ({ key: String(idx), label: modeLabel(pc.effect, idx), mode: idx })),
         prompt: "Choose a mode",
         semantics: "mode",
+        // rule 355.10.d.2 — one legal mode is still a choice.
+        ...((pc as { soleOption?: true }).soleOption === true ? { soleOption: true as const } : {}),
       };
       return d;
     }
@@ -1175,7 +1189,7 @@ function deriveBattlefieldSelectionDecision(ctx: DecisionContext): Decision | nu
       continue;
     }
     const options = ctx.registeredBattlefieldsOf(seat);
-    if (options.length < 2) {
+    if (options.length < 1) {
       continue;
     }
     const d: PickDecision = {
@@ -1185,6 +1199,9 @@ function deriveBattlefieldSelectionDecision(ctx: DecisionContext): Decision | nu
       max: 1,
       min: 1,
       options: options.map((id) => ({ card: id, key: id, label: ctx.label(id) })),
+      // rule 355.10.d.2 — one registered battlefield is still the one the seat
+      // KEEPS: asked, not assumed.
+      ...(options.length === 1 ? { soleOption: true as const } : {}),
       prompt: "Select the battlefield you keep; the rest are set aside",
       seat,
       source: { moveId: "selectBattlefield" },

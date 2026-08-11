@@ -21,6 +21,8 @@ const VI_PEACEKEEPER = "unl-176-219";
 /** P1's turn. P1 controls bf1 with a 3-Might Guard; Faefolk in P1's base; P2's Vi, Peacekeeper in P2's base. */
 function board() {
   return scenario()
+    // rule 355.10.d.2 — this file asserts the prompt a SOLE legal option still raises.
+    .interactive()
     .battlefield("bf1", { controller: P1 })
     .battlefield("bf2", { controller: P2 })
     .unit(P1, "bf1", { might: 3, name: "Guard" }, "guard")

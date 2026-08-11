@@ -392,16 +392,14 @@ export function handle_move(effect: ExecutableEffect, ctx: EffectContext, h: Eff
       return;
     }
     const theirs = pool.filter((id) => arrivingController(ctx, id) === chooser);
-    if (theirs.length === 1) {
-      const mover = theirs[0] as string;
-      arriveByEffect(ctx, [mover], moveCardWithEvent(ctx, mover, destZone));
-      return;
-    }
+    // rule 355.10.d.2 — the opponent still CHOOSES which of their units moves,
+    // even when only one of them can: a sole legal option is not programmatic.
     ctx.draft.pendingChoice = {
       effect: { ...(effect as object), _destZone: destZone },
       options: theirs,
       playerId: chooser,
       remaining: 1,
+      ...(theirs.length === 1 ? { soleOption: true as const } : {}),
       sourceCardId: ctx.sourceCardId,
       type: "choose-target",
     } as RiftboundGameState["pendingChoice"];
@@ -751,7 +749,9 @@ export function handle_move(effect: ExecutableEffect, ctx: EffectContext, h: Eff
       if (options.length === 0) {
         continue;
       }
-      if (options.length === 1 || ctx.draft.pendingChoice) {
+      // A prompt is already open for an earlier unit of this batch — that one
+      // is answered first, so this unit takes its only destination now.
+      if (ctx.draft.pendingChoice) {
         const landed = moveCardWithEvent(ctx, cardId, options[0] as string);
         // rule-id: unl-144-219 — Rule 450: arriving at a non-controlled
         // battlefield applies Contested so combat is staged.
@@ -759,11 +759,14 @@ export function handle_move(effect: ExecutableEffect, ctx: EffectContext, h: Eff
         runThenAt(cardId, landed);
         continue;
       }
+      // rule 355.10.d.2 — a sole legal destination is still a Move Destination
+      // CHOICE (355.4), so it is offered rather than taken silently.
       ctx.draft.pendingChoice = {
         cardId,
         options,
         playerId: ctx.playerId,
         sourceCardId: ctx.sourceCardId,
+        ...(options.length === 1 ? { soleOption: true as const } : {}),
         ...(thenAtDestination !== undefined ? { then: thenAtDestination } : {}),
         type: "choose-destination",
       } as RiftboundGameState["pendingChoice"];

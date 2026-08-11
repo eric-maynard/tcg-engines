@@ -48,8 +48,6 @@ import {
 import {
   beginRevealPairLock,
   beginRevealSlotLock,
-  chargeDeflectFor,
-  fireChooseForBoundTargets,
   filterDeflectAffordable,
   isSinglePickSlot,
 } from "./reveal-target-lock";
@@ -918,27 +916,18 @@ function lockRevealedSpellTarget(
   if (affordable.length === 0) {
     return;
   }
-  // rule 355.5 with rule 402.2 — a lone legal candidate is no decision, but it is
-  // still CHOSEN as the card is played: lock it onto the chain item so a response
-  // that moves it away mistargets (359.3.e.5) and a later re-choice by a new
-  // controller (752.1) starts from a real target instead of nothing.
-  if (affordable.length === 1) {
-    const idx = items?.findIndex((it) => it.id === item.id) ?? -1;
-    if (items && idx >= 0) {
-      items[idx] = { ...items[idx], targets: [affordable[0] as string] };
-    }
-    // rule 809.1.c.1 — the surcharge is owed as the target is chosen.
-    chargeDeflectFor(draft, playerId, cardId, affordable, ctx);
-    // rule 359.2 — no prompt, but the object was still chosen.
-    fireChooseForBoundTargets(draft, playerId, affordable, ctx);
-    return;
-  }
+  // rule 355.10.d.2 with rule 402.2 — a lone legal candidate is STILL the
+  // caster's choice: it is offered (the [Deflect] surcharge 809.1.c.1 and
+  // "when you choose me" 359.2 are then charged/fired off the answer, in
+  // `pending-choice.ts`), and the answer locks it onto the chain item so a
+  // response that moves it away mistargets (359.3.e.5).
   draft.pendingChoice = {
     bindToChainItemId: item.id,
     effect: item.effect as never,
     options: affordable as never,
     playerId: playerId as never,
     remaining: 1,
+    ...(affordable.length === 1 ? { soleOption: true as const } : {}),
     sourceCardId: cardId as never,
     ...(deflectTax ? { deflectTax: true as const } : {}),
     type: "choose-target",

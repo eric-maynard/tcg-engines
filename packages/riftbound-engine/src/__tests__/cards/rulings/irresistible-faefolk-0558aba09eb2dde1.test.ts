@@ -20,6 +20,8 @@ const GUST = "ogn-169-298";
 /** P1's turn. bf1 open and empty. P1: Faefolk in base. P2: Homebody (2) in base, Gust in hand + [1]. */
 function board() {
   return scenario()
+    // rule 355.10.d.2 — this file asserts the prompt a SOLE legal option still raises.
+    .interactive()
     .battlefield("bf1", { controller: null })
     .unit(P1, "base", IRRESISTIBLE_FAEFOLK, "faefolk")
     .unit(P2, "base", { might: 2, name: "Homebody" }, "homebody")

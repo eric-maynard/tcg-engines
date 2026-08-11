@@ -195,6 +195,8 @@ describe("Irresistible Faefolk (unl-112-219)", () => {
 
   test("an enemy unit already AT that battlefield is not offered — it cannot 'move to' where it is (355.4.a)", async () => {
     const game = await scenario()
+      // rule 355.10.d.2 — this test asserts the prompt a SOLE legal option still raises.
+      .interactive()
       .battlefield("bf1", { controller: P2 })
       .unit(P1, "base", CARD, "fae")
       .unit(P2, "bf1", { might: 1, name: "There" }, "there")

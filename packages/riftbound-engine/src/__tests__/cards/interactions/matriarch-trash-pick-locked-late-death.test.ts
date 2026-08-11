@@ -66,6 +66,8 @@ const KILL_SHOT = {
  */
 function board() {
   return scenario()
+    // rule 355.10.d.2 — this file asserts the prompt a SOLE legal option still raises.
+    .interactive()
     .resources(P1, { energy: 3, power: { chaos: 1 } })
     .resources(P2, { energy: 2, power: { fury: 1 } })
     .battlefield("bf1", { controller: P1 })
@@ -176,6 +178,8 @@ describe("Tail-Cloaked Matriarch × Shakedown — the trash pick is locked at fi
   // and raises an acceptable "you may" whose acceptance then does nothing.
   test("(d) a trigger with no legal choice is removed from the chain during finalization (402.4)", async () => {
     const game = await scenario()
+    // rule 355.10.d.2 — this file asserts the prompt a SOLE legal option still raises.
+    .interactive()
       .resources(P1, { energy: 3, power: { chaos: 1 } })
       .unit(P1, "base", MATRIARCH, "mat")
       .trash(P1, FOUR_DROP, "four")
@@ -189,6 +193,8 @@ describe("Tail-Cloaked Matriarch × Shakedown — the trash pick is locked at fi
 
   test("(d) removal is NOT a counter (402.4.a): the [2][chaos] stays spent, the Matriarch is still Empowered, and the trash is untouched", async () => {
     const game = await scenario()
+    // rule 355.10.d.2 — this file asserts the prompt a SOLE legal option still raises.
+    .interactive()
       .resources(P1, { energy: 3, power: { chaos: 1 } })
       .unit(P1, "base", MATRIARCH, "mat")
       .trash(P1, FOUR_DROP, "four")
@@ -206,6 +212,8 @@ describe("Tail-Cloaked Matriarch × Shakedown — the trash pick is locked at fi
 
   test("(e) a V killed BEFORE the Empower is in the option set — the snapshot is taken at finalization, so both T2 and V are offered", async () => {
     const game = await scenario()
+    // rule 355.10.d.2 — this file asserts the prompt a SOLE legal option still raises.
+    .interactive()
       .resources(P1, { energy: 3, power: { chaos: 1 } })
       .unit(P1, "base", MATRIARCH, "mat")
       .trash(P1, T2, "t2")

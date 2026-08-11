@@ -671,16 +671,14 @@ function bindReplayTarget(
   if (options.length === 0) {
     return;
   }
-  if (options.length === 1) {
-    (item as { targets?: readonly string[] }).targets = [options[0] as string];
-    return;
-  }
+  // rule 355.10.d.2 — a replayed card's target is chosen, not auto-bound.
   ctx.draft.pendingChoice = {
     bindToChainItemId: item.id,
     effect: spellEffect,
     options,
     playerId: replayPlayer,
     remaining: 1,
+    ...(options.length === 1 ? { soleOption: true as const } : {}),
     sourceCardId: cardId,
     type: "choose-target",
   } as unknown as typeof ctx.draft.pendingChoice;

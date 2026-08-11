@@ -69,6 +69,17 @@ export interface EngineBackendOptions {
   /** Throw HarnessError(INVARIANT) instead of just recording violations. */
   readonly strictInvariants?: boolean;
   readonly origin?: TranscriptOrigin;
+  /**
+   * rule 355.10.d.2 — the engine raises a real prompt even when a choice has
+   * exactly ONE legal option (being the only valid choice does not make a
+   * selection programmatic). A human client shows that prompt as a one-click
+   * Confirm. Automated clients (tests, bots, the goldfish driver) do not need
+   * the click, so by default this backend answers a `soleOption` prompt with
+   * its one option the moment it is raised — the same answer Confirm gives.
+   * `interactive: true` turns that off and hands the prompt back, which is
+   * what a UI-facing driver and the sole-option specs want.
+   */
+  readonly interactive?: boolean;
 }
 
 interface Parked {
@@ -90,6 +101,10 @@ export class EngineBackend implements GameBackend {
   private readonly autoProcedures: boolean;
   private readonly invariants: readonly Invariant[];
   private readonly strictInvariants: boolean;
+  /** rule 355.10.d.2 — false (the default) auto-confirms sole-option prompts; see EngineBackendOptions. */
+  private readonly interactive: boolean;
+  /** Re-entrancy guard: a confirm executes moves, which would call back in. */
+  private confirming = false;
   private readonly origin: TranscriptOrigin;
   private seqNo = 0;
   private parked?: Parked;
@@ -108,7 +123,12 @@ export class EngineBackend implements GameBackend {
     this.autoProcedures = opts.autoProcedures ?? true;
     this.invariants = opts.invariants ?? DEFAULT_INVARIANTS;
     this.strictInvariants = opts.strictInvariants ?? false;
+    this.interactive = opts.interactive ?? false;
     this.origin = opts.origin ?? { kind: "opaque" };
+    // rule 355.10.d.2 — a sole-option prompt can already be open before anyone
+    // acts (the pregame battlefield keep of a seat that registered one), so an
+    // automated client confirms it here too.
+    this.confirmSoleOptions([]);
     this.prevSnap = takeSnapshot(engine);
     this.initialHash = hashSnapshot(this.prevSnap);
   }
@@ -538,8 +558,18 @@ export class EngineBackend implements GameBackend {
   ): ActResult {
     const actor = move.playerId || seat;
     const params = { ...move.params } as Record<string, unknown>;
-    const r = applyMove(this.engine, this.players, actor, move.moveId, params, {
-      autoProcedures: this.autoProcedures,
+    // rule 355.10.d.2 — the move and the sole-option confirms it forces share
+    // ONE undo group: `undo()` rewinds a player-facing action, and a prompt
+    // whose only legal answer the harness gave for you is not one.
+    const auto: ExecutedMove[] = [];
+    const r = this.engine.withUndoGroup(() => {
+      const res = applyMove(this.engine, this.players, actor, move.moveId, params, {
+        autoProcedures: this.autoProcedures,
+      });
+      if (res.success) {
+        this.confirmSoleOptions(auto);
+      }
+      return res;
     });
     if (!r.success) {
       return {
@@ -557,6 +587,7 @@ export class EngineBackend implements GameBackend {
     for (const run of r.procedures) {
       executed.push({ auto: true, moveId: run.moveId, params: run.params, seat: run.seat });
     }
+    executed.push(...auto);
     this.seqNo += 1;
     const cur = takeSnapshot(this.engine);
     const found = runInvariants(this.invariants, {
@@ -586,6 +617,81 @@ export class EngineBackend implements GameBackend {
       });
     }
     return { decision: this.decision(), executed, ok: true, seq: this.seqNo, violations };
+  }
+
+  /**
+   * rule 355.10.d.2 — a choice with exactly one legal option is still asked
+   * (`soleOption`), so an automated client has to answer it. This is that
+   * client: it gives the answer a human's one-click Confirm would give,
+   * immediately, so a scripted line reads exactly as it did while the engine
+   * auto-bound the option — while the engine itself has really made the
+   * choice (targeting, [Deflect], "when you choose me" all fire).
+   * `interactive: true` skips this and hands the prompt back instead.
+   */
+  private confirmSoleOptions(executed: ExecutedMove[]): void {
+    if (this.interactive || this.confirming) {
+      return;
+    }
+    this.confirming = true;
+    try {
+      this.drainSoleOptions(executed);
+    } finally {
+      this.confirming = false;
+    }
+  }
+
+  private drainSoleOptions(executed: ExecutedMove[]): void {
+    // Bounded: one answer per prompt, and a prompt chain longer than this is a
+    // runaway the caller should see rather than have silently drained.
+    for (let i = 0; i < 32; i++) {
+      const d = this.decision();
+      if (!d || d.soleOption !== true) {
+        return;
+      }
+      // rule 113 / 486.5 — the pregame keep is a setup MOVE, not a
+      // pendingChoice; answer it the way `actSync` does.
+      if (d.kind === "pick" && d.source?.moveId === "selectBattlefield" && d.options[0]) {
+        const keep = String(d.options[0].key);
+        const params = { battlefieldId: keep, discardIds: [], playerId: d.seat };
+        const bf = applyMove(this.engine, this.players, d.seat, "selectBattlefield", params, {
+          autoProcedures: this.autoProcedures,
+        });
+        if (!bf.success) {
+          return;
+        }
+        executed.push({ auto: true, moveId: "selectBattlefield", params, seat: d.seat });
+        this.finalizePregameIfBattlefieldsChosen();
+        continue;
+      }
+      let answer: Answer | undefined;
+      if (d.kind === "pick" && d.options[0]) {
+        answer = { keys: [d.options[0].key], kind: "pick" };
+      } else if (d.kind === "distribute" && d.buckets[0]) {
+        // rule 355.14.e — one recipient takes the whole amount; that is the
+        // only legal assignment, so Confirm is the only answer.
+        answer = { allocation: { [d.buckets[0].key]: d.total }, kind: "distribute" };
+      }
+      if (!answer) {
+        return;
+      }
+      const resolved = resolvePendingAnswer(this.ctx(), d, answer);
+      if (resolved.type === "error") {
+        return;
+      }
+      const mv = resolved.move;
+      const seat = (mv.playerId || d.seat) as Seat;
+      const mvParams = { ...mv.params } as Record<string, unknown>;
+      const run = applyMove(this.engine, this.players, seat, mv.moveId, mvParams, {
+        autoProcedures: this.autoProcedures,
+      });
+      if (!run.success) {
+        return;
+      }
+      executed.push({ auto: true, moveId: mv.moveId, params: mvParams, seat });
+      for (const p of run.procedures) {
+        executed.push({ auto: true, moveId: p.moveId, params: p.params, seat: p.seat });
+      }
+    }
   }
 
   /**

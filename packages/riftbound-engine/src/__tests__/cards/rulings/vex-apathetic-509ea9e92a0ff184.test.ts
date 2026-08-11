@@ -26,6 +26,8 @@ const NIDALEE_CAT_FORM = "unl-114-219";
  */
 function board() {
   return scenario()
+    // rule 355.10.d.2 — this file asserts the prompt a SOLE legal option still raises.
+    .interactive()
     .turn(3)
     .active(P2)
     .resources(P2, { energy: 3, power: { body: 1, rainbow: 1 } })

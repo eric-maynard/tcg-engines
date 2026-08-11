@@ -1392,15 +1392,15 @@ export function executeResolvedItem(
         return undefined;
       }
       boundTargets = [];
-    } else if (
-      options.length >= 2 ||
-      (fixedMoveDest !== undefined && options.length === 1) ||
-      // rule 383.3.b.1 (rule-id: ven-082-166) — paying a cost is the
-      // controller's own deliberate choice, so it is prompted even when only
-      // one legal payment exists.
-      ((target as { promptWhenSingle?: boolean }).promptWhenSingle === true &&
-        options.length === 1)
-    ) {
+    } else if (options.length >= 1) {
+      // rule 355.10.d.2 — being the only valid option does NOT make a selection
+      // programmatic. A sole legal target is still a CHOICE: it targets, so
+      // "when you choose me" / [Deflect] fire off it, and where declining is
+      // legal the chooser may still decline. So the prompt is raised for one
+      // option exactly as for many; `soleOption` lets the UI render it as a
+      // one-click confirm and lets the harness settle it without a stall.
+      // (`fixedMoveDest` / `promptWhenSingle` used to be the hand-listed
+      // exceptions to a `>= 2` gate — they are now the general rule.)
       // rule 355.10 (unl-112-219) — dragging a unit to a destination the
       // trigger already fixed is still the controller's public choice, so it is
       // prompted even when 355.4.a leaves exactly one legal candidate.
@@ -1411,6 +1411,8 @@ export function executeResolvedItem(
         effect,
         options,
         remaining: 1,
+        // rule 355.10.d.2 — a one-click confirm, not an auto-pick.
+        ...(options.length === 1 ? { soleOption: true as const } : {}),
         // rule 402.2 — while finalizing, the pick is bound onto the item.
         ...bindTag,
         // rule 402.1 / 355.13 (ven-114-166 Kharox) — a "you may" instruction

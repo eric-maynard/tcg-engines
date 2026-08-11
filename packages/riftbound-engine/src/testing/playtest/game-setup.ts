@@ -289,9 +289,10 @@ export function createPlayableGame(
   const instanceIds = { p1: [] as string[], p2: [] as string[] };
 
   const bfInstanceIds: string[] = [];
-  // rule 486.5: with three registered battlefields the keep is a real choice.
+  // rule 486.5 / 355.10.d.2: the keep is a real choice — and one registered
+  // battlefield does not make it programmatic, so it is asked either way.
   const needsBattlefieldSelection =
-    opts.battlefieldSelection === "decision" && [deck1, deck2].some((d) => (d.battlefieldIds?.length ?? 0) > 1);
+    opts.battlefieldSelection === "decision" && [deck1, deck2].some((d) => (d.battlefieldIds?.length ?? 0) > 0);
   for (const [pid, deck, bucket] of [
     [P1, deck1, instanceIds.p1],
     [P2, deck2, instanceIds.p2],
@@ -363,15 +364,9 @@ export function createPlayableGame(
         const def = defById.get(bfDef);
         if (def) cardReg.register(cid, makeLookupPayload(def, cid));
       }
-      // rule 355.5 — a seat with a single registered battlefield has nothing to
-      // choose, so its keep is recorded at once.
-      const onlyBf = deck.battlefieldIds[0];
-      if (deck.battlefieldIds.length === 1 && onlyBf) {
-        engine.executeMove("selectBattlefield", {
-          params: { battlefieldId: `${pid}-bf-${onlyBf}`, discardIds: [], playerId: pid },
-          playerId: pid as PlayerId,
-        });
-      }
+      // rule 355.10.d.2 — a seat that registered ONE battlefield still KEEPS
+      // it as a choice; the pick is offered (flagged `soleOption`) rather than
+      // recorded on their behalf.
       continue;
     }
     const bfDef = deck.battlefieldIds[0];

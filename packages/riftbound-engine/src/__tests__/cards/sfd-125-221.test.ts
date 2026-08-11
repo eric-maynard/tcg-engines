@@ -15,6 +15,8 @@ const CARD = "sfd-125-221";
 
 function board() {
   return scenario()
+    // rule 355.10.d.2 — this file asserts the prompt a SOLE legal option still raises.
+    .interactive()
     .battlefield("bf1", { controller: null })
     .battlefield("bf2", { controller: null })
     .resources(P1, { power: { chaos: 1 } })

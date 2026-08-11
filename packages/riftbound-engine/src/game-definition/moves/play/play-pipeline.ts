@@ -852,10 +852,8 @@ export function bindPlayedSpellTarget(
   if (options.length === 0) {
     return;
   }
-  if (options.length === 1) {
-    (item as { targets?: readonly string[] }).targets = [options[0] as string];
-    return;
-  }
+  // rule 355.10.d.2 — the played card's target is CHOSEN even when only one is
+  // legal ("when you choose me" / [Deflect] fire off the answer).
   if (draft.pendingChoice) {
     return;
   }
@@ -865,6 +863,7 @@ export function bindPlayedSpellTarget(
     options,
     playerId,
     remaining: 1,
+    ...(options.length === 1 ? { soleOption: true as const } : {}),
     sourceCardId: cardId,
     type: "choose-target",
   } as unknown as typeof draft.pendingChoice;

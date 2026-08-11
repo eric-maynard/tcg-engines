@@ -337,7 +337,9 @@ function pendingPickLabel(pending, p) {
   }
   // A look / reveal pick names the ACTION, never a bare card name ("Recycle Chaos Rune", "Draw Cleave").
   if (p.pickedCardId && pending?.type === "reveal-and-pick") return revealPickInfo(pending).sidebarLabel(p.pickedCardId);
-  if (p.pickedCardId) return promptName(p.pickedCardId) + (p.paidAdditionalCost ? " (pay additional cost)" : "");
+  // rule 355.10.d.2 — a sole legal option is still a CHOICE, so it is asked;
+  // read the one button as the confirm it is ("Confirm Skulker").
+  if (p.pickedCardId) return (pending?.soleOption ? "Confirm " : "") + promptName(p.pickedCardId) + (p.paidAdditionalCost ? " (pay additional cost)" : "");
   if (p.pickedPlayerId) return pName(p.pickedPlayerId);
   if (p.pickedName != null) return String(p.pickedName);
   // Rule ogn-102-298 / sfd-109-221: destination zone (+ optional additional cost of a pending play).
@@ -431,6 +433,10 @@ function renderPendingChoiceModal() {
     ? esc(`Choosing a card costs ${pickCostText.replace(/^pay /, "")} — or decline`)
     : optInCostText
     ? esc(`Yes costs: ${optInCostText.replace(/^pay /, "")} — No is free`)
+    : pending.soleOption
+    // rule 355.10.d.2 — being the only valid choice does not make a selection
+    // programmatic: the player still makes it (and it still targets).
+    ? "Only one legal choice — confirm it"
     : "Play is paused until you choose"}</div>`;
   // The card whose ability is asking: show its art + printed text IN the prompt —
   // the backdrop dims the board and suspends hover preview, so without this the

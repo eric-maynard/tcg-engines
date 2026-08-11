@@ -164,7 +164,10 @@ export function raisePlayTimeModeChoice(
           const options = modeTargetOptions(next, next._chosenIndex as number, ctx).filter(
             (id) => surchargeOf(id) <= pooled,
           );
-          if (options.length >= 2) {
+          // rule 355.10.d.2 — the mode's target is chosen even when only one
+          // is legal (the [Deflect] surcharge and "when you choose me" are then
+          // paid/fired off the ANSWER, in `pending-choice.ts`).
+          if (options.length >= 1) {
             draft.pendingChoice = {
               bindToChainItemId: itemId,
               effect: modeEffect(next, next._chosenIndex as number),
@@ -172,35 +175,18 @@ export function raisePlayTimeModeChoice(
               playerId,
               sourceCardId,
               type: "choose-target",
+              ...(options.length === 1 ? { soleOption: true as const } : {}),
               ...(options.some((id) => surchargeOf(id) > 0) ? { deflectTax: true } : {}),
             };
             return true;
-          }
-          if (options.length === 1) {
-            found.items[found.index] = { ...item, targets: [options[0] as string] };
-            if (isSpell) {
-              payDeflectSurcharge(
-                ctx.draft as Parameters<typeof payDeflectSurcharge>[0],
-                playerId,
-                [options[0] as string],
-                ctx.cards as Parameters<typeof payDeflectSurcharge>[3],
-                ctx.zones as Parameters<typeof payDeflectSurcharge>[4],
-              );
-            }
-            // rule 359.2 — "when you choose me" fires as the choosing spell is finalized.
-            ctx.fireTriggers?.({
-              cardId: options[0] as string,
-              chooserId: playerId,
-              sourceType: isSpell ? "spell" : "ability",
-              type: "choose",
-            } as Parameters<NonNullable<typeof ctx.fireTriggers>>[0]);
           }
         }
         continue;
       }
       if (next._chosenTargets === undefined) {
         const options = modeTargetOptions(next, next._chosenIndex as number, ctx);
-        if (options.length >= 2) {
+        // rule 355.10.d.2 — one legal target is still a target CHOICE.
+        if (options.length >= 1) {
           draft.pendingChoice = {
             bindToChainItemId: itemId,
             choiceNodeIndex: nodeIndex,
@@ -209,6 +195,7 @@ export function raisePlayTimeModeChoice(
             playerId,
             sourceCardId,
             type: "choose-target",
+            ...(options.length === 1 ? { soleOption: true as const } : {}),
           };
           return true;
         }
@@ -240,13 +227,8 @@ export function raisePlayTimeModeChoice(
     if (options.length === 0) {
       return false;
     }
-    // A forced mode is still a choice made now — lock it and move on, so the
-    // last [Repeat] execution does not re-open the menu as it resolves; its
-    // target is then chosen like any named mode's.
-    if (options.length === 1) {
-      next._chosenIndex = options[0] as number;
-      return raisePlayTimeModeChoice(draft, itemId, rootEffect, playerId, sourceCardId, ctx);
-    }
+    // rule 355.10.d.2 / 355.3 — a forced mode is still the mode the controller
+    // NAMES: it is offered (one-click confirm), not locked behind their back.
     draft.pendingChoice = {
       bindToChainItemId: itemId,
       effect: next,
@@ -254,6 +236,7 @@ export function raisePlayTimeModeChoice(
       playerId,
       sourceCardId,
       type: "choose-mode",
+      ...(options.length === 1 ? { soleOption: true as const } : {}),
       ...(next.notChosenThisTurn === true ? { notChosenThisTurn: true } : {}),
     };
     return true;

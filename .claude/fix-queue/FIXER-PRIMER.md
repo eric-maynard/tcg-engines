@@ -31,6 +31,15 @@ Recipe: 1) dump enriched abilities. 2) JSON wrong → explicit `abilities` in th
 3) JSON right → jump to the effect/trigger/static/cost section below. 4) run only the card's test file while iterating.
 
 ## 2. Targets / filters
+- **A SOLE LEGAL OPTION IS STILL A CHOICE (rule 355.10.d.2)** — never re-introduce an `options.length === 1` (or
+  `>= 2`) short-circuit that binds the only candidate instead of asking. Being the only valid choice does NOT make a
+  selection programmatic: the object is still targeted ("when you choose me" 355.14.d / 359.2 fires, the [Deflect]
+  surcharge 809.1.c.1 is owed at pick time) and a declinable choice stays declinable. Raise the normal
+  `pendingChoice` with `soleOption: true` (targets, destinations, modes, cost payers, split recipients). A
+  PROGRAMMATIC selection (355.10.d — "each unit", "all units with 2 or less Might") is not a choice and must NOT be
+  prompted. Bots/tests do not click: `E/harness/engine-backend.ts confirmSoleOptions` answers a `soleOption` prompt
+  immediately (and `passivePolicy` does the same in `settle()`); `scenario().interactive()` surfaces it instead.
+  Spec: `E/__tests__/core-rules/sole-option-choices.test.ts`; design note: DESIGN.md "A sole legal option is still a choice".
 - `T/targeting/riftbound-target-dsl.ts` — `Target {type, controller, location, filter, quantity, excludeSelf, totalMight}`;
   `Location` = `base|battlefield|here|same|trash|hand|deck|anywhere|…`; `SimpleFilter` = `mighty buffed damaged stunned ready
   exhausted token equipped attacking defending in-combat alone facedown`; object filters `{tag} {excludeTag} {might:{lt,lte,gt,gte,eq}}

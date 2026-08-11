@@ -429,6 +429,8 @@ export interface ScenarioBuildOutput {
   readonly invariants?: readonly Invariant[];
   readonly strictInvariants: boolean;
   readonly autoProcedures: boolean;
+  /** rule 355.10.d.2 — hand sole-option prompts back instead of auto-confirming them. */
+  readonly interactive: boolean;
 }
 
 type MutableSpec = {
@@ -449,6 +451,7 @@ export class ScenarioBuilder {
   private invariantSet?: Invariant[];
   private strictInv = false;
   private autoProc = true;
+  private interactiveOpt = false;
   private counter = 0;
 
   constructor(opts: ScenarioOptions = {}) {
@@ -682,6 +685,17 @@ export class ScenarioBuilder {
     return this;
   }
 
+  /**
+   * rule 355.10.d.2 — drive this game the way a human client does: a choice
+   * with exactly ONE legal option is handed back as a real prompt (a one-click
+   * Confirm in the UI) instead of being answered for you. Off by default so a
+   * scripted test reads as one line per player decision.
+   */
+  interactive(v = true): this {
+    this.interactiveOpt = v;
+    return this;
+  }
+
   seed(s: string): this {
     this.spec.seed = s;
     return this;
@@ -700,6 +714,7 @@ export class ScenarioBuilder {
     return {
       autoProcedures: this.autoProc,
       built,
+      interactive: this.interactiveOpt,
       invariants: [...(this.invariantSet ?? DEFAULT_INVARIANTS), ...this.extraInvariants],
       pool,
       scripts: new Map(this.scripts),

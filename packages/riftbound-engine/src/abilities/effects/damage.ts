@@ -257,19 +257,16 @@ function resolveBoundSplit(effect: ExecutableEffect, ctx: EffectContext): boolea
       return true;
     }
   }
-  if (legal.length === 1) {
-    dealHits(effect, ctx, [{ amount: n, targetId: legal[0] as string }], [legal[0] as string], {
-      noSourceBonus: true,
-    });
-    return true;
-  }
   if (ctx.draft.pendingChoice !== undefined) {
     return true;
   }
+  // rule 355.10.d.2 — a split with one surviving recipient is still an
+  // ASSIGNMENT the chooser makes (355.14.e); it is shown, not applied silently.
   ctx.draft.pendingChoice = {
     assign: true,
     effect,
     exactTargets,
+    ...(legal.length === 1 ? { soleOption: true as const } : {}),
     maxPer,
     minPer,
     options: legal,

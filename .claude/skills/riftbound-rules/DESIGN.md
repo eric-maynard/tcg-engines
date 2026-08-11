@@ -103,6 +103,28 @@ Rule 383.3.d ("the controller selects the order to place simultaneous triggers o
   offering the order. The sidebar only keeps a compact hint ("Reorder N triggers in the chain popup…" + "Keep this
   order").
 
+## A sole legal option is still a choice (355.10.d.2)
+Rule 355.10.d.2: **being the only valid choice does NOT make a selection programmatic.** So the engine never
+short-circuits a choice down to "there is only one, take it" — a lone legal target/destination/mode/payer/recipient
+raises the same prompt as five of them, flagged `soleOption: true` on the `pendingChoice` (and on the harness
+`Decision`). Consequences that would be LOST by auto-binding and are the reason for the rule: the object is still
+TARGETED, so "when you choose me" (355.14.d / 359.2) fires, the [Deflect] surcharge (809.1.c.1) is incurred at pick
+time, and where the choice is declinable the player may still decline it.
+- **UI**: a sole-option prompt is a one-click confirm — the single candidate is shown highlighted with
+  **Confirm** / **Cancel**. Cancel = decline for an optional choice, or "choose nothing" where that is legal;
+  a mandatory sole-option prompt has Confirm only.
+- **NOT a choice, so NOT prompted** (355.10.d): a *programmatic* selection — "each unit", "all units with 2 or less
+  Might", every effect whose object set is the whole of a description rather than a selection from it. Those keep
+  resolving silently; do not "fix" them by adding a prompt.
+- **Combat damage** stays the one deliberate exception, and it is not an exception to 355.10.d.2: rule 465.2.c.3
+  gives the assigning player the choice "whenever more than one legal assignment exists", so a side facing a single
+  opposing unit has no selection to make at all. Effect splits (355.14.e — "deal 5 split among …") DO prompt with a
+  single surviving recipient, because there the recipients were chosen and the division is still the chooser's.
+- **Automated drivers** (bot, goldfish auto-play, the ~27k harness tests) do not need the click: `EngineBackend`
+  answers a `soleOption` prompt with its one option the instant it is raised, and `settle()`'s passive policy does
+  the same — the same answer Confirm gives. Build a scenario with `.interactive()` to see the prompt instead. The
+  gate is that flag, never the option count.
+
 ## Interactions
 - Hover on any card (hand, board, battlefield, legend/champion, runes, prompt tiles, trash top) → floating preview with the enlarged art PLUS name/type and full rules text (+ state chips); position:fixed, pointer-events:none, never shifts layout, auto-hides on mouseout/detach/modal (user request 2026-08-10: 'mouse over battlefield to see more clearly should work')
 - No fly-animation on zone change — cards appear at destination immediately

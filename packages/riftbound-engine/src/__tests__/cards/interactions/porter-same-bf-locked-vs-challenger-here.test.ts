@@ -59,6 +59,8 @@ async function drainChain(game: Game): Promise<void> {
 /** P1's Fae Porter and an ally wait in base; bfA is P1's; P1 holds Flash and one [chaos]. */
 function porterBoard() {
   return scenario()
+    // rule 355.10.d.2 — this file asserts the prompt a SOLE legal option still raises.
+    .interactive()
     .resources(P1, { energy: 2, power: { chaos: 1 } })
     .battlefield("bfA", { controller: P1 })
     .unit(P1, "base", PORTER, "porter")

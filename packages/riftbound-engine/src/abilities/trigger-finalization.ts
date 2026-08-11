@@ -466,10 +466,9 @@ function settleObjectCost(
   }
   const needed = parts.reduce((n, p) => n + p.needed, 0);
   const options = [...new Set(pools.flat())];
-  if (needed === 1 && options.length === 1) {
-    payTriggerObjectCost(draft, ctx, item.id, options);
-    return "paid";
-  }
+  // rule 355.10.d.2 — a sole legal payer is still NAMED by the controller
+  // (the opt-in they already accepted does not name it for them), so the pick
+  // is offered rather than paid silently.
   const nameOf = (cardId: string): string =>
     (ctx.cards.getCardName?.(cardId as CoreCardId) as string | undefined) ??
     (getGlobalCardRegistry().get(cardId) as { name?: string } | undefined)?.name ??
@@ -486,6 +485,7 @@ function settleObjectCost(
     prompt: `Choose ${needed === 1 ? "the card" : `${needed} cards`} to ${verb} — the cost of ${nameOf(item.cardId as string)}'s ability`,
     resume: { itemId: item.id, kind: "trigger-cost" },
     semantics: "target",
+    ...(needed === 1 && options.length === 1 ? { soleOption: true as const } : {}),
     sourceCardId: item.cardId,
     type: "pick-many",
   } as RiftboundGameState["pendingChoice"];
@@ -801,13 +801,10 @@ function finalizeMultiTargetSlots(
       removeUnfinalizedItem(draft, item.id);
       return "removed";
     }
-    if (options.length === 1) {
-      bound.push(options[0] as string);
-      patchItem(draft, item.id, { targets: [...bound] });
-      fireChooseEvents(draft, ctx, item, [options[0] as string]);
-      continue;
-    }
     patchItem(draft, item.id, { targets: [...bound] });
+    // rule 355.10.d.2 — a slot with one legal candidate is still a TARGET the
+    // controller chooses (355.14.d "when you choose me" fires off the answer),
+    // so it is prompted instead of bound behind their back.
     draft.pendingChoice = {
       bindSlotIndex: k,
       bindToChainItemId: item.id,
@@ -815,6 +812,7 @@ function finalizeMultiTargetSlots(
       options: options as never,
       playerId: item.controller as never,
       remaining: 1,
+      ...(options.length === 1 ? { soleOption: true as const } : {}),
       sourceCardId: item.cardId as never,
       type: "choose-target",
     };

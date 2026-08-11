@@ -983,6 +983,14 @@ export interface ChooseTargetChoice {
    * friendly unit here with a spell" trigger fires off the answer.
    */
   readonly notTargeting?: true;
+  /**
+   * rule 355.10.d.2 — being the ONLY legal option does not make a selection
+   * programmatic: a sole legal target is still a CHOICE (it still targets, so
+   * "when you choose me" / [Deflect] still apply and the chooser may decline
+   * where declining is legal). The prompt is raised anyway and flagged so the
+   * UI can render it as a one-click confirm.
+   */
+  readonly soleOption?: true;
 }
 
 /**
@@ -1041,6 +1049,8 @@ export interface ChooseDestinationChoice {
    */
   readonly bindToChainItemId?: string;
   readonly destinationNodeIndex?: number;
+  /** rule 355.10.d.2 — the sole legal destination is still a choice; see `ChooseTargetChoice.soleOption`. */
+  readonly soleOption?: true;
 }
 
 /**
@@ -1375,6 +1385,8 @@ export interface PickManyChoice {
   readonly min: number;
   readonly max: number;
   readonly semantics: "target" | "drop" | "replacement-assign" | "subset";
+  /** rule 355.10.d.2 — exactly one legal answer, asked anyway; see `ChooseTargetChoice.soleOption`. */
+  readonly soleOption?: true;
   /**
    * rule 355.13 / 355.14.b — a finalization-time target SET: "split" = the
    * recipients of split damage (amounts are decided at resolution, 355.14.e),

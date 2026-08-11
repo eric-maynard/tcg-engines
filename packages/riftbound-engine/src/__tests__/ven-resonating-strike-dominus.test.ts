@@ -83,6 +83,19 @@ describe("ven-034-166 Resonating Strike", () => {
       playerId: P1 as CorePlayerId,
     });
     expect(r.success).toBe(true);
+
+    // rule 355.10.d.2 — the ONE battlefield P1 controls is still the Move
+    // Destination they choose, so the play raises the prompt (a one-click
+    // confirm in a UI; this test drives the raw engine, so it answers it).
+    const dest = engine.getState().pendingChoice as
+      | { type?: string; soleOption?: true; options?: readonly string[] }
+      | undefined;
+    expect(dest).toMatchObject({ soleOption: true, type: "choose-destination" });
+    expect(dest?.options).toEqual([`battlefield-${bfId}`]);
+    engine.executeMove("resolvePendingChoice", {
+      params: { pickedZoneId: `battlefield-${bfId}`, playerId: P1 },
+      playerId: P1 as CorePlayerId,
+    });
     drainChain(engine);
 
     expect(engine.getState().pendingChoice).toBeUndefined();
