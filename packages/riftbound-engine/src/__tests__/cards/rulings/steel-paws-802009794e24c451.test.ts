@@ -101,7 +101,7 @@ describe("Ruling 802009794e24c451 — Empower [7] bounced in response still 'pla
   // when that ability RESOLVES — so right after activation only the Empower item exists; the Curator triggers at step 3,
   // after the opponent's bounce has resolved. Actual: the engine fires the Curator's trigger at ACTIVATION — its item
   // (and its FIN "exhaust me?" prompt) appears immediately, before P2 can even respond.
-  test.failing("BUG: ruling 802009794e24c451 — Curator of the Sands triggers when Empower is ACTIVATED; it should trigger when the ability RESOLVES", async () => {
+  test("ruling 802009794e24c451 — Curator of the Sands triggers when Empower is ACTIVATED; it should trigger when the ability RESOLVES", async () => {
     const game = await board();
     await game.p1.activate("paws");
     expect(game.chain().map((c) => c.cardId)).toEqual(["paws"]);

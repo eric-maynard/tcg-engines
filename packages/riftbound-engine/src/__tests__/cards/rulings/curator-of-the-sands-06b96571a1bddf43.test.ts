@@ -64,10 +64,32 @@ describe("Ruling 06b96571a1bddf43 — Curator of the Sands is a triggered abilit
     return game;
   }
 
-  test("OPPONENT's turn, MID-CHAIN: using a [7] activated ability in response to P2's spell trips the trigger right there — the Curator item lands on top of the still-pending chain and P1 is asked at once", async () => {
+  /**
+   * rule 419.4.a (patch 2026-07-17, ruling 802009794e24c451) — playing an activated ability is
+   * completed by its RESOLUTION, so the Curator's condition is met only once the Lever's ability
+   * has resolved. Pass priority until the trigger's opt-in is on the table.
+   */
+  async function passUntilCuratorAsk(game: Game): Promise<void> {
+    for (let i = 0; i < 8; i++) {
+      const d = game.decision();
+      if (d?.kind === "yes-no" && d.seat === P1) {
+        return;
+      }
+      if (d?.kind === "action" && d.context === "chain") {
+        await game.seat(d.seat).passPriority();
+        continue;
+      }
+      break;
+    }
+  }
+
+  test("OPPONENT's turn, MID-CHAIN: a [7] activated ability played in response to P2's spell trips the trigger as it RESOLVES — the Curator item lands on the still-pending chain (above P2's Opener) and P1 is asked there and then", async () => {
     const game = await leverOnOpponentsTurn();
     expect(game.turnPlayer()).toBe(P2);
-    expect(game.chain().map((c) => c.cardId)).toEqual(["op", "lever", "cur"]);
+    // rule 419.4.a (ruling 802009794e24c451): the ability is merely on the chain at activation.
+    expect(game.chain().map((c) => c.cardId)).toEqual(["op", "lever"]);
+    await passUntilCuratorAsk(game);
+    expect(game.chain().map((c) => c.cardId)).toEqual(["op", "cur"]);
     expect(game.chain().at(-1)).toMatchObject({ cardId: "cur", controller: P1, triggered: true, type: "ability" });
     expect(game.decision()).toMatchObject({ kind: "yes-no", seat: P1, source: { cardId: "cur" }, timing: "FIN" });
   });
@@ -75,17 +97,19 @@ describe("Ruling 06b96571a1bddf43 — Curator of the Sands is a triggered abilit
   // RULING-CONFLICT: riftjudge 06b96571a1bddf43 says the "may exhaust me" cost is paid as the trigger RESOLVES; CR 383.3.b / 383.3.b.1 (and
   // 204.3.a) make a cost immediately following the leading "you may" the trigger's BASE COST, paid to FINALIZE it — engine follows CR: the
   // legend is exhausted the moment P1 opts in, while the item (and everything under it) is still unresolved.
-  test("the exhaust is the trigger's base cost, paid at FINALIZATION (CR 383.3.b): after 'yes' the legend is already exhausted with the whole chain [op, lever, cur] still pending", async () => {
+  test("the exhaust is the trigger's base cost, paid at FINALIZATION (CR 383.3.b): after 'yes' the legend is already exhausted with the chain [op, cur] still pending", async () => {
     const game = await leverOnOpponentsTurn();
     expect(game.state("cur").isReady).toBe(true);
+    await passUntilCuratorAsk(game);
     await game.p1.yes();
     expect(game.state("cur").isExhausted).toBe(true);
-    expect(game.chain().map((c) => c.cardId)).toEqual(["op", "lever", "cur"]);
+    expect(game.chain().map((c) => c.cardId)).toEqual(["op", "cur"]);
     expect(game.p1.runes({ ready: true })).toHaveLength(0); // nothing readied yet — that is the effect, at resolution
   });
 
-  test("resolution on the opponent's turn works normally: the Curator item resolves first (P1 readies 2 runes), then the Lever draws d1, then P2's Opener", async () => {
+  test("resolution on the opponent's turn works normally: the Lever draws d1, its play then triggers the Curator (P1 readies 2 runes), and P2's Opener resolves last", async () => {
     const game = await leverOnOpponentsTurn();
+    await passUntilCuratorAsk(game);
     await game.p1.yes();
     for (let i = 0; i < 12; i++) {
       const d = game.decision();
@@ -111,8 +135,9 @@ describe("Ruling 06b96571a1bddf43 — Curator of the Sands is a triggered abilit
 
   test("declining is allowed ('you may'): 'no' removes the item, legend stays ready, no runes readied", async () => {
     const game = await leverOnOpponentsTurn();
+    await passUntilCuratorAsk(game);
     await game.p1.no();
-    expect(game.chain().map((c) => c.cardId)).toEqual(["op", "lever"]);
+    expect(game.chain().map((c) => c.cardId)).toEqual(["op"]);
     expect(game.state("cur").isReady).toBe(true);
     await game.settle();
     expect(game.p1.runes({ ready: true })).toHaveLength(0);

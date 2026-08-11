@@ -2890,6 +2890,14 @@ export const activateAbility: Defs["activateAbility"] = {
           ? { status: "pending" as const }
           : {}),
         type: "ability",
+        // rule 419.4.a (rule-id: ven-192-166) — the act of PLAYING this ability
+        // completes at its resolution, where "with Energy cost [N] or more"
+        // must still read the ability's own printed cost: carry it (and the
+        // host's card type) on the item for `firePlayedCardTriggers`.
+        _activationEnergyCost: Number(
+          (ability.cost as { energy?: unknown } | undefined)?.energy ?? 0,
+        ),
+        _activationSourceType: activationSourceType(cardId as string),
       },
       turnOrder,
     );

@@ -268,6 +268,9 @@ const EVENT_MAP: Record<string, string> = {
   "take-damage": "take-damage",
   // rule-id: sfd-075-221 — rule 206.1: using an activated ability.
   "use-activated-ability": "use-activated-ability",
+  // rule 419.4.a (rule-id: ven-192-166) — PLAYING an activated ability is a
+  // distinct moment from using it: the act completes when the ability resolves.
+  "play-activated-ability": "play-activated-ability",
   "win-combat": "win-combat",
   // rule 466.7.b — "When a combat that I was in ends".
   "combat-end": "combat-end",

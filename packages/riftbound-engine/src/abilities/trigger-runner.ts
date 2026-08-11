@@ -685,7 +685,7 @@ export function evaluateTriggerCondition(
     // event carries its own cost). Reductions and increases never move that
     // number, so read the registry / the ability's cost, never what was paid.
     const needed = (c as { min?: number }).min ?? 1;
-    if (event.type === "use-activated-ability") {
+    if (event.type === "use-activated-ability" || event.type === "play-activated-ability") {
       return ((event as { energyCost?: number }).energyCost ?? 0) >= needed;
     }
     const playedId = (event as { cardId?: string }).cardId;

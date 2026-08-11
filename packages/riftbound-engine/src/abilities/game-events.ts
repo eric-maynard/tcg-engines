@@ -310,4 +310,16 @@ export type GameEvent =
       playerId: string;
       sourceType?: string;
       energyCost?: number;
+    }
+  // rule 419.4.a (patch 2026-07-17, rule-id: ven-192-166) — "when you PLAY an
+  // activated ability" is completed by that ability's RESOLUTION, not by its
+  // activation, so this is fired once per activated (non-triggered) ability
+  // item as it finishes resolving — even when its source has left and the
+  // instructions did nothing (rule 359.3.e). Same payload as the `use` event.
+  | {
+      type: "play-activated-ability";
+      cardId: string;
+      playerId: string;
+      sourceType?: string;
+      energyCost?: number;
     };

@@ -5539,7 +5539,7 @@
         {
           "type": "triggered",
           "trigger": {
-            "event": "play-unit-or-play-gear-or-use-activated-ability",
+            "event": "play-unit-or-play-gear-or-play-activated-ability",
             "on": "controller"
           },
           "condition": {

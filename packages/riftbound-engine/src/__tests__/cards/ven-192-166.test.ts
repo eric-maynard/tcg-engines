@@ -156,8 +156,12 @@ describe("Curator of the Sands (ven-192-166)", () => {
     const hand = game.p1.hand().length;
     await game.p1.activate("lever");
     expect(game.p1.energy()).toBe(0);
-    expect(game.chain().some((i) => i.cardId === "cur" && i.triggered)).toBe(true);
+    // rule 419.4.a (patch 2026-07-17, ruling 802009794e24c451) — "play … an activated
+    // ability" is completed by its RESOLUTION, so at activation only the Lever's own
+    // ability is on the chain; the Curator's trigger joins once that has resolved.
+    expect(game.chain().some((i) => i.cardId === "cur" && i.triggered)).toBe(false);
     await acceptAndReady(game, ["r1", "r2"]);
+    expect(game.chain().some((i) => i.cardId === "cur" && i.triggered)).toBe(false);
     expect(game.p1.hand()).toHaveLength(hand + 1);
     expect(game.state("cur").isExhausted).toBe(true);
     expect(game.p1.runes({ ready: true }).sort()).toEqual(["r1", "r2"]);
