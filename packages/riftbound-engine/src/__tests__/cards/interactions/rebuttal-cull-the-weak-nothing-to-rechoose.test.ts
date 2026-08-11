@@ -266,12 +266,15 @@ describe("Rebuttal × Cull the Weak — (b) paid: resolution under P2's control"
     expect(game.state("s1")).toMatchObject({ baseMight: 2, might: 2 });
   });
 
-  // Expected: even if P1 used the engine's play-time slot to name a1, that pick is not a target; after the
-  // steal (kept as is) resolution still has each player kill one of their own units → a1 and b1 die.
-  // Actual: the stolen item keeps "targets: [a1]", a1 is not friendly to the new controller P2, and the
-  // whole effect fizzles — nobody is asked and no unit dies.
-  test.failing("BUG: with a play-time pre-pick, a stolen-and-kept Cull the Weak kills nothing; each player must still kill one of their units on resolution (355.10.e)", async () => {
-    const game = await rebutted(["a1"]);
+  // rule 355.10.e — there is no play-time slot to pre-pick into: naming a unit while casting is rejected
+  // outright, so a stolen Cull can never carry a pick that is unfriendly to its new controller and fizzle.
+  // Each player still kills one of their own units on resolution.
+  test("a play-time pre-pick is rejected, and the stolen-and-kept spell still kills one unit per player on resolution (355.10.e)", async () => {
+    const rejected = await board().build();
+    await expect(rejected.p1.cast("cull", { targets: ["a1"] })).rejects.toThrow();
+    expect(rejected.zoneOf("cull")).toBe("hand");
+
+    const game = await rebutted();
     await game.p2.yes();
     await keepAsIs(game);
     const asked = await resolveEverything(game);
