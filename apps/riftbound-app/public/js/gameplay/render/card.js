@@ -147,7 +147,7 @@ function combatRoleMightBonus(card) {
 
 function renderCardElement(card, isFacedown = false, zone = "") {
   if (isFacedown) {
-    return `<div class="card facedown"><div class="card-back"></div></div>`;
+    return `<div class="card facedown"><div class="card-back card-back-art card-back-art--main"></div></div>`;
   }
 
   // W13: if the viewing player has hidden this specific hand card, render
@@ -158,7 +158,7 @@ function renderCardElement(card, isFacedown = false, zone = "") {
     return `
       <div class="card facedown hand-hidden" data-card-id="${esc(card.id)}" data-zone="hand"
            onpointerdown="onPointerDown(event, '${esc(card.id)}')">
-        <div class="card-back"></div>
+        <div class="card-back card-back-art card-back-art--main"></div>
         <button class="card-hide-btn"
                 type="button"
                 title="Uncover this card (local view only)"
@@ -303,18 +303,25 @@ function renderCardElement(card, isFacedown = false, zone = "") {
   `;
 }
 
+/**
+ * A face-down pile: the MAIN deck shows the main card back, the RUNE deck the
+ * rune back (CSS-drawn, see .card-back-art), each with a count badge; an empty
+ * pile is a dashed placeholder. `label` picks the back ("Rune" → rune back).
+ */
 function renderDeckStack(zoneCards, label, options = {}) {
   const count = zoneCards?.length ?? 0;
   // W12: right-clicking the viewing player's main deck opens the
   // enriched peek dialog. We also add a title hint so users discover
   // the interaction. Opponent decks and rune decks stay inert.
   const peekable = options.peekable === true;
+  const kind = options.kind || (/rune/i.test(label) ? "rune" : "main");
   const attrs = peekable
     ? ' oncontextmenu="event.preventDefault(); if (typeof openPeekDialog === \'function\') openPeekDialog(1); return false;" title="Right-click to peek at the top card"'
-    : "";
-  const cls = peekable ? "deck-stack deck-stack--peekable" : "deck-stack";
+    : ` title="${esc(label)} deck: ${count}"`;
+  const cls = ["deck-stack", `deck-stack--${kind}`, count > 0 ? "deck-stack--has-cards" : "deck-stack--empty", peekable ? "deck-stack--peekable" : ""].filter(Boolean).join(" ");
   return `
-    <div class="${cls}"${attrs}>
+    <div class="${cls}" data-pile="${esc(kind)}" data-count="${count}"${attrs}>
+      ${count > 0 ? `<div class="card-back-art card-back-art--${esc(kind)}" aria-hidden="true"></div>` : ""}
       <div class="deck-count">${count}</div>
       <div class="deck-label">${esc(label)}</div>
     </div>
@@ -322,20 +329,22 @@ function renderDeckStack(zoneCards, label, options = {}) {
 }
 
 /**
- * Trash pile for one player.
+ * Trash pile for one player: shows the FACE of the most recent (top) card.
  * rule 108.2.d / 355.10.a.1: cards in a Trash are Public Information, so both
  * players' trashes must always show a count and be openable for inspection.
  */
 function renderTrashStack(zoneCards, pid, label = "Trash") {
   const count = zoneCards?.length ?? 0;
   const top = count > 0 ? zoneCards[count - 1] : null;
+  const topImgId = top ? String(top.definitionId || top.id || "").replace(/^player-[12]-/, "") : "";
   // Hovering the pile previews its top card (overlays.js delegated preview).
   const attrs = count > 0
-    ? ` data-card-id="${esc(top?.id ?? "")}" data-def-id="${esc(top?.definitionId ?? "")}" data-zone="trash" onclick="if (typeof openZoneViewer === 'function') openZoneViewer('trash', '${esc(String(pid))}')" title="${esc(`Top: ${top?.name ?? ""} — click to view`)}"`
+    ? ` data-card-id="${esc(top?.id ?? "")}" data-def-id="${esc(top?.definitionId ?? "")}" data-zone="trash" onclick="if (typeof openZoneViewer === 'function') openZoneViewer('trash', '${esc(String(pid))}')" title="${esc(`Top: ${top?.name ?? ""} — click to view all ${count}`)}"`
     : ' title="Trash (empty)"';
-  const cls = count > 0 ? "deck-stack deck-stack--trash deck-stack--viewable" : "deck-stack deck-stack--trash";
+  const cls = count > 0 ? "deck-stack deck-stack--trash deck-stack--has-cards deck-stack--viewable" : "deck-stack deck-stack--trash deck-stack--empty";
   return `
-    <div class="${cls}"${attrs}>
+    <div class="${cls}" data-pile="trash" data-count="${count}"${attrs}>
+      ${top ? `<img class="deck-stack-top" src="/card-image/${esc(topImgId)}" alt="${esc(top.name || "")}" onerror="this.style.display='none'"><div class="deck-stack-top-name">${esc(top.name || "")}</div>` : ""}
       <div class="deck-count">${count}</div>
       <div class="deck-label">${esc(label)}</div>
     </div>

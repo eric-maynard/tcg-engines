@@ -28,7 +28,11 @@ function iconify(text) {
 // ============================================================================
 let _previewEl = null;      // element the panel currently describes
 let _previewHideTimer = null;
+let _previewMaxTimer = null;  // hard backstop: nothing keeps the panel up longer than this
+let _previewPointer = { x: -1, y: -1 }; // last known pointer position (client coords)
+let _previewCheckQueued = false;
 const PREVIEW_HIDE_DELAY_MS = 60; // bridge the gap between two adjacent cards without a flash
+const PREVIEW_MAX_VISIBLE_MS = 8000;
 
 /** The hover-able card surface for a DOM node (or null). */
 function previewSurface(node) {
@@ -101,6 +105,10 @@ function showPreview(eventOrEl, maybeEl) {
   if (el.classList.contains("facedown") && !el.dataset.defId) return;
 
   if (_previewHideTimer !== null) { clearTimeout(_previewHideTimer); _previewHideTimer = null; }
+  if (_previewEl !== el || _previewMaxTimer === null) {
+    if (_previewMaxTimer !== null) clearTimeout(_previewMaxTimer);
+    _previewMaxTimer = setTimeout(() => { _previewMaxTimer = null; hidePreview(true); }, PREVIEW_MAX_VISIBLE_MS);
+  }
   _previewEl = el;
 
   const imgId = String(card.definitionId || el.dataset.defId || card.id || "").replace(/^player-[12]-(?:(?:main|rune)-\d+-|legend-|champion-|bf-)?/, "");
@@ -170,18 +178,64 @@ function hidePreview(immediate) {
   const previewEl = document.getElementById("cardPreview");
   if (!previewEl) return;
   if (_previewHideTimer !== null) { clearTimeout(_previewHideTimer); _previewHideTimer = null; }
-  const doHide = () => { _previewHideTimer = null; _previewEl = null; previewEl.classList.remove("visible"); };
+  const doHide = () => {
+    _previewHideTimer = null;
+    _previewEl = null;
+    if (_previewMaxTimer !== null) { clearTimeout(_previewMaxTimer); _previewMaxTimer = null; }
+    previewEl.classList.remove("visible");
+  };
   if (immediate === true || typeof immediate === "undefined") { doHide(); return; }
   _previewHideTimer = setTimeout(doHide, PREVIEW_HIDE_DELAY_MS);
+}
+
+function previewVisible() {
+  return !!document.getElementById("cardPreview")?.classList.contains("visible");
+}
+
+/**
+ * Is the panel's subject still the thing under the pointer? mouseout never
+ * fires for a node that is REMOVED or covered while the cursor stands still (a
+ * prompt closes and takes its rune tiles with it, a modal opens on top, a
+ * state_update rebuilds the row), so visibility is re-validated from the
+ * anchor itself: it must still be in the document, rendered, and be the card
+ * surface at the last pointer position. Anything else drops the panel.
+ */
+function validatePreview() {
+  _previewCheckQueued = false;
+  if (!previewVisible()) return;
+  const el = _previewEl;
+  if (!el || !el.isConnected || !document.contains(el)) { hidePreview(true); return; }
+  if (el.getClientRects().length === 0) { hidePreview(true); return; } // display:none ancestor (overlay closed)
+  const { x, y } = _previewPointer;
+  if (x < 0 || y < 0) return;
+  const hit = document.elementFromPoint(x, y);
+  if (!hit) { hidePreview(true); return; } // pointer outside the viewport
+  const surface = previewSurface(hit);
+  if (surface === el) return;
+  if (surface) { showPreview(surface); return; } // a re-render swapped in a new node for the same slot
+  hidePreview(true);
+}
+
+/** Coalesce validation to at most once per frame (mutations + pointermove can be chatty). */
+function queuePreviewCheck() {
+  if (_previewCheckQueued || !previewVisible()) return;
+  _previewCheckQueued = true;
+  (window.requestAnimationFrame || setTimeout)(validatePreview);
 }
 
 // Delegated driver: mouseover/mouseout bubble, so one listener covers every
 // surface rendered now or later (battlefields, prompt tiles, trash…).
 (function wireHoverPreview() {
   function over(e) {
+    _previewPointer = { x: e.clientX, y: e.clientY };
     const el = previewSurface(e.target);
-    if (!el) return;
-    if (el === _previewEl && document.getElementById("cardPreview")?.classList.contains("visible")) {
+    if (!el) {
+      // Pointer is over a non-card: if the panel is still up its subject was
+      // removed/covered without a mouseout — re-validate instead of trusting it.
+      if (previewVisible()) queuePreviewCheck();
+      return;
+    }
+    if (el === _previewEl && previewVisible()) {
       if (_previewHideTimer !== null) { clearTimeout(_previewHideTimer); _previewHideTimer = null; }
       return;
     }
@@ -192,6 +246,7 @@ function hidePreview(immediate) {
     if (!el) return;
     const to = e.relatedTarget;
     if (to && el.contains(to)) return; // still inside the same card
+    if (!to) { hidePreview(true); return; } // left the window
     hidePreview(previewSurface(to) ? false : true);
   }
   function go() {
@@ -199,10 +254,28 @@ function hidePreview(immediate) {
     document.body.dataset.cardPreviewWired = "1";
     document.addEventListener("mouseover", over);
     document.addEventListener("mouseout", out);
-    // The element under a stationary cursor can be replaced by a re-render or
-    // scrolled away; drop the panel when its subject is gone.
+    document.addEventListener("pointermove", (e) => {
+      _previewPointer = { x: e.clientX, y: e.clientY };
+      queuePreviewCheck();
+    }, { passive: true });
+    // The element under a stationary cursor can be replaced by a re-render,
+    // covered by a prompt/modal, or scrolled away; drop the panel when its
+    // subject is gone. childList covers renders and prompt open/close that
+    // rebuild content; the class/style filter covers overlays toggled via
+    // .visible / display.
+    new MutationObserver(queuePreviewCheck).observe(document.body, {
+      childList: true, subtree: true, attributes: true, attributeFilter: ["class", "style", "hidden"],
+    });
+    // Backstop poll while visible (cheap no-op otherwise): catches anything the
+    // observer cannot see, e.g. a stylesheet-driven hide.
+    setInterval(queuePreviewCheck, 400);
     document.addEventListener("scroll", () => hidePreview(true), true);
+    document.addEventListener("wheel", () => hidePreview(true), { passive: true, capture: true });
+    document.addEventListener("pointerdown", () => hidePreview(true), true);
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape" || e.key === "Esc") hidePreview(true); }, true);
+    document.documentElement.addEventListener("mouseleave", () => hidePreview(true));
     window.addEventListener("blur", () => hidePreview(true));
+    document.addEventListener("visibilitychange", () => { if (document.hidden) hidePreview(true); });
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", go, { once: true });
   else go();

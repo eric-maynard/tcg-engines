@@ -1207,8 +1207,12 @@ function enterBattlefieldCardSelected(cardId, zone) {
   const recallMoves = availableMoves.filter(m =>
     m.moveId === "recallUnit" && (m.params?.unitId === cardId || m.params?.cardId === cardId)
   );
+  // rule 144.4.b: a ready unit at a battlefield may take its standard move back to base.
+  const baseMoves = typeof preferSoloUnitMoves === "function"
+    ? preferSoloUnitMoves(availableMoves.filter(m => m.moveId === "standardMove" && m.params?.destination === "base" && m.params?.unitIds?.includes(cardId)), cardId).slice(0, 1)
+    : [];
 
-  const allMoves = [...gankMoves, ...recallMoves];
+  const allMoves = [...gankMoves, ...baseMoves, ...recallMoves];
   if (allMoves.length === 0 && !hasCardBarActions(cardId)) {
     selectedCard = cardId;
     render();
@@ -1220,6 +1224,7 @@ function enterBattlefieldCardSelected(cardId, zone) {
     const bfId = m.params?.toBattlefield || m.params?.battlefieldId;
     if (bfId && !targets.includes(bfId)) targets.push(bfId);
   }
+  if (baseMoves.length > 0) targets.push("player-base");
 
   const card = findCard(cardId);
   interaction = {
@@ -1248,9 +1253,11 @@ function applyValidTargetHighlights() {
     const baseEl = document.getElementById("player-base");
     if (baseEl) baseEl.classList.add("valid-target");
   } else if (interaction.action === "moveUnit") {
-    // Highlight valid battlefield destinations
+    // Highlight valid destinations: battlefields, or the base row (rule 144.4.b).
     for (const bfId of interaction.validTargets) {
-      const bfEl = document.querySelector(`[data-bf-id="${CSS.escape(bfId)}"]`);
+      const bfEl = bfId === "player-base"
+        ? document.getElementById("player-base")
+        : document.querySelector(`[data-bf-id="${CSS.escape(bfId)}"]`);
       if (bfEl) bfEl.classList.add("valid-target");
     }
   }
@@ -1317,6 +1324,10 @@ function showBattlefieldCardActionBar(cardName, gankMoves, recallMoves) {
     html += `<button class="action-bar-btn" onclick='executeInteractionMove("recallUnit")'>Recall to Base</button>`;
   }
   for (const bfId of interaction.validTargets) {
+    if (bfId === "player-base") {
+      html += `<button class="action-bar-btn" onclick='onZoneClick("player-base")' title="Standard move back to your base (rule 144.4.b) — or drag the unit onto your base row">Move to Base</button>`;
+      continue;
+    }
     const bfName = getBattlefieldName(bfId);
     html += `<button class="action-bar-btn" onclick='onZoneClick("${esc(bfId)}")'>${esc("Gank to " + bfName)}</button>`;
   }

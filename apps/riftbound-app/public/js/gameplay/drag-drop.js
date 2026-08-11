@@ -12,12 +12,13 @@ function onZoneClick(targetId) {
 
   // Find a matching move that targets this battlefield (a play names it as
   // `location: "battlefield-<id>"`).
-  const toHere = interaction.matchingMoves.filter(m =>
+  const toHere = preferSoloUnitMoves(interaction.matchingMoves.filter(m =>
     m.params?.destination === targetId ||
+    (targetId === "player-base" && m.params?.destination === "base") ||
     m.params?.toBattlefield === targetId ||
     m.params?.battlefieldId === targetId ||
     m.params?.location === `battlefield-${targetId}`
-  );
+  ), interaction.sourceCardId);
   if (toHere.length > 1 && interaction.action === "playCard" && typeof openPlayCostModal === "function") {
     // Same destination, different costs (Accelerate) → let the player choose.
     openPlayCostModal(interaction.sourceCardId);
@@ -48,6 +49,21 @@ function onZoneClick(targetId) {
       cancelInteraction();
     }
   }
+}
+
+/**
+ * Movement moves enumerate every SUBSET of ready units (rule 144.4); a drag or
+ * click acts on one card, so put the variants that move exactly that unit first.
+ */
+function preferSoloUnitMoves(moves, cardId) {
+  const solo = (m) => Array.isArray(m.params?.unitIds) ? (m.params.unitIds.length === 1 && m.params.unitIds[0] === cardId) : true;
+  return [...moves].sort((a, b) => Number(solo(b)) - Number(solo(a)));
+}
+
+/** Drop-zone id for a movement destination ("base" is the #player-base row). */
+function moveDropZoneId(m) {
+  const d = m.params?.destination || m.params?.toBattlefield || m.params?.battlefieldId;
+  return d === "base" ? "player-base" : d;
 }
 
 /** Battlefield ids a hand card may be played / hidden to (rule 723, units to a held battlefield). */
@@ -129,17 +145,18 @@ function getDragContext(cardId, zone) {
       }
     }
   } else if (zone.startsWith("battlefield-")) {
-    // Ganking moves
-    const gankMoves = availableMoves.filter(m =>
-      m.moveId === "gankingMove" &&
+    // Ganking moves (battlefield → battlefield) and rule 144.4.b standard
+    // moves back to base (battlefield → base: drop on the base row).
+    const unitMoves = availableMoves.filter(m =>
+      (m.moveId === "gankingMove" || (m.moveId === "standardMove" && m.params?.destination === "base")) &&
       (m.params?.unitIds?.includes(cardId) || m.params?.unitId === cardId)
     );
-    if (gankMoves.length > 0) {
-      matchingMoves = gankMoves;
+    if (unitMoves.length > 0) {
+      matchingMoves = preferSoloUnitMoves(unitMoves, cardId);
       action = "moveUnit";
-      for (const m of gankMoves) {
-        const bfId = m.params?.toBattlefield || m.params?.battlefieldId;
-        if (bfId && !validTargets.includes(bfId)) validTargets.push(bfId);
+      for (const m of matchingMoves) {
+        const id = moveDropZoneId(m);
+        if (id && !validTargets.includes(id)) validTargets.push(id);
       }
     }
   }
@@ -378,11 +395,7 @@ document.addEventListener("pointerup", (e) => {
           move = there[0] ?? null;
         }
       } else {
-        move = dragState.matchingMoves.find(m =>
-          m.params?.destination === dropZone ||
-          m.params?.toBattlefield === dropZone ||
-          m.params?.battlefieldId === dropZone
-        );
+        move = preferSoloUnitMoves(dragState.matchingMoves, cardId).find(m => moveDropZoneId(m) === dropZone);
       }
 
       if (move) {

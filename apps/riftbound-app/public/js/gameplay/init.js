@@ -62,7 +62,7 @@ document.addEventListener("click", (e) => {
 
   // Check if the click was directly on the base zone (not on a card inside it)
   if (e.target === baseEl || (e.target.parentElement === baseEl && !e.target.closest("[data-card-id]"))) {
-    if (interaction.mode === "cardSelected" && interaction.action === "playCard") {
+    if (interaction.mode === "cardSelected" && (interaction.action === "playCard" || (interaction.action === "moveUnit" && (interaction.validTargets || []).includes("player-base")))) {
       onZoneClick("player-base");
     }
   }
