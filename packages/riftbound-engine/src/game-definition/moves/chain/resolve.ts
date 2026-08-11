@@ -680,7 +680,9 @@ export function executeResolvedItem(
       : undefined;
   // rule 811.1 (unl-042-219) — played from Hidden, not from hand: collapse any
   // "if you played this from your hand" gate to its `else` branch now.
-  if (hiddenZone !== undefined) {
+  // rule 811.1 (unl-042-219) — an EFFECT play from the deck / trash /
+  // banishment is not a play from hand either, so the same gate collapses.
+  if (hiddenZone !== undefined || (resolved as { playedFromHand?: boolean }).playedFromHand === false) {
     effect = resolvePlayedFromHandGates(effect, false);
   }
 
@@ -1709,6 +1711,13 @@ function firePlayedCardTriggers(
     draft,
     zones: context.zones,
   };
+  // rule 419.1 (ven-197-166) — the play's ORIGIN zone, recorded on the item as
+  // the spell went on the chain ("when you play a card from anywhere other than
+  // your hand" reads it). An older item that recorded only the hand/non-hand
+  // class still answers the question.
+  const spellOrigin =
+    (resolved as { playedFrom?: string }).playedFrom ??
+    ((resolved as { playedFromHand?: boolean }).playedFromHand === false ? "effect" : "hand");
   fireTriggers(
     { cardId: resolved.cardId, playerId: resolved.controller, type: "play-spell" },
     trigCtx,
@@ -1717,6 +1726,7 @@ function firePlayedCardTriggers(
     {
       cardId: resolved.cardId,
       cardType: "spell",
+      from: spellOrigin,
       playerId: resolved.controller,
       type: "play-card",
     },
@@ -1844,6 +1854,14 @@ export function settleResolvedSpellCard(
       // the play-trigger step of `executeResolvedItem`; the flush owes it.
       playTriggersPending:
         (resolved as { _playTriggersFired?: boolean })._playTriggersFired !== true,
+      // rule 419.1 (ven-197-166) — keep the play's ORIGIN with the parked
+      // settle; the flush rebuilds the item and would otherwise lose it.
+      ...((resolved as { playedFrom?: string }).playedFrom !== undefined
+        ? { playedFrom: (resolved as { playedFrom?: string }).playedFrom }
+        : {}),
+      ...((resolved as { playedFromHand?: boolean }).playedFromHand !== undefined
+        ? { playedFromHand: (resolved as { playedFromHand?: boolean }).playedFromHand }
+        : {}),
       resolveTo: resolved.resolveTo as string | undefined,
     };
     return;
@@ -1907,10 +1925,17 @@ export function flushDeferredSpellSettle(
   const item = {
     cardId: parked.cardId,
     controller: parked.controller,
+    // rule 419.1 (ven-197-166) — the rebuilt item keeps the play's ORIGIN.
+    ...(parked.playedFrom !== undefined ? { playedFrom: parked.playedFrom } : {}),
+    ...(parked.playedFromHand !== undefined ? { playedFromHand: parked.playedFromHand } : {}),
     resolveTo: parked.resolveTo,
     type: "spell",
   } as unknown as ChainItem;
-  settleResolvedSpellCard(item, context, draft);
+  // rule 350.1 / 419.4.a — the card was replayed out of this resolution: it is
+  // a Chain item of a NEW play now, so only the finished play's triggers are owed.
+  if (parked.playTriggersOnly !== true) {
+    settleResolvedSpellCard(item, context, draft);
+  }
   // rule 419.4.a — "when you play a spell" fires when the play is completed by
   // resolution. A resolution suspended on a prompt (a target chosen as the
   // spell resolves) completes here, so its play triggers are owed now.

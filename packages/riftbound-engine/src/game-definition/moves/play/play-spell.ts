@@ -44,6 +44,7 @@ import {
   deductCost,
   getEffectiveSpellRepeatCost,
   getFlowCostForPlay,
+  getFlowCostOptionsForPlay,
   hasPlayFromTrashGrant,
   xCostIsPower,
 } from "./cost";
@@ -736,6 +737,8 @@ export const playSpell: Defs["playSpell"] = {
           // rule-id: ven-055-166 — friendly "your spells cost less" statics.
           board: { cards: context.cards, zones: context.zones },
           ignoreBaseCost,
+          // rule 829.1.c.3 (ven-113-166) — price the [Flow] instance elected.
+          flowIndex: context.params.flowIndex as number | undefined,
           repeatCount: reqRepeatCount,
           targets: context.params.targets,
           viaFlow,
@@ -2660,6 +2663,32 @@ export const playSpell: Defs["playSpell"] = {
           }
         }
       }
+
+      // rule 829.1.c.3 (rule-id: ven-113-166) — a card carrying SEVERAL [Flow]
+      // costs (its printed one plus one granted this turn) is played for the
+      // one its CONTROLLER elects, so every variant is offered once per
+      // payable instance instead of the engine picking a cost for them.
+      const flowOptions = getFlowCostOptionsForPlay(cardId as string, meta);
+      if (flowOptions.length > 1) {
+        const flowBaseVariants = results.splice(flowStart);
+        for (let i = 0; i < flowOptions.length; i++) {
+          for (const base of flowBaseVariants) {
+            if (
+              !canAffordCard(
+                state,
+                context.playerId as string,
+                cardId as string,
+                { board, flowIndex: i, repeatCount: base.repeatCount, targets: base.targets, viaFlow: true },
+                meta,
+                potential,
+              )
+            ) {
+              continue;
+            }
+            results.push({ ...base, flowIndex: i });
+          }
+        }
+      }
     }
     return results.map((r) => withCostsParam(r));
   },
@@ -2787,6 +2816,8 @@ export const playSpell: Defs["playSpell"] = {
         // rule-id: ven-055-166 — friendly "your spells cost less" statics.
         board: { cards: context.cards, zones: context.zones },
         ignoreBaseCost,
+        // rule 829.1.c.3 (ven-113-166) — charge the elected [Flow] instance.
+        flowIndex: context.params.flowIndex as number | undefined,
         repeatCount: repeatN,
         targets,
         viaFlow: viaFlow === true,
@@ -3038,6 +3069,12 @@ export const playSpell: Defs["playSpell"] = {
     // Add spell to the chain (rule 537)
     const interaction = draft.interaction ?? createInteractionState();
     const turnOrder = Object.keys(draft.players);
+    // rule 419.1 (ven-197-166) — the card is still in its origin zone here
+    // (`moveCard` to the chain happens below), so record where the play came
+    // from: the `play-card` event fired at resolution is narrowed by ORIGIN
+    // ("when you play a card from anywhere other than your hand") and rule
+    // 811.1's "if you played this from your hand" gate reads the same field.
+    const playOriginZone = context.zones.getCardZone(cardId as CoreCardId) as string | undefined;
     draft.interaction = addToChain(
       interaction,
       {
@@ -3059,6 +3096,14 @@ export const playSpell: Defs["playSpell"] = {
       },
       turnOrder,
     );
+    if (playOriginZone !== undefined) {
+      const freshItems = draft.interaction?.chain?.items;
+      const fresh = freshItems?.[freshItems.length - 1];
+      if (fresh && fresh.cardId === cardId) {
+        (fresh as { playedFrom?: string; playedFromHand?: boolean }).playedFrom = playOriginZone;
+        (fresh as { playedFromHand?: boolean }).playedFromHand = playOriginZone === "hand";
+      }
+    }
 
     // Rule 419.4.a: play-spell / play-card triggers fire when the spell
     // RESOLVES (not here) — see executeResolvedItem in chain-moves.ts.

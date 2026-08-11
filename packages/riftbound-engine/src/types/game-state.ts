@@ -1668,6 +1668,14 @@ export interface RiftboundGameState {
   additionalTurnsTaken?: number;
 
   /**
+   * rule 485.7 — players whose first Channel Phase has already happened. The
+   * catch-up rune is granted "during their first Channel Phase", so that phase
+   * spends the grant even when it is skipped (443.1.a) or arrives early inside
+   * an Additional Turn (738).
+   */
+  firstChannelPhaseTaken?: Record<string, boolean>;
+
+  /**
    * rule 487.7 / 644.7 — the player who channels the extra rune on their first
    * turn: the LAST player in Turn Order (the second player in a duel). When
    * unset every player booked in `firstTurnNumber` gets the bonus.
@@ -1994,6 +2002,18 @@ export interface RiftboundGameState {
     controller: string;
     /** rule 419.4.a — its "when you play a spell" triggers are still owed. */
     playTriggersPending?: boolean;
+    /**
+     * rule 350.1 / 419.4.a (rule-id: unl-186-219) — the card was played AGAIN
+     * before this settle could run, so only the completed play's triggers are
+     * still owed: the card itself now belongs to the new play, not the trash.
+     */
+    playTriggersOnly?: boolean;
+    /**
+     * rule 419.1 (ven-197-166) — the zone the parked play came from, so the
+     * `play-card` event the flush fires is still narrowed by ORIGIN.
+     */
+    playedFrom?: string;
+    playedFromHand?: boolean;
     resolveTo?: string;
   };
 
