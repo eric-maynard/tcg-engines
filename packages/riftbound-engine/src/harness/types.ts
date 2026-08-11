@@ -547,7 +547,7 @@ export interface Observation {
   readonly points: Readonly<Record<Seat, number>>;
   readonly zones: Readonly<Record<string, readonly CardView[]>>;
   readonly battlefields: readonly BattlefieldView[];
-  readonly chain: readonly { id: string; cardId: CardRef; name: string; controller: Seat; type: string; triggered: boolean; countered: boolean; targets?: readonly CardRef[]; mode?: number }[];
+  readonly chain: readonly { id: string; cardId: CardRef; name: string; controller: Seat; type: string; triggered: boolean; countered: boolean; pending?: boolean; targets?: readonly CardRef[]; mode?: number }[];
   readonly decision: Decision | DecisionSummary | null;
 }
 

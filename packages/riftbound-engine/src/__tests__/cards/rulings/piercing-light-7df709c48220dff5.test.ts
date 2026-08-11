@@ -40,7 +40,7 @@ async function fizzPlaysLight(game: Game, onDecision?: (d: Decision) => Promise<
   expect(game.p1.resources()).toEqual({ energy: 2, power: { chaos: 0, fury: 2 } }); // Fizz paid
   expect(game.decision()).toMatchObject({ kind: "yes-no", seat: P1, source: { cardId: "fizz" } });
   await game.p1.yes();
-  for (let i = 0; i < 10 && !game.chain().some((c) => c.cardId === "pl" && !c.triggered); i++) {
+  for (let i = 0; i < 10 && !game.chain().some((c) => c.cardId === "pl" && !c.triggered && !c.pending); i++) {
     const d = game.decision();
     if (!d) {
       break;

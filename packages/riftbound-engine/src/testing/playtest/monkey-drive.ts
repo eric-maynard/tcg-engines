@@ -47,7 +47,9 @@ p.on("pageerror", e => errs.push(`[pageerror] ${String(e)}`));
 
 // Get to the board (login → goldfish → play → keep)
 await p.goto("http://localhost:3000/login", { waitUntil: "networkidle" });
-await p.fill("#loginUser", "dev@riftbound.local"); await p.fill("#loginPass", "dev"); await p.click("#loginBtn");
+// /login may auto-login with dev credentials and redirect away before the form is fillable
+await p.fill("#loginUser", "dev@riftbound.local", { timeout: 5000 })
+  .then(() => p.fill("#loginPass", "dev")).then(() => p.click("#loginBtn")).catch(() => {});
 await p.waitForTimeout(600);
 await p.goto("http://localhost:3000/play?cb=" + Date.now(), { waitUntil: "domcontentloaded" });
 await p.evaluate(() => { localStorage.clear(); sessionStorage.clear(); });

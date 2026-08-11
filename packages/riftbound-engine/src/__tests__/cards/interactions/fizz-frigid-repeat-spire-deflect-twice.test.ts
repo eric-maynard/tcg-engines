@@ -144,7 +144,7 @@ async function makeChoices(game: Game, repeat: boolean, targets: readonly string
 describe("Fizz → Frigid Touch from trash × Marai Spire × Pouty Poro — cost pipeline of an effect-play with Repeat + Deflect", () => {
   // ── shared premise ─────────────────────────────────────────────────────────────────────
 
-  test.failing("BUG: premise: Fizz (3+[chaos]) enters base; its 'you may' is asked at finalization; Frigid Touch (printed 2 ≤ 3) is the spell named; after both pass the trigger resolves and Frigid Touch is on the chain being played — 0 extra energy spent so far (356.1.b.2)", async () => {
+  test("premise: Fizz (3+[chaos]) enters base; its 'you may' is asked at finalization; Frigid Touch (printed 2 ≤ 3) is the spell named; after both pass the trigger resolves and Frigid Touch is on the chain being played — 0 extra energy spent so far (356.1.b.2)", async () => {
     const game = await fizzIntoFrigidTouch();
     expect(game.zoneOf("ft")).toBe("chain");
     expect(game.chain().map((c) => [c.cardId, c.triggered])).toEqual([["ft", false]]);

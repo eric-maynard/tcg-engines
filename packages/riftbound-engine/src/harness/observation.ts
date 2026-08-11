@@ -329,6 +329,12 @@ export function observe(
     points[pid] = state.players[pid]?.victoryPoints ?? 0;
   }
 
+  /** A Pending Item for a card an effect is playing (see `PendingPlayItem`). */
+  const isPendingEffectPlay = (it: unknown): boolean => {
+    const cand = it as { play?: unknown; status?: unknown };
+    return typeof cand.play === "object" && cand.play !== null && cand.status === "pending";
+  };
+
   const chain = (state.interaction?.chain?.items ?? []).map((it) => {
     // rule 355.3 — a "Choose one —" item whose mode was chosen as it was played / finalized.
     const menu = it.effect as { type?: string; _chosenIndex?: unknown } | undefined;
@@ -340,9 +346,16 @@ export function observe(
       id: it.id,
       ...(mode !== undefined ? { mode } : {}),
       name: registry.get(it.cardId)?.name ?? it.cardId,
+      // rule 419.3 — a card an effect is still PLAYING (its Pending Item) is
+      // marked so observers can tell it from the finalized play.
+      ...(isPendingEffectPlay(it) ? { pending: true } : {}),
       // rule 355.5 — the Game Objects chosen for it as it was played (public).
       ...(it.targets ? { targets: [...it.targets] } : {}),
-      triggered: it.triggered === true,
+      // rule 419.3.b — a card an effect is playing sits on the Chain as a PLAY
+      // of that card, not as a triggered ability; its Pending Item carries the
+      // internal `triggered` flag only to keep the Chain open, so observers
+      // must see it untriggered.
+      triggered: it.triggered === true && !isPendingEffectPlay(it),
       type: it.type,
     };
   });
