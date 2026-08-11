@@ -176,6 +176,18 @@ function promptCostShortfall(cost) {
   return energy === 0 && Object.keys(owed).length === 0 ? null : { energy, power: owed };
 }
 
+/**
+ * rule 164.2.a/b — does this Add pay toward what is still OWED? A tap only ever
+ * adds Energy; a recycle only ever adds one Power of its own Domain (which also
+ * covers a [rainbow] or a hybrid pip naming that Domain).
+ */
+function addPaysToward(move, owed) {
+  if (move.moveId === "exhaustRune") return (owed.energy || 0) > 0;
+  const d = move.params?.domain;
+  return Object.keys(owed.power || {}).some(pip =>
+    pip === d || pip === "rainbow" || (pip.includes("|") && pip.split("|").includes(d)));
+}
+
 /** Short "[order][2]"-style token list for a cost / shortfall. */
 function costTokens(cost) {
   const parts = [];
@@ -447,12 +459,15 @@ function renderPendingChoiceModal() {
       <div class="prompt-pay-line">${promptTitleHtml(`Cost ${costTokens(payState.cost)}`)}
         <span class="prompt-pay-sep">·</span>
         ${promptTitleHtml(owed ? `still owed ${costTokens(owed)}` : "paid in full from your pool")}</div>`;
-    if (owed && payState.adds.moves.length) {
+    const useful = owed ? payState.adds.moves.filter(m => addPaysToward(m, owed)) : [];
+    if (useful.length) {
       // The sidebar rune row can sit under the modal; give the same taps an
       // affordance here so the prompt is answerable without hunting for it.
+      // Only Adds that pay toward what is OWED are listed — tapping for Energy
+      // does nothing for a [order] pip (164.2.a/b).
       html += `<div class="prompt-pay-runes">`;
-      for (let i = 0; i < payState.adds.moves.length; i++) {
-        const m = payState.adds.moves[i];
+      for (let i = 0; i < useful.length; i++) {
+        const m = useful[i];
         const rune = findCard(m.params?.runeId ?? m.params?.cardId);
         const dom = m.params?.domain ?? (Array.isArray(rune?.domain) ? rune.domain[0] : rune?.domain) ?? "";
         const label = m.moveId === "exhaustRune" ? `Tap ${dom} → [1]` : `Recycle ${dom} → [${dom}]`;
@@ -460,6 +475,7 @@ function renderPendingChoiceModal() {
       }
       html += `</div>`;
     }
+    payState.useful = useful;
     html += `</div>`;
   }
 
@@ -517,9 +533,15 @@ function renderPendingChoiceModal() {
     // contents make illegal is still reachable: show it disabled with what to
     // tap, rather than hiding it and forcing a pre-tap the player can't guess.
     if (payState?.canPayAfterAdds && !otherPicks.some(m => m.params?.accept === true)) {
+      // rule 164.2.a/b — name the RIGHT Add: Energy comes from tapping, Power
+      // only from recycling a rune of that Domain.
+      const owed = payState.shortfall;
+      const verb = Object.keys(owed.power || {}).length
+        ? (owed.energy ? "tap and recycle runes" : "recycle a rune")
+        : "tap a rune";
       html += `<button class="choice-modal-btn choice-modal-btn--needs-add" disabled
-        title="${esc(`Pay ${costTokens(payState.shortfall)} first — tap or recycle a rune`)}">Yes
-        <small>${promptTitleHtml(`tap a rune for ${costTokens(payState.shortfall)} first`)}</small></button>`;
+        title="${esc(`Pay ${costTokens(owed)} first — ${verb}`)}">Yes
+        <small>${promptTitleHtml(`${verb} for ${costTokens(owed)} first`)}</small></button>`;
     }
     for (let i = 0; i < otherPicks.length; i++) {
       const label = pendingPickLabel(pending, otherPicks[i].params);
@@ -544,7 +566,7 @@ function renderPendingChoiceModal() {
   // re-renders with the new pool (nothing is auto-paid).
   box.querySelectorAll(".prompt-pay-rune").forEach(el => {
     el.addEventListener("click", () => {
-      const m = payState?.adds.moves[Number(el.dataset.payIdx)];
+      const m = payState?.useful?.[Number(el.dataset.payIdx)];
       if (m) executeMove(m.moveId, m.params, m.playerId);
     });
   });
