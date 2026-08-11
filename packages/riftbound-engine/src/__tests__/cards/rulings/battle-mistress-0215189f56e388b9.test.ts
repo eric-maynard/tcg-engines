@@ -110,8 +110,10 @@ describe("Ruling 0215189f56e388b9 — recycling a rune into Battle Mistress: the
     expect(game.zoneOf("chompers")).toBe("trash");
     const pay = game.decision();
     expect(pay).toMatchObject({ kind: "yes-no", seat: P1, source: { cardId: "chompers" } });
-    // No fury yet ⇒ can't accept; the rune's Recycle stays legal during the payment (429.3.a).
-    expect(pay?.kind === "yes-no" ? pay.canAccept : undefined).toBe(false);
+    // No fury yet ⇒ the prompt names the missing [fury] and refuses "yes" until
+    // it is paid; the rune's Recycle stays legal during the payment (429.3.a).
+    expect(pay?.kind === "yes-no" ? pay.needsAdd : undefined).toMatchObject({ power: { fury: 1 } });
+    expect((await game.p1.try((p) => p.yes())).ok).toBe(false);
     expect((pay?.kind === "yes-no" ? (pay.actions ?? []) : []).map((a) => a.key)).toContain("recycleRune:r1");
 
     const seen: Decision[] = [];

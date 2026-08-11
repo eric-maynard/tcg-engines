@@ -16,6 +16,7 @@ import { fireTriggers } from "../../abilities/trigger-runner";
 import { getActiveShowdown } from "../../chain/chain-state";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import { withPostMoveCleanup } from "../../cleanup/post-move-cleanup";
+import { isPayPromptFor } from "./prompt-cost";
 
 /**
  * rule 164.2.a/b + 312.1.a/b — a rune's "[Exhaust]: Add" / "Recycle this: Add"
@@ -50,94 +51,19 @@ function holdsRunePriority(state: RiftboundGameState, playerId: string): boolean
 }
 
 /**
- * rule 128.6 / 419.2.a — is this `opt-in` the "you may play it?" confirm of an
- * instructed play that still costs something? Both confirm shapes are covered:
- * the pre-chain one (`playConfirmSpec`, raised by `beginPlay`) and the pending
- * item's own (`playConfirm` + `playItemId`, raised by `continueEffectPlay`).
- * A play under a fully waived cost mode charges nothing, so it is no Pay step.
- */
-function playConfirmCharges(state: RiftboundGameState, p: Record<string, unknown>): boolean {
-  let spec = p.playConfirmSpec as { costMode?: { kind?: string } } | undefined;
-  if (spec === undefined && p.playConfirm === true && typeof p.playItemId === "string") {
-    const items = (state.interaction?.chain?.items ?? []) as readonly {
-      id?: string;
-      play?: { costMode?: { kind?: string } };
-    }[];
-    spec = items.find((it) => it.id === p.playItemId)?.play;
-  }
-  if (spec === undefined) {
-    return false;
-  }
-  const kind = spec.costMode?.kind;
-  return kind !== "ignore-all" && kind !== "ignore-any-and-all";
-}
-
-/**
- * rule 444.2.c / 429.3 / 204.4.b.1 — a Pay demanded by a resolving ability
- * ("you may pay [1] to …") is still a Pay step, so the player being asked may
- * activate a rune's [Reaction] Add ability to fund it. Every other pending
- * choice keeps the board frozen, so only the payer's own `opt-in` prompt lifts
- * the block.
+ * rule 444.2.c / 429.3 / 357.1.a — a Pay demanded by a resolving or finalizing
+ * ability ("you may pay [1] to …", "you may exhaust me and pay [rainbow] to
+ * ready it") is still a Pay step, so the player being asked may activate a
+ * rune's [Reaction] Add ability to fund it — the prompt stays open across the
+ * activation (DESIGN.md §Paying costs: tap runes, THEN accept). Which prompts
+ * are Pay steps is decided once, in `promptPayableCost`; every other pending
+ * choice keeps the board frozen.
  */
 function runeAddAllowedDuringChoice(state: RiftboundGameState, playerId: string): boolean {
-  const pending = state.pendingChoice;
-  if (!pending) {
+  if (!state.pendingChoice) {
     return true;
   }
-  // rule 204.3.b / 444.2.c (rule-id: ogn-268-298 Bullet Time) — "pay any amount
-  // of [rainbow]" is paid ON RESOLUTION, and that prompt IS the Pay step: the
-  // payer may crack Reaction [Add] abilities (exhaust a rune for Energy,
-  // recycle one for Power) to raise the amount before naming it.
-  if (pending.type === "pay-x") {
-    return pending.playerId === playerId;
-  }
-  // rule 419.2.a / 444.2.c (rule-id: sfd-188-221 Void Rush) — picking a card the
-  // instruction then PLAYS commits the prompter to paying that card's remaining
-  // cost, so the pick prompt carries a Pay step of its own: the prompter may
-  // crack Reaction [Add] abilities before naming a card (an unaffordable card
-  // stays unpickable until the pool actually covers it).
-  if (pending.type === "reveal-and-pick") {
-    const rp = pending as unknown as { onPicked?: string; prompter?: string };
-    return rp.onPicked === "play" && rp.prompter === playerId;
-  }
-  if (pending.type !== "opt-in" || pending.playerId !== playerId) {
-    return false;
-  }
-  // A costless "you may …" (rule 383.3.a) is not a Pay step: nothing can be
-  // funded, so the board stays frozen like every other pending choice.
-  const p = pending as unknown as Record<string, unknown>;
-  if (
-    p.counterRansom !== undefined ||
-    p.payChoice !== undefined ||
-    // rule 355.1.a / 357 — electing (and then paying) a pending play's
-    // optional additional cost is part of that play's Pay step.
-    (p.playItemId !== undefined && p.playConfirm !== true) ||
-    // rule 128.6 / 419.2.a / 444.2.c (rule-id: ogn-194-298 Nocturne "you may
-    // play me for [rainbow]") — saying yes to a declinable instructed play
-    // commits the performer to paying that play's cost, so the confirm carries
-    // the play's Pay step exactly like the Void Rush pick above: Reaction [Add]
-    // abilities stay activatable while it is open, unless the play is free.
-    playConfirmCharges(state, p)
-  ) {
-    return true;
-  }
-  // rule 809.1.c.1 / 429.3.a (ruling cb0c9c7b9d025ad8) — the [Deflect] surcharge
-  // a trigger's own choice owes is Power paid at this prompt, so it opens the
-  // same rune window: the payer may recycle a rune to fund it.
-  if (((p.deflectSurcharge as number) ?? 0) > 0) {
-    return true;
-  }
-  const optInCost = (p.resolved as { optInCost?: Record<string, unknown> } | undefined)?.optInCost;
-  if (!optInCost || typeof optInCost !== "object") {
-    return false;
-  }
-  // rule-id: ven-067-166 — a cost a rune can never fund ("kill 3 other friendly
-  // units and/or gear") is no more a Pay step than a costless "you may": only an
-  // Energy/Power portion opens the rune window.
-  return (
-    ((optInCost.energy as number) ?? 0) > 0 ||
-    (Array.isArray(optInCost.power) && optInCost.power.length > 0)
-  );
+  return isPayPromptFor(state, playerId);
 }
 
 /**

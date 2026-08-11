@@ -86,6 +86,11 @@ export const passivePolicy: Policy = (d) => {
   if (d.kind === "pick" && d.options.length === 1 && d.min === 1 && !isPlayFromPile) {
     return { keys: [d.options[0]?.key as string], kind: "pick" };
   }
+  // rule 356.4.b — an "[N] or [rainbow] less" election nobody answered keeps
+  // the half the engine already paid (the first option).
+  if (d.kind === "pick" && d.meta?.arg === "cost-election" && d.options[0]) {
+    return { keys: [d.options[0].key], kind: "pick" };
+  }
   // rule 383.3.d — a soft trigger-order offer nobody answered keeps the
   // listed (scan) order.
   if (d.kind === "order" && d.defaultable) {
@@ -126,7 +131,9 @@ export const firstOptionPolicy: Policy = (d, g) => {
       return d.options.length > 0 ? { keys: d.options.slice(0, Math.max(1, d.min)).map((o) => o.key), kind: "pick" } : { kind: "decline" };
     }
     case "yes-no": {
-      return { kind: "yes-no", value: d.canAccept !== false };
+      // rule 429.3 — `needsAdd` means "yes" needs runes tapped first; an
+      // automatic policy never pays manually (DESIGN.md), so it answers no.
+      return { kind: "yes-no", value: d.canAccept !== false && d.needsAdd === undefined };
     }
     case "integer": {
       return { kind: "integer", value: d.min };
@@ -577,13 +584,14 @@ export class Game {
         // handed back ONCE so the caller can observe it (DESIGN.md §Paying costs keeps the
         // prompt open — a live player may tap runes first and only then accept); settling again
         // on the same prompt declines it and moves on.
-        if (d.kind === "yes-no" && d.canAccept === false && this.unacceptableOptInsHandedBack.has(d.id)) {
+        const unacceptableNow = d.kind === "yes-no" && (d.canAccept === false || d.needsAdd !== undefined);
+        if (unacceptableNow && this.unacceptableOptInsHandedBack.has(d.id)) {
           const c = coerceAnswer(d, { kind: "yes-no", value: false });
           if (!isAnswerObject(c)) {
             throw new HarnessError(c);
           }
           answer = c;
-        } else if (d.kind === "yes-no" && d.canAccept === false) {
+        } else if (unacceptableNow) {
           this.unacceptableOptInsHandedBack.add(d.id);
         }
       }
@@ -1329,6 +1337,18 @@ export class SeatHandle {
   }
 
   async chooseMode(index: number): Promise<Extract<ActResult, { ok: true }>> {
+    // Modes are keyed by their index, but some numbered menus (the 356.4.b
+    // cost election) name their options; "the Nth listed option" still reads
+    // as that pick.
+    const d = this.game.decision();
+    if (
+      d?.kind === "pick" &&
+      d.seat === this.seat &&
+      !d.options.some((o) => o.key === String(index)) &&
+      d.options[index]
+    ) {
+      return this.answer({ keys: [d.options[index].key], kind: "pick" });
+    }
     return this.answer({ keys: [String(index)], kind: "pick" });
   }
 

@@ -68,14 +68,19 @@ describe("Power Nexus (sfd-214-221)", () => {
     ]);
   });
 
-  test("holding scores the ordinary point at once and puts the Nexus trigger on the chain, asking P1 whether to pay [rainbow]×4 — with an (inevitably) empty pool 'yes' is not acceptable yet", async () => {
+  test("holding scores the ordinary point at once and puts the Nexus trigger on the chain, asking P1 whether to pay [rainbow]×4 — with an (inevitably) empty pool 'yes' is offered but not yet payable", async () => {
     const game = await aboutToHold().build();
     const d = await holdAndGetPrompt(game);
     expect(game.p1.points()).toBe(1);
     expect(game.chain()).toEqual([expect.objectContaining({ cardId: "nexus", controller: P1, triggered: true })]);
     expect(d.prompt).toContain("[rainbow][rainbow][rainbow][rainbow]");
     expect(game.p1.resources()).toEqual({ energy: 0, power: {} }); // 317.2.d — pools emptied at the end of P2's turn
-    expect(d.canAccept).toBe(false);
+    // rule 429.3 / 357.1.a (DESIGN manual-pay) — five ready runes CAN fund
+    // [rainbow]×4, so the prompt offers "yes" and names the top-up rather than
+    // hiding it; the accept itself stays refused until the Power is in the pool.
+    expect(d.canAccept).toBe(true);
+    expect(d.needsAdd).toMatchObject({ power: { rainbow: 4 } });
+    expect((await game.p1.try((p) => p.yes())).ok).toBe(false);
     expect(game.p1.runes({ ready: true })).toHaveLength(5); // Awaken already readied them (315.1.b)
   });
 
@@ -105,13 +110,20 @@ describe("Power Nexus (sfd-214-221)", () => {
     expect(game.violations()).toEqual([]);
   });
 
-  test("Energy is not Power: tapping four runes for energy while the prompt is open still leaves 'yes' unacceptable; forcing it is rejected", async () => {
+  test("Energy is not Power: tapping four runes for energy while the prompt is open leaves the [rainbow]×4 top-up outstanding; forcing 'yes' is rejected", async () => {
     const game = await aboutToHold().build();
     await holdAndGetPrompt(game);
     expect(game.p1.legal().some((o) => o.verb === "tapRune")).toBe(true); // the [Exhaust]: Add [1] Reaction IS offered
     await game.p1.tapRunes(4);
     expect(game.p1.energy()).toBe(4);
-    expect(game.decision()).toMatchObject({ canAccept: false, kind: "yes-no", seat: P1 });
+    // The four Energy pay nothing here: the shortfall the prompt reports is
+    // still four Power, which only recycling can add (164.2.b).
+    expect(game.decision()).toMatchObject({
+      kind: "yes-no",
+      needsAdd: { power: { rainbow: 4 } },
+      seat: P1,
+    });
+    expect((game.decision() as { needsAdd?: { energy?: number } }).needsAdd?.energy).toBeUndefined();
     expect((await game.p1.try((p) => p.yes())).ok).toBe(false);
     expect(game.p1.points()).toBe(1);
   });

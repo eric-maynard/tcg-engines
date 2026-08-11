@@ -82,7 +82,9 @@ describe("Ruling cb0c9c7b9d025ad8 — Yasuo, Remorseful's attack trigger must pa
     await attackToDeflectPrompt(game);
     const d = game.decision();
     expect(d).toMatchObject({ kind: "yes-no", seat: P1, source: { cardId: "yasuo" } });
-    if (d?.kind === "yes-no" && d.canAccept === false) {
+    // rule 429.3 — unpaid Deflect shows up either as a flat refusal or (once the
+    // prompt credits tappable runes) as `needsAdd`; both mean "recycle first".
+    if (d?.kind === "yes-no" && (d.canAccept === false || d.needsAdd !== undefined)) {
       expect((d.actions ?? []).some((a) => a.moveId === "recycleRune")).toBe(true);
       await game.p1.recycleRune("rune"); // Add [calm] — any domain pays [rainbow]
     }

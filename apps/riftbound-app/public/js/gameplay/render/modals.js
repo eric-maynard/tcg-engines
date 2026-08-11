@@ -109,6 +109,112 @@ function describeOptInCost(cost) {
   return parts.length ? parts.join(", ") : null;
 }
 
+/* ============================================================
+   Paying a prompt's cost from inside the prompt (429.3 / 357.1.a).
+   ------------------------------------------------------------
+   DESIGN.md §Paying costs: paying is MANUAL and the prompt STAYS OPEN while
+   the player taps/recycles runes, so a cost-bearing prompt must (a) keep the
+   rune row reachable, (b) show what is still owed, and (c) keep Yes VISIBLE —
+   disabled with "tap a rune first" — instead of hiding it until the pool
+   already covers the cost. Hiding it is what made Blade Dancer's "you may
+   exhaust me and pay [rainbow] to ready it" look impossible unless the player
+   happened to pre-recycle before choosing the unit.
+   Nothing here auto-pays: every rune move is one deliberate click.
+   ============================================================ */
+
+/** The Energy/Power an open prompt would charge on Yes, or null when it is free. */
+function promptResourceCost(pending) {
+  if (!pending || pending.type !== "opt-in") return null;
+  const src = pending.resolved?.optInCost ?? pending.acceleratePlay?.cost;
+  const energy = Number(src?.energy) || 0;
+  const power = Array.isArray(src?.power) ? src.power.filter(p => typeof p === "string") : [];
+  // rule 809.1.c.1 / 404.1 — the [Deflect] surcharge this trigger's own choice
+  // owes is Power paid in the SAME payment as the base cost.
+  const pips = power.concat(Array.from({ length: Number(pending.deflectSurcharge) || 0 }, () => "rainbow"));
+  return energy > 0 || pips.length > 0 ? { energy, power: pips } : null;
+}
+
+/** rule 164.2.a/b / 594 — what the viewer's rune moves could still add to the pool. */
+function runeAddsAvailable() {
+  const taps = availableMoves.filter(m => m.moveId === "exhaustRune");
+  const recycles = availableMoves.filter(m => m.moveId === "recycleRune");
+  const power = {};
+  const seen = new Set();
+  for (const m of recycles) {
+    const d = m.params?.domain, id = m.params?.runeId ?? m.params?.cardId;
+    if (typeof d !== "string" || seen.has(String(id))) continue;
+    seen.add(String(id));
+    power[d] = (power[d] || 0) + 1;
+  }
+  return { energy: taps.length, moves: taps.concat(recycles), power };
+}
+
+/**
+ * What is still owed after the CURRENT pool pays as much as it can.
+ * rule 135.2.e.5.b — pooled [rainbow] pays a pip of any Domain; a [rainbow] pip
+ * is paid last, out of whatever Domain is left.
+ */
+function promptCostShortfall(cost) {
+  if (!cost) return null;
+  const pool = gameState?.runePools?.[viewingPlayer] || {};
+  const left = {};
+  for (const [d, v] of Object.entries(pool.power || {})) if (v > 0) left[d] = v;
+  const owed = {};
+  const wild = [];
+  for (const pip of cost.power) {
+    if (pip === "rainbow" || pip.includes("|")) { wild.push(pip); continue; }
+    if (left[pip] > 0) left[pip] -= 1;
+    else if (left.rainbow > 0) left.rainbow -= 1;
+    else owed[pip] = (owed[pip] || 0) + 1;
+  }
+  for (const pip of wild) {
+    const from = (pip === "rainbow" ? Object.keys(left) : pip.split("|")).find(d => left[d] > 0);
+    if (from) left[from] -= 1;
+    else owed[pip] = (owed[pip] || 0) + 1;
+  }
+  const energy = Math.max(0, cost.energy - (Number(pool.energy) || 0));
+  return energy === 0 && Object.keys(owed).length === 0 ? null : { energy, power: owed };
+}
+
+/** Short "[order][2]"-style token list for a cost / shortfall. */
+function costTokens(cost) {
+  const parts = [];
+  if (cost?.energy) parts.push(`[${cost.energy}]`);
+  const power = Array.isArray(cost?.power)
+    ? cost.power
+    : Object.entries(cost?.power || {}).flatMap(([d, n]) => Array.from({ length: n }, () => d));
+  for (const p of power) parts.push(`[${p}]`);
+  return parts.join("");
+}
+
+/**
+ * The pay state of the open prompt: what it costs, what is still owed, and
+ * whether the seat's Reaction [Add] abilities could cover the gap.
+ * `canPayAfterAdds` ⇒ show Yes disabled with a hint, not hidden.
+ */
+function promptPayState(pending) {
+  const cost = promptResourceCost(pending);
+  if (!cost) return null;
+  const shortfall = promptCostShortfall(cost);
+  const adds = runeAddsAvailable();
+  let canPayAfterAdds = false;
+  if (shortfall) {
+    const recyclable = Object.values(adds.power).reduce((a, b) => a + b, 0);
+    let wildOwed = 0, ok = shortfall.energy <= adds.energy;
+    for (const [pip, n] of Object.entries(shortfall.power)) {
+      if (pip !== "rainbow") {
+        const usable = pip.includes("|")
+          ? pip.split("|").reduce((a, d) => a + (adds.power[d] || 0), 0)
+          : (adds.power[pip] || 0);
+        if (usable < n) ok = false;
+      }
+      wildOwed += n;
+    }
+    canPayAfterAdds = ok && wildOwed <= recyclable;
+  }
+  return { adds, canPayAfterAdds, cost, shortfall };
+}
+
 /** Display name of a card id / zone id / seat for prompt labels. */
 function promptName(id) {
   if (typeof id !== "string") return String(id ?? "");
@@ -257,6 +363,7 @@ function renderPendingChoiceModal() {
     // Don't stomp a play-cost modal that's currently open.
     if (overlay.dataset.mode === "pending") closeChoiceModal();
     overlay.classList.remove("targeting");
+    overlay.classList.remove("paying");
     return;
   }
   overlay.dataset.mode = "pending";
@@ -270,6 +377,11 @@ function renderPendingChoiceModal() {
     m.moveId === "resolvePendingChoice" && m.params?.pickedCardId &&
     document.querySelector(`#game-scale-wrapper [data-card-id="${CSS.escape(m.params.pickedCardId)}"]`));
   overlay.classList.toggle("targeting", !!hasBoardPicks);
+  // rule 429.3 / 357.1.a — while this prompt is a Pay step the player must be
+  // able to reach the rune row behind the modal (tap / right-click recycle) and
+  // then answer. The backdrop stops swallowing those clicks; the modal itself
+  // stays interactive and re-renders on each Add.
+  overlay.classList.toggle("paying", !!promptPayState(pending)?.shortfall);
   if (typeof closeZoom === "function") closeZoom();
   // A floating hover preview left over from the click that caused the prompt must not cover it.
   if (!overlay.classList.contains("visible") && typeof hidePreview === "function") hidePreview();
@@ -326,6 +438,31 @@ function renderPendingChoiceModal() {
     }
   }
 
+  // rule 429.3 / 357.1.a — this prompt IS a Pay step: keep the rune row live
+  // and the running total visible while the player funds it by hand.
+  const payState = promptPayState(pending);
+  if (payState) {
+    const owed = payState.shortfall;
+    html += `<div class="prompt-pay" data-prompt-pay>
+      <div class="prompt-pay-line">${promptTitleHtml(`Cost ${costTokens(payState.cost)}`)}
+        <span class="prompt-pay-sep">·</span>
+        ${promptTitleHtml(owed ? `still owed ${costTokens(owed)}` : "paid in full from your pool")}</div>`;
+    if (owed && payState.adds.moves.length) {
+      // The sidebar rune row can sit under the modal; give the same taps an
+      // affordance here so the prompt is answerable without hunting for it.
+      html += `<div class="prompt-pay-runes">`;
+      for (let i = 0; i < payState.adds.moves.length; i++) {
+        const m = payState.adds.moves[i];
+        const rune = findCard(m.params?.runeId ?? m.params?.cardId);
+        const dom = m.params?.domain ?? (Array.isArray(rune?.domain) ? rune.domain[0] : rune?.domain) ?? "";
+        const label = m.moveId === "exhaustRune" ? `Tap ${dom} → [1]` : `Recycle ${dom} → [${dom}]`;
+        html += `<button class="prompt-pay-rune" data-pay-idx="${i}">${promptTitleHtml(label)}</button>`;
+      }
+      html += `</div>`;
+    }
+    html += `</div>`;
+  }
+
   const picks = availableMoves.filter(m => m.moveId === "resolvePendingChoice");
   const cardPicks = picks.filter(m => m.params?.pickedCardId);
   const otherPicks = picks.filter(m => !m.params?.pickedCardId);
@@ -376,6 +513,14 @@ function renderPendingChoiceModal() {
     const many = otherPicks.length > 12;
     if (many) html += `<input class="choice-modal-filter" type="text" placeholder="Type to filter…" style="width:100%;margin:6px 0;padding:6px 8px;background:#1e1b30;border:1px solid #3a3560;border-radius:4px;color:#e0dced;">`;
     html += `<div class="choice-modal-btns${many ? " choice-modal-btns--many" : ""}"${many ? ' style="max-height:320px;overflow-y:auto;"' : ""}>`;
+    // rule 429.3 (DESIGN.md §Paying costs) — "yes" that only the pool's CURRENT
+    // contents make illegal is still reachable: show it disabled with what to
+    // tap, rather than hiding it and forcing a pre-tap the player can't guess.
+    if (payState?.canPayAfterAdds && !otherPicks.some(m => m.params?.accept === true)) {
+      html += `<button class="choice-modal-btn choice-modal-btn--needs-add" disabled
+        title="${esc(`Pay ${costTokens(payState.shortfall)} first — tap or recycle a rune`)}">Yes
+        <small>${promptTitleHtml(`tap a rune for ${costTokens(payState.shortfall)} first`)}</small></button>`;
+    }
     for (let i = 0; i < otherPicks.length; i++) {
       const label = pendingPickLabel(pending, otherPicks[i].params);
       html += `<button class="choice-modal-btn" data-other-idx="${i}">${esc(String(label))}</button>`;
@@ -394,6 +539,14 @@ function renderPendingChoiceModal() {
     el.addEventListener("click", pickIt);
     // Card tiles are the controls of a mandatory prompt: keyboard-operable too.
     el.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pickIt(); } });
+  });
+  // rule 429.3 — one click = one deliberate Add; the prompt stays open and
+  // re-renders with the new pool (nothing is auto-paid).
+  box.querySelectorAll(".prompt-pay-rune").forEach(el => {
+    el.addEventListener("click", () => {
+      const m = payState?.adds.moves[Number(el.dataset.payIdx)];
+      if (m) executeMove(m.moveId, m.params, m.playerId);
+    });
   });
   box.querySelectorAll(".choice-modal-btn").forEach(el => {
     el.addEventListener("click", () => {

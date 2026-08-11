@@ -2361,6 +2361,25 @@
       padding-bottom: 24px;
     }
     .chain-overlay.targeting .chain-box { pointer-events: auto; }
+    /* rule 429.3 / 357.1.a (DESIGN.md §Paying costs) — a cost-bearing prompt is
+       a Pay step: the rune row behind the modal stays clickable so the player
+       can tap / recycle and only then answer. Nothing is auto-paid. */
+    .chain-overlay.paying { pointer-events: none; background: rgba(5,3,15,0.45); }
+    .chain-overlay.paying .chain-box { pointer-events: auto; }
+    .prompt-pay {
+      margin: 8px 0 4px; padding: 8px 10px; border-radius: 6px;
+      background: #1a1630; border: 1px solid #3a3560;
+    }
+    .prompt-pay-line { font-size: 13px; color: #e0dced; }
+    .prompt-pay-sep { color: #6b6490; margin: 0 6px; }
+    .prompt-pay-runes { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    .prompt-pay-rune {
+      padding: 4px 10px; border-radius: 999px; border: 1px solid #ffd070;
+      background: #2a1a05; color: #fff4d8; font-size: 12px; font-weight: 600; cursor: pointer;
+    }
+    .prompt-pay-rune:hover { background: #3d2708; }
+    .choice-modal-btn--needs-add { opacity: .5; cursor: not-allowed; border-style: dashed; }
+    .choice-modal-btn--needs-add:hover { background: #2a2545; border-color: #3a3560; }
     /* [rule:chain-overlay-targeting-clickthrough] Client-side targeting (a
        reaction spell played off the chain, body.targeting-mode) picks cards on
        the board — including base units that sit under the centred #chainBox.

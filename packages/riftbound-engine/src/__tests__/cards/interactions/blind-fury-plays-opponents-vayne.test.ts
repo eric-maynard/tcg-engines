@@ -207,12 +207,15 @@ describe("Blind Fury plays the opponent's Vayne, Hunter — owner vs controller"
     expect(d?.kind === "yes-no" ? d.canAccept : undefined).toBe(true); // P1 has the 1 energy
   });
 
-  test("(b) with an empty pool P1 cannot accept the payment; declining leaves Vayne at the conquered battlefield under P1 (204.3.b)", async () => {
+  test("(b) with an empty pool P1 cannot pay yet (the prompt says what to tap); declining leaves Vayne at the conquered battlefield under P1 (204.3.b)", async () => {
     const { game } = await vayneConquersOpen({ tapEnergy: 0 });
     const d = game.decision();
     expect(d?.kind).toBe("yes-no");
     expect(d?.seat).toBe(P1);
-    expect(d?.kind === "yes-no" ? d.canAccept : undefined).toBe(false);
+    // rule 429.3 — offered with the [1] named as still owed, and refused until
+    // it is actually in the pool (DESIGN manual-pay: no auto-tap).
+    expect(d?.kind === "yes-no" ? d.needsAdd : undefined).toMatchObject({ energy: 1 });
+    expect((await game.p1.try((p) => p.yes())).ok).toBe(false);
     await game.p1.no();
     await game.settle();
     expect(game.locationOf("vayne")).toBe("open");

@@ -41,7 +41,16 @@ async function holdPrompt(game: Game): Promise<YesNoDecision> {
   // RULING-CONFLICT: riftjudge e2a35c364b15734f also allows floating "in response to the trigger" BEFORE paying; CR 383.3.b
   // says the trigger's cost is paid as it is FINALIZED (before anyone gets priority) — engine follows CR: the pay prompt
   // (timing FIN) comes first, the response window opens only once it is answered.
-  expect(d).toMatchObject({ kind: "yes-no", seat: P1, timing: "FIN", canAccept: false });
+  // rule 429.3 — the pool is empty but the ready runes could fund it, so "yes"
+  // is offered with the outstanding [rainbow]×4 named (DESIGN manual-pay: the
+  // player recycles while the prompt is open, nothing is auto-paid).
+  expect(d).toMatchObject({
+    canAccept: true,
+    kind: "yes-no",
+    needsAdd: { power: { rainbow: 4 } },
+    seat: P1,
+    timing: "FIN",
+  });
   return d as YesNoDecision;
 }
 

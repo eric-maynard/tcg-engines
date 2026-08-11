@@ -138,10 +138,13 @@ describe("Hand of Noxus × Hard Bargain × Hextech Ray — a Reaction Add used m
 
   // ───────────────────────────── (e)/(a) the prompt surfaces the Add opportunity ─────────────────────────────
 
-  test("(e) the ransom prompt with (1,{}) in the pool is SHOWN (not auto-declined) as canAccept:false, and its side-actions expose exactly the 444.2.c opportunities: activate Hand of Noxus, tap r3 (plus recycles/concede) — no pass, no P2 anything", async () => {
+  test("(e) the ransom prompt with (1,{}) in the pool is SHOWN (not auto-declined) with the missing [1] named, and its side-actions expose exactly the 444.2.c opportunities: activate Hand of Noxus, tap r3 (plus recycles/concede) — no pass, no P2 anything", async () => {
     const game = await board().build();
     const d = await toRansom(game);
-    expect(d.canAccept).toBe(false);
+    // rule 429.3 — half the [2] is in the pool and a tap covers the rest, so the
+    // prompt offers "yes" and names the shortfall instead of hiding the option.
+    expect(d.canAccept).toBe(true);
+    expect(d.needsAdd).toMatchObject({ energy: 1 });
     const keys = actionKeys(d);
     expect(keys).toContain("activateAbility:hon#0");
     expect(keys).toContain("exhaustRune:r3");

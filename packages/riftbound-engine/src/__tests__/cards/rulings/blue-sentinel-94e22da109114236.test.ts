@@ -42,7 +42,9 @@ async function payEveryNexusPrompt(game: Game): Promise<number> {
     }
     if (d.kind === "yes-no" && d.source?.cardId === "nexus") {
       expect(d.seat).toBe(P1);
-      if (d.canAccept) {
+      // rule 429.3 — `needsAdd` means the pool is still short: recycle first
+      // (the prompt stays open), only then is "yes" a legal answer.
+      if (d.canAccept && d.needsAdd === undefined) {
         accepted += 1;
         await game.p1.yes();
       } else {
@@ -105,7 +107,7 @@ describe("Ruling 94e22da109114236 — Blue Sentinel makes Power Nexus trigger tw
         if (accepted === 1) {
           await game.p1.no();
           accepted += 1;
-        } else if (d.canAccept) {
+        } else if (d.canAccept && d.needsAdd === undefined) {
           await game.p1.yes();
           accepted += 1;
         } else {

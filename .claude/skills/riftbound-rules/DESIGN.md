@@ -59,11 +59,22 @@ sub-step is intentionally not implemented; see `moves/play/cost-model.ts`).
   together with the rest of the cost is absent (never "accepted, then silently dropped"); a raw move naming anything
   outside that set is refused with the state untouched. Each variant carries a `quote` (energy / pips / any / xp) a UI
   may show.
-- Pays demanded while an ability RESOLVES (a spell's / activation's "pay [1] to …", a trigger's LATER "then you may
-  pay …", a leading "you may pay [C]. If you do, …" — rule 205: not a cost, a Pay performed on resolution, 444.2 —
-  or a counter's ransom) keep their prompt open; the player may tap runes while it is open and then answer — still
-  manual, nothing auto-tapped. (Known gap: `effects/conditional.ts` skips the question outright when the POOL cannot
-  pay, without crediting untapped runes; a finalization-cost prompt does credit them via `canPayOptInCost`.)
+- Pays demanded while an ability RESOLVES or FINALIZES (a trigger's "you may pay [C] to …", a spell's /
+  activation's "pay [1] to …", a leading "you may pay [C]. If you do, …" — rule 205: not a cost, a Pay performed
+  on resolution, 444.2 — an instructed play's confirm, an elected optional additional cost, a [Deflect] surcharge
+  the trigger's own choice owes, or a counter's ransom) keep their prompt OPEN; the player taps / recycles runes
+  while it is open and only then answers — still manual, nothing auto-tapped. One place decides which prompts
+  those are: `moves/prompt-cost.ts promptPayableCost`, used both to keep `exhaustRune` / `recycleRune` legal
+  during the prompt and to price it. Such a prompt reports `canAccept:true` with `needsAdd {energy, power, reason}`
+  whenever the pool as it stands cannot pay but the seat's Reaction [Add] abilities could — so "yes" is shown
+  (disabled, with "tap an [order] rune first") instead of hidden, and nobody has to guess the cost and pre-tap
+  before the ability is offered. Accepting is still refused until the pool actually covers it; `canAccept:false`
+  now means genuinely unpayable. Automatic policies (`settle`, the harness `first` policy) treat `needsAdd` as
+  "decline" — they never pay on the player's behalf.
+- Still pool-only, and NOT covered by the above: [Deflect]-taxed target picks (`choose-target` / `pick-many` with
+  `deflectTax`). Each producer filters candidates against the pool when the prompt is raised and never re-derives
+  the list, so a rune added mid-prompt cannot make a filtered-out target reappear; widening those budgets needs a
+  pick-time payability gate to replace the filter.
 - Trigger optional/cost timing follows ONE model (`E/abilities/optional-kind.ts`, core-rules test
   `optional-instructions-timing.test.ts`): "you may [cost] TO Y" = base cost decided+paid at FINALIZATION (383.3.a/b,
   204.3.a); "you may Y" / "you may X. If you do, Y" = decided at FINALIZATION, X/Y performed at RESOLUTION (205, 444.2,

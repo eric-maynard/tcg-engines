@@ -345,8 +345,26 @@ export interface PickDecision extends DecisionBase {
 export interface YesNoDecision extends DecisionBase {
   readonly kind: "yes-no";
   readonly consequence?: string;
-  /** False when "yes" is not a legal answer right now (e.g. an unpayable "you may [cost] to …"). */
+  /**
+   * False when "yes" can never be given (an unpayable "you may [cost] to …"
+   * that no Reaction [Add] could fund). True while the cost is payable NOW, and
+   * also while `needsAdd` says it becomes payable once runes are tapped.
+   */
   readonly canAccept?: boolean;
+  /**
+   * rule 429.3 / 357.1.a (DESIGN.md §Paying costs) — set when "yes" is not
+   * payable from the pool as it stands but WOULD be after the seat activates
+   * Reaction [Add] abilities (tap a rune for Energy, recycle one for Power).
+   * The prompt stays open across those activations: tap, then accept. Present
+   * ⇒ the accept move is still refused this instant, so a UI shows the button
+   * disabled with `reason` rather than hiding it, and an automatic policy that
+   * will not pay treats it like `canAccept:false`.
+   */
+  readonly needsAdd?: {
+    readonly energy?: number;
+    readonly power?: Readonly<Record<string, number>>;
+    readonly reason: string;
+  };
   /**
    * rule 444.2.c / 429.3.a: actions that stay legal while this Pay is being
    * demanded (Reaction [Add] abilities), offered alongside yes/no.

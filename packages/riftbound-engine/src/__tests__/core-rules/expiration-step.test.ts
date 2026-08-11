@@ -246,10 +246,19 @@ describe("320 / 317.2.d before finalization — the trigger queued at 3d is FINA
     return game;
   }
 
-  test("the 'you may pay [1]' prompt is put to P1 with the floated energy already gone (pool 0) → shown but canAccept:false (DESIGN manual-pay); the pass trace shows the lost energy", async () => {
+  test("the 'you may pay [1]' prompt is put to P1 with the floated energy already gone (pool 0) → shown, with the [1] still owed (DESIGN manual-pay); the pass trace shows the lost energy", async () => {
     const game = await admirerBoard();
     const d = game.decision();
-    expect(d).toMatchObject({ canAccept: false, kind: "yes-no", seat: P1, source: { cardId: "admirer" } });
+    // rule 429.3 — the ready rune can still fund the [1], so the prompt offers
+    // "yes" and says what to tap; accepting before the tap is still refused.
+    expect(d).toMatchObject({
+      canAccept: true,
+      kind: "yes-no",
+      needsAdd: { energy: 1 },
+      seat: P1,
+      source: { cardId: "admirer" },
+    });
+    expect((await game.p1.try((p) => p.yes())).ok).toBe(false);
     expect(game.p1.energy()).toBe(0);
     expect(game.turnPlayer()).toBe(P1);
     expect(game.trace().expiration[0]?.poolsEmptied[P1]).toEqual({ energy: 1, power: {} });

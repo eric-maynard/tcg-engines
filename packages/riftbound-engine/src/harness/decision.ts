@@ -14,9 +14,11 @@
  * card labels) so a UI-snapshot backend can reuse it unchanged.
  */
 
-import type { PlayerId } from "@tcg/core";
+import type { CardId, PlayerId } from "@tcg/core";
+import { costElectionHalves } from "../game-definition/moves/play/cost";
 import { modeOptionLabel, spellModeLabels } from "../game-definition/moves/play/play-time-modes";
 import { pairEffectRoles } from "../game-definition/moves/play/targeting";
+import { promptNeedsAdd } from "../game-definition/moves/prompt-cost";
 import { getGlobalCardRegistry } from "../operations/card-lookup";
 import type { PendingChoice, RiftboundGameState } from "../types/game-state";
 import { getActingSeat, getPendingChoiceChooser } from "../views/acting-seat";
@@ -62,6 +64,11 @@ export interface DecisionContext {
   handOf?(seat: Seat): readonly CardRef[];
   /** A seat's registered battlefields still awaiting its pick (rule 113 / 486.5). */
   registeredBattlefieldsOf?(seat: Seat): readonly CardRef[];
+  /**
+   * rule 356.4.b / 356.4.c.1 — would playing `cardId` on `targets` offer the
+   * caster an "[N] or [rainbow] less" election (both halves payable, different)?
+   */
+  costElectionLive?(seat: Seat, cardId: CardRef, targets?: readonly string[]): boolean;
   /** Whether procedures are auto-run (then they are hidden from menus). */
   readonly autoProcedures: boolean;
   readonly seq: number;
@@ -76,6 +83,41 @@ export function engineDecisionContext(
     autoProcedures,
     canExecute: (seat, moveId, params) =>
       engine.canExecuteMove(moveId, { params, playerId: seat as PlayerId }),
+    // rule 356.4.b — the board statics that carry an "[N] or [rainbow] less"
+    // discount live in the engine's zones, so read them the same way the play
+    // itself does (a read-only view; `updateCardMeta` is never called here).
+    costElectionLive: (seat, cardId, targets) => {
+      const internal = getInternalState(engine);
+      return (
+        costElectionHalves(
+          engine.getState(),
+          seat as string,
+          cardId as string,
+          {
+            board: {
+              cards: {
+                getCardController: (id) => internal.cards[id as string]?.controller,
+                getCardMeta: (id) => internal.cardMetas[id as string],
+                getCardOwner: (id) => internal.cards[id as string]?.owner,
+                updateCardMeta: () => {},
+              },
+              zones: {
+                getCardsInZone: (zoneId, playerId) =>
+                  Object.entries(internal.cards)
+                    .filter(
+                      ([, c]) =>
+                        c.zone === (zoneId as string) &&
+                        (playerId === undefined || c.owner === (playerId as string)),
+                    )
+                    .map(([id]) => id as CardId),
+              },
+            },
+            ...(targets ? { targets: [...targets] } : {}),
+          },
+          (id) => internal.cardMetas[id as string],
+        ) !== undefined
+      );
+    },
     handOf: (seat) => {
       const internal = getInternalState(engine);
       return (internal.zones.hand?.cardIds ?? []).filter((id) => internal.cards[id]?.owner === seat);
@@ -385,6 +427,24 @@ function buildFields(ctx: DecisionContext, moveId: string, variants: FlatMove[],
         required: true,
       });
     }
+    // rule 356.4.b / 356.4.c.1 — "[N] or [rainbow] less" is ONE discount whose
+    // half the caster elects; offer it up front as well as after the play.
+    if (
+      cardId &&
+      ctx.costElectionLive?.(
+        (variants[0] as FlatMove).playerId as Seat,
+        cardId,
+        (variants[0] as FlatMove).params.targets as readonly string[] | undefined,
+      )
+    ) {
+      fields.push({
+        arg: "costElection",
+        kind: "enum",
+        name: "cost-election",
+        options: ["energy", "power"],
+        required: false,
+      });
+    }
   }
   return fields;
 }
@@ -620,6 +680,8 @@ export function deriveFromPendingChoice(ctx: DecisionContext, pc: PendingChoice)
             (typeof (o as { deflect?: number }).deflect === "number" ? ` (+${(o as { deflect: number }).deflect} [Deflect])` : ""),
         })),
         prompt: pc.prompt ?? `Choose ${pc.min === pc.max ? pc.min : `${pc.min}–${pc.max}`}`,
+        // rule 356.4.b — the caster's "[N] or [rainbow] less" election.
+        ...(pc.resume?.kind === "cost-election" ? { meta: { arg: "cost-election" } } : {}),
         // rule 355.13 / 355.14.b — a finalization-time target set.
         ...(slotSemantics === "split" ? { targeting: "split-targets" as const } : slotSemantics === "upTo" ? { targeting: "up-to" as const } : {}),
         semantics:
@@ -957,11 +1019,27 @@ export function deriveFromPendingChoice(ctx: DecisionContext, pc: PendingChoice)
         ctx,
         ctx.legal(seat).filter((m) => m.moveId !== "resolvePendingChoice"),
       ).options;
+      // rule 429.3 / 357.1.a (DESIGN.md §Paying costs) — "yes" that only the
+      // pool's CURRENT contents make illegal is still reachable: the payer may
+      // tap/recycle runes while this prompt is open and then accept. Offer it
+      // (so no one has to pre-tap before the ability is even shown) but say what
+      // is missing; the accept move itself stays refused until the pool covers it.
+      const acceptLegal = flat.some((m) => m.params.accept === true);
+      const needsAdd = acceptLegal
+        ? undefined
+        : promptNeedsAdd(
+            ctx.state,
+            seat as string,
+            ctx.legal(seat).filter((m) => m.moveId !== "resolvePendingChoice"),
+            pc,
+          );
       const d: YesNoDecision = {
         ...base,
         ...(optInActions.length > 0 ? { actions: optInActions } : {}),
-        // rule 383.3.b (ogn-072-298): "yes" is only legal when the opt-in cost is payable.
-        canAccept: flat.some((m) => m.params.accept === true),
+        ...(needsAdd ? { needsAdd } : {}),
+        // rule 383.3.b (ogn-072-298): "yes" is only legal when the opt-in cost is
+        // payable — now, or after the Reaction [Add] abilities `needsAdd` names.
+        canAccept: acceptLegal || needsAdd !== undefined,
         consequence: "Perform the optional triggered ability",
         id: decisionId(ctx.seq, seat, "yes-no"),
         kind: "yes-no",
