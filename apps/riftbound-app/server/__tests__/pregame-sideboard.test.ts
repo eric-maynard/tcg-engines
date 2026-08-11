@@ -14,6 +14,7 @@ import { registry } from "../cards";
 import { buildDefaultDeck } from "../decks";
 import {
   advancePastReveal,
+  applySideboardSwaps,
   buildPregamePayload,
   createGameFromDecks,
   handlePregameMessage,
@@ -231,6 +232,41 @@ describe("swap validation", () => {
     const plain = createGameFromDecks(BASE, BASE, "sb-plain", { gameMode: "duel" });
     expect(swapSideboard(plain, P1, "a", "b")).toEqual({ error: "Not in the sideboard phase", ok: false });
     expect(lockSideboard(plain, P1).ok).toBe(false);
+  });
+
+  test("batch lock: `sideboard_lock` with `swaps` applies every pair in order then locks; a bad pair refuses the whole batch (nothing applied, not locked, error frame) — this is what the overlay's Lock in sends", () => {
+    const s = twoSided();
+    const p1 = s.pregame!.sideboard![P1]!;
+    const sent: Record<string, unknown>[] = [];
+    const wsA = { data: { connId: "a", gameId: "g", playerId: P1 }, send: (raw: string) => sent.push(JSON.parse(raw)) } as never;
+    s.clients.set("a", { playerId: P1, ws: wsA });
+    const mainBefore = p1.main.map((c) => c.id);
+    const sideBefore = p1.side.map((c) => c.id);
+    // Bad batch: second pair names a card that is not in the sideboard ⇒ refused atomically.
+    const bad = [{ in: p1.side[0]!.id, out: p1.main[0]!.id }, { in: "player-1-side-99-nope", out: p1.main[1]!.id }];
+    expect(handlePregameMessage(wsA, { swaps: bad, type: "sideboard_lock" }, s, "g", P1)).toBe(true);
+    expect(sent.some((f) => f.type === "error" && f.errorCode === "SIDEBOARD_LOCK" && String(f.error).startsWith("swap 2 of 2"))).toBe(true);
+    expect(p1.locked).toBe(false);
+    expect(p1.main.map((c) => c.id)).toEqual(mainBefore);
+    expect(p1.side.map((c) => c.id)).toEqual(sideBefore);
+    expect(applySideboardSwaps(s, P1, "nope").ok).toBe(false);
+    expect(applySideboardSwaps(s, P1, undefined)).toEqual({ applied: 0, ok: true });
+    // Good batch: two swaps then lock (P2 not locked yet ⇒ phase stays "sideboard").
+    const good = [{ in: p1.side[0]!.id, out: p1.main[0]!.id }, { in: p1.side[2]!.id, out: p1.main[7]!.id }];
+    sent.length = 0;
+    expect(handlePregameMessage(wsA, { swaps: good, type: "sideboard_lock" }, s, "g", P1)).toBe(true);
+    expect(sent.some((f) => f.type === "error")).toBe(false);
+    expect(p1.locked).toBe(true);
+    expect(p1.main[0]!.id).toBe(sideBefore[0]!);
+    expect(p1.main[7]!.id).toBe(sideBefore[2]!);
+    expect(p1.side[0]!.id).toBe(mainBefore[0]!);
+    expect(p1.side[2]!.id).toBe(mainBefore[7]!);
+    expect(p1.main).toHaveLength(40);
+    expect(p1.side).toHaveLength(4);
+    expect(s.pregame!.phase).toBe("sideboard");
+    // Plain lock (no swaps) is unchanged and completes the phase.
+    expect(handlePregameMessage({ data: { connId: "b", gameId: "g", playerId: P2 }, send: () => {} } as never, { type: "sideboard_lock" }, s, "g", P2)).toBe(true);
+    expect(s.pregame!.phase).toBe("mulligan");
   });
 
   test("copy limit (rule 103.2.b) is advisory: a deck registering 4× a name across main + sideboard still seats (flagged in the shared log, no card names), and swapping the 4th copy into the main deck is allowed", () => {

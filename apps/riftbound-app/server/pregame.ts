@@ -439,6 +439,36 @@ export function swapSideboard(session: GameSession, playerId: string, outId: unk
 }
 
 /**
+ * Apply a batch of 1-for-1 swaps atomically: every `{out, in}` is validated
+ * and applied in order (so a later swap may name a card an earlier one moved);
+ * on the first failure the seat's lists are restored and that error returned.
+ * This is what the overlay's Lock in sends — it edits quantities locally and
+ * turns the deltas into swaps only at lock time (`sideboard_lock` + `swaps`).
+ */
+export function applySideboardSwaps(session: GameSession, playerId: string, swaps: unknown): SideboardResult & { applied?: number } {
+  const pregame = session.pregame;
+  if (!pregame || pregame.phase !== "sideboard" || !pregame.sideboard) {
+    return { error: "Not in the sideboard phase", ok: false };
+  }
+  const seat = pregame.sideboard[playerId];
+  if (!seat) {return { error: "Not a seated player", ok: false };}
+  if (swaps === undefined || swaps === null) {return { applied: 0, ok: true };}
+  if (!Array.isArray(swaps)) {return { error: "swaps must be a list of {out, in} pairs", ok: false };}
+  const mainBefore = [...seat.main];
+  const sideBefore = [...seat.side];
+  for (let i = 0; i < swaps.length; i++) {
+    const s = swaps[i] as { out?: unknown; in?: unknown } | null;
+    const r = swapSideboard(session, playerId, s?.out, s?.in);
+    if (!r.ok) {
+      seat.main = mainBefore;
+      seat.side = sideBefore;
+      return { error: `swap ${i + 1} of ${swaps.length}: ${r.error}`, ok: false };
+    }
+  }
+  return { applied: swaps.length, ok: true };
+}
+
+/**
  * Lock a seat's configuration. In sandbox games the other (Goldfish / Claude)
  * seat locks with it. When every seat is locked the decks are rebuilt,
  * shuffled, hands drawn, and the pregame moves on to the mulligan.
@@ -891,6 +921,17 @@ export function handlePregameMessage(
   }
 
   if (msg.type === "sideboard_lock") {
+    // Optional batch: `swaps: [{out, in}, …]` is applied atomically first; a
+    // bad batch refuses the lock (nothing applied) so the overlay can retry.
+    if (msg.swaps !== undefined) {
+      const seatLocked = session.pregame.sideboard?.[playerId]?.locked === true;
+      const applied = seatLocked ? { ok: true as const } : applySideboardSwaps(session, playerId, msg.swaps);
+      if (!applied.ok) {
+        ws.send(JSON.stringify({ error: applied.error, errorCode: "SIDEBOARD_LOCK", type: "error" }));
+        sendPregameTo(session, playerId);
+        return true;
+      }
+    }
     const result = lockSideboard(session, playerId);
     if (!result.ok) {
       ws.send(JSON.stringify({ error: result.error, errorCode: "SIDEBOARD_LOCK", type: "error" }));

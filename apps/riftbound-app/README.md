@@ -133,9 +133,13 @@ widely published organized-play policy and states its assumptions here and at th
 **Try it.** Deck builder (`/builder`): turn on **Add to: Sideboard** above the Sideboard list and click cards (or
 import a list with a `Sideboard:` section — export writes it back), save, then create the game with
 `sideboardBeforeGame1: true` (until the Bo3 game-2 flow lands, that is the only way to reach the phase). After the
-battlefield reveal the pregame overlay shows *Sideboarding*: Main deck / Sideboard columns (click a main-deck card then
-a sideboard card, or drag one onto the other, to swap; *undo* per swap), the opponent's revealed legend / champion /
-battlefield, and **Lock in**. Practice games offer a *Skip sideboarding* checkbox (remembered in `localStorage`).
+battlefield reveal the pregame overlay shows *Sideboarding*: dense Main | Side lists, one row per distinct card with a
+quantity and **−** / **+** steppers (Main: − sends one copy to the sideboard, + pulls one back / in; Side symmetric).
+Rows never move or re-sort during the step — copies arriving in the other column show as ghost rows at its bottom
+("+2 Disintegrate ← side"); a summary strip lists the swaps ("−1 Cleave · +1 Disintegrate") with **Reset**, and
+**Lock in (N swaps)** is enabled only once the main deck is back to its size (it sends one `sideboard_lock` frame
+carrying the swap batch). ↑/↓ select a row, −/+ or ←/→ adjust. Practice games offer a *Skip sideboarding* checkbox
+(remembered in `localStorage`); `GET /play/test?sideboard=1` (sandbox) drops you straight onto the step.
 
 Wire protocol: server → client `pregame.phase === "sideboard"` with `you: {main, side, swaps, locked, …}` (own seat
 only) and `opponent: {legend, champion, battlefields, status}`; client → server `{type:"sideboard_swap", out, in}` and

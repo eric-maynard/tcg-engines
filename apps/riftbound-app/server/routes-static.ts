@@ -100,14 +100,23 @@ export async function handleStaticRoutes(_req: Request, url: URL, _ctx: RouteCtx
   // DEV ONLY: auto-create goldfish game for testing (requires SANDBOX_ENABLED=true)
   if (pathname === "/play/test" && SANDBOX_ENABLED) {
     const deck = buildDefaultDeck();
-    const session = createGameFromDecks(deck, deck, undefined, {
+    // `/play/test?sideboard=1`: stop at the pregame Sideboarding step instead —
+    // the Tester seat registers a 9-card sideboard (incl. extra copies of two
+    // main-deck spells) and the pre-game-1 window is opened (`sideboardBeforeGame1`).
+    const withSideboard = url.searchParams.get("sideboard") === "1";
+    const testerDeck = withSideboard
+      ? { ...deck, sideboardCardIds: ["ogn-005-298", "ogn-005-298", "ogn-005-298", "ogn-008-298", "ogn-008-298", "ogn-022-298", "ogn-014-298", "ogn-004-298", "ogn-169-298"] }
+      : deck;
+    const session = createGameFromDecks(testerDeck, deck, undefined, {
       firstPlayer: "player-1", gameMode: "duel", names: { "player-1": "Tester", "player-2": "Goldfish" },
-      sandbox: true,
+      sandbox: true, sideboardBeforeGame1: withSideboard,
     });
-    // Auto-complete mulligan
-    session.pregame?.mulliganComplete.add("player-1");
-    session.pregame?.mulliganComplete.add("player-2");
-    finalizePregame(session);
+    if (!withSideboard) {
+      // Auto-complete mulligan
+      session.pregame?.mulliganComplete.add("player-1");
+      session.pregame?.mulliganComplete.add("player-2");
+      finalizePregame(session);
+    }
 
     const testGameId = crypto.randomUUID();
     gameSessions.set(testGameId, session);
