@@ -840,6 +840,15 @@ export interface EffectPlaySpec {
   readonly location?: PlayLocationSpec;
   /** rule 128.6 / "you may play" — the performer may decline the whole play. */
   readonly declinable?: boolean;
+  /**
+   * rule 357.1.a / 429.3.a / 444.2.c (ruling cac9ff02562631c6, ogn-194-298
+   * Nocturne) — this play was ACCEPTED at a "you may play it" confirm, so it
+   * still owes its performer a Pay step: a rune they could recycle is Power
+   * they can bring, and the play is admitted on that basis exactly as the
+   * declinable offer was. Without it the accepted respawn (`declinable: false`)
+   * would be judged unaffordable and dropped, stranding the card.
+   */
+  readonly payWindow?: boolean;
   /** The instructing card (prompt source / `then` source). */
   readonly sourceCardId?: string;
   /** rule 323.13 — whose action stages the arrival when it is not the performer. */
@@ -885,6 +894,15 @@ interface EffectPlayProgress {
    */
   readonly killObjects?: readonly string[] | null;
   readonly killAsked?: boolean;
+  /**
+   * rule 357.1.a / 429.3.a (ruling cac9ff02562631c6) — the recyclable-rune PAY
+   * confirm was already put to the performer once. Distinct from `confirmed`
+   * (the "you may play it" DECLINE question, 128.6): accepting the decline
+   * question is not a pay attempt, so it must not suppress the pay window the
+   * dialog owes the performer later (Nocturne accepted while Stacked Deck was
+   * still resolving, then paid once it finished).
+   */
+  readonly payAsked?: boolean;
 }
 
 /** The Chain item of a card an effect is playing (type "permanent"/"spell", status pending). */
@@ -1136,7 +1154,10 @@ export function canPerformEffectPlay(io: PlayIO, spec: EffectPlaySpec): boolean 
     // DECLINABLE instructed play opens a confirm prompt that is itself the play's
     // Pay step, and rune [Add] abilities stay usable inside it: a rune the
     // performer could recycle right then is Power they can bring.
-    return spec.declinable === true && permanentEffectPlayOptions(io, spec, from, withRecyclableRunes(io, spec.playerId)).length > 0;
+    return (
+      (spec.declinable === true || spec.payWindow === true) &&
+      permanentEffectPlayOptions(io, spec, from, withRecyclableRunes(io, spec.playerId)).length > 0
+    );
   }
   const { extras, free } = costExtrasFor(io, spec);
   if (free || draft.runePools[spec.playerId] === undefined) {
@@ -1149,7 +1170,10 @@ export function canPerformEffectPlay(io: PlayIO, spec: EffectPlaySpec): boolean 
   }
   // rule 429.3.a / 444.2.c (ruling cac9ff02562631c6) — a DECLINABLE instructed
   // play's confirm prompt is its Pay step; recyclable runes count (see above).
-  return spec.declinable === true && canPayResourceCost(withRecyclableRunes(io, spec.playerId), spec.playerId, spec.cardId, cost);
+  return (
+    (spec.declinable === true || spec.payWindow === true) &&
+    canPayResourceCost(withRecyclableRunes(io, spec.playerId), spec.playerId, spec.cardId, cost)
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -1472,7 +1496,9 @@ export function beginPlay(
   // only goes to the Chain (354.1) once its player has chosen to play it.
   if (spec.declinable === true && !io.draft.pendingChoice) {
     io.draft.pendingChoice = {
-      playConfirmSpec: { ...spec, declinable: false },
+      // rule 357.1.a / 429.3.a — accepting is not paying: the play keeps its
+      // Pay step (and the runes that can feed it) once it is a Pending Item.
+      playConfirmSpec: { ...spec, declinable: false, payWindow: true },
       // rule 354.3 (rule-id: ogn-062-298 Reinforce × ogn-194-298 Nocturne) —
       // saying yes to "you may play me" does not jump the queue: the play is
       // continued at once only when THIS call asked for it. An instructed play
@@ -1601,9 +1627,10 @@ export function continueEffectPlay(io: PlayIO, item: PendingPlayItem): "prompted
         // rule 357.1.a / 429.3.a (ruling cac9ff02562631c6) — recyclable runes:
         // ask instead of silently undoing; accept only once the pool covers it.
         if (
-          progress.confirmed !== true &&
+          progress.payAsked !== true &&
           canPayResourceCost(withRecyclableRunes(io, spec.playerId), spec.playerId, spec.cardId, cost)
         ) {
+          patchPlayItem(draft, item.id, { payAsked: true });
           draft.pendingChoice = {
             playConfirm: true,
             playItemId: item.id,
@@ -1693,7 +1720,7 @@ function continuePermanentEffectPlay(io: PlayIO, item: PendingPlayItem): "prompt
     // empty pool with a rune still recyclable is not "unaffordable", it is unpaid:
     // ask (rune moves stay legal while the prompt is open) instead of undoing.
     const projected =
-      progress.confirmed !== true ? permanentEffectPlayOptions(io, spec, progress.from, withRecyclableRunes(io, spec.playerId)) : [];
+      progress.payAsked !== true ? permanentEffectPlayOptions(io, spec, progress.from, withRecyclableRunes(io, spec.playerId)) : [];
     const cheapest = projected.toSorted((a, b) => a.quote.energy + a.quote.any - (b.quote.energy + b.quote.any))[0];
     if (cheapest) {
       const pips: string[] = [];
@@ -1705,6 +1732,7 @@ function continuePermanentEffectPlay(io: PlayIO, item: PendingPlayItem): "prompt
       for (let i = 0; i < cheapest.quote.any; i++) {
         pips.push("rainbow");
       }
+      patchPlayItem(draft, item.id, { payAsked: true });
       draft.pendingChoice = {
         playConfirm: true,
         playItemId: item.id,

@@ -107,9 +107,9 @@ describe("Ruling cac9ff02562631c6 — Stacked Deck finding Nocturne: banish → 
   // Expected (FAQ 1157): no floating power is needed while Stacked Deck resolves and runes are NOT tapped during it — you
   // just accept Nocturne's offers; AFTER Stacked Deck's put-1-in-hand step you are prompted to pay for the banished
   // Nocturne and may exhaust/recycle runes THEN; recycling the ready rune pays [rainbow] and Nocturne is played.
-  // Actual: the engine only offers rune actions at the opt-in DURING Stacked Deck's resolution; a player who accepts there
-  // with an empty pool gets no pay prompt after Stacked Deck finishes and Nocturne is stranded in banishment.
-  test.failing("BUG: ruling cac9ff02562631c6 — no pay-for-Nocturne prompt after Stacked Deck finishes; accepting with an empty pool strands Nocturne in banishment", async () => {
+  // Accepting "you may play me" is not paying (357.1.a): the accepted play stays a Pending Item and gets its own Pay
+  // confirm once Stacked Deck has finished, where rune [Add] abilities are still legal (429.3.a / 444.2.c).
+  test("ruling cac9ff02562631c6 — the pay-for-Nocturne window opens after Stacked Deck finishes; a rune recycled there pays for it", async () => {
     const game = await scenario()
       .resources(P1, { energy: 1 })
       .rune(P1, "chaos", { alias: "rune" })
