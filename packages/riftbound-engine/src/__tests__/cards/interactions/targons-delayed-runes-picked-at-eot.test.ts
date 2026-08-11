@@ -149,17 +149,18 @@ describe("Targon's Peak — the delayed 'ready up to 2 runes' picks its runes at
     expect(d.allowDecline).toBe(true); // rule 355.13 — zero picks is a legal finalization
   });
 
-  test("(b) the option set is every friendly rune on the board AT THAT MOMENT: r3 — channelled by Retreat AFTER the conquer — is fully eligible, and so is the already-READY rune (the text says 'ready up to 2 runes', not 'exhausted runes')", async () => {
+  test("(b) the option set is every rune on the board AT THAT MOMENT: r3 — channelled by Retreat AFTER the conquer — is fully eligible, and so is the already-READY rune (the text says 'ready up to 2 runes', not 'exhausted runes')", async () => {
     const game = await atEndingStepPrompt();
     expect(game.p1.runes().toSorted()).toEqual(["r1", "r2", "r3", "rReady"]);
     expect(game.state("r3").isExhausted).toBe(true); // 430.2 — Retreat channels it exhausted
-    expect(offered(runePrompt(game))).toEqual(["r1", "r2", "r3", "rReady"]);
+    // rule 355.7 — no "friendly" qualifier, so P2's e1 is in the set too.
+    expect(offered(runePrompt(game))).toEqual(["e1", "r1", "r2", "r3", "rReady"]);
   });
 
-  // Expected (355.7 / 355.13): "ready up to 2 runes" carries no "friendly" qualifier — unlike Sona,
+  // rule 355.7 / 355.13: "ready up to 2 runes" carries no "friendly" qualifier — unlike Sona,
   // Harmonious, which says "up to 4 friendly runes" — so every rune on the board is an available target,
-  // P2's included. Actual: the engine's target descriptor pins controller:"friendly" and offers only P1's.
-  test.failing("BUG: 'ready up to 2 runes' has no friendly qualifier, so the ENEMY rune e1 must be in the option set too (355.7, 355.13); the engine filters the pick to friendly runes", async () => {
+  // P2's included.
+  test("'ready up to 2 runes' has no friendly qualifier, so the ENEMY rune e1 is in the option set too (355.7, 355.13)", async () => {
     const game = await atEndingStepPrompt();
     expect(offered(runePrompt(game))).toContain("e1");
   });

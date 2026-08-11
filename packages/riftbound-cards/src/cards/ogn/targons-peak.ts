@@ -18,7 +18,10 @@ const abilities: Ability[] = [
     effect: {
       duration: "turn",
       effect: {
-        target: { controller: "friendly", quantity: { upTo: 2 }, type: "rune" },
+        // rule 355.7 — "ready up to 2 runes" carries no friendly qualifier
+        // (unlike Sona, Harmonious' "up to 4 friendly runes"), so EVERY rune
+        // on the board is an available target, the opponent's included.
+        target: { quantity: { upTo: 2 }, type: "rune" },
         type: "ready",
       },
       target: "controller",

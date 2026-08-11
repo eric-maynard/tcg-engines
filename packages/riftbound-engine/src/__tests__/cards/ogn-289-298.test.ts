@@ -69,9 +69,11 @@ async function endTurnTakingRunes(game: Game, seat: Seat, take: number): Promise
   await game.seat(seat).endTurn();
   for (let i = 0; i < 16 && game.turnPlayer() === seat; i++) {
     const d = game.decision();
-    if (d?.kind === "pick" && d.seat === seat && d.options.length > 0 && d.options.every((o) => runeIds.has(o.card ?? o.key))) {
+    // rule 355.7 — "ready up to 2 runes" has no friendly qualifier, so the opponent's runes are offered
+    // too; this seat still only ever picks its OWN.
+    if (d?.kind === "pick" && d.seat === seat && d.options.some((o) => runeIds.has(o.card ?? o.key))) {
       prompts += 1;
-      const exhaustedFirst = [...d.options].sort(
+      const exhaustedFirst = [...d.options.filter((o) => runeIds.has(o.card ?? o.key))].sort(
         (a, b) => Number(game.state(b.card ?? b.key).isExhausted) - Number(game.state(a.card ?? a.key).isExhausted),
       );
       const keys = exhaustedFirst.slice(0, Math.min(take, d.max)).map((o) => o.key);

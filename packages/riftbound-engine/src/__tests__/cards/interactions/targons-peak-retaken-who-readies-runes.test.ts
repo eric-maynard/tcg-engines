@@ -101,12 +101,20 @@ async function peakRetaken(): Promise<Game> {
 }
 
 /** Is `d` a rune-choice prompt for `seat` listing only that seat's runes? */
+// rule 355.7 — "ready up to 2 runes" has no friendly qualifier, so the prompt lists EVERY rune on the
+// board; a seat's own trigger is recognised by its own runes being among the options.
 function isRunePromptFor(game: Game, d: Decision | null, seat: string): d is Extract<Decision, { kind: "pick" }> {
   if (d?.kind !== "pick" || d.seat !== seat || d.options.length === 0) {
     return false;
   }
   const mine = new Set(game.seat(seat).runes());
-  return d.options.every((o) => mine.has(o.card ?? o.key));
+  return d.options.some((o) => mine.has(o.card ?? o.key));
+}
+
+/** The keys of `seat`'s OWN runes in a rune prompt — what a sane player picks. */
+function ownRuneKeys(game: Game, d: Extract<Decision, { kind: "pick" }>, seat: string): string[] {
+  const mine = new Set(game.seat(seat).runes());
+  return d.options.filter((o) => mine.has(o.card ?? o.key)).map((o) => o.key);
 }
 
 /**
@@ -121,7 +129,7 @@ async function endP1TurnAnsweringRunePrompts(game: Game): Promise<string[]> {
     const d = game.decision();
     if (isRunePromptFor(game, d, P1) || isRunePromptFor(game, d, P2)) {
       asked.push(d.seat);
-      await game.seat(d.seat).pick(...d.options.slice(0, Math.min(2, d.max)).map((o) => o.key));
+      await game.seat(d.seat).pick(...ownRuneKeys(game, d, d.seat).slice(0, Math.min(2, d.max)));
     } else if (d?.kind === "action" && d.context === "chain") {
       await game.seat(d.seat).passPriority();
     } else if ((await game.settle()).reason === "unanswered") {
@@ -247,7 +255,7 @@ describe("Targon's Peak conquered by P1, retaken by P2 the same turn — who rea
     }
   });
 
-  test("(3) at the end of P1's turn P1 — who NO LONGER controls the Peak — is still asked and readies 2 of P1's OWN runes: losing the source does not cancel the effect, and the offer lists only P1's runes so P2 has no say in it (191.4.b, 392)", async () => {
+  test("(3) at the end of P1's turn P1 — who NO LONGER controls the Peak — is still asked and readies 2 of P1's OWN runes: losing the source does not cancel the effect, and P1 alone answers its own trigger (191.4.b, 392)", async () => {
     const game = await peakRetaken();
     expect(game.gameState.battlefields.peak?.controller).toBe(P2);
     expect(game.p1.runes({ ready: true })).toEqual([]);
@@ -260,16 +268,17 @@ describe("Targon's Peak conquered by P1, retaken by P2 the same turn — who rea
         p1Offer = d.options.map((o) => o.card ?? o.key).sort();
         expect(d.max).toBe(2);
         expect(game.turnPlayer()).toBe(P1); // asked in P1's Ending Step
-        await game.p1.pick(...d.options.slice(0, 2).map((o) => o.key));
+        await game.p1.pick(...ownRuneKeys(game, d, P1).slice(0, 2));
       } else if (isRunePromptFor(game, d, P2)) {
-        await game.p2.pick(...d.options.slice(0, 2).map((o) => o.key));
+        await game.p2.pick(...ownRuneKeys(game, d, P2).slice(0, 2));
       } else if (d?.kind === "action" && d.context === "chain") {
         await game.seat(d.seat).passPriority();
       } else if ((await game.settle()).reason === "unanswered") {
         break;
       }
     }
-    expect(p1Offer).toEqual(p1Runes); // exactly P1's three runes, none of P2's
+    // rule 355.7 — the offer is every rune on the board (P2's included); P1's three are all there.
+    expect(p1Offer).toEqual(expect.arrayContaining(p1Runes));
     await game.settle();
     expect(game.turnPlayer()).toBe(P2);
     expect(game.p1.runes({ ready: true })).toHaveLength(2); // P2's Awaken does not touch P1's runes
@@ -285,21 +294,11 @@ describe("Targon's Peak conquered by P1, retaken by P2 the same turn — who rea
     expect(asked.sort()).toEqual([P1, P2]);
   });
 
-  test("(3) 'No' side: P2 taking the Peak does not make P2 the 'you' of P1's already-resolved trigger — during P1's Ending Step P2 is never offered P1's runes, and P1's prompt still happens exactly once", async () => {
+  test("(3) 'No' side: P2 taking the Peak does not make P2 the 'you' of P1's already-resolved trigger — P2 answers only its OWN delayed trigger and P1's prompt still happens exactly once", async () => {
     const game = await peakRetaken();
-    const p1Runes = new Set(game.p1.runes());
-    let p2OfferedP1Rune = false;
-    game.script(P2, [
-      (d) => {
-        if (d.kind === "pick" && d.options.some((o) => p1Runes.has(o.card ?? o.key))) {
-          p2OfferedP1Rune = true;
-        }
-        return undefined;
-      },
-    ]);
     const asked = await endP1TurnAnsweringRunePrompts(game);
     expect(asked.filter((s) => s === P1)).toEqual([P1]);
-    expect(p2OfferedP1Rune).toBe(false);
+    expect(asked.filter((s) => s === P2)).toEqual([P2]); // its own trigger, not a second bite at P1's
     expect(game.violations()).toEqual([]);
   });
 });
