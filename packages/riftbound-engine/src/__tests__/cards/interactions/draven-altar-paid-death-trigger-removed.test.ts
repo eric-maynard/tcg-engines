@@ -172,7 +172,7 @@ describe("(b) YES / YES-for-V: P1 saves Draven, P2 declines the Poro and saves V
   // still "here", so "I didn't die alone" is TRUE (condition fixed at trigger time, 383.2.a.1) → the DK lands
   // as P2's only chain item and P2 draws 1. Actual: the engine re-reads "alone" after V's replacement recall
   // has already emptied the battlefield, finds the Poro alone and never puts the Deathknell on the chain.
-  test.failing("BUG: Loyal Poro's Deathknell lands as [Poro DK (P2)] — V was still here at step 3a → 'didn't die alone' — and P2 draws 1 (323.4, 808.1.d.3, 383.2.a.1)", async () => {
+  test("Loyal Poro's Deathknell lands as [Poro DK (P2)] — V was still here at step 3a → 'didn't die alone' — and P2 draws 1 (323.4, 808.1.d.3, 383.2.a.1)", async () => {
     const game = await branchB();
     expect(game.chain()).toEqual([expect.objectContaining({ cardId: "poro", controller: P2, triggered: true })]);
     const hand = game.p2.hand().length;

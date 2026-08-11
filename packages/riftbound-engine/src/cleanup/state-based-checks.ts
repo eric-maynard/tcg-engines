@@ -35,8 +35,10 @@ import { combatRoleMightBonus } from "../operations/combat-role-might";
 import { flushPendingCombatDesignations } from "../operations/combat-designations";
 import { hiddenCapacityAt } from "../operations/hidden-capacity";
 import {
+  type LKISnapshot,
   type LeaveResult,
   clearLKI,
+  getLKI,
   leaveBoard,
   recordDepartedOwner,
   snapshotBatch,
@@ -170,6 +172,14 @@ export interface CleanupOptions {
    * one item.
    */
   readonly shieldsOnly?: boolean;
+  /**
+   * rule 319.2 vs 323.6 — skip step 6's battlefield-control lapse. The Cleanup
+   * a PHASE TRANSITION makes outstanding runs the death check (323.5) but must
+   * not re-time control: control is modelled off the game actions that empty a
+   * battlefield, and seeded/left-over control is only re-read by the Cleanups
+   * those actions produce.
+   */
+  readonly skipControlStep?: boolean;
 }
 
 export function performCleanup(ctx: CleanupContext, opts: CleanupOptions = {}): CleanupResult {
@@ -293,7 +303,31 @@ export function performCleanup(ctx: CleanupContext, opts: CleanupOptions = {}): 
   }
   // rule 428.1.a.1.b / 740.2.a — last-known information for every candidate,
   // taken while the whole simultaneous batch is still on the board.
+  // rule 323.4 / 808.1.d.3 — Deathknell information is noted at Cleanup step 3a,
+  // BEFORE anything leaves in step 3b: when the batch was suspended on a costed
+  // shield (371.2) and a batch-mate has since been saved and recalled, the
+  // survivor still counts as "here" for "I didn't die alone" (383.2.a.1). Carry
+  // the batch's original board picture over the re-snapshot.
+  const noted = new Map<string, { unitsHere: LKISnapshot["unitsHere"]; wasAlone: boolean }>();
+  for (const id of lethalIds) {
+    const prev = getLKI(ctx.draft, id);
+    if (prev !== undefined) {
+      noted.set(id, { unitsHere: prev.unitsHere, wasAlone: prev.wasAlone });
+    }
+  }
   const preLKI = snapshotBatch(ctx, lethalIds);
+  for (const [id, keep] of noted) {
+    const fresh = preLKI.get(id);
+    if (fresh === undefined) {
+      continue;
+    }
+    const merged = { ...fresh, unitsHere: keep.unitsHere, wasAlone: keep.wasAlone };
+    preLKI.set(id, merged);
+    const lkiBag = (ctx.draft as { lki?: Record<string, LKISnapshot> }).lki;
+    if (lkiBag !== undefined) {
+      lkiBag[id] = merged;
+    }
+  }
 
   // rules 370–373 — die replacements for the whole batch: optional shields
   // asked (371.2), several replacements on one death ordered by its controller
@@ -350,9 +384,17 @@ export function performCleanup(ctx: CleanupContext, opts: CleanupOptions = {}): 
   }
   // Survivors of this pass keep no LKI entry; the batch's own entries stay
   // until its `die` events have been published by the caller.
+  // rule 323.4 — a batch still waiting on a shield answer has NOT reached step
+  // 3b yet, so its members keep the information noted at 3a.
+  const pendingBatch = ctx.draft.dieBatch;
+  const stillWaiting = new Set<string>(
+    pendingBatch === undefined
+      ? []
+      : [...pendingBatch.queue, ...pendingBatch.dying, ...pendingBatch.replaced],
+  );
   clearLKI(
     ctx.draft,
-    [...damagedIds, ...lethalIds].filter((id) => !killed.includes(id)),
+    [...damagedIds, ...lethalIds].filter((id) => !killed.includes(id) && !stillWaiting.has(id)),
   );
 
   // Step 2: Remove stale combat roles (rule 521)
@@ -643,7 +685,7 @@ export function performCleanup(ctx: CleanupContext, opts: CleanupOptions = {}): 
   // when the controller has no unit here and no Showdown / Combat is ongoing
   // HERE; a Closed State — chain item, pending trigger, the `die` triggers of
   // units reaped in this very pass — keeps it) + combat staging (323.13).
-  if (applyControlCleanupStep(ctx, { killedThisPass: killed.length })) {
+  if (!opts.skipControlStep && applyControlCleanupStep(ctx, { killedThisPass: killed.length })) {
     stateChanged = true;
   }
   for (const [bfId, bf] of Object.entries(ctx.draft.battlefields)) {
