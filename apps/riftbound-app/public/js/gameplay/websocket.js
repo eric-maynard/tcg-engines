@@ -199,6 +199,10 @@ function connectWs() {
         if (pregameState && pregameState.phase === "sideboard" && typeof maybeRenderSideboardOverlay === "function") {
           maybeRenderSideboardOverlay(gameState, pregameState);
         }
+        if (pregameState && pregameState.phase === "battlefield_select" && typeof handlePregameSync === "function") {
+          if (typeof _bfSelectPending !== "undefined") _bfSelectPending = null;
+          handlePregameSync(pregameState, gameState);
+        }
         break;
 
       case "ai_status":

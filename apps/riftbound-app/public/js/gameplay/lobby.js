@@ -124,15 +124,24 @@ function connectLobbyWs(onOpen) {
       return;
     }
 
+    if (msg.type === "lobby_closed") {
+      // The other seat left before the game began — nothing to wait for.
+      if (typeof showToast === "function") showToast(msg.reason === "host_left" ? "The host closed the lobby" : "Match abandoned — your opponent left");
+      if (typeof returnToPlayMenu === "function") returnToPlayMenu(); else leaveLobby();
+      return;
+    }
+
     if (msg.type === "lobby_update") {
-      // Solo direct-play: never surface the lobby room or the d20 overlay.
+      // Solo direct-play: never surface the lobby room.
       if (!_soloAutoStart) renderLobbyRoom(msg.lobby);
+      // Practice games may skip the roll overlay entirely ("Skip animations in practice games").
+      const instant = _soloAutoStart && typeof pregameAnimationsSkipped === "function" && pregameAnimationsSkipped();
 
       // Step 1: Coin flip happened — show flip overlay (winner chooses)
       if (msg.lobby.coinFlip && !msg.lobby.coinFlip.firstPlayer && msg.lobby.status !== "started") {
         playerNames[P1] = msg.lobby.host?.name || "Player 1";
         playerNames[P2] = msg.lobby.guest?.name || "Player 2";
-        if (_soloAutoStart) {
+        if (instant) {
           lobbyWs.send(JSON.stringify({ choice: "self", type: "choose_first" }));
         } else {
           showCoinFlip(msg.lobby.coinFlip, null);
@@ -162,7 +171,10 @@ function connectLobbyWs(onOpen) {
         // Close lobby WS before connecting game WS
         if (lobbyWs) { lobbyWs.close(1000); lobbyWs = null; }
 
+        let proceeded = false;
         const proceed = () => {
+          if (proceeded) return;
+          proceeded = true;
           _coinFlipShown = false;
           const overlay = document.getElementById("coinOverlay");
           if (overlay) overlay.classList.remove("visible");
@@ -170,10 +182,16 @@ function connectLobbyWs(onOpen) {
           _soloAutoStart = false;
           connectWs();
         };
-        // Solo auto-start never showed the coin overlay, so there's nothing
-        // to linger on — connect immediately instead of waiting 1.5s on a
-        // blank screen.
-        if (_soloAutoStart) proceed(); else setTimeout(proceed, 1500);
+        if (instant) {
+          // Preference: no overlay was shown — nothing to linger on.
+          proceed();
+        } else if (!_coinFlipShown && flip) {
+          // The other seat won and already decided (Goldfish / Claude elect to go
+          // first) — or we reconnected: show the roll and who goes first, then go.
+          showCoinFlip(flip, proceed);
+        } else {
+          setTimeout(proceed, 1500);
+        }
       }
     }
   };
@@ -687,8 +705,28 @@ async function showSoloDeckPicker(mode) {
   // Opponent row (Goldfish · Claude Haiku/Sonnet/Opus) — ai-opponent.js.
   if (typeof aiPreparePicker === "function") aiPreparePicker(mode);
   mountSoloOppDeckRow();
+  mountSoloSkipAnimToggle();
   const lists = await loadSavedDecksInto(document.getElementById("soloDeckSelect"), document.getElementById("soloDeckStatus"), { fetchPublic: true });
   fillOppDeckSelect(document.getElementById("soloOppDeckSelect"), document.getElementById("soloDeckSelect"), lists);
+}
+
+/** Solo dialog: "Skip animations in practice games" (roll overlay / first-player reveal), remembered in localStorage, default off. */
+function mountSoloSkipAnimToggle() {
+  if (document.getElementById("soloSkipAnimRow")) return;
+  const picker = document.getElementById("soloDeckPicker");
+  const modeRow = picker && picker.querySelector('input[name="soloMode"]')?.closest("div");
+  if (!picker || !modeRow) return;
+  const row = document.createElement("label");
+  row.id = "soloSkipAnimRow";
+  row.style.cssText = "display:flex;gap:6px;align-items:center;margin-top:10px;color:#8a82a6;font-size:12px;cursor:pointer;";
+  const box = document.createElement("input");
+  box.type = "checkbox";
+  box.id = "soloSkipAnimToggle";
+  box.checked = typeof pregameAnimationsSkipped === "function" && pregameAnimationsSkipped();
+  box.addEventListener("change", () => { if (typeof setPregameAnimationsSkipped === "function") setPregameAnimationsSkipped(box.checked); });
+  row.appendChild(box);
+  row.appendChild(document.createTextNode(" Skip animations in practice games (dice roll, first-player reveal)"));
+  modeRow.insertAdjacentElement("afterend", row);
 }
 
 async function startSoloGame() {
@@ -713,8 +751,8 @@ async function startSoloGame() {
   viewingPlayer = P1;
 
   // Open the WS, and once open: set deck → start. The lobby_update handler
-  // sees _soloAutoStart and auto-sends choose_first when the coinFlip lands,
-  // so no d20 overlay is shown — straight to mulligan.
+  // sees _soloAutoStart: it skips the lobby room, shows the d20 roll (unless
+  // "Skip animations in practice games" is on) and then connects to the game.
   _soloAutoStart = true;
   const status = document.getElementById("soloDeckStatus");
   const btn = document.querySelector('#soloDeckPicker .start-btn');

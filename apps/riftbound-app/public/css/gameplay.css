@@ -2583,18 +2583,38 @@
     }
 
     /* Battlefield selection */
+    .pregame-step.bf-step { max-width: 900px; }
     .bf-choices {
       display: flex; gap: 16px; justify-content: center; flex-wrap: wrap;
     }
+    /* Each option is the battlefield CARD (landscape art, name under it); the full printed
+       text is on the hover preview (.bf-choice[data-def-id] is a preview surface). */
     .bf-choice {
-      width: 180px; padding: 16px 12px;
-      border: 2px solid #3a3560; border-radius: 10px;
-      background: #1a1830; cursor: pointer; text-align: center;
-      transition: all 0.2s;
+      display: flex; flex-direction: column; align-items: center; gap: 8px;
+      width: 260px; padding: 10px 10px 12px; font: inherit;
+      border: 2px solid #3a3560; border-radius: 12px;
+      background: #1a1830; cursor: pointer; text-align: center; color: inherit;
+      transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s, opacity 0.2s;
+      position: relative;
     }
-    .bf-choice:hover { border-color: #c4a0ff; transform: translateY(-4px); box-shadow: 0 6px 20px rgba(120,80,200,0.2); }
-    .bf-choice.selected { border-color: #50c878; background: #152520; pointer-events: none; }
-    .bf-choice .bf-name { font-size: 14px; font-weight: 700; color: #c4a0ff; margin-bottom: 4px; }
+    .bf-choice:hover:not(:disabled) { border-color: #c4a0ff; transform: translateY(-4px); box-shadow: 0 6px 20px rgba(120,80,200,0.2); }
+    .bf-choice:disabled { cursor: default; }
+    .bf-choice.selected { border-color: #50c878; background: #152520; box-shadow: 0 0 0 2px rgba(80,200,120,0.35), 0 6px 22px rgba(80,200,120,0.18); }
+    .bf-choice.bf-choice--dimmed { opacity: 0.42; filter: grayscale(0.6); }
+    .bf-choice-art {
+      display: block; width: 240px; height: 168px; border-radius: 8px; overflow: hidden;
+      background: #0e0a1c; position: relative;
+    }
+    .bf-choice-img { width: 100%; height: 100%; object-fit: contain; display: block; }
+    .bf-choice-fallback { display: none; position: absolute; inset: 0; padding: 10px; font-size: 11px; color: #8a82a6; line-height: 1.4; align-items: center; justify-content: center; text-align: center; }
+    .bf-choice-art--missing .bf-choice-img { display: none; }
+    .bf-choice-art--missing .bf-choice-fallback { display: flex; }
+    .bf-choice .bf-name { font-size: 14px; font-weight: 700; color: #c4a0ff; margin: 0; }
+    .bf-choice.selected .bf-name { color: #7ee2a0; }
+    .bf-choice-badge {
+      position: absolute; top: 16px; left: 16px; padding: 3px 8px; border-radius: 999px;
+      background: rgba(20,60,35,0.92); border: 1px solid #50c878; color: #7ee2a0; font-size: 10px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase;
+    }
     .bf-choice .bf-text { font-size: 11px; color: #8a82a6; line-height: 1.4; }
 
     /* Mulligan hand — break out of the 700px .pregame-step cap so card

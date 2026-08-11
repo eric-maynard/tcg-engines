@@ -37,7 +37,31 @@ if (typeof document !== "undefined") {
   else ensurePregameLeaveButton();
 }
 
-/** Show dice-roll turn order animation with choose-who-goes-first for the winner */
+/* "Skip animations in practice games" (roll overlay + first-player reveal vs Goldfish / Claude).
+   Default OFF: solo games show the d20 roll like a hosted game does. */
+const PREGAME_SKIP_ANIM_KEY = "rb-skip-pregame-animations";
+function pregameAnimationsSkipped() {
+  let v = null;
+  try { v = localStorage.getItem(PREGAME_SKIP_ANIM_KEY); } catch { /* private mode */ }
+  if (v === "1") return true;
+  if (v === "0") return false;
+  // No explicit choice: unattended automation (navigator.webdriver — playtest drivers that never
+  // answer a go-first prompt) keeps the instant start; people get the roll.
+  return typeof navigator !== "undefined" && navigator.webdriver === true;
+}
+function setPregameAnimationsSkipped(on) {
+  try { localStorage.setItem(PREGAME_SKIP_ANIM_KEY, on ? "1" : "0"); } catch { /* private mode */ }
+}
+
+/**
+ * Show the d20 initiative roll (both dice, who won). Then:
+ *  - `flip.firstPlayer` unknown and the viewer won → the go-first / go-second buttons;
+ *  - `flip.firstPlayer` unknown and the other seat won → "Waiting for X to choose";
+ *  - `flip.firstPlayer` known (the other seat — e.g. the Goldfish / Claude seat —
+ *    already decided, or a reconnect) → says who goes first, then `onDone` after a
+ *    short linger. A click anywhere on the overlay skips: first click settles the
+ *    dice, the next proceeds (when there is nothing to choose).
+ */
 function showCoinFlip(flip, onDone) {
   // Don't re-trigger if already showing
   if (_coinFlipShown && !flip.firstPlayer) return;
@@ -47,7 +71,9 @@ function showCoinFlip(flip, onDone) {
   ensurePregameLeaveButton();
 
   _coinFlipShown = true;
-  _coinFlipOnDone = onDone;
+  let done = false;
+  const finish = () => { if (done) return; done = true; overlay.onclick = null; if (onDone) onDone(); };
+  _coinFlipOnDone = finish;
 
   const p1Name = pName(P1);
   const p2Name = pName(P2);
@@ -84,6 +110,56 @@ function showCoinFlip(flip, onDone) {
 
   document.getElementById("startScreen").classList.add("hidden");
   overlay.classList.add("visible");
+  overlay.dataset.stage = "rolling";
+
+  let settled = false;
+  let detailTimer = null;
+  // Who goes first (once known): the other seat decided when it won (bots always elect to go first).
+  const reveal = () => {
+    if (detailTimer) { clearTimeout(detailTimer); detailTimer = null; }
+    coinDetail.style.opacity = "1";
+    coinDetail.style.transition = "opacity 0.3s";
+    if (flip.firstPlayer) {
+      const firstIsMe = flip.firstPlayer === viewingPlayer;
+      const botDecided = !isMe && isSandboxGame;
+      coinDetail.textContent = firstIsMe
+        ? (isMe ? "You go first!" : `${winnerName} chose: you go first`)
+        : botDecided ? `${winnerName} won the roll and chose to go first` : `${pName(flip.firstPlayer)} goes first`;
+      overlay.dataset.stage = "decided";
+      setTimeout(finish, 1500);
+    } else if (isMe) {
+      coinDetail.textContent = "Choose who goes first:";
+      if (coinChoose) { coinChoose.style.display = "flex"; coinChoose.style.opacity = "1"; }
+      overlay.dataset.stage = "choose";
+    } else {
+      coinDetail.textContent = `Waiting for ${winnerName} to choose...`;
+      overlay.dataset.stage = "waiting";
+    }
+  };
+  // Stop the dice on the server-rolled values and name the winner.
+  const settle = (fast) => {
+    if (settled) return;
+    settled = true;
+    if (_coinRollInterval) { clearInterval(_coinRollInterval); _coinRollInterval = null; }
+    roll1El.textContent = p1Roll;
+    roll2El.textContent = p2Roll;
+    if (flip.winner === P1) avatar1.classList.add("winner"); else avatar2.classList.add("winner");
+    coinResult.style.opacity = "1";
+    coinResult.style.transition = "opacity 0.3s";
+    const hi = flip.winner === P1 ? p1Roll : p2Roll;
+    const lo = flip.winner === P1 ? p2Roll : p1Roll;
+    coinResult.innerHTML = isMe
+      ? `<span style="color:#50c878;font-weight:700;">You rolled higher!</span> <span style="opacity:0.5">(${hi} vs ${lo})</span>`
+      : `<span style="color:#f0c040;">${esc(winnerName)}</span> <span style="opacity:0.5">rolled higher (${hi} vs ${lo})</span>`;
+    overlay.dataset.stage = "settled";
+    if (fast) reveal(); else detailTimer = setTimeout(reveal, 500);
+  };
+  // Click to skip: settle the dice at once; a further click proceeds when nothing is left to choose.
+  overlay.onclick = (e) => {
+    if (e.target.closest && e.target.closest("button")) return;
+    if (!settled) { settle(true); return; }
+    if (flip.firstPlayer) finish();
+  };
 
   // Rolling number animation — 1.5s of random numbers then settle
   let rollCount = 0;
@@ -91,44 +167,7 @@ function showCoinFlip(flip, onDone) {
     roll1El.textContent = Math.floor(Math.random() * 20) + 1;
     roll2El.textContent = Math.floor(Math.random() * 20) + 1;
     rollCount++;
-    if (rollCount > 15) {
-      clearInterval(_coinRollInterval);
-      _coinRollInterval = null;
-
-      // Show final server-rolled values
-      roll1El.textContent = p1Roll;
-      roll2El.textContent = p2Roll;
-
-      // Highlight winner
-      if (flip.winner === P1) avatar1.classList.add("winner");
-      else avatar2.classList.add("winner");
-
-      // Fade in result text
-      coinResult.style.opacity = "1";
-      coinResult.style.transition = "opacity 0.3s";
-      if (isMe) {
-        coinResult.innerHTML = `<span style="color:#50c878;font-weight:700;">You rolled higher!</span>`;
-      } else {
-        coinResult.innerHTML = `<span style="color:#f0c040;">${esc(winnerName)}</span> <span style="opacity:0.5">rolled higher</span>`;
-      }
-
-      // After a beat, show the choose UI or waiting text
-      setTimeout(() => {
-        coinDetail.style.opacity = "1";
-        coinDetail.style.transition = "opacity 0.3s";
-
-        if (flip.firstPlayer) {
-          // Game already started — just show who goes first
-          const firstIsMe = flip.firstPlayer === viewingPlayer;
-          coinDetail.textContent = firstIsMe ? "You go first!" : `${pName(flip.firstPlayer)} goes first`;
-        } else if (isMe) {
-          coinDetail.textContent = "Choose who goes first:";
-          if (coinChoose) { coinChoose.style.display = "flex"; coinChoose.style.opacity = "1"; }
-        } else {
-          coinDetail.textContent = `Waiting for ${esc(winnerName)} to choose...`;
-        }
-      }, 500);
-    }
+    if (rollCount > 15) settle(false);
   }, 100);
 }
 
@@ -180,6 +219,7 @@ function handlePregameSync(pregame, state) {
   overlay.classList.add("visible");
   ensurePregameLeaveButton();
   content.classList.toggle("sideboard-step", pregame.phase === "sideboard");
+  content.classList.toggle("bf-step", pregame.phase === "battlefield_select");
 
   if (pregame.phase === "battlefield_select") {
     renderBattlefieldSelection(pregame, content);
@@ -195,35 +235,61 @@ function renderBattlefieldSelection(pregame, container) {
   const selected = pregame.battlefieldSelected;
   const firstLabel = pregame.firstPlayer === viewingPlayer ? "You" : pName(pregame.firstPlayer);
 
+  // Rule 486.5: the pick is final once sent (the server refuses a second one) —
+  // after locking, the options are inert and the screen says what we wait for.
+  const locked = Boolean(selected);
+  _bfSelectPending = locked ? null : _bfSelectPending;
   let html = `
     <div class="pregame-title">Choose Your Battlefield</div>
-    <div class="pregame-subtitle">Each player contributes 1 battlefield to the arena</div>
+    <div class="pregame-subtitle">Each player contributes 1 battlefield to the arena &mdash; hover a card for its full text</div>
     <div class="pregame-info">${esc(firstLabel)} will go first</div>
-    <div class="bf-choices" style="margin-top:16px;">
+    <div class="bf-choices${locked ? " bf-choices--locked" : ""}" id="bfChoices" style="margin-top:16px;">
   `;
 
   for (const bf of options) {
     const isSelected = selected === bf.id;
     html += `
-      <div class="bf-choice ${isSelected ? "selected" : ""}" onclick="selectBattlefield('${esc(bf.id)}')">
-        <div class="bf-name">${esc(bf.name)}</div>
-        <div class="bf-text">${iconify(bf.rulesText || "")}</div>
-      </div>
+      <button type="button" class="bf-choice${isSelected ? " selected" : ""}${locked && !isSelected ? " bf-choice--dimmed" : ""}"
+              data-bf-id="${esc(bf.id)}" data-def-id="${esc(bf.id)}" data-card-type="battlefield"
+              data-rules-text="${esc(bf.rulesText || "")}" title="${esc(bf.name)}" aria-pressed="${isSelected}"
+              ${locked ? "disabled" : `onclick="selectBattlefield('${esc(bf.id)}')"`}>
+        <span class="bf-choice-art">
+          <img class="bf-choice-img" src="/card-image/${encodeURIComponent(bf.id)}" alt="${esc(bf.name)}" draggable="false"
+               onerror="this.parentElement.classList.add('bf-choice-art--missing')">
+          <span class="bf-choice-fallback">${iconify(bf.rulesText || "")}</span>
+        </span>
+        <span class="bf-name">${esc(bf.name)}</span>
+        ${isSelected ? '<span class="bf-choice-badge">Locked in</span>' : ""}
+      </button>
     `;
   }
 
   html += `</div>`;
 
-  if (selected) {
-    html += `<div class="pregame-waiting">Waiting for opponent to choose...</div>`;
+  if (locked) {
+    const name = pregame.battlefieldSelectedName || (options.find((b) => b.id === selected) || {}).name || selected;
+    html += `<div class="pregame-waiting" id="bfLockedStatus">Locked: <b>${esc(name)}</b> &mdash; waiting for opponent&hellip;</div>`;
+  } else {
+    html += `<div class="pregame-info" id="bfPickHint">Click a battlefield to lock it in &mdash; the choice is final.</div>`;
   }
 
   container.innerHTML = html;
 }
 
+let _bfSelectPending = null;
 function selectBattlefield(bfId) {
   if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  // Final once chosen: never send a second pick (the server refuses it anyway).
+  if ((pregameState && pregameState.battlefieldSelected) || _bfSelectPending) return;
+  _bfSelectPending = bfId;
+  document.querySelectorAll("#bfChoices .bf-choice").forEach((el) => {
+    el.disabled = true;
+    el.classList.toggle("selected", el.dataset.bfId === bfId);
+    el.classList.toggle("bf-choice--dimmed", el.dataset.bfId !== bfId);
+  });
   ws.send(JSON.stringify({ type: "pregame_battlefield_select", battlefieldId: bfId }));
+  // If the server refuses (error frame), the next sync re-renders the live options.
+  setTimeout(() => { if (_bfSelectPending === bfId && !(pregameState && pregameState.battlefieldSelected)) { _bfSelectPending = null; if (pregameState) handlePregameSync(pregameState, gameState); } }, 4000);
 }
 
 function renderMulliganUI(pregame, state, container) {

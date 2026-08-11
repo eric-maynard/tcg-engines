@@ -834,7 +834,8 @@ export function handlePregameMessage(
     return true;
   }
 
-  if (msg.type === "pregame_battlefield_select" && session.pregame.phase === "battlefield_select") {
+  if (msg.type === "pregame_battlefield_select") {
+    // Late / duplicate picks (phase already moved on, seat already locked) get an error frame — never a silent re-choose.
     const result = selectBattlefield(session, playerId, msg.battlefieldId);
     if (!result.ok) {
       ws.send(JSON.stringify({ error: result.error, errorCode: "BATTLEFIELD_SELECT", type: "error" }));

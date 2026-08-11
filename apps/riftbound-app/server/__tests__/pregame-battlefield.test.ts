@@ -9,7 +9,7 @@
 
 import { describe, expect, test } from "bun:test";
 import { buildDefaultDeck } from "../decks";
-import { buildPregamePayload, createGameFromDecks } from "../pregame";
+import { buildPregamePayload, createGameFromDecks, handlePregameMessage, selectBattlefield } from "../pregame";
 import { getInternalSnapshot } from "../state";
 
 const P1 = "player-1";
@@ -92,5 +92,30 @@ describe("Match (Bo3) / sandbox manual pick: the choice IS offered (486.5)", () 
       expect(payload.battlefieldSelected).toBeNull();
       expect(payload.battlefieldRandom).toBeUndefined();
     }
+  });
+
+  test("lock-in is final: a second pick from the same seat (incl. a raw WS frame) is refused with an error frame and changes nothing; unknown ids / foreign seats are refused too", () => {
+    const session = createGameFromDecks(deck, deck, "bo3-lock", { gameMode: "match", sandbox: false });
+    const [a, b] = deck.battlefieldIds as [string, string];
+    expect(selectBattlefield(session, P1, "not-a-battlefield")).toEqual({ error: "Invalid battlefield choice", ok: false });
+    expect(selectBattlefield(session, "player-3", a)).toEqual({ error: "Not a seated player", ok: false });
+    expect(selectBattlefield(session, P1, a)).toEqual({ completed: false, ok: true });
+    expect(selectBattlefield(session, P1, b)).toEqual({ error: "Battlefield already locked in", ok: false });
+    expect(session.pregame?.battlefieldSelections[P1]).toBe(a);
+
+    // Same over the socket: error frame with a code, no broadcast, selection intact.
+    const sent: Record<string, unknown>[] = [];
+    const ws = { data: { connId: "c", gameId: "g", playerId: P1 }, send: (raw: string) => sent.push(JSON.parse(raw)) } as never;
+    session.clients.set("c", { playerId: P1, ws });
+    expect(handlePregameMessage(ws, { battlefieldId: b, type: "pregame_battlefield_select" }, session, "g", P1)).toBe(true);
+    expect(sent).toEqual([{ error: "Battlefield already locked in", errorCode: "BATTLEFIELD_SELECT", type: "error" }]);
+    expect(session.pregame?.battlefieldSelections[P1]).toBe(a);
+    expect(session.log.filter((e) => /locked in a battlefield/.test(e.text))).toHaveLength(1);
+
+    // The other seat's (first) pick still completes the phase.
+    expect(selectBattlefield(session, P2, b)).toEqual({ completed: true, ok: true });
+    expect(session.pregame?.phase).toBe("mulligan");
+    // And nothing is accepted once the phase has moved on.
+    expect(selectBattlefield(session, P2, a).ok).toBe(false);
   });
 });

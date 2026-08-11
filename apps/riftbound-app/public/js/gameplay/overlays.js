@@ -34,7 +34,7 @@ const PREVIEW_HIDE_DELAY_MS = 60; // bridge the gap between two adjacent cards w
 function previewSurface(node) {
   if (!node || typeof node.closest !== "function") return null;
   if (node.closest("#cardPreview, #hover-preview")) return null;
-  return node.closest(".card[data-card-id], .card[data-def-id], .bf-art[data-card-id], .choice-modal-card[data-card-id], .prompt-source[data-card-id], .deck-stack[data-card-id], .showdown-card[data-card-id], .zone-viewer-card[data-card-id]");
+  return node.closest(".card[data-card-id], .card[data-def-id], .bf-art[data-card-id], .bf-choice[data-def-id], .choice-modal-card[data-card-id], .prompt-source[data-card-id], .deck-stack[data-card-id], .showdown-card[data-card-id], .zone-viewer-card[data-card-id]");
 }
 
 /** Card snapshot for an element: any zone (battlefieldRow included), else a def-only stub. */
@@ -51,7 +51,8 @@ function previewCardFor(el) {
   const defId = el.dataset.defId || "";
   if (!defId && !cardId) return null;
   const name = el.querySelector?.(".card-name, .sc-name, .fallback-name")?.textContent || el.getAttribute("title") || el.getAttribute("aria-label") || "";
-  return { id: cardId, definitionId: defId || cardId, name, cardType: el.classList.contains("bf-art") ? "battlefield" : "" };
+  // Def-only surfaces (pregame battlefield options…) carry their type / printed text as data attributes.
+  return { id: cardId, definitionId: defId || cardId, name, cardType: el.dataset.cardType || (el.classList.contains("bf-art") ? "battlefield" : ""), rulesText: el.dataset.rulesText || "" };
 }
 
 function _previewCostText(card) {
