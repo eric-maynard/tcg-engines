@@ -1082,7 +1082,10 @@ export function getOccupiedBattlefieldPermission(
 
 /**
  * rule 170.11.a (occupied = a unit is there) + rule 740.2.a (alone = no other
- * unit at that location): does `bfId` match what the permission asks for?
+ * FRIENDLY unit at that location): does `bfId` match what the permission asks
+ * for? "Alone" is measured from the enemy unit's own side, so my units standing
+ * at the same battlefield never break an enemy unit's solitude (riftjudge
+ * d8937a8abe18b2d3 — several units may be played there off one Arachnoid).
  */
 export function battlefieldMatchesOccupiedPermission(
   zones: { getCardsInZone: (zone: CoreZoneId, player?: CorePlayerId) => readonly CoreCardId[] },
@@ -1091,15 +1094,27 @@ export function battlefieldMatchesOccupiedPermission(
   playerId: string,
   permission: OccupiedBattlefieldPermission,
 ): boolean {
-  const occupants = zones.getCardsInZone(getBattlefieldZoneId(bfId) as CoreZoneId);
-  const enemies = occupants.filter((occupant) => {
+  const registry = getGlobalCardRegistry();
+  const occupants = zones
+    .getCardsInZone(getBattlefieldZoneId(bfId) as CoreZoneId)
+    // rule 740.2.a — attached gear and equipment are not units and never
+    // count for "alone".
+    .filter((occupant) => registry.getCardType(occupant as string) === "unit");
+  const perController = new Map<string, number>();
+  for (const occupant of occupants) {
     const controller = getController(occupant);
-    return controller !== undefined && controller !== playerId;
-  });
-  if (enemies.length === 0) {
+    if (controller === undefined) {
+      continue;
+    }
+    perController.set(controller, (perController.get(controller) ?? 0) + 1);
+  }
+  const enemyCounts = [...perController.entries()].filter(([controller]) => controller !== playerId);
+  if (enemyCounts.length === 0) {
     return false;
   }
-  return permission.requiresLoneEnemy ? occupants.length === 1 : true;
+  // rule 740.2.a — an enemy unit is alone when no OTHER unit its own controller
+  // controls shares the location; my units there are irrelevant.
+  return permission.requiresLoneEnemy ? enemyCounts.some(([, n]) => n === 1) : true;
 }
 
 /**
@@ -1725,7 +1740,10 @@ export function getGrantedAcceleratePlayCost(
   if (!granted) {
     return undefined;
   }
-  return { energy: 1, power: def.domain ? [def.domain] : [] };
+  // rule 805.1.a.2 / 135.2.e.6.b — [Accelerate] is [1] plus one pip of the
+  // card's Domain; a card with NO Domain pays [A] (any Domain) instead of
+  // nothing at all.
+  return { energy: 1, power: [def.domain ?? "rainbow"] };
 }
 
 /**
