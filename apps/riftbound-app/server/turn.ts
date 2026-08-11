@@ -101,6 +101,7 @@ export function sandboxAutoPlay(session: GameSession, goldfish: string): void {
   const MAX_ITERATIONS = 20; // Safety valve to prevent infinite loops
   let acted = true;
   let iterations = 0;
+  let actions = 0; // moves the Goldfish actually made (iterations counts loop passes, incl. the final no-op pass)
   const act = (seat: string, moveId: string, params: Record<string, unknown>, line?: string): boolean => {
     const r = applySessionMove(session, seat, moveId, params);
     if (r.success && line) {
@@ -134,13 +135,14 @@ export function sandboxAutoPlay(session: GameSession, goldfish: string): void {
     ) {
       // `sandboxAuto` marks the pass as made BY the Goldfish driver on the human's
       // behalf (server/rewind.ts skips it like any Goldfish action).
-      if (act(human, "passChainPriority", { playerId: human, sandboxAuto: true })) { acted = true; continue; }
+      if (act(human, "passChainPriority", { playerId: human, sandboxAuto: true })) { acted = true; actions++; continue; }
     }
 
     // Auto-pass chain priority if Goldfish has it
     if (state.interaction?.chain?.active && state.interaction.chain.activePlayer === goldfish) {
       if (act(goldfish, "passChainPriority", { playerId: goldfish }, `${goldName} passed priority.`)) {
         acted = true;
+      actions++;
         continue;
       }
     }
@@ -155,6 +157,7 @@ export function sandboxAutoPlay(session: GameSession, goldfish: string): void {
       const pick = goldMoves.find((m) => m.moveId === "resolvePendingChoice");
       if (pick && act(goldfish, "resolvePendingChoice", pick.params, `${goldName} resolved a choice.`)) {
         acted = true;
+      actions++;
         continue;
       }
     }
@@ -163,6 +166,7 @@ export function sandboxAutoPlay(session: GameSession, goldfish: string): void {
     const passFocus = goldMoves.find((m) => m.moveId === "passShowdownFocus");
     if (passFocus && act(goldfish, "passShowdownFocus", passFocus.params, `${goldName} passed focus.`)) {
       acted = true;
+      actions++;
       continue;
     }
 
@@ -172,6 +176,7 @@ export function sandboxAutoPlay(session: GameSession, goldfish: string): void {
       const begin = goldMoves.find((m) => m.moveId === "startShowdown");
       if (begin && act(goldfish, "startShowdown", begin.params)) {
         acted = true;
+      actions++;
         continue;
       }
       const conquer = goldMoves.find(
@@ -179,6 +184,7 @@ export function sandboxAutoPlay(session: GameSession, goldfish: string): void {
       );
       if (conquer && act(goldfish, "conquerBattlefield", conquer.params, `${goldName} conquered a battlefield.`)) {
         acted = true;
+      actions++;
         continue;
       }
 
@@ -187,13 +193,16 @@ export function sandboxAutoPlay(session: GameSession, goldfish: string): void {
       // current player itself in that case.
       if (act(goldfish, "endTurn", { playerId: goldfish }, `${goldName} ended their turn.`)) {
         acted = true;
+      actions++;
         continue;
       }
     }
   }
 
-  // If the goldfish took any actions, broadcast updated state
-  if (iterations > 0) {
+  // Broadcast only if the Goldfish actually did something — a no-op pass must not
+  // push a redundant state_update (it re-rendered clients ~500ms after every human
+  // move and swallowed UI state such as an expanded rune group).
+  if (actions > 0) {
     session.seq++;
     const goldSnapshot = buildGameSnapshot(session);
     for (const [, client] of session.clients) {

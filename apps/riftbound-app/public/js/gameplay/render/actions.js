@@ -149,7 +149,16 @@ function humanizeEffect(e) {
       const exhausted = e.ready === false || e.exhausted === true ? " exhausted" : "";
       return `Play ${c === 1 ? "a" : c} ${k.might != null ? `${k.might} Might ` : ""}${k.name ?? "token"} ${k.type ?? "unit"} token${c === 1 ? "" : "s"}${k.keywords?.length ? ` with ${k.keywords.join(", ")}` : ""}${exhausted}`;
     }
-    case "kill": return `Kill ${noun || "a unit"}`;
+    // rule 355.8 (rule-id: ven-154-166) — a reference-pair kill compares the
+    // victim against a SECOND, caster-chosen unit that is not itself killed.
+    // Naming the yardstick keeps the chain item honest about who dies.
+    case "kill": {
+      const ref = e.reference && typeof e.reference === "object" ? e.reference : null;
+      const cmp = ref && t?.filter?.mightLessThanReference
+        ? ` with less Might than ${targetNoun({ controller: "friendly", ...ref }) || "a unit you control"}`
+        : "";
+      return `Kill ${noun || "a unit"}${cmp}`;
+    }
     case "buff": return `Buff ${noun || "a unit"}`;
     case "stun": return `Stun ${noun || "a unit"}`;
     case "ready": return `Ready ${noun || "a permanent"}`;
@@ -184,6 +193,38 @@ function humanizeEffect(e) {
       return `${verb.charAt(0).toUpperCase()}${verb.slice(1)}${n != null ? ` ${n}` : ""}${noun ? ` — ${noun}` : ""}`;
     }
   }
+}
+
+/** Depth-first search for a `reference` slot anywhere in an effect tree. */
+function findEffectReference(e) {
+  if (!e || typeof e !== "object") return null;
+  if (e.reference && typeof e.reference === "object") return e.reference;
+  for (const child of [e.then, e.else, e.effect, ...(Array.isArray(e.effects) ? e.effects : []), ...(Array.isArray(e.options) ? e.options : [])]) {
+    const found = findEffectReference(child);
+    if (found) return found;
+  }
+  return null;
+}
+
+/**
+ * rule 355.8 — an item's locked `targets` can hold objects the effect will NOT
+ * act on: a reference-pair spell (ven-154-166 Public Execution) stores
+ * `[reference, victim]`, the reference being the friendly Might yardstick.
+ * Split the two so the overlay never lists the yardstick beside the victims as
+ * though it were also being killed. Returns `{ reference, targets }` of names.
+ */
+function splitChainTargets(effect, names) {
+  const list = Array.isArray(names) ? names.slice() : [];
+  if (list.length < 2 || !findEffectReference(effect)) return { reference: null, targets: list };
+  return { reference: list[0], targets: list.slice(1) };
+}
+
+/** rule 355.5 — the one-line "what this item will do" text for a chain item. */
+function chainWhatText(effect, names, modeText) {
+  const split = splitChainTargets(effect, names);
+  const base = [modeText || "", split.targets.length ? `→ ${split.targets.join(", ")}` : ""].filter(Boolean).join(" ");
+  if (!split.reference) return base;
+  return [base, `(compared to ${split.reference})`].filter(Boolean).join(" ");
 }
 
 /** Fallback param formatter: show only resolved values without raw key names */
@@ -718,7 +759,7 @@ function renderActions() {
         } else {
           // Multiple runes — show grouped by domain
           const DOMAIN_DISPLAY = { fury: "Fury", calm: "Calm", mind: "Mind", body: "Body", chaos: "Chaos", order: "Order" };
-          const isExpanded = isHighlighted;
+          const isExpanded = isHighlighted || _expandedMoveGroups.has(moveId);
           html += `
             <button class="action-btn ${isHighlighted ? "highlighted" : ""}"
                     onclick="toggleMoveGroup('${moveId}')">
@@ -751,7 +792,9 @@ function renderActions() {
         }
       } else {
         // Collapsible group
-        const isExpanded = isHighlighted; // auto-expand if highlighted
+        // auto-expand if highlighted, and keep a hand-opened group open across
+        // the re-renders that trailing state pushes trigger (see _expandedMoveGroups)
+        const isExpanded = isHighlighted || _expandedMoveGroups.has(moveId);
         html += `
           <button class="action-btn ${isPrimary ? "primary" : ""} ${isHighlighted ? "highlighted" : ""}"
                   onclick="toggleMoveGroup('${moveId}')">
@@ -791,6 +834,10 @@ function renderActions() {
   });
 }
 
+// Groups the player has opened stay open across re-renders (state pushes rebuild
+// the list; without this a click could be undone by the next frame).
+const _expandedMoveGroups = new Set();
+
 function toggleMoveGroup(moveId) {
   // Opening a sidebar action group is a new intent: drop any armed targeting mode
   // first so the target banner and a move submenu can never be live at once.
@@ -801,10 +848,16 @@ function toggleMoveGroup(moveId) {
   const el = document.getElementById(`move-group-${moveId}`);
   if (!el) return;
   const opened = el.classList.toggle("hidden") === false;
+  if (opened) _expandedMoveGroups.add(moveId); else _expandedMoveGroups.delete(moveId);
   // The actions panel is height-capped and scrolls; a group expanded near the
   // bottom reveals its per-rune options below the fold, so they read as missing.
   // Pull them into view (block:"nearest" leaves an already-visible group alone).
   if (opened && typeof el.scrollIntoView === "function") {
     el.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }
+}
+
+// Node/bun test harness only — the browser loads this as a classic script.
+if (typeof module !== "undefined" && module && module.exports) {
+  module.exports = { chainWhatText, expandedMoveGroups: _expandedMoveGroups, findEffectReference, humanizeEffect, splitChainTargets, targetNoun, toggleMoveGroup };
 }
