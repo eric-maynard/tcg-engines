@@ -135,13 +135,13 @@ describe("Relentless Pursuit × Determined Sentry — an ignored move takes its 
     expect(game.violations()).toEqual([]);
   });
 
-  test.failing('BUG: P1 is still prompted to attach the Long Sword. "You may attach an Equipment … to it" references the unit moved by the earlier instruction, so the two are linked instructions and the later one must not execute once the earlier was ignored (359.3.e.14 / 359.3.e.14.a). Expected: the spell resolves into P1\'s open main phase with the Sword still unattached. Actual: a RES-timing "choose a target for Relentless Pursuit" pick offering the Sword is raised, and taking it equips the Sentry.', async () => {
+  test('P1 is not prompted to attach the Long Sword. "You may attach an Equipment … to it" references the unit moved by the earlier instruction, so the two are linked instructions and the later one must not execute once the earlier was ignored (359.3.e.14 / 359.3.e.14.a). The spell resolves into P1\'s open main phase with the Sword still unattached.', async () => {
     const game = await pursuedToBase();
     expect(game.decision()).toMatchObject({ context: "main", kind: "action", seat: P1 });
     expect(game.state("sword").attachedTo).toBeUndefined();
   });
 
-  test.failing('BUG: the Sentry still gains "When I conquer, you may move me to my base". That clause references the moved unit ("that unit"), so it is linked to the ignored move and must not execute either (359.3.e.14.a). Expected: no delayed trigger installed on the Sentry. Actual: the turn-scoped conquer trigger is written onto its meta.', async () => {
+  test('the Sentry does not gain "When I conquer, you may move me to my base". That clause references the moved unit ("that unit"), so it is linked to the ignored move and must not execute either (359.3.e.14.a). No delayed trigger is installed on the Sentry.', async () => {
     const game = await pursuedToBase();
     await game.settle();
     expect(delayedTriggers(game, "sentry")).toEqual([]);

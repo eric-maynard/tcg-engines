@@ -10,7 +10,9 @@ import {
   getEffectiveMight,
   raiseTotalMightSubsetRepick,
 } from "./_helpers";
-import { isBlockedByTwoOtherPlayers } from "../../game-definition/moves/movement/helpers";
+import { isInvalidMoveDestination } from "../../game-definition/moves/movement/helpers";
+import { areAllies } from "../../operations/teams";
+import type { PlayerId } from "../../types/game-state";
 import {
   clearCombatRoleAfterRelocation,
   noteArrival,
@@ -151,18 +153,25 @@ export function moveCardWithEvent(
   if (targetZoneId === "base" && from.startsWith("battlefield-") && hasNoMoveToBase(ctx, cardId)) {
     return from;
   }
-  // rule 449.2 / 447.2.c / 456.1 — a battlefield already holding units of two
-  // OTHER players cannot be entered by any means; the forced Move instead
-  // becomes a Recall to base, and a Recall is not a Move (no move triggers).
+  // rule 449.2 / 447.2.b / 447.2.c / 456.1 — a battlefield already holding
+  // units of two OTHER players, or units of a TEAMMATE, cannot be entered by
+  // any means; the forced Move instead becomes a Recall to base, and a Recall
+  // is not a Move (no move triggers).
   if (
     targetZoneId.startsWith("battlefield-") &&
-    isBlockedByTwoOtherPlayers(
+    isInvalidMoveDestination(
       targetZoneId,
       arrivingController(ctx, cardId),
       (zoneId) => ctx.zones.getCardsInZone(zoneId),
       (id) =>
         (ctx.cards.getCardController?.(id as CoreCardId) ??
           ctx.cards.getCardOwner(id as CoreCardId)) as string | undefined,
+      (other) =>
+        areAllies(
+          ctx.draft as RiftboundGameState,
+          arrivingController(ctx, cardId) as PlayerId,
+          other as PlayerId,
+        ),
     )
   ) {
     if (from !== "base") {
@@ -318,7 +327,16 @@ function moveToBoundDestination(
   if (!legalNow.includes(bound)) {
     return true;
   }
+  const before = ctx.zones.getCardZone(cardId as CoreCardId) ?? "";
   const landed = moveCardWithEvent(ctx, cardId, bound);
+  // rule 359.3.e.14 / 359.3.e.14.a (sfd-184-221 × unl-111-219) — the mover is
+  // forbidden from moving ("can't" beats "can", 054.1) so the move instruction
+  // is IGNORED: nothing arrived, and the instructions anchored on the moved
+  // unit ("attach an Equipment … to it", "that unit has …") are linked to it
+  // and must not execute either.
+  if (landed === before) {
+    return true;
+  }
   arriveByEffect(ctx, [cardId], landed);
   const then = (effect as unknown as { then?: ExecutableEffect }).then;
   if (then) {
