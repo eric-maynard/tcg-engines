@@ -751,11 +751,28 @@ function afterItemsLeft(state: TurnInteractionState, items: ChainItem[]): TurnIn
 
   // Chain still has items — reset passes, give priority to controller of new top item
   const newTopController = items[items.length - 1].controller;
+  // rule 340.4 / 652.5.c.1 — a player who has left the game (or is otherwise no
+  // longer Relevant) can hold neither Priority nor the decision it carries, so
+  // seat the next Relevant Player in Turn Order instead of the dead controller.
+  const relevant = state.chain.relevantPlayers;
+  let seated = newTopController;
+  if (!relevant.includes(newTopController)) {
+    const order = state.chain.turnOrder;
+    seated = relevant[0] ?? "";
+    const from = order.indexOf(newTopController);
+    for (let i = 1; i <= order.length; i += 1) {
+      const candidate = order[(from + i) % order.length];
+      if (relevant.includes(candidate)) {
+        seated = candidate;
+        break;
+      }
+    }
+  }
   return {
     ...state,
     chain: {
       ...state.chain,
-      activePlayer: newTopController,
+      activePlayer: seated,
       items,
       passedPlayers: [], // Everyone must pass again (rule 543.4)
     },

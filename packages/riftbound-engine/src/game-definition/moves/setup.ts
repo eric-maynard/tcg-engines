@@ -62,6 +62,19 @@ function seedDeckCard(
 
 
 /**
+ * rule 488.4.b / 489.4.a — in the four-player Modes of Play (FFA4, Magma
+ * Chamber) the player taking the first turn "removes their Battlefields. They
+ * will not be used", so the row holds three battlefields, none of them theirs.
+ * Every other mode has each player contribute one.
+ */
+function firstPlayerContributesNoBattlefield(
+  state: RiftboundGameState,
+  playerId: string,
+): boolean {
+  return Object.keys(state.players).length === 4 && state.setup?.firstPlayer === playerId;
+}
+
+/**
  * Setup move definitions
  */
 export const setupMoves: Partial<
@@ -226,6 +239,19 @@ export const setupMoves: Partial<
         draft.setup.battlefieldChoices[playerId] = battlefieldId;
       }
 
+      // rule 488.4.b / 489.4.a — in the four-player modes the player taking the
+      // FIRST turn removes all three of their battlefields; only the other
+      // seats contribute, so the row holds exactly three (488.4 / 489.4).
+      if (firstPlayerContributesNoBattlefield(draft, playerId as string)) {
+        for (const setAsideId of [battlefieldId, ...discardIds]) {
+          zones.moveCard({
+            cardId: setAsideId as CoreCardId,
+            targetZoneId: "setAside" as CoreZoneId,
+          });
+        }
+        return;
+      }
+
       // Move selected battlefield to battlefield row
       zones.moveCard({
         cardId: battlefieldId as CoreCardId,
@@ -286,6 +312,16 @@ export const setupMoves: Partial<
       if (draft.setup) {
         draft.setup.battlefieldChoices ??= {};
         draft.setup.battlefieldChoices[playerId] = kept;
+      }
+      // rule 488.4.b / 489.4.a — the first player's battlefields are removed.
+      if (firstPlayerContributesNoBattlefield(draft, playerId as string)) {
+        for (const setAsideId of candidates) {
+          zones.moveCard({
+            cardId: setAsideId as CoreCardId,
+            targetZoneId: "setAside" as CoreZoneId,
+          });
+        }
+        return;
       }
       zones.moveCard({
         cardId: kept as CoreCardId,
@@ -546,8 +582,15 @@ export const setupMoves: Partial<
         to: "hand" as CoreZoneId,
       });
 
-      // Recycle the set-aside cards to bottom of Main Deck (Rule 117.3, 594)
-      for (const cardId of toReturn) {
+      // Recycle the set-aside cards to bottom of Main Deck (Rule 117.3, 594).
+      // rule 416.5: objects recycled SIMULTANEOUSLY reach the bottom in a
+      // random order, so the player's own naming order must not survive as
+      // deck knowledge (contrast 416.5.a: runes are ordered by their owner).
+      const ordered =
+        toReturn.length > 1 && (context.rng.rollDice(2) as number) === 2
+          ? [...toReturn].reverse()
+          : toReturn;
+      for (const cardId of ordered) {
         zones.moveCard({
           cardId: cardId as CoreCardId,
           position: "bottom",

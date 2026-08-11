@@ -1352,7 +1352,7 @@ describe("16. Concession mid-chain: the conceder's items are countered and Prior
     expect(game.state("w").damage).not.toBe(6);
   });
 
-  test.failing("BUG: 652.5.c.1 — Priority must move off the removed player; the engine leaves Priority (and the only decision) with the conceded seat, deadlocking P1 and P3", async () => {
+  test("652.5.c.1 — Priority must move off the removed player; the engine leaves Priority (and the only decision) with the conceded seat, deadlocking P1 and P3", async () => {
     // Expected: after P2's removal Priority sits with a player still in the game (the controller of
     // the new newest item, P1) and P1 + P3 can complete a round to resolve S1.
     // Actual: interaction.chain.activePlayer stays "player-2"; P1 and P3 enumerate no pass at all.
