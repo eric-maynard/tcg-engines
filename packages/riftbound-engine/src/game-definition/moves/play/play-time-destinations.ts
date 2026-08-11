@@ -105,6 +105,18 @@ function writableDestinationNodes(item: ChainItemLike): AnyEffect[] {
   return collectDestinationNodes(item.effect);
 }
 
+/**
+ * rule 135.2.b.5.a — true when the destination carries a condition under which
+ * the move is performed ("…if my Might is greater than the total Might of enemy
+ * units there", unl-144-219 Maduli). Such a clause is part of the
+ * INSTRUCTION's complement, read as the move executes — so an option set it
+ * empties at choice time must not be frozen as "no destination".
+ */
+function destinationConditionIsReadOnExecution(node: AnyEffect): boolean {
+  const to = node.to;
+  return typeof to === "object" && to !== null && to.requireSourceMightExceedsEnemyTotal === true;
+}
+
 function isSingleChoice(target: AnyEffect): boolean {
   const q = target.quantity;
   return q === undefined || q === 1;
@@ -254,7 +266,13 @@ export function raisePlayTimeDestinationChoice(
     // (teammate there, or units of two other players) is never offered.
     const options = keepLegalArrivals(worded, mover, ctx);
     if (options.length === 0) {
-      node._dest = null;
+      // rule 135.2.b.5.a — when the wording's own "…if X" clause is what
+      // emptied the list, nothing is chosen yet and nothing is ruled out: the
+      // clause is read as the instruction EXECUTES, so a board change before
+      // then can hand the move a destination after all (unl-144-219 Maduli).
+      if (!destinationConditionIsReadOnExecution(node)) {
+        node._dest = null;
+      }
       continue;
     }
     // rule 355.13 — a "you MAY move" instruction keeps its prompt even with a
