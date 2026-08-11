@@ -1175,7 +1175,11 @@ export class SeatHandle {
    * descriptor that is the legal empty choice (rule 355.13), not a deferral.
    */
   async reveal(card: CardRef, opts: RevealOptions = {}): Promise<Extract<ActResult, { ok: true }>> {
-    const asksTargets = this.option("revealHidden", card)?.fields.some((f) => f.name === "targets") === true;
+    // rule 355.13 — only a descriptor that may legally name NOTHING enumerates
+    // the empty set; a flip whose `targets` variants all name objects (an
+    // elected [Repeat] offers one per execution, 820.2.a) still asks its pick.
+    const targetsField = this.option("revealHidden", card)?.fields.find((f) => f.name === "targets");
+    const asksTargets = (targetsField?.options ?? []).some((o) => Array.isArray(o) && o.length === 0);
     const args: PlayArgs =
       asksTargets && opts.targets === undefined && !opts.answers?.length ? { ...opts, targets: [] } : { ...opts };
     return this.verb("revealHidden", card, args, `reveal(${card})`, opts);

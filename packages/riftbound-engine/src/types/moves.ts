@@ -267,6 +267,13 @@ export interface RiftboundMoves {
      */
     viaFlow?: boolean;
     /**
+     * rule 829.1.c.3 (rule-id: ven-113-166) — WHICH [Flow] instance the
+     * controller elects when the card carries more than one (its printed cost
+     * plus one granted this turn): an index into the card's Flow options,
+     * printed first. Omitted = the printed / only one.
+     */
+    flowIndex?: number;
+    /**
      * rule-id: ven-083-166 — `true` when the caster elects to pay the spell's
      * optional "you may pay [X] as an additional cost" (rule 560). The extra
      * cost is re-derived from the card definition; `additionalCostSpec` is
@@ -313,6 +320,13 @@ export interface RiftboundMoves {
      * answer (rule 355.13) and not "ask me later".
      */
     targets?: CardId[];
+    /**
+     * rule 820.1.c.1 / 356.1.b.3 — extra executions bought with an elected
+     * [Repeat] (printed or granted); its tier is an additional cost paid on top
+     * of the zeroed base cost of a facedown play, and every execution names its
+     * own object at the same step (820.2.a).
+     */
+    repeatCount?: number;
     paidAdditionalCost?: boolean;
     costs?: PlayCosts;
   };

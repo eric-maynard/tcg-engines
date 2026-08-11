@@ -31,6 +31,7 @@ import {
   computePlayResourceCost,
   createMetaAccessor,
   getCardEffectiveMight,
+  getEffectiveSpellRepeatCost,
   opponentsRestrictedToBase,
   payResourceCost,
   spendablePowerPool,
@@ -273,6 +274,9 @@ function revealSpellCost(
     zones: any;
   },
   consume = false,
+  // rule 356.1.b.3 / 820.1.c.1 — an elected [Repeat] is an optional ADDITIONAL
+  // cost, so its tier stacks on top of the zeroed base of a facedown play.
+  repeatCount = 0,
 ): PlayResourceCost {
   return computePlayResourceCost(
     state,
@@ -284,6 +288,7 @@ function revealSpellCost(
       // rule 811.6 — played from facedown, the card has [Reaction] for audiences
       // like Mystic Vortex even though its printed timing is [Action].
       grantedReaction: true,
+      ...(repeatCount > 0 ? { repeatCount } : {}),
     },
     createMetaAccessor(ctx.cards),
     consume,
@@ -765,6 +770,55 @@ function hiddenSpellHasLegalTargets(
 }
 
 /**
+ * rule 355.5 / 811.1.d.2 (rule-id: ogn-213-298) — the objects a spell played
+ * from facedown may name for ONE caster-chosen slot: the candidates of its lead
+ * target descriptor that stand at the facedown battlefield. `undefined` when
+ * the spell names no single caster-chosen slot (pair and "any number" shapes
+ * carry their own enumerations). rule 820.2 — an elected [Repeat] chooses each
+ * execution's object at the same step under the same restriction, so this is
+ * the pool for EVERY execution.
+ */
+function hiddenCasterTargetCandidates(
+  state: RiftboundGameState,
+  cardId: string,
+  playerId: string,
+  battlefieldId: string | undefined,
+  // biome-ignore lint/suspicious/noExplicitAny: engine move context is framework-typed
+  ctx: { cards: any; zones: any },
+): string[] | undefined {
+  if (battlefieldId === undefined) {
+    return undefined;
+  }
+  const registry = getGlobalCardRegistry();
+  const effect = (registry.getAbilities(cardId) ?? []).find((a) => a.type === "spell")?.effect as
+    | SpellEffectTargetShape
+    | undefined;
+  if (!effect || pairEffectSlots(effect)) {
+    return undefined;
+  }
+  const target =
+    casterChosenTarget(effect) ??
+    casterChosenTarget({ target: findSequenceLeadTarget(effect) });
+  if (!target) {
+    return undefined;
+  }
+  const bfZone = getBattlefieldZoneId(battlefieldId);
+  return (
+    resolveTarget({ ...target, quantity: "all" }, {
+      cards: ctx.cards,
+      choosing: true,
+      draft: state,
+      playerId,
+      sourceCardId: cardId,
+      sourceZone: bfZone,
+      zones: ctx.zones,
+    } as Parameters<typeof resolveTarget>[1]) as string[]
+  ).filter(
+    (id) => hiddenChoiceIsPulledIn(effect) || ctx.zones.getCardZone(id as CoreCardId) === bfZone,
+  );
+}
+
+/**
  * rule 355.5 / 811.1.b (rule-id: ogn-213-298) — playing a card from Hidden
  * follows the normal play process, so its targets are chosen when it is
  * PLAYED, before anyone receives Priority, not when the chain item resolves.
@@ -1014,7 +1068,41 @@ export const revealHidden: Defs["revealHidden"] = {
     // rule 355.5 / 355.15 with 811.1.d.2 — objects named as the card is played
     // must be legal choices at its facedown battlefield (never trust the
     // client's list).
-    if (
+    // rule 820.1.c.1 / 820.2 — an elected [Repeat] buys extra executions of the
+    // flipped spell; each execution names its own object at the same step,
+    // under the same "at this battlefield" restriction (811.1.d.2).
+    const repeatN = Math.max(0, (context.params.repeatCount as number | undefined) ?? 0);
+    const repeatCandidates =
+      repeatN > 0
+        ? hiddenCasterTargetCandidates(
+            state,
+            context.params.cardId as string,
+            context.params.playerId as string,
+            meta.hiddenAt,
+            context,
+          )
+        : undefined;
+    if (repeatN > 0) {
+      const tiers = getEffectiveSpellRepeatCost(
+        state,
+        context.params.playerId as string,
+        context.params.cardId as string,
+        { cards: context.cards, zones: context.zones },
+      );
+      if (!tiers || tiers.length < repeatN) {
+        return false;
+      }
+      // rule 820.2.a — one object per execution, all from the facedown pool.
+      const supplied = context.params.targets as readonly string[] | undefined;
+      if (
+        !repeatCandidates ||
+        supplied === undefined ||
+        supplied.length !== 1 + repeatN ||
+        !supplied.every((id) => repeatCandidates.includes(id))
+      ) {
+        return false;
+      }
+    } else if (
       context.params.targets !== undefined &&
       !suppliedHiddenTargetsAreLegal(
         state,
@@ -1057,7 +1145,14 @@ export const revealHidden: Defs["revealHidden"] = {
         state,
         context.params.playerId as string,
         context.params.cardId as string,
-        revealSpellCost(state, context.params.playerId as string, context.params.cardId as string, context),
+        revealSpellCost(
+          state,
+          context.params.playerId as string,
+          context.params.cardId as string,
+          context,
+          false,
+          repeatN,
+        ),
       )
     ) {
       return false;
@@ -1077,6 +1172,8 @@ export const revealHidden: Defs["revealHidden"] = {
       cardId: string;
       targets?: string[];
       paidAdditionalCost?: boolean;
+      /** rule 820.1.c.1 — extra executions bought with an elected [Repeat]. */
+      repeatCount?: number;
     }[] = [];
     for (const bfId of Object.keys(state.battlefields)) {
       const facedown = context.zones.getCardsInZone(getFacedownZoneId(bfId) as CoreZoneId);
@@ -1149,6 +1246,43 @@ export const revealHidden: Defs["revealHidden"] = {
           continue;
         }
         results.push({ cardId: hid as string, playerId });
+        // rule 820.1.c.1 / 820.2.a (rule-id: unl-146-219) — a [Repeat] the
+        // caster's board grants applies to spells from ANY origin, the flip
+        // included: offer one variant per payable tier × ordered object list
+        // (one object per execution, all at the facedown battlefield —
+        // 811.1.d.2).
+        const tiers = getEffectiveSpellRepeatCost(state, playerId, hid as string, {
+          cards: context.cards,
+          zones: context.zones,
+        });
+        const candidates = tiers?.length
+          ? hiddenCasterTargetCandidates(state, hid as string, playerId, meta.hiddenAt, context)
+          : undefined;
+        if (!tiers || !candidates || candidates.length === 0) {
+          continue;
+        }
+        for (let n = 1; n <= tiers.length; n++) {
+          if (
+            !canPayResourceCost(
+              state,
+              playerId,
+              hid as string,
+              revealSpellCost(state, playerId, hid as string, context, false, n),
+            )
+          ) {
+            break;
+          }
+          if (candidates.length ** (1 + n) > 256) {
+            continue;
+          }
+          let lists: string[][] = [[]];
+          for (let slot = 0; slot <= n; slot++) {
+            lists = lists.flatMap((list) => candidates.map((id) => [...list, id]));
+          }
+          for (const targets of lists) {
+            results.push({ cardId: hid as string, playerId, repeatCount: n, targets });
+          }
+        }
       }
     }
     return results;
@@ -1206,8 +1340,11 @@ export const revealHidden: Defs["revealHidden"] = {
       return;
     }
     const unitPaid = unitOption ? payUnitPlayCosts(draft, { cards, counters, zones }, unitOption) : undefined;
+    // rule 820.1.c.1 / 356.1.b.3 — the elected [Repeat] tier is paid on top of
+    // the zeroed base cost of a facedown play.
+    const repeatN = Math.max(0, (context.params.repeatCount as number | undefined) ?? 0);
     if (cardType === "spell") {
-      payResourceCost(draft, playerId as string, cardId as string, revealSpellCost(draft, playerId as string, cardId as string, { cards, zones }, true));
+      payResourceCost(draft, playerId as string, cardId as string, revealSpellCost(draft, playerId as string, cardId as string, { cards, zones }, true, repeatN));
     }
 
     // Clear hidden state — the card is no longer facedown regardless
@@ -1244,12 +1381,24 @@ export const revealHidden: Defs["revealHidden"] = {
       // chain item now and are never re-chosen at resolution; the empty list
       // (rule 355.13) is just as final as a full one.
       const chosenTargets = context.params.targets as readonly string[] | undefined;
+      // rule 820.2 / 820.3.a — an elected [Repeat] runs the SAME instructions
+      // again from ONE chain item; each execution owns a positional target slot
+      // (820.2.a) so execution i affects `targets[i]`.
+      const chainEffect =
+        repeatN > 0 && spellEffect
+          ? {
+              _repeatExecutions: true,
+              effects: Array.from({ length: 1 + repeatN }, () => structuredClone(spellEffect)),
+              type: "sequence",
+              ...(chosenTargets?.length === 1 + repeatN ? { independentTargets: true } : {}),
+            }
+          : spellEffect;
       draft.interaction = addToChain(
         interaction,
         {
           cardId,
           controller: playerId,
-          effect: spellEffect,
+          effect: chainEffect,
           resolveTo: "trash",
           ...(chosenTargets === undefined ? {} : { targets: [...chosenTargets] }),
           // rule-id: ogn-097-298 — Rule 723.1.d (811.1.d.2): targets for a card
