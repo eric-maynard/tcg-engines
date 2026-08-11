@@ -97,6 +97,7 @@ import {
   getDeflectSurcharge,
   getPotentialRuneEnergy,
   payResourceCost,
+  spendablePowerPool,
 } from "./play/cost";
 import { bindDestinationOnItem } from "./play/play-time-destinations";
 import { collectChoiceNodes, raisePlayTimeModeChoice } from "./play/play-time-modes";
@@ -832,7 +833,11 @@ function canPayOptInCost(
     for (const d of powerCost) {
       needed[d] = (needed[d] ?? 0) + 1;
     }
-    if (!canAffordPower(pool.power, needed)) {
+    // rule 429.4 (ogn-247-298 Daughter of the Void) — Power earmarked "use only
+    // to play spells/gear" is no more spendable here than earmarked Energy is:
+    // a Pay demanded while an ability finalizes or resolves is not playing a
+    // card, so those pips are hidden from this payment entirely.
+    if (!canAffordPower(spendablePowerPool(state, playerId, undefined), needed)) {
       return false;
     }
   }
