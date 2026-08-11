@@ -266,7 +266,7 @@ describe("Fizz → Frigid Touch from trash × Marai Spire × Pouty Poro — cost
 
   // ── controls: the same cost pipeline from HAND (base [2] NOT ignored) ─────────────────
 
-  test.failing("BUG: control (hand cast, Spire): the option enumerates Repeat 0..1 and two-slot target tuples incl. [poro, poro]; casting with Repeat + Poro ×2 costs 2 + (2−1) = 3 energy and 2 calm — Spire discounts ONLY the Repeat component, Deflect is owed twice", async () => {
+  test("control (hand cast, Spire): the option enumerates Repeat 0..1 and two-slot target tuples incl. [poro, poro]; casting with Repeat + Poro ×2 costs 2 + (2−1) = 3 energy and 2 calm — Spire discounts ONLY the Repeat component, Deflect is owed twice", async () => {
     const game = await board({ spareEnergy: 7, calm: 3 }).build(); // 10 energy, 3 calm
     const opt = game.p1.option("cast", "ftHand");
     expect(opt?.fields.find((f) => f.name === "repeatCount")).toMatchObject({ max: 1, min: 0 });
@@ -281,7 +281,7 @@ describe("Fizz → Frigid Touch from trash × Marai Spire × Pouty Poro — cost
     expect(game.zoneOf("ftHand")).toBe("trash"); // a hand cast is NOT recycled — only Fizz's rider does that
   });
 
-  test.failing("BUG: control (hand cast): no Spire → 4 energy + 2 calm for Repeat + Poro ×2; Spire + Poro/Vanilla → 3 energy + 1 calm; Spire, no Repeat, Poro → 2 energy + 1 calm", async () => {
+  test("control (hand cast): no Spire → 4 energy + 2 calm for Repeat + Poro ×2; Spire + Poro/Vanilla → 3 energy + 1 calm; Spire, no Repeat, Poro → 2 energy + 1 calm", async () => {
     const noSpire = await board({ calm: 3, spareEnergy: 7, spire: false }).build();
     await noSpire.p1.cast("ftHand", { repeat: 1, targets: ["poro", "poro"] });
     expect(noSpire.p1.resources()).toEqual({ energy: 10 - 4, power: { calm: 1, chaos: 1 } });

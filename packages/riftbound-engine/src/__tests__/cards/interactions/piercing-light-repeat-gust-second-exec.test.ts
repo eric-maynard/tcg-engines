@@ -180,7 +180,7 @@ describe("Piercing Light [Repeat] X→Z, Gust in response — per-execution targ
 
   // ── (c) both executions on X, no Gust ─────────────────────────────────────────────────────────
 
-  test.failing("BUG: (c) no Gust, BOTH executions name X: the second Deal 2 is not skipped for 'already lethal' — X (3 Might) takes 2 + 2 and is dead once the spell has resolved, in the trash together with Piercing Light; Z untouched (321, 142.4.a, 323.5)", async () => {
+  test("(c) no Gust, BOTH executions name X: the second Deal 2 is not skipped for 'already lethal' — X (3 Might) takes 2 + 2 and is dead once the spell has resolved, in the trash together with Piercing Light; Z untouched (321, 142.4.a, 323.5)", async () => {
     const game = await board().build();
     await game.p1.cast("pl", { repeat: 1, targets: ["x", "x"] });
     expect(game.chain()).toHaveLength(1);
@@ -194,7 +194,7 @@ describe("Piercing Light [Repeat] X→Z, Gust in response — per-execution targ
     expect(game.violations()).toEqual([]);
   });
 
-  test.failing("BUG: (c) …and the spell was still played once: Student +1 → 3, P1 paid the full 4 + [fury][fury]", async () => {
+  test("(c) …and the spell was still played once: Student +1 → 3, P1 paid the full 4 + [fury][fury]", async () => {
     const game = await board().build();
     await game.p1.cast("pl", { repeat: 1, targets: ["x", "x"] });
     expect(game.p1.resources()).toEqual({ energy: 0, power: { fury: 0 } });

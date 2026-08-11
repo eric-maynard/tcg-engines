@@ -59,7 +59,7 @@ describe("Ruling 3e467bbdebe8e5ba — a repeated Thwonk may stun a DIFFERENT att
     expect(game.violations()).toEqual([]);
   });
 
-  test.failing("BUG: the same unit twice is also legal (choices are independent) — then only that attacker is stunned and the other one still kills the Defender", async () => {
+  test("the same unit twice is also legal (choices are independent) — then only that attacker is stunned and the other one still kills the Defender", async () => {
     const game = await underAttack();
     await game.p1.cast("thwonk", { repeat: 1, targets: ["atkA", "atkA"] });
     expect(game.p1.energy()).toBe(0);

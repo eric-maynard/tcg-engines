@@ -175,10 +175,8 @@ describe("Bellows Breath [Repeat] × Annie, Fiery × Counter Strike — bonus pe
 
   // Expected (820.2.a + "up to three units at the same location"): each execution chooses its OWN group of up to
   // three units sharing a location; the two groups may overlap and may sit at the SAME location, so
-  // {A,B,C} then {A,B} at bf1 must be an enumerated Repeat finalization (flat per-execution list, execution order).
-  // Actual: the enumerator only offers one unit per execution (or one group repeated) — no variant names A, B, C
-  // for execution 1 and A, B for execution 2.
-  test.failing("BUG: the Repeat finalization 'exec 1 → {A,B,C}, exec 2 → {A,B}' (same location, overlapping groups) is offered as a cast variant (820.2.a)", async () => {
+  // {A,B,C} then {A,B} at bf1 is an enumerated Repeat finalization (flat per-execution list, execution order).
+  test("the Repeat finalization 'exec 1 → {A,B,C}, exec 2 → {A,B}' (same location, overlapping groups) is offered as a cast variant (820.2.a)", async () => {
     const game = await board().build();
     const variants = game.p1.option("cast", "bb")?.variants ?? [];
     const wanted = variants.filter(
@@ -192,9 +190,8 @@ describe("Bellows Breath [Repeat] × Annie, Fiery × Counter Strike — bonus pe
 
   // Expected: CS first (P2 +1 card); exec 1: A 0 (2 prevented, shield spent) / B 2 / C 2; exec 2: A 2 / B 2 → A 2/4
   // alive, B (4) and C (2) both dead in the one Cleanup after Bellows leaves the chain; chain empty, P1's open main
-  // phase. Actual: the raw move accepts the flat list but does not partition two same-location groups — every
-  // execution hits the whole list, so A dies too.
-  test.failing("BUG: full scenario with Annie + Counter Strike on A → A exactly 2 damage and ALIVE, B and C both in the trash after a single Cleanup (715.2, 715.4.a, 820.2.a, 321)", async () => {
+  // phase. The flat list is read back in execution order into the two same-location groups (820.2.a).
+  test("full scenario with Annie + Counter Strike on A → A exactly 2 damage and ALIVE, B and C both in the trash after a single Cleanup (715.2, 715.4.a, 820.2.a, 321)", async () => {
     const game = await board().build();
     await castFullScenario(game);
     expect(game.p1.resources()).toEqual({ energy: 0, power: { mind: 0 } });
@@ -217,8 +214,7 @@ describe("Bellows Breath [Repeat] × Annie, Fiery × Counter Strike — bonus pe
   });
 
   // Expected: exec 1: A 0 (prevented) / B 1 / C 1; exec 2: A 1 / B 1 → A 1/4, B 2/4, C 1/2 — nobody dies.
-  // Actual: same partition gap — each execution hits A, B, C, A, B → B and C die.
-  test.failing("BUG: full scenario WITHOUT Annie, Counter Strike on A → A 1, B 2, C 1, all three alive (437.4, 820.2.a)", async () => {
+  test("full scenario WITHOUT Annie, Counter Strike on A → A 1, B 2, C 1, all three alive (437.4, 820.2.a)", async () => {
     const game = await board({ annie: false }).build();
     await castFullScenario(game);
     await counterStrikeOnA(game);

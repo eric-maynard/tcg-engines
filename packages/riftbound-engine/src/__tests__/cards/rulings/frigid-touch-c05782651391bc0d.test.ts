@@ -35,7 +35,7 @@ describe("Ruling c05782651391bc0d — Repeated Frigid Touch on a Mighty Fiora pa
     expect(game.state("fiora").keywords).toContain("Deflect");
   });
 
-  test.failing("BUG: casting it with Repeat choosing Fiora both times costs exactly 4 energy + 2 power (2 base + 2 Repeat; Deflect ×2) — all paid up front, no rune recycled — and it is ONE chain item targeting [fiora, fiora]", async () => {
+  test("casting it with Repeat choosing Fiora both times costs exactly 4 energy + 2 power (2 base + 2 Repeat; Deflect ×2) — all paid up front, no rune recycled — and it is ONE chain item targeting [fiora, fiora]", async () => {
     const game = await board({ energy: 4, power: { mind: 2 } }).build();
     const runesBefore = game.p1.runes().length;
     const runeDeckBefore = game.p1.runeDeck().length;
@@ -46,7 +46,7 @@ describe("Ruling c05782651391bc0d — Repeated Frigid Touch on a Mighty Fiora pa
     expect(game.chain()).toEqual([expect.objectContaining({ cardId: "frigid", controller: P1, targets: ["fiora", "fiora"] })]);
   });
 
-  test.failing("BUG: on resolution the first -2 drops her to 3 (no longer Mighty, Deflect gone) and the second still applies: 5 → 1 — nothing extra is charged or refunded at that point", async () => {
+  test("on resolution the first -2 drops her to 3 (no longer Mighty, Deflect gone) and the second still applies: 5 → 1 — nothing extra is charged or refunded at that point", async () => {
     const game = await board({ energy: 4, power: { mind: 2 } }).build();
     await game.p1.cast("frigid", { repeat: 1, targets: ["fiora", "fiora"] });
     await game.settle();

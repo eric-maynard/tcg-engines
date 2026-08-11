@@ -26,7 +26,7 @@ function board() {
 }
 
 describe("Ruling cc37c0ea29228ccc — Bellows Breath's repeated execution may hit the same 1-Might unit again", () => {
-  test.failing("BUG: legal: the cast offers [weak, weak] as the two executions' targets; casting it with Repeat pays [2] + 2 mind and locks both on the chain", async () => {
+  test("legal: the cast offers [weak, weak] as the two executions' targets; casting it with Repeat pays [2] + 2 mind and locks both on the chain", async () => {
     const game = await board().build();
     const pairs = game.p1.option("cast", "bellows")?.fields.find((f) => f.name === "targets")?.options ?? [];
     expect(pairs).toContainEqual(["weak", "weak"]);
@@ -38,7 +38,7 @@ describe("Ruling cc37c0ea29228ccc — Bellows Breath's repeated execution may hi
     expect(game.state("weak").damage).toBe(0);
   });
 
-  test.failing("BUG: resolution: 1 + 1 damage marked, then the post-resolution cleanup kills the 1-Might unit; the untargeted Bystander is untouched", async () => {
+  test("resolution: 1 + 1 damage marked, then the post-resolution cleanup kills the 1-Might unit; the untargeted Bystander is untouched", async () => {
     const game = await board().build();
     await game.p1.cast("bellows", { repeat: 1, targets: ["weak", "weak"] });
     await game.settle();
@@ -50,7 +50,7 @@ describe("Ruling cc37c0ea29228ccc — Bellows Breath's repeated execution may hi
     expect(game.violations()).toEqual([]);
   });
 
-  test.failing("BUG: a single execution cannot name the same unit twice (no [weak, weak] inside ONE 'up to three' group without Repeat)", async () => {
+  test("a single execution cannot name the same unit twice (no [weak, weak] inside ONE 'up to three' group without Repeat)", async () => {
     const game = await board().build();
     const variants = game.p1.option("cast", "bellows")?.variants ?? [];
     const doubleWeak = variants.filter((v) => JSON.stringify(v.params.targets) === JSON.stringify(["weak", "weak"]));
@@ -61,7 +61,7 @@ describe("Ruling cc37c0ea29228ccc — Bellows Breath's repeated execution may hi
     expect(variants.some((v) => JSON.stringify(v.params.targets) === JSON.stringify(["weak", "bystander"]) && !v.params.repeatCount)).toBe(true);
   });
 
-  test.failing("BUG: nuance: with Guardian Angel (+1 → 2 Might) both hits land first; only the cleanup's would-die check fires GA — GA is killed instead, the unit is healed, exhausted and recalled", async () => {
+  test("nuance: with Guardian Angel (+1 → 2 Might) both hits land first; only the cleanup's would-die check fires GA — GA is killed instead, the unit is healed, exhausted and recalled", async () => {
     const game = await scenario()
       .resources(P1, { energy: 2, power: { mind: 2 } })
       .battlefield("bf1", { controller: P2 })

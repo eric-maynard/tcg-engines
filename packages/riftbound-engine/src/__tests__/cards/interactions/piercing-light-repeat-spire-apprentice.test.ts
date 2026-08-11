@@ -162,7 +162,7 @@ describe("Piercing Light + Repeat under Marai Spire, Eager Apprentice and a Defl
     expect(p).toEqual({ any: 2, energy: 2, fury: 2 });
   });
 
-  test.failing("BUG: (b′) Deflect per choice where the engine CAN express it: naming the Poro for BOTH executions costs [A][A] → 2 energy + [fury][fury] + 2 any-domain; with a single rainbow (and no spare fury) that line is not castable", async () => {
+  test("(b′) Deflect per choice where the engine CAN express it: naming the Poro for BOTH executions costs [A][A] → 2 energy + [fury][fury] + 2 any-domain; with a single rainbow (and no spare fury) that line is not castable", async () => {
     const { game, paid: p, moves } = await castAndPay({}, { repeat: 1, targets: ["poro", "poro"] });
     expect(moves).toEqual(["playSpell"]);
     expect(p).toEqual({ any: 2, energy: 2, fury: 2 });

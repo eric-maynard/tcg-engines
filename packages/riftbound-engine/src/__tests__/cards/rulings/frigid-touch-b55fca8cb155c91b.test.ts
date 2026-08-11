@@ -75,9 +75,8 @@ describe("Ruling b55fca8cb155c91b — Frigid Touch with Repeat on enemy units = 
   });
 
   // Expected (ruling: "these can be the same unit or different units"): the two executions may both name Foe A, which is
-  // still two enemy choices and enables the legend. Actual: the engine never offers the same unit for both executions
-  // (targets options lack ["foeA","foeA"]) and rejects that cast.
-  test.failing("BUG: ruling b55fca8cb155c91b — engine does not allow both Repeat executions of Frigid Touch to choose the SAME enemy unit", async () => {
+  // still two enemy choices and enables the legend — the targets options include ["foeA","foeA"].
+  test("ruling b55fca8cb155c91b — both Repeat executions of Frigid Touch may choose the SAME enemy unit (still two enemy choices)", async () => {
     const game = await board().build();
     const offered = game.p1.option("cast", "ft")?.fields.find((f) => f.name === "targets")?.options ?? [];
     expect(offered).toContainEqual(["foeA", "foeA"]);

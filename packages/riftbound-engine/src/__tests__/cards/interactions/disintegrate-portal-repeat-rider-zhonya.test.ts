@@ -79,7 +79,7 @@ function reflexiveItems(game: Game) {
 describe("Disintegrate with Portal-granted Repeat — per-execution 'if this kills it' riders, one Cleanup, one Zhonya's", () => {
   // ── the Repeat grant / cost ───────────────────────────────────────────────────────────────────
 
-  test.failing("BUG: Temporal Portal: [rainbow] + exhaust; once it resolves Disintegrate (printed cost 4) is offered exactly ONE Repeat instance (Repeat [4], 206) and each execution may name its own battlefield unit (820.2.a)", async () => {
+  test("Temporal Portal: [rainbow] + exhaust; once it resolves Disintegrate (printed cost 4) is offered exactly ONE Repeat instance (Repeat [4], 206) and each execution may name its own battlefield unit (820.2.a)", async () => {
     const game = await board().build();
     expect(repeatOptions(game)).toEqual([]); // no Repeat before the Portal
     await game.p1.activate("portal");

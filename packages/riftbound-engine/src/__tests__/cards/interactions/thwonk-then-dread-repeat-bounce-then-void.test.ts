@@ -93,7 +93,10 @@ describe("Thwonk! then Existential Dread [Repeat] — bounce on exec 1, exec 2 i
     await resolveChain(game);
     await focusBackToP2(game);
     const opt = game.p2.option("cast", "dread");
-    expect(opt?.fields.find((f) => f.arg === "targets")?.options).toEqual([["a"]]);
+    // rule 820.2.a (ruling b55fca8cb155c91b) — A is the only legal choice, and the
+    // repeated execution may name it again, so the explicit two-execution list is
+    // offered alongside the single-slot one.
+    expect(opt?.fields.find((f) => f.arg === "targets")?.options).toEqual([["a"], ["a", "a"]]);
     expect(opt?.fields.find((f) => f.arg === "repeat")?.max).toBe(1);
     await game.p2.cast("dread", { repeat: 1, targets: "a" });
     expect(spentByP2(game)).toEqual({ chaos: 1, energy: 2 + 1 + 2 });

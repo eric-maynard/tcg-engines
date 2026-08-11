@@ -68,7 +68,7 @@ describe("Ruling c233bf1fa47addf6 — Radiant Dawn: one buff per stun EFFECT, no
   });
 
   // The one resolving spell stunned "one or more enemy units" once → exactly ONE Radiant Dawn trigger on the chain and one buff.
-  test.failing("BUG: ruling c233bf1fa47addf6 — a single repeated Thwonk stunning two units gives ONE Radiant Dawn trigger / ONE buff", async () => {
+  test("ruling c233bf1fa47addf6 — a single repeated Thwonk stunning two units gives ONE Radiant Dawn trigger / ONE buff", async () => {
     const game = await thwonkBoth();
     await passBoth(game); // Thwonk resolves
     // The buff target is asked as the trigger is put on the chain.

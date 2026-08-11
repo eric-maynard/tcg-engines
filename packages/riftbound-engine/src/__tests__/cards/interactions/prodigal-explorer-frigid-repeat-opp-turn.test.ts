@@ -81,7 +81,7 @@ async function frigidRepeatOnChain(): Promise<Game> {
 describe("Prodigal Explorer × Frigid Touch [Repeat] × Vi, Destructive — defending on the OPPONENT's turn", () => {
   // ---------------------------------------------------------------- (a) Focus window, Showdown Open, P2's turn
 
-  test.failing("BUG: (a) P1 with Focus (Showdown Open, P2's turn): Frigid Touch IS listed (Reaction ⊇ Action, 813.1.b) and offers the attacker for both Repeat executions", async () => {
+  test("(a) P1 with Focus (Showdown Open, P2's turn): Frigid Touch IS listed (Reaction ⊇ Action, 813.1.b) and offers the attacker for both Repeat executions", async () => {
     const game = await p1HasFocus();
     expect(keys(game, P1)).toContain(FT);
     expect(game.p1.can("cast", "ft")).toBe(true);
@@ -125,14 +125,14 @@ describe("Prodigal Explorer × Frigid Touch [Repeat] × Vi, Destructive — defe
 
   // ---------------------------------------------------------------- (b) Frigid Touch with Repeat on the chain
 
-  test.failing("BUG: (b) after Frigid Touch [Repeat] names the attacker twice, Explorer is listed for P1 IMMEDIATELY — Closed State, P2's turn (820.2 two choices; 813.1.c.2 lifts closed-state AND your-turn limbs of 381)", async () => {
+  test("(b) after Frigid Touch [Repeat] names the attacker twice, Explorer is listed for P1 IMMEDIATELY — Closed State, P2's turn (820.2 two choices; 813.1.c.2 lifts closed-state AND your-turn limbs of 381)", async () => {
     const game = await frigidRepeatOnChain();
     expect(game.turnPlayer()).toBe(P2);
     expect(keys(game, P1)).toContain(EZ);
     expect(game.p1.can("activate", "ez")).toBe(true);
   });
 
-  test.failing("BUG: (b) Vi's ability is STILL absent in that Closed state (no Reaction tag)", async () => {
+  test("(b) Vi's ability is STILL absent in that Closed state (no Reaction tag)", async () => {
     const game = await frigidRepeatOnChain();
     expect(keys(game, P1)).not.toContain(VI_ABILITY);
     expect(new Set(keys(game, P1))).toEqual(new Set(["concede:-", "passChainPriority:-", EZ]));
@@ -140,7 +140,7 @@ describe("Prodigal Explorer × Frigid Touch [Repeat] × Vi, Destructive — defe
 
   // ---------------------------------------------------------------- (c) activating Explorer in the Closed state
 
-  test.failing("BUG: (c) activating Explorer: the legend is exhausted at activation (cost, 404.1) and the ability is a chain item ON TOP of Frigid Touch — nothing drawn yet (not an [Add], 429.2)", async () => {
+  test("(c) activating Explorer: the legend is exhausted at activation (cost, 404.1) and the ability is a chain item ON TOP of Frigid Touch — nothing drawn yet (not an [Add], 429.2)", async () => {
     const game = await frigidRepeatOnChain();
     const hand0 = game.p1.hand().length;
     await game.p1.activate("ez", 0);
@@ -158,7 +158,7 @@ describe("Prodigal Explorer × Frigid Touch [Repeat] × Vi, Destructive — defe
     expect(game.p2.can("cast", "disc")).toBe(true); // a real Reaction window for P2
   });
 
-  test.failing("BUG: (c) LIFO: P2 passes → Explorer resolves first (P1 draws 1) while Frigid Touch is still on the chain and the attacker is still 6", async () => {
+  test("(c) LIFO: P2 passes → Explorer resolves first (P1 draws 1) while Frigid Touch is still on the chain and the attacker is still 6", async () => {
     const game = await frigidRepeatOnChain();
     const deck0 = game.p1.deck().length;
     await game.p1.activate("ez", 0);
@@ -178,7 +178,7 @@ describe("Prodigal Explorer × Frigid Touch [Repeat] × Vi, Destructive — defe
     expect(showdown(game)).toMatchObject({ active: true, focusPlayer: P2 });
   });
 
-  test.failing("BUG: (c) everyone passes → combat: Vi 3 vs attacker 2 → attacker dies, Vi survives (healed), P1 still holds bf1, no points to P2", async () => {
+  test("(c) everyone passes → combat: Vi 3 vs attacker 2 → attacker dies, Vi survives (healed), P1 still holds bf1, no points to P2", async () => {
     const game = await frigidRepeatOnChain();
     await game.p1.activate("ez", 0);
     const r = await game.settle();

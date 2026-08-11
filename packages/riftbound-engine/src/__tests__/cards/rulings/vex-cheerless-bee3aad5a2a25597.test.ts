@@ -70,7 +70,7 @@ describe("Ruling bee3aad5a2a25597 — Frigid Touch on a Deflect unit with Vex, C
     expect(game.p1.resources()).toEqual({ energy: 2, power: { rainbow: 1 } });
   });
 
-  test.failing("BUG: nuance — paying Repeat and choosing the same Deflect unit both times: ([2]+[2] + 2 power) − ([1] + 1 power) = [3] + 1 power, drained exactly; the unit gets −4", async () => {
+  test("nuance — paying Repeat and choosing the same Deflect unit both times: ([2]+[2] + 2 power) − ([1] + 1 power) = [3] + 1 power, drained exactly; the unit gets −4", async () => {
     const game = await board({ energy: 3, power: { rainbow: 1 } }).build();
     await vexInCombat(game);
     await game.p1.cast("ft", { repeat: 1, targets: ["deflector", "deflector"] });

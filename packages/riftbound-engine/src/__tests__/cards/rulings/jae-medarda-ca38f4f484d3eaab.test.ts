@@ -35,7 +35,7 @@ async function passBoth(game: Game): Promise<void> {
 }
 
 describe("Ruling ca38f4f484d3eaab — repeated Frigid Touch choosing Jae twice draws 2", () => {
-  test.failing("BUG: Repeat is ONE spell that chooses a unit twice: the cast offers a two-target tuple and [jae, jae] is a legal choice", async () => {
+  test("Repeat is ONE spell that chooses a unit twice: the cast offers a two-target tuple and [jae, jae] is a legal choice", async () => {
     const game = await board().build();
     const targets = game.p1.option("cast", "ft")?.fields.find((f) => f.name === "targets");
     expect(targets?.max).toBe(2);
@@ -47,7 +47,7 @@ describe("Ruling ca38f4f484d3eaab — repeated Frigid Touch choosing Jae twice d
     expect(game.chain().filter((c) => !c.triggered)).toHaveLength(1); // one spell, not two
   });
 
-  test.failing("BUG: each choice triggers Jae separately: TWO Jae triggers sit above the spell; first resolves → draw 1, second → draw 1 (2 cards), then Frigid Touch gives Jae −2 twice (5 → 1)", async () => {
+  test("each choice triggers Jae separately: TWO Jae triggers sit above the spell; first resolves → draw 1, second → draw 1 (2 cards), then Frigid Touch gives Jae −2 twice (5 → 1)", async () => {
     const game = await board().build();
     await game.p1.cast("ft", { repeat: 1, targets: ["jae", "jae"] });
     await game.acceptTriggerOrder();

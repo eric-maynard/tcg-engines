@@ -59,7 +59,7 @@ describe("Ruling e2e43318d1e95c3b — Meditation with an exhausted unit + Tempor
 
   // rule 820.1 / 356.2 — Repeat and "you may exhaust a friendly unit" are two independent optional additional
   // costs, each payable as the spell is played, so the cast menu offers a line that pays BOTH.
-  test.failing("BUG: ruling e2e43318d1e95c3b — the playSpell enumerator offers exhaust-a-unit AND the Portal's Repeat together", async () => {
+  test("ruling e2e43318d1e95c3b — the playSpell enumerator offers exhaust-a-unit AND the Portal's Repeat together", async () => {
     const game = await portalUsed();
     const variants = game.p1.option("cast", "med")?.variants ?? [];
     expect(variants.some((v) => v.params.repeatCount === 1 && v.params.paidAdditionalCost === true)).toBe(true);
@@ -71,7 +71,7 @@ describe("Ruling e2e43318d1e95c3b — Meditation with an exhausted unit + Tempor
   // Per the ruling: exhaust the Monk (cost, paid once) + Repeat ⇒ first execution "if you do, draw 2", repeated execution
   // "otherwise, draw 1" ⇒ 3 cards. (The ruling self-describes as interpretation; driven through the raw move params so the
   // exact cost bundle is explicit.)
-  test.failing("BUG: ruling e2e43318d1e95c3b — exhaust cost + Portal Repeat both paid: Meditation draws 3 (2 + 1), not 4", async () => {
+  test("ruling e2e43318d1e95c3b — exhaust cost + Portal Repeat both paid: Meditation draws 3 (2 + 1), not 4", async () => {
     const game = await portalUsed();
     await game.p1.do("playSpell", {
       cardId: "med",

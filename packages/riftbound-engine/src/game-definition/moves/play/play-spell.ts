@@ -362,6 +362,42 @@ function getRepeatDiscardCount(
 }
 
 /**
+ * rule 820.2.a / 820.3.a (rule-id: sfd-080-221 Bellows Breath) — "Deal 1 to up
+ * to N units at the same location" bought with [Repeat]: every execution names
+ * its OWN group, and two executions may name OVERLAPPING groups at the SAME
+ * location, so the flat play-time list cannot be split by location alone. Read
+ * it greedily in execution order — a group takes ids until it is full, an id
+ * repeats inside it (rule 355.8: one unit is never named twice in one group),
+ * or the location changes — and accept the reading only when it yields exactly
+ * `execCount` groups.
+ */
+function partitionSameLocationRepeatGroups(
+  targets: readonly string[],
+  upToN: number,
+  execCount: number,
+  zoneOf: (id: string) => string,
+): string[][] | undefined {
+  const groups: string[][] = [];
+  let current: string[] = [];
+  for (const id of targets) {
+    if (
+      current.length > 0 &&
+      (current.length >= upToN ||
+        current.includes(id) ||
+        zoneOf(id) !== zoneOf(current[0] as string))
+    ) {
+      groups.push(current);
+      current = [];
+    }
+    current.push(id);
+  }
+  if (current.length > 0) {
+    groups.push(current);
+  }
+  return groups.length === execCount ? groups : undefined;
+}
+
+/**
  * rule 355.3 / 355.8 (sfd-049-221 / unl-182-219 "Choose one you haven't already
  * chosen") — modes recorded on the source this turn are not legal choices
  * (turn-stamped record, rule 517.2.b).
@@ -2152,7 +2188,17 @@ export const playSpell: Defs["playSpell"] = {
         // offered once per unordered pair of groups (swapping them is the same
         // play), each group in a canonical order so a caller can name it.
         const offeredGroupPairs = new Set<string>();
-        for (const base of baseVariants) {
+        // rule 356.2 / 820.1.d (ruling e2e43318d1e95c3b) — the spell's own
+        // optional additional cost ("you may exhaust a friendly unit") and
+        // [Repeat] are independent costs of the SAME play, so the paid lines
+        // must be offered with each affordable repeat count too. Only the
+        // non-resource paid variants cross here; a paid variant that also
+        // charges energy/power carries its own `additionalCostSpec` and is
+        // priced by that path.
+        const paidRepeatBases = results
+          .slice(cardResultsStart)
+          .filter((r) => r.paidAdditionalCost === true && r.additionalCostSpec === undefined);
+        for (const base of [...baseVariants, ...paidRepeatBases]) {
           // rule-id: sfd-122-221 — Rule 820.1.c.3: each Repeat instance is
           // paid at most once, so n never exceeds the number of instances.
           for (let n = 1; n <= repeatCost.length; n++) {
@@ -2169,6 +2215,12 @@ export const playSpell: Defs["playSpell"] = {
               break;
             }
             results.push({ ...base, repeatCount: n });
+            if (base.paidAdditionalCost === true) {
+              // the paid line's target slot already carries the cost's victim;
+              // per-execution target permutations are enumerated off the
+              // unpaid bases only.
+              continue;
+            }
             // rule 820.2.a — the extra execution makes its OWN choices, so the
             // caster may name a different target for each execution. Offer one
             // variant per distinct ordered target list of length n+1 (the first
@@ -2176,14 +2228,31 @@ export const playSpell: Defs["playSpell"] = {
             // rule 820.2.a (sfd-136-221) — a counter's target is a chain item,
             // not a board card, but the repeated execution picks its own just
             // the same, so offer the two-item variants here too.
-            if ((isCardTarget || counterSpec !== undefined) && base.targets?.length === 1 && n === 1) {
+            // rule 820.2.a — with SEVERAL instances paid every execution still
+            // chooses for itself, so the tail slots vary independently: one
+            // variant per ordered target list of length n+1.
+            if ((isCardTarget || counterSpec !== undefined) && base.targets?.length === 1) {
               const first = base.targets[0] as string;
-              for (const other of baseVariants) {
-                const alt = other.targets?.[0];
-                if (alt === undefined || alt === first) {
-                  continue;
+              const candidates = baseVariants
+                .map((other) => other.targets?.[0])
+                .filter((id): id is string => id !== undefined);
+              if (candidates.length > 0 && candidates.length ** n <= 256) {
+                let tails: string[][] = [[]];
+                for (let slot = 0; slot < n; slot++) {
+                  tails = tails.flatMap((tail) => candidates.map((id) => [...tail, id]));
                 }
-                results.push({ ...base, repeatCount: n, targets: [first, alt] });
+                for (const tail of tails) {
+                  // rule 820.2.a (ruling b55fca8cb155c91b) — the executions "can be
+                  // the same unit or different units", so the explicit all-`first`
+                  // list is offered as well (it does the same as the plain
+                  // `{repeatCount: n}` variant, which names the target once). A
+                  // COUNTER may not name the same chain item twice, so it keeps the
+                  // distinct-only shape.
+                  if (tail.every((id) => id === first) && counterSpec !== undefined) {
+                    continue;
+                  }
+                  results.push({ ...base, repeatCount: n, targets: [first, ...tail] });
+                }
               }
             }
             // rule 820.2.a (sfd-151-221) — an instruction that names SEVERAL
@@ -2209,6 +2278,50 @@ export const playSpell: Defs["playSpell"] = {
                 }
                 offeredGroupPairs.add(pairKey);
                 results.push({ ...base, repeatCount: n, targets: [...lo, ...hi] });
+              }
+            }
+            // rule 820.2.a / 820.3.a (sfd-080-221) — "up to N units at the same
+            // location" also chooses a fresh group per execution, and those
+            // groups may OVERLAP and sit at the SAME location. Offer every
+            // ordered pair of groups whose flat list still reads back as those
+            // two groups, so the play the caller names is the play that runs.
+            const upToPerExecution =
+              isCardTarget &&
+              typeof tgt === "object" &&
+              typeof tgt.quantity === "object" &&
+              tgt.quantity !== null
+                ? (tgt.quantity as { atLeast?: number; upTo?: number }).upTo
+                : undefined;
+            if (
+              upToPerExecution !== undefined &&
+              (tgt as { location?: string }).location === "here" &&
+              n === 1 &&
+              base.targets !== undefined &&
+              base.targets.length > 0 &&
+              baseVariants.length <= 40
+            ) {
+              const zoneOf = (id: string) =>
+                String(context.zones.getCardZone(id as CoreCardId) ?? "");
+              for (const other of baseVariants) {
+                const secondGroup = other.targets;
+                if (secondGroup === undefined || secondGroup.length === 0) {
+                  continue;
+                }
+                const flat = [...base.targets, ...secondGroup];
+                const readBack = partitionSameLocationRepeatGroups(
+                  flat,
+                  upToPerExecution,
+                  2,
+                  zoneOf,
+                );
+                if (
+                  readBack === undefined ||
+                  readBack[0]?.join("+") !== base.targets.join("+") ||
+                  readBack[1]?.join("+") !== secondGroup.join("+")
+                ) {
+                  continue;
+                }
+                results.push({ ...base, repeatCount: n, targets: flat });
               }
             }
             // rule 820.2.a (sfd-114-221) — a `fight` execution names an
@@ -2725,6 +2838,16 @@ export const playSpell: Defs["playSpell"] = {
         const groups = [...byZone.values()];
         if (groups.length === 1 + repeatN && groups.every((g) => g.length <= upToN)) {
           locationGroups = groups;
+        } else {
+          // rule 820.2.a — two executions may name overlapping groups at the
+          // SAME location, which no by-location split can recover; read the
+          // list in execution order instead.
+          locationGroups = partitionSameLocationRepeatGroups(
+            targets as string[],
+            upToN,
+            1 + repeatN,
+            (id) => String(zones.getCardZone(id as CoreCardId) ?? ""),
+          );
         }
       }
       // rule 820.2 — every execution owns its choices, so each copy must be a
@@ -2743,6 +2866,10 @@ export const playSpell: Defs["playSpell"] = {
           : copy(),
       );
       effectToStore = {
+        // rule 820 / 428 (ruling 87d4521ad1764eb1) — [Repeat] is ONE spell executed
+        // twice, not two printed instructions: no Cleanup (so no lethal-damage check
+        // and no die replacement) runs between the executions.
+        _repeatExecutions: true,
         effects: repeatedEffects,
         type: "sequence",
         // rule 820.2.a — each execution makes its own choices: when the caster

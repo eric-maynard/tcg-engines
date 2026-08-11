@@ -167,10 +167,9 @@ describe("(b) every execution's target is chosen at play time, public, and indep
     expect(game.state("home").might).toBe(3);
   });
 
-  test.failing("BUG: the cast menu should offer one-target-per-execution variants when BOTH Repeats are paid (820.2.a) — it only does so for a single repeat", async () => {
-    // Expected: `cast(fs, { repeat: 2, targets: [ally, home, syndra] })` is a listed legal variant, exactly like
-    // `{ repeat: 1, targets: [home, ally] }` is. Actual: for repeatCount 2 the enumerator lists single-target
-    // variants only, so the harness rejects the bundle (the raw move IS accepted by the engine — see above).
+  test("the cast menu offers one-target-per-execution variants when BOTH Repeats are paid (820.2.a), exactly as it does for a single repeat", async () => {
+    // `cast(fs, { repeat: 2, targets: [ally, home, syndra] })` is a listed legal variant, exactly like
+    // `{ repeat: 1, targets: [home, ally] }` is (820.2.a — every paid execution chooses for itself).
     const game = await p1HasFocus();
     await game.p1.cast("fs", { repeat: 2, targets: ["ally", "home", "syndra"] });
     expect(game.chain()[0]).toMatchObject({ cardId: "fs", targets: ["ally", "home", "syndra"] });
