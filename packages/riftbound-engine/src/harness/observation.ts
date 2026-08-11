@@ -215,15 +215,43 @@ function redactPrivateCardIds(engine: HarnessEngine, viewer: Viewer, value: unkn
   return value;
 }
 
-export function summarizeDecision(d: Decision | null): DecisionSummary | null {
+/**
+ * rule 128.3 / 128.4 — a LOOK is private. A prompt raised by a privately
+ * looked-at card ("as you look at me, you may banish me") carries that card's
+ * id and printed name in its text, so the summary handed to a seat that may not
+ * learn the card's identity must not repeat it: such a seat sees only THAT the
+ * chooser has a pending decision of that kind.
+ */
+function promptNamesHiddenCard(engine: HarnessEngine, viewer: Viewer, prompt: string): boolean {
+  const internal = getInternalState(engine);
+  const registry = getGlobalCardRegistry();
+  for (const id of Object.keys(internal.cards)) {
+    if (canSeeCardIdentity(engine, viewer, id)) {
+      continue;
+    }
+    const def = registry.get(id) as { id?: string; name?: string } | undefined;
+    if (prompt.includes(id) || (def?.name !== undefined && prompt.includes(def.name)) || (def?.id !== undefined && prompt.includes(def.id))) {
+      return true;
+    }
+  }
+  return false;
+}
+
+export function summarizeDecision(
+  d: Decision | null,
+  engine?: HarnessEngine,
+  viewer?: Viewer,
+): DecisionSummary | null {
   if (!d) {
     return null;
   }
+  const leaks =
+    engine !== undefined && viewer !== undefined && viewer !== SPECTATOR && promptNamesHiddenCard(engine, viewer, d.prompt);
   return {
     context: d.kind === "action" ? d.context : undefined,
     id: d.id,
     kind: d.kind,
-    prompt: d.prompt,
+    prompt: leaks ? `${d.seat} has a pending ${d.kind} decision` : d.prompt,
     seat: d.seat,
   };
 }
@@ -361,7 +389,9 @@ export function observe(
   });
 
   const visibleDecision =
-    decision && (viewer === SPECTATOR || decision.seat === viewer) ? decision : summarizeDecision(decision);
+    decision && (viewer === SPECTATOR || decision.seat === viewer)
+      ? decision
+      : summarizeDecision(decision, engine, viewer);
 
   // rule 128.4 — the shared state travels in every seat's Observation, so the
   // pending prompt's card ids get the same redaction as the zones above.
