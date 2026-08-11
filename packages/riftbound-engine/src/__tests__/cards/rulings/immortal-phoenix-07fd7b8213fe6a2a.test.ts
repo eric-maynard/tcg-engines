@@ -58,7 +58,7 @@ async function resolveCull(game: Game): Promise<void> {
 }
 
 describe("Ruling 07fd7b8213fe6a2a — killing your own Immortal Phoenix with your spell lets you replay it from the trash", () => {
-  test.failing("BUG: P1 casts Cull the Weak choosing its own Phoenix; when it has FULLY resolved (both kills done, Cull in trash) the Phoenix — now in the trash — triggers and asks P1 to pay [1][fury]", async () => {
+  test("P1 casts Cull the Weak choosing its own Phoenix; when it has FULLY resolved (both kills done, Cull in trash) the Phoenix — now in the trash — triggers and asks P1 to pay [1][fury]", async () => {
     const game = await ownSpellBoard().build();
     await game.p1.cast("cull"); // rule 355.10.e — no play-time target; the caster picks phoenix on resolution
     expect(game.p1.resources()).toEqual({ energy: 1, power: { fury: 1, order: 0 } });
@@ -71,7 +71,7 @@ describe("Ruling 07fd7b8213fe6a2a — killing your own Immortal Phoenix with you
     expect(game.chain().some((c) => c.cardId === "cull")).toBe(false);
   });
 
-  test.failing("BUG: YES: P1 pays exactly [1][fury] and the Phoenix is played from the trash onto P1's board, entering exhausted", async () => {
+  test("YES: P1 pays exactly [1][fury] and the Phoenix is played from the trash onto P1's board, entering exhausted", async () => {
     const game = await ownSpellBoard().build();
     await game.p1.cast("cull"); // rule 355.10.e — no play-time target; the caster picks phoenix on resolution
     await resolveCull(game);
@@ -102,7 +102,7 @@ describe("Ruling 07fd7b8213fe6a2a — killing your own Immortal Phoenix with you
     expect(game.violations()).toEqual([]);
   });
 
-  test.failing("BUG: NO: the Phoenix simply stays in the trash and nothing is paid", async () => {
+  test("NO: the Phoenix simply stays in the trash and nothing is paid", async () => {
     const game = await ownSpellBoard().build();
     await game.p1.cast("cull"); // rule 355.10.e — no play-time target; the caster picks phoenix on resolution
     await resolveCull(game);

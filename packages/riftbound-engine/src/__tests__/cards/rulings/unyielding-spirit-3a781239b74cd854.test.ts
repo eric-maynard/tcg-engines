@@ -29,7 +29,7 @@ function board() {
 }
 
 describe("Ruling 3a781239b74cd854 — Unyielding Spirit (damage prevention) does not stop Cull the Weak (a kill)", () => {
-  test.failing("BUG: P2 answers Cull the Weak with Unyielding Spirit; Spirit resolves first, then Cull still KILLS P2's only unit (and P1's) — kill ≠ damage", async () => {
+  test("P2 answers Cull the Weak with Unyielding Spirit; Spirit resolves first, then Cull still KILLS P2's only unit (and P1's) — kill ≠ damage", async () => {
     const game = await board().build();
     await game.p1.cast("cull"); // rule 355.10.e — no play-time target; the caster picks pawn on resolution
     await game.p1.passPriority();

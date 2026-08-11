@@ -80,13 +80,13 @@ async function resolveCull(game: Game, boss?: boolean): Promise<Decision[]> {
 describe("Cull the Weak × The Boss — a forced self-kill, an optional costed save, and an opponent with nothing to cull", () => {
   // ---- premise ---------------------------------------------------------------------------------------------
 
-  test("premise: Cull the Weak targets nothing (355.10.e) — castable although P2 controls no units; P1's own menu lists only P1's Sergeant; 2 energy + [order] are paid and it goes on the chain", async () => {
+  test("premise: Cull the Weak targets nothing (355.10.e) — castable although P2 controls no units; the cast offers NO unit to name (not even P1's Sergeant); 2 energy + [order] are paid and it goes on the chain", async () => {
     const game = await board().build();
     expect(game.p2.units()).toEqual([]);
     expect(game.p1.can("cast", "cull")).toBe(true);
     const offered = (game.p1.option("cast", "cull")?.fields.find((f) => f.arg === "targets")?.options ?? []) as string[][];
-    expect([...new Set(offered.flat())]).toEqual(["sarge"]);
-    await game.p1.cast("cull", { targets: "sarge" });
+    expect([...new Set(offered.flat())]).toEqual([]); // rule 355.10.e — a per-player instruction names nothing at play time
+    await game.p1.cast("cull");
     expect(game.p1.resources()).toEqual({ energy: 0, power: { body: 1, order: 0 } });
     expect(game.chain()).toEqual([expect.objectContaining({ cardId: "cull", controller: P1 })]);
     expect(game.state("sarge")).toMatchObject({ isBuffed: true, might: 5, zone: "battlefield-bf1" });
@@ -105,7 +105,7 @@ describe("Cull the Weak × The Boss — a forced self-kill, an optional costed s
 
   test("(a) Boss ready + 1 spare power: the kill is a 'would die' of a buffed friendly unit → P1 gets exactly ONE acceptable yes/no sourced from The Boss, before anything dies; P2 is never prompted (359.3.e.11)", async () => {
     const game = await board().build();
-    await game.p1.cast("cull", { targets: "sarge" });
+    await game.p1.cast("cull"); // rule 355.10.e — nothing is named at play time; the lone Sergeant binds on resolution
     const prompts = await resolveCull(game); // leaves the yes/no standing
     expect(prompts).toHaveLength(1);
     const ask = prompts[0] as YesNoDecision;
@@ -119,7 +119,7 @@ describe("Cull the Weak × The Boss — a forced self-kill, an optional costed s
 
   test("(a) YES → pays exactly 1 power (any domain — here [body]) and no energy, exhausts The Boss, spends the buff; the Sergeant is healed, exhausted and RECALLED to base instead of dying — bf1 is left empty and goes uncontrolled", async () => {
     const game = await board().build();
-    await game.p1.cast("cull", { targets: "sarge" });
+    await game.p1.cast("cull"); // rule 355.10.e — nothing is named at play time; the lone Sergeant binds on resolution
     const prompts = await resolveCull(game, true);
     expect(prompts.map((p) => [p.seat, p.kind])).toEqual([[P1, "yes-no"]]);
     expect(game.p1.resources()).toEqual({ energy: 0, power: { body: 0, order: 0 } });
@@ -136,7 +136,7 @@ describe("Cull the Weak × The Boss — a forced self-kill, an optional costed s
 
   test("(a) YES with the spare power in ORDER instead: [rainbow] is any domain, same save", async () => {
     const game = await board({ spare: { order: 1 } }).build(); // pool: order 2 → 1 for Cull, 1 for the Boss
-    await game.p1.cast("cull", { targets: "sarge" });
+    await game.p1.cast("cull"); // rule 355.10.e — nothing is named at play time; the lone Sergeant binds on resolution
     await resolveCull(game, true);
     expect(game.zoneOf("sarge")).toBe("base");
     expect(game.p1.resources()).toEqual({ energy: 0, power: { order: 0 } });
@@ -145,7 +145,7 @@ describe("Cull the Weak × The Boss — a forced self-kill, an optional costed s
 
   test("(a) NO → the replacement 'has not been applied' (371.2.b): Sergeant dies to P1's trash, The Boss stays READY, the spare power is kept; still nobody asked P2 anything", async () => {
     const game = await board().build();
-    await game.p1.cast("cull", { targets: "sarge" });
+    await game.p1.cast("cull"); // rule 355.10.e — nothing is named at play time; the lone Sergeant binds on resolution
     const prompts = await resolveCull(game, false);
     expect(prompts.map((p) => [p.seat, p.kind])).toEqual([[P1, "yes-no"]]);
     expect(game.zoneOf("sarge")).toBe("trash");
@@ -159,7 +159,7 @@ describe("Cull the Weak × The Boss — a forced self-kill, an optional costed s
 
   test("(b) Boss ready but 0 power left after Cull: the [rainbow] is unpayable → NO yes/no is surfaced at all, the Sergeant just dies, The Boss stays ready", async () => {
     const game = await board({ spare: {} }).build();
-    await game.p1.cast("cull", { targets: "sarge" });
+    await game.p1.cast("cull"); // rule 355.10.e — nothing is named at play time; the lone Sergeant binds on resolution
     expect(game.p1.resources()).toEqual({ energy: 0, power: { order: 0 } });
     const prompts = await resolveCull(game);
     expect(prompts).toEqual([]);
@@ -170,7 +170,7 @@ describe("Cull the Weak × The Boss — a forced self-kill, an optional costed s
 
   test("(b') energy is irrelevant: 0 power but plenty of ENERGY still cannot pay [rainbow] — no prompt, Sergeant dies", async () => {
     const game = await board({ spare: {} }).resources(P1, { energy: 9 }).build();
-    await game.p1.cast("cull", { targets: "sarge" });
+    await game.p1.cast("cull"); // rule 355.10.e — nothing is named at play time; the lone Sergeant binds on resolution
     expect(game.p1.energy()).toBe(7);
     const prompts = await resolveCull(game);
     expect(prompts).toEqual([]);
@@ -181,7 +181,7 @@ describe("Cull the Weak × The Boss — a forced self-kill, an optional costed s
   test("(c) power available but The Boss ALREADY exhausted: 'exhaust me' is unpayable → no prompt, Sergeant dies, the power is kept", async () => {
     const game = await board({ bossExhausted: true }).build();
     expect(game.state("boss").isExhausted).toBe(true);
-    await game.p1.cast("cull", { targets: "sarge" });
+    await game.p1.cast("cull"); // rule 355.10.e — nothing is named at play time; the lone Sergeant binds on resolution
     const prompts = await resolveCull(game);
     expect(prompts).toEqual([]);
     expect(game.zoneOf("sarge")).toBe("trash");
@@ -192,7 +192,7 @@ describe("Cull the Weak × The Boss — a forced self-kill, an optional costed s
   test("(d) Sergeant NOT buffed: the replacement's condition ('a buffed unit you control') is unmet → no prompt, Sergeant (4 Might) dies, Boss ready, power kept", async () => {
     const game = await board({ buffed: false }).build();
     expect(game.state("sarge")).toMatchObject({ isBuffed: false, might: 4 });
-    await game.p1.cast("cull", { targets: "sarge" });
+    await game.p1.cast("cull"); // rule 355.10.e — nothing is named at play time; the lone Sergeant binds on resolution
     const prompts = await resolveCull(game);
     expect(prompts).toEqual([]);
     expect(game.zoneOf("sarge")).toBe("trash");
@@ -212,7 +212,7 @@ describe("Cull the Weak × The Boss — a forced self-kill, an optional costed s
     ];
     for (const [name, v, boss] of variants) {
       const game = await board(v).build();
-      await game.p1.cast("cull", { targets: "sarge" });
+      await game.p1.cast("cull"); // rule 355.10.e — nothing is named at play time; the lone Sergeant binds on resolution
       const prompts = await resolveCull(game, boss);
       expect({ name, p2Prompts: prompts.filter((p) => p.seat === P2) }).toEqual({ name, p2Prompts: [] });
       expect(game.p2.resources()).toEqual({ energy: 3, power: { body: 1 } });

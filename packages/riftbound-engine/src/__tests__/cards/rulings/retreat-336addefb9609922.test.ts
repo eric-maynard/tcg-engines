@@ -63,15 +63,12 @@ describe("Ruling 336addefb9609922 — Retreat targets (Tree draws), Cull the Wea
 
   test("Cull the Weak: nothing is targeted — no Tree item is ever created; P1 picks the Dreamer as it resolves, it dies, and P1 draws nothing", async () => {
     const game = await board(CULL_THE_WEAK, { energy: 2, power: { order: 1 } }).unit(P1, "base", { might: 1, name: "Spare" }, "spare").build();
-    // The engine may collect the caster's own choice up front; either way it must not count as a target for the Tree.
-    const asksUpFront = game.p1.option("cast", "spell")?.fields.some((f) => f.name === "targets" && f.required) ?? false;
+    // rule 355.10.e — a per-player instruction names nothing at play time: the cast offers no unit to choose,
+    // and P1's own pick (Dreamer vs Spare) is a resolution-time choice, never a target for the Tree.
+    const offered = game.p1.option("cast", "spell")?.fields.find((f) => f.name === "targets")?.options ?? [];
+    expect(offered.flat()).toEqual([]);
     let p1Chose = false;
-    if (asksUpFront) {
-      await game.p1.cast("spell", { targets: "dreamer" });
-      p1Chose = true;
-    } else {
-      await game.p1.cast("spell");
-    }
+    await game.p1.cast("spell");
     expect(game.p1.resources()).toEqual({ energy: 0, power: { order: 0 } });
     expect(game.chain().map((c) => c.cardId)).toEqual(["spell"]);
     let treeEverOnChain = game.chain().some((c) => c.cardId === "tree");

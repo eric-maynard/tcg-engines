@@ -42,7 +42,7 @@ function board() {
 describe("Ruling 559920052babcc03 — Repulse cannot counter Cull the Weak (it chooses no unit when played)", () => {
   test("Cull the Weak goes on the chain with NO unit targets; with priority, P1's Repulse is not castable (no enemy spell 'chooses' the Scout) and forcing it fails", async () => {
     const game = await board().build();
-    await game.p2.cast("cull", { targets: "grunt" }); // the caster names only its OWN unit (never a unit of P1)
+    await game.p2.cast("cull"); // rule 355.10.e — nothing is named at play time (P2's lone Grunt binds on resolution; never a unit of P1)
     expect(game.p2.resources()).toEqual({ energy: 1, power: { order: 0 } });
     const item = game.chain()[0];
     expect(item).toMatchObject({ cardId: "cull", controller: P2 });
@@ -58,7 +58,7 @@ describe("Ruling 559920052babcc03 — Repulse cannot counter Cull the Weak (it c
 
   test("Cull the Weak then resolves un-countered: each player picks one of THEIR units on resolution — P1's only unit (Scout) and P2's Grunt die", async () => {
     const game = await board().build();
-    await game.p2.cast("cull", { targets: "grunt" }); // the caster names only its OWN unit (never a unit of P1)
+    await game.p2.cast("cull"); // rule 355.10.e — nothing is named at play time (P2's lone Grunt binds on resolution; never a unit of P1)
     await game.p2.passPriority();
     await game.p1.passPriority();
     // Resolution-time choices (a lone candidate may be taken automatically).

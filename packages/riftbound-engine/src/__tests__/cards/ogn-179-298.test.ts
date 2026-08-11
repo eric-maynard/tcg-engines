@@ -7,8 +7,8 @@
  * Rules: this does not "choose"/target — on resolution every player (caster included) kills one
  * gear they control, each player selecting their own; a player with no gear is simply unaffected.
  *
- * Engine note: the spell is currently modelled as "kill a gear" with ONE caster-chosen target, so
- * the harness demands a `targets` argument at cast time.
+ * rule 355.10.e — a per-player instruction is not targeting, so nothing is named at cast time;
+ * every player, the caster included, picks their own gear as the spell resolves.
  */
 
 import { describe, expect, test } from "bun:test";
@@ -29,7 +29,7 @@ function board() {
 describe("Acceptable Losses (ogn-179-298)", () => {
   test("cost: 1 energy; resolves to the trash; not castable with 0 energy", async () => {
     const game = await board().build();
-    await game.p1.cast("al", { targets: "g1a" });
+    await game.p1.cast("al");
     expect(game.p1.resources()).toEqual({ energy: 0, power: {} });
     expect(game.chain()).toEqual([expect.objectContaining({ cardId: "al", controller: P1, triggered: false })]);
     await game.settle();
@@ -43,17 +43,17 @@ describe("Acceptable Losses (ogn-179-298)", () => {
 
   test("the caster's own gear is killed too (with a single gear there is no choice to make)", async () => {
     const game = await board().build();
-    await game.p1.cast("al", { targets: "g1a" });
+    await game.p1.cast("al");
+    game.script(P1, ["g1a"]);
     game.script(P2, ["g2a"]);
     await game.settle();
     expect(game.zoneOf("g1a")).toBe("trash");
   });
 
   test("EACH player kills one of their gear — the opponent loses one as well (only one gear dies today)", async () => {
-    // Expected: after resolution P1's only gear and exactly one of P2's two gear are in the trash.
-    // Actual: the effect is a single caster-targeted kill, so only g1a dies.
     const game = await board().build();
-    await game.p1.cast("al", { targets: "g1a" });
+    await game.p1.cast("al");
+    game.script(P1, ["g1a"]);
     game.script(P2, ["g2a"]);
     await game.settle();
     expect(game.zoneOf("g1a")).toBe("trash");
@@ -62,10 +62,9 @@ describe("Acceptable Losses (ogn-179-298)", () => {
   });
 
   test("each player selects which of THEIR OWN gear dies — P2 is the one asked about g2a/g2b", async () => {
-    // Expected: during resolution a pick decision for P2 over exactly {g2a, g2b}.
-    // Actual: no decision is ever handed to P2.
     const game = await board().build();
-    await game.p1.cast("al", { targets: "g1a" });
+    await game.p1.cast("al");
+    game.script(P1, ["g1a"]);
     await game.p1.passPriority();
     await game.p2.passPriority();
     const d = game.decision();

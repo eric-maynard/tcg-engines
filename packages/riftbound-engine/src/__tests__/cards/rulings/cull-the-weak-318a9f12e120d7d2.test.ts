@@ -42,14 +42,14 @@ describe("Ruling 318a9f12e120d7d2 — Cull the Weak does not 'choose' a unit, so
     expect(game.p1.hand()).toHaveLength(hand0 + 1);
   });
 
-  test.failing("BUG: Cull the Weak: casting it (even naming Dreamer, P1's unit at the Tree, as the one P1 will kill) puts NO Dreaming Tree trigger on the chain", async () => {
+  test("Cull the Weak: casting it (even naming Dreamer, P1's unit at the Tree, as the one P1 will kill) puts NO Dreaming Tree trigger on the chain", async () => {
     const game = await board().build();
     await game.p1.cast("cull"); // rule 355.10.e — no play-time target; the caster picks dreamer on resolution
     expect(game.chain()).toEqual([expect.objectContaining({ cardId: "cull", controller: P1 })]);
     expect(game.chain().some((c) => c.cardId === "bf1" || c.triggered)).toBe(false);
   });
 
-  test.failing("BUG: Cull the Weak resolves: Dreamer and Grunt die, and P1 drew NOTHING (hand shrank by exactly the Cull) — the Tree never fired at play or at resolution", async () => {
+  test("Cull the Weak resolves: Dreamer and Grunt die, and P1 drew NOTHING (hand shrank by exactly the Cull) — the Tree never fired at play or at resolution", async () => {
     const game = await board().build();
     const hand0 = game.p1.hand().length;
     const deck0 = game.p1.deck().length;

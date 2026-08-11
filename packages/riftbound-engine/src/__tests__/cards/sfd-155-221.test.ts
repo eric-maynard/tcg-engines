@@ -142,7 +142,10 @@ describe("Honest Broker (sfd-155-221)", () => {
       .unit(P2, "base", { might: 4, name: "Their Only Unit" }, "theirs")
       .hand(P1, CULL_THE_WEAK, "cull")
       .build();
-    await game.p1.cast("cull", { targets: "hb" }); // the caster names their own victim as they play it
+    // rule 355.10.e — Cull the Weak does not target: each player, the caster
+    // included, names their own victim as the spell RESOLVES.
+    await game.p1.cast("cull");
+    game.script(P1, ["hb"]);
     game.script(P2, ["theirs"]);
     await game.settle({ policy: "first" }); // each side has exactly one unit to give up
     expect(game.zoneOf("hb")).toBe("trash");

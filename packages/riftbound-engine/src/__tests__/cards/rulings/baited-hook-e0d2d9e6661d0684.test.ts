@@ -70,7 +70,7 @@ describe("Ruling e0d2d9e6661d0684 — Baited Hook choosing a unit at the Dreamin
     expect(game.p1.hand()).toEqual(["j1", "j2"]);
   });
 
-  test.failing("BUG: nuance: Cull the Weak makes each player CHOOSE a unit on resolution — not targeting — so killing the Dreamer with it never creates a Tree item and P1 draws nothing", async () => {
+  test("nuance: Cull the Weak makes each player CHOOSE a unit on resolution — not targeting — so killing the Dreamer with it never creates a Tree item and P1 draws nothing", async () => {
     const game = await board().hand(P1, CULL_THE_WEAK, "cull").build();
     const deckBefore = game.p1.deck().length;
     // Nothing is chosen as it is played: no caster-chosen target on the item.

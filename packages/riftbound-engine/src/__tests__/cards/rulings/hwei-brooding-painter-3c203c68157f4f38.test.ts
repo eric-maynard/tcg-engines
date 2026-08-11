@@ -40,10 +40,10 @@ function board() {
     .hand(P1, DISCIPLINE, "disc");
 }
 
-/** P2 casts Cull the Weak (naming Ashe as its own eventual victim); P1 responds with Flash on Hwei. */
+/** P2 casts Cull the Weak (Ashe, P2's only unit, will bind as its victim on resolution — 355.10.e); P1 responds with Flash on Hwei. */
 async function cullThenFlash(): Promise<Game> {
   const game = await board().build();
-  await game.p2.cast("cull", { targets: "ashe" });
+  await game.p2.cast("cull");
   await game.p2.passPriority();
   expect(game.p1.can("cast", "flash")).toBe(true);
   await game.p1.cast("flash", { targets: ["hwei"] });

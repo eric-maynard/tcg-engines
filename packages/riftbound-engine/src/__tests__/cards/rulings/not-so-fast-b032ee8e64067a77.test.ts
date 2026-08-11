@@ -37,7 +37,7 @@ function board() {
 }
 
 describe("Ruling b032ee8e64067a77 — Not So Fast can't counter Cull the Weak (it chooses no unit)", () => {
-  test.failing("BUG: Cull the Weak is cast with NO chosen unit; with priority P1's Not So Fast is not castable — Cull is never offered as its object and forcing it is refused", async () => {
+  test("Cull the Weak is cast with NO chosen unit; with priority P1's Not So Fast is not castable — Cull is never offered as its object and forcing it is refused", async () => {
     const game = await board().build();
     expect(game.p2.option("cast", "cull")?.fields.find((f) => f.arg === "targets")?.options ?? [[]]).toEqual([[]]); // nothing to choose at play time
     await game.p2.cast("cull");
@@ -55,7 +55,7 @@ describe("Ruling b032ee8e64067a77 — Not So Fast can't counter Cull the Weak (i
     expect(game.p1.resources()).toEqual({ energy: 2, power: { calm: 1 } });
   });
 
-  test.failing("BUG: …so Cull the Weak resolves: each player kills one of THEIR units (chosen on resolution) — Scout and Grunt both die", async () => {
+  test("…so Cull the Weak resolves: each player kills one of THEIR units (chosen on resolution) — Scout and Grunt both die", async () => {
     const game = await board().build();
     await game.p2.cast("cull");
     await game.p2.passPriority();

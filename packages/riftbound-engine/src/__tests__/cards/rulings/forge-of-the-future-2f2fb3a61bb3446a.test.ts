@@ -77,7 +77,7 @@ describe("Ruling 2f2fb3a61bb3446a — 'Kill this:' is Forge of the Future's own 
 
   test("contrast — killed from OUTSIDE (Acceptable Losses): the Forge just dies; no recycle ability goes on the chain, P1 is never asked to pick, trashes untouched", async () => {
     const game = await board().build();
-    await game.p1.cast("losses", { targets: "forge" }); // the caster's own pick; P2 has no gear
+    await game.p1.cast("losses"); // rule 355.10.e — nothing named at play time; P1's only gear (the Forge) binds on resolution, P2 has none
     // Resolve; each player kills one of their gear — P1's only gear is the Forge, P2 has none.
     for (let i = 0; i < 10; i++) {
       const d = game.decision();

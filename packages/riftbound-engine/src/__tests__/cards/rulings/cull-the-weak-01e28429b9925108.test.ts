@@ -73,7 +73,7 @@ describe("Ruling 01e28429b9925108 — 'each player kills one of their units' is 
     expect(game.p1.trash()).toEqual(["cull"]);
   });
 
-  test.failing("BUG: mirror: the OPPONENT has no unit — still playable; only the caster's unit dies", async () => {
+  test("mirror: the OPPONENT has no unit — still playable; only the caster's unit dies", async () => {
     const game = await board(1, 0).build();
     await cull(game);
     expect(game.zoneOf("mine0")).toBe("trash");

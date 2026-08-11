@@ -54,7 +54,7 @@ async function cullAnsweredByThrill(withSpare: boolean): Promise<Game> {
 }
 
 describe("Ruling afe7cdee56c340f2 — Thrill of the Hunt dodges nothing: Cull the Weak chooses on resolution", () => {
-  test.failing("BUG: Cub is P2's ONLY unit: after Thrill re-plays it to bf2, Cull resolves and P2 must still kill a unit — the Cub dies anyway (and P1 kills the Pawn)", async () => {
+  test("Cub is P2's ONLY unit: after Thrill re-plays it to bf2, Cull resolves and P2 must still kill a unit — the Cub dies anyway (and P1 kills the Pawn)", async () => {
     const game = await cullAnsweredByThrill(false);
     for (let i = 0; i < 10; i++) {
       const d = game.decision();
@@ -79,7 +79,7 @@ describe("Ruling afe7cdee56c340f2 — Thrill of the Hunt dodges nothing: Cull th
     expect(game.violations()).toEqual([]);
   });
 
-  test.failing("BUG: with a second unit (Spare) P2 is not locked into the Cub: on resolution P2 is asked to choose among BOTH and may kill the Spare — the re-played Cub survives at bf2", async () => {
+  test("with a second unit (Spare) P2 is not locked into the Cub: on resolution P2 is asked to choose among BOTH and may kill the Spare — the re-played Cub survives at bf2", async () => {
     const game = await cullAnsweredByThrill(true);
     let p2Asked = false;
     for (let i = 0; i < 10; i++) {

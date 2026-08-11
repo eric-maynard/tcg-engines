@@ -1471,6 +1471,11 @@ export const playSpell: Defs["playSpell"] = {
         // trash/hand as the effect resolves, never as a play-time board target.
         (offBoardPlayZone(spellEffect) === undefined ||
           offBoardPlayIsCasterChosen(spellEffect)) &&
+        // rule 355.10.e (rule-id: ogn-209-298 Cull the Weak) — a PER-PLAYER
+        // instruction ("Each player kills one of their units") does not target:
+        // every player, the caster included, picks among their own units as the
+        // spell RESOLVES, so nothing is chosen at play time.
+        !isPerPlayerInstruction(spellEffect as SpellEffectTargetShape | undefined) &&
         tgt !== undefined &&
         typeof tgt !== "string" &&
         tgt.type !== "self" &&
@@ -1970,6 +1975,12 @@ export const playSpell: Defs["playSpell"] = {
         baseVariants.push({
           cardId: cardId as string,
           playerId: context.playerId as string,
+          // rule 355.10.e (rule-id: ogn-209-298 Cull the Weak) — a per-player
+          // instruction chooses nothing when played: say so explicitly, so the
+          // sole variant is "no targets" rather than "targets never asked".
+          ...(isPerPlayerInstruction(spellEffect as SpellEffectTargetShape | undefined)
+            ? { targets: [] }
+            : {}),
         });
       }
       // rule-id: sfd-206-221 (rule 355.8) — "Choose a friendly unit and a

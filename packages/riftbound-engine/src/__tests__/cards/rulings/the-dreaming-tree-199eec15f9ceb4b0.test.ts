@@ -59,15 +59,12 @@ describe("Ruling 199eec15f9ceb4b0 — Hidden Blade on your own unit at the Dream
 
   test("Cull the Weak: no targets on the chain, no Tree item; each player CHOOSES on resolution (P1 picks the Dreamer at the Tree) — the Dreamer dies and P1 draws nothing", async () => {
     const game = await board(CULL_THE_WEAK).unit(P1, "base", { might: 1, name: "Spare" }, "spare").build();
-    // The engine may collect the caster's own choice up front; either way it is not a target for the Tree.
-    const asksUpFront = game.p1.option("cast", "spell")?.fields.some((f) => f.name === "targets" && f.required) ?? false;
+    // rule 355.10.e — a per-player instruction names nothing at play time: the cast offers no unit to choose,
+    // and P1's own pick (Dreamer vs Spare) is a resolution-time choice, never a target for the Tree.
+    const offered = game.p1.option("cast", "spell")?.fields.find((f) => f.name === "targets")?.options ?? [];
+    expect(offered.flat()).toEqual([]);
     let p1Chose = false;
-    if (asksUpFront) {
-      await game.p1.cast("spell", { targets: "dreamer" });
-      p1Chose = true;
-    } else {
-      await game.p1.cast("spell");
-    }
+    await game.p1.cast("spell");
     expect(game.p1.resources()).toEqual({ energy: 0, power: { order: 0 } });
     expect(game.chain().map((c) => c.cardId)).toEqual(["spell"]);
     expect(game.chain().some((c) => c.cardId === "tree")).toBe(false);

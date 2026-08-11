@@ -138,10 +138,9 @@ async function resolveEverything(game: Game, picks: Record<Seat, string> = { [P1
 }
 
 describe("Rebuttal × Cull the Weak — (a) there is nothing to re-choose", () => {
-  // Expected (355.10.e): "each player kills one of their units" is not targeting — the caster makes no
-  // unit choice while playing it, so the cast should offer no unit at all. Actual: the engine models the
-  // caster's own kill as an optional ("up to 1") play-time target slot and offers a1 / a2 / s1.
-  test.failing("BUG: Cull the Weak offers the caster's own units as play-time targets; 355.10.e says the per-player picks are made on resolution and are not targets", async () => {
+  // rule 355.10.e — "each player kills one of their units" is not targeting: the caster makes no unit
+  // choice while playing it, so the cast offers no unit at all (not a1 / a2 / s1).
+  test("Cull the Weak offers the caster NO unit as a play-time target — the per-player picks are made on resolution and are not targets (355.10.e)", async () => {
     const game = await board().build();
     expect(game.p1.can("cast", "cull")).toBe(true);
     expect(targetsOffered(game, P1, "cull")).toEqual([]);

@@ -129,7 +129,7 @@ describe("Ruling a9394c30f4aa6725 — Hidden Blade's locked target: to base ⇒ 
     expect(game.state("anchor").damage).toBe(0);
   });
 
-  test.failing("BUG: contrast — Cull the Weak does not target: P2 flips Tideturner in response, and on resolution P2 must still kill one of its units, chosen THEN — the newly arrived Tideturner is a legal choice", async () => {
+  test("contrast — Cull the Weak does not target: P2 flips Tideturner in response, and on resolution P2 must still kill one of its units, chosen THEN — the newly arrived Tideturner is a legal choice", async () => {
     const game = await scenario()
       .turn(3)
       .resources(P1, { energy: 2, power: { order: 1 } })

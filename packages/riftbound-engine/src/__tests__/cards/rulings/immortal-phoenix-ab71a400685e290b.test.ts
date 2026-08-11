@@ -68,7 +68,7 @@ async function landIt(game: Game): Promise<void> {
 }
 
 describe("Ruling ab71a400685e290b — your own Cull the Weak killing your Immortal Phoenix lets you replay it", () => {
-  test.failing("BUG: Cull the Weak resolves (Phoenix and Grunt both dead, spell in trash); THEN the Phoenix — from the trash — asks P1 'pay [1][fury] to play me?'", async () => {
+  test("Cull the Weak resolves (Phoenix and Grunt both dead, spell in trash); THEN the Phoenix — from the trash — asks P1 'pay [1][fury] to play me?'", async () => {
     const game = await cullBoard().build();
     await game.p1.cast("cull");
     expect(game.p1.resources()).toEqual({ energy: 1, power: { fury: 1, order: 0 } });
@@ -79,7 +79,7 @@ describe("Ruling ab71a400685e290b — your own Cull the Weak killing your Immort
     expect(game.zoneOf("cull")).toBe("trash");
   });
 
-  test.failing("BUG: YES: exactly [1][fury] is paid and the Phoenix is played from the trash back onto P1's board (exhausted, undamaged)", async () => {
+  test("YES: exactly [1][fury] is paid and the Phoenix is played from the trash back onto P1's board (exhausted, undamaged)", async () => {
     const game = await cullBoard().build();
     await game.p1.cast("cull");
     await untilPhoenixAsk(game);
@@ -115,7 +115,7 @@ describe("Ruling ab71a400685e290b — your own Cull the Weak killing your Immort
     expect(game.zoneOf("phoenix")).not.toBe("trash");
   });
 
-  test.failing("BUG: declining leaves it in the trash with the [1][fury] unspent", async () => {
+  test("declining leaves it in the trash with the [1][fury] unspent", async () => {
     const game = await cullBoard().build();
     await game.p1.cast("cull");
     await untilPhoenixAsk(game);

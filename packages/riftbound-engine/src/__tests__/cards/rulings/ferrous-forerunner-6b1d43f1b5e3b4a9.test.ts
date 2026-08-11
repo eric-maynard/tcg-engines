@@ -39,7 +39,7 @@ async function steal(game: Game): Promise<void> {
 }
 
 async function cull(game: Game): Promise<void> {
-  await game.p1.cast("cull", { targets: "forerunner" });
+  await game.p1.cast("cull"); // rule 355.10.e — nothing named at play time; P1's only unit (the stolen Forerunner) binds on resolution
   for (let i = 0; i < 10; i++) {
     await game.settle();
     const d = game.decision();
@@ -94,7 +94,7 @@ describe("Ruling 6b1d43f1b5e3b4a9 — a stolen Ferrous Forerunner's Deathknell p
       .unit(P1, "base", { might: 1, name: "Pawn" }, "pawn")
       .hand(P1, CULL_THE_WEAK, "cull")
       .build();
-    await game.p1.cast("cull", { targets: "pawn" });
+    await game.p1.cast("cull"); // rule 355.10.e — the lone Pawn binds on resolution
     for (let i = 0; i < 10; i++) {
       await game.settle();
       const d = game.decision();

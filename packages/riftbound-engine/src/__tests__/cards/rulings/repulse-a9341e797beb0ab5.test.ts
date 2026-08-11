@@ -70,7 +70,7 @@ describe("Ruling a9341e797beb0ab5 — Repulse stops Hidden Blade (it chooses the
     expect(game.violations()).toEqual([]);
   });
 
-  test.failing("BUG: Cull the Weak: no unit of P1's is chosen at play time → with priority P1 can NOT cast Repulse (forcing it is refused); Cull resolves and each player loses a unit", async () => {
+  test("Cull the Weak: no unit of P1's is chosen at play time → with priority P1 can NOT cast Repulse (forcing it is refused); Cull resolves and each player loses a unit", async () => {
     const game = await board().build();
     await game.p2.cast("cull"); // nothing is chosen as it is played
     const item = game.chain()[0];

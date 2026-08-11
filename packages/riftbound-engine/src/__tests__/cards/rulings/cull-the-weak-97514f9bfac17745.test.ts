@@ -48,7 +48,7 @@ describe("Ruling 97514f9bfac17745 — Cull the Weak with no friendly units: lega
     expect(game.violations()).toEqual([]);
   });
 
-  test.failing("BUG: with a friendly unit P1 does kill one of its own too (each player kills one)", async () => {
+  test("with a friendly unit P1 does kill one of its own too (each player kills one)", async () => {
     const game = await board().unit(P1, "base", { might: 1, name: "Pawn" }, "pawn").build();
     await game.p1.cast("cull");
     for (let i = 0; i < 6; i++) {

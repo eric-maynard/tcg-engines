@@ -55,7 +55,7 @@ async function resolveCull(game: Game, p2Pick?: string): Promise<Decision[]> {
 }
 
 describe("Ruling 0328d5177ffd6d19 — Cull the Weak does not target, so Deflect never applies", () => {
-  test.failing("BUG: premise: the Poro has Deflect and P1 has ZERO spare power after Cull's own [order] — yet Cull is castable and its play-time menu never lists the enemy Poro (it is not targeted)", async () => {
+  test("premise: the Poro has Deflect and P1 has ZERO spare power after Cull's own [order] — yet Cull is castable and its play-time menu never lists the enemy Poro (it is not targeted)", async () => {
     const game = await board().build();
     expect(game.state("poro").keywords).toContain("Deflect");
     expect(game.p1.can("cast", "cull")).toBe(true);
@@ -67,7 +67,7 @@ describe("Ruling 0328d5177ffd6d19 — Cull the Weak does not target, so Deflect 
     expect(game.chain()).toEqual([expect.objectContaining({ cardId: "cull", controller: P1 })]);
   });
 
-  test.failing("BUG: resolution: each player kills one of their units — P1's Pawn and P2's Deflect Poro both die; no Deflect payment was ever asked of P1 (809.1.c, 355.10.e)", async () => {
+  test("resolution: each player kills one of their units — P1's Pawn and P2's Deflect Poro both die; no Deflect payment was ever asked of P1 (809.1.c, 355.10.e)", async () => {
     const game = await board().build();
     await game.p1.cast("cull"); // rule 355.10.e — no play-time target; the caster picks pawn on resolution
     const prompts = await resolveCull(game);
@@ -81,7 +81,7 @@ describe("Ruling 0328d5177ffd6d19 — Cull the Weak does not target, so Deflect 
     expect(game.violations()).toEqual([]);
   });
 
-  test.failing("BUG: with two P2 units the choice of which to kill is P2's own decision on resolution; P2 picking its Deflect Poro costs nobody anything", async () => {
+  test("with two P2 units the choice of which to kill is P2's own decision on resolution; P2 picking its Deflect Poro costs nobody anything", async () => {
     const game = await board({ p2Second: true }).build();
     await game.p1.cast("cull"); // rule 355.10.e — no play-time target; the caster picks pawn on resolution
     expect(game.p1.resources()).toEqual({ energy: 0, power: { order: 0 } });

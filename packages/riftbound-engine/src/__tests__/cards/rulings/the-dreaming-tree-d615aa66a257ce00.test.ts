@@ -43,7 +43,7 @@ function board() {
 }
 
 describe("Ruling d615aa66a257ce00 — choosing your Dreaming Tree unit for an opponent's Cull the Weak draws nothing", () => {
-  test.failing("BUG: Cull the Weak is cast with NO targets (nothing is chosen at play time), so no Tree trigger joins the chain", async () => {
+  test("Cull the Weak is cast with NO targets (nothing is chosen at play time), so no Tree trigger joins the chain", async () => {
     const game = await board().build();
     const targets = game.p2.option("cast", "cull")?.fields.find((f) => f.name === "targets");
     expect((targets?.options ?? []).flat()).toEqual([]); // it chooses nothing as it is played
@@ -53,7 +53,7 @@ describe("Ruling d615aa66a257ce00 — choosing your Dreaming Tree unit for an op
     expect(game.chain().some((c) => c.cardId === "tree")).toBe(false);
   });
 
-  test.failing("BUG: on resolution P1 is asked to pick one of THEIR units (a resolution-time choice, P1's decision); picking the Dreamer at the Tree kills it — and P1 draws NOTHING, no Tree item ever appears", async () => {
+  test("on resolution P1 is asked to pick one of THEIR units (a resolution-time choice, P1's decision); picking the Dreamer at the Tree kills it — and P1 draws NOTHING, no Tree item ever appears", async () => {
     const game = await board().build();
     await game.p2.cast("cull");
     const s = await game.settle();

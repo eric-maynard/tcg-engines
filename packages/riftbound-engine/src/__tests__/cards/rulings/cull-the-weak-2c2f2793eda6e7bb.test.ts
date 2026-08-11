@@ -58,7 +58,7 @@ describe("Ruling 2c2f2793eda6e7bb — Cull the Weak kills an enemy Ruin Runner b
     const offered = (game.p1.option("cast", "cull")?.fields.find((f) => f.arg === "targets")?.options ?? []) as unknown[];
     const flat = [...new Set(offered.flatMap((v) => (Array.isArray(v) ? v : [v]) as string[]))];
     expect(flat).not.toContain("runner");
-    await game.p1.cast("cull", { targets: "pawn" });
+    await game.p1.cast("cull"); // rule 355.10.e — nothing named at play time; the lone Pawn binds on resolution
     expect(game.p1.resources()).toEqual({ energy: 0, power: { order: 0 } });
     expect(game.chain()).toEqual([expect.objectContaining({ cardId: "cull", controller: P1 })]);
     expect(game.zoneOf("runner")).toBe("base");
@@ -66,7 +66,7 @@ describe("Ruling 2c2f2793eda6e7bb — Cull the Weak kills an enemy Ruin Runner b
 
   test("P2's only unit is Ruin Runner: on resolution P2 is forced to kill it (mandatory, not a targeting) — both Pawn and Runner die", async () => {
     const game = await board().build();
-    await game.p1.cast("cull", { targets: "pawn" });
+    await game.p1.cast("cull"); // rule 355.10.e — nothing named at play time; the lone Pawn binds on resolution
     const prompts = await resolve(game, "runner");
     // Any prompt about the Runner is P2's own (never P1 choosing an enemy unit).
     expect(prompts.filter((p) => p.kind === "pick" && p.seat === P1 && p.options.some((o) => (o.card ?? o.key) === "runner"))).toEqual([]);
@@ -79,7 +79,7 @@ describe("Ruling 2c2f2793eda6e7bb — Cull the Weak kills an enemy Ruin Runner b
 
   test("P2 with Ruin Runner + Bystander: the choice surfaces to P2 and INCLUDES the Runner; P2 may pick the Runner and it dies", async () => {
     const game = await board({ p2Second: true }).build();
-    await game.p1.cast("cull", { targets: "pawn" });
+    await game.p1.cast("cull"); // rule 355.10.e — nothing named at play time; the lone Pawn binds on resolution
     const prompts = await resolve(game, "runner");
     const p2Pick = prompts.find((p) => p.seat === P2 && p.kind === "pick");
     expect(p2Pick).toBeDefined();

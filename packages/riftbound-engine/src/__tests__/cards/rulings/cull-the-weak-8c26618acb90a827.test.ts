@@ -57,7 +57,7 @@ describe("Ruling 8c26618acb90a827 — Cull the Weak is playable with no units; c
   // Cull the Weak does not target, so even a caster WITH units names nothing at play time; the caster's own pick
   // (like the opponent's) is a resolution-time choice — a bare cast goes straight to priority and P1 is only
   // asked after both pass. rule 355.10.e
-  test.failing("BUG: ruling 8c26618acb90a827 — the caster's own unit is chosen on resolution, not as a play-time target", async () => {
+  test("ruling 8c26618acb90a827 — the caster's own unit is chosen on resolution, not as a play-time target", async () => {
     const game = await board().unit(P1, "base", { might: 1, name: "Pawn" }, "pawn").build();
     await game.p1.cast("cull"); // no targets: nothing is chosen when finalizing
     expect(game.decision()).toMatchObject({ context: "chain", kind: "action" });
