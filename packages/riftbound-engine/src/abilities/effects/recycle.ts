@@ -49,12 +49,24 @@ function collectCategory(playerId: string, category: KeepCategory, ctx: EffectCo
   return out;
 }
 
+/** rule 303.2.a — every seat, starting from the turn player. */
+function turnOrderSeats(ctx: EffectContext): string[] {
+  const seats = Object.keys((ctx.draft as { players?: Record<string, unknown> }).players ?? {});
+  const turn = (ctx.draft as { turn?: { activePlayer?: string } }).turn;
+  const at = seats.indexOf(turn?.activePlayer ?? "");
+  return at < 0 ? seats : [...seats.slice(at), ...seats.slice(0, at)];
+}
+
 /**
  * rule-id: ogn-244-298 — walk (player × category) in order; the FIRST pair
  * holding more than `keep` parks a pick prompt whose `then` re-runs this same
  * effect, so the remaining categories/players are prompted one at a time
  * (a single `pendingChoice` slot exists). Pairs at or under the limit keep
  * everything, so re-entry always makes progress.
+ *
+ * rule 303.2.a — "Each player chooses …" is ONE instruction per player made in
+ * turn order from the turn player, so the seat loop is the OUTER one: a seat
+ * answers every category it must answer before the next seat is asked anything.
  */
 function handleKeepRecycle(effect: ExecutableEffect, ctx: EffectContext): void {
   const keep = (effect as { keep?: number }).keep ?? 0;
@@ -64,9 +76,9 @@ function handleKeepRecycle(effect: ExecutableEffect, ctx: EffectContext): void {
     "rune",
     "hand",
   ]) as readonly KeepCategory[];
-  const players = Object.keys((ctx.draft as { players?: Record<string, unknown> }).players ?? {});
-  for (const category of categories) {
-    for (const playerId of players) {
+  const players = turnOrderSeats(ctx);
+  for (const playerId of players) {
+    for (const category of categories) {
       const pool = collectCategory(playerId, category, ctx);
       if (pool.length <= keep) {
         continue;

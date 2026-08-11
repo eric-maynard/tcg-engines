@@ -146,12 +146,12 @@ describe("(a) order and visibility of the choices", () => {
     expect(d.options.map((o) => o.card).sort()).toEqual(["karma", "u1b", "u1c"]);
   });
 
-  test("categories at or under quota ask nothing: P1's single gear, P2's 2 units / 2 gear / 2 hand cards never produce a prompt; the full prompt list is P1 units(1), P1 runes(2), P2 runes(1), P1 hand(1)", async () => {
+  test("categories at or under quota ask nothing: P1's single gear, P2's 2 units / 2 gear / 2 hand cards never produce a prompt; the full prompt list is P1 units(1), P1 runes(2), P1 hand(1), P2 runes(1)", async () => {
     const game = await castAndResolve();
     const prompts = await walk(game, LINE);
-    expect(prompts.map((p) => `${p.seat}:${p.max}`)).toEqual([`${P1}:1`, `${P1}:2`, `${P2}:1`, `${P1}:1`]);
+    expect(prompts.map((p) => `${p.seat}:${p.max}`)).toEqual([`${P1}:1`, `${P1}:2`, `${P1}:1`, `${P2}:1`]);
     expect(prompts[1]?.options.sort()).toEqual([...P1_RUNES]);
-    expect(prompts[2]?.options.sort()).toEqual([...P2_RUNES]);
+    expect(prompts[3]?.options.sort()).toEqual([...P2_RUNES]);
     expect(prompts.some((p) => p.options.includes("g1") || p.options.includes("g2") || p.options.includes("scrapBoard"))).toBe(false);
     expect(prompts.some((p) => p.options.includes("u2a"))).toBe(false);
   });
@@ -160,7 +160,7 @@ describe("(a) order and visibility of the choices", () => {
   // of its choices (units, runes, hand) and only then does P2 choose. Actual: the engine walks category by category
   // (units → gear → runes → hand) asking each player in turn inside a category, so P1's hand pick comes AFTER P2's
   // rune pick.
-  test.failing("BUG: P1 completes every one of its choices (incl. the hand pick) before P2 is asked anything (303.2.a)", async () => {
+  test("P1 completes every one of its choices (incl. the hand pick) before P2 is asked anything (303.2.a)", async () => {
     const game = await castAndResolve();
     const prompts = await walk(game, LINE);
     const lastP1 = prompts.map((p) => p.seat).lastIndexOf(P1);
@@ -172,6 +172,7 @@ describe("(a) order and visibility of the choices", () => {
     const game = await castAndResolve();
     await game.p1.pick("u1c");
     await game.p1.pick("o1", "o2");
+    await game.p1.pick("h3");
     expect(djPick(game)).toMatchObject({ seat: P2 });
     expect(game.zoneOf("u1c")).toBe("mainDeck");
     expect([game.zoneOf("o1"), game.zoneOf("o2")]).toEqual(["runeDeck", "runeDeck"]);
@@ -187,7 +188,6 @@ describe("(a) order and visibility of the choices", () => {
     const game = await castAndResolve();
     await game.p1.pick("u1c");
     await game.p1.pick("o1", "o2");
-    await game.p2.pick("r1");
     const d = djPick(game)!;
     expect(d).toMatchObject({ max: 1, min: 1, seat: P1 });
     expect(d.options.map((o) => o.card).sort()).toEqual(["h1", "h2", "h3"]);
@@ -215,7 +215,6 @@ describe("(b) hand counts: P2 trivially keeps both; P1 drops one unseen", () => 
     const game = await castAndResolve();
     await game.p1.pick("u1c");
     await game.p1.pick("o1", "o2");
-    await game.p2.pick("r1");
     const before = game.p2.listZones({ all: true });
     expect(before.find((z) => z.zone === "hand" && z.owner === P1)).toMatchObject({ count: 3, visible: false });
     const deckBefore = before.find((z) => z.zone === "mainDeck" && z.owner === P1)!.count;
@@ -276,7 +275,7 @@ describe("(d) Karma, Channeler: how many 'when you recycle one or more cards to 
   // simultaneous event → "one or more cards" triggers exactly ONCE; the two runes go to the RUNE deck and are not
   // cards at all (Karma's own reminder text). Actual: the engine fires Karma once per recycled category — unit,
   // runes AND hand — putting three Karma items on the chain.
-  test.failing("BUG: exactly ONE Karma trigger for P1's whole recycle (unit + hand card together; runes aren't cards) → one buff prompt, one chain item", async () => {
+  test("exactly ONE Karma trigger for P1's whole recycle (unit + hand card together; runes aren't cards) → one buff prompt, one chain item", async () => {
     const game = await castAndResolve();
     await walk(game, LINE);
     const asked = await answerKarma(game, "karma");

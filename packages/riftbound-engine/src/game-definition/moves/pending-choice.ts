@@ -3980,9 +3980,18 @@ export const pendingChoiceMoves: Partial<
       // Clear the pending choice so play can resume.
       draft.pendingChoice = undefined;
 
+      // rule 383.3.d.1 / rule-id: ogn-244-298 — a "keep N of each category,
+      // recycle the rest" instruction (Divine Judgment) is prompted category by
+      // category but recycles a seat's cards ALL AT ONCE, so its event is held
+      // back until that seat's last category is answered (below).
+      const keepRecycleBatch =
+        choice.onPicked === "recycle" && (choice.then as { keep?: unknown } | undefined)?.keep !== undefined;
+      const carried = [...((choice.carriedRecycled ?? []) as readonly string[]), ...recycledIds];
       // rule-id: ogn-235-298 — one `recycle` event for the whole batch
       // (picked-to-recycle and/or recycled rest) so Karma's buff fires once.
-      fireRecycleEvent(draft, context, choice.prompter, recycledIds);
+      if (!keepRecycleBatch) {
+        fireRecycleEvent(draft, context, choice.prompter, recycledIds);
+      }
 
       // Resume the originating effect's `then` clause (e.g. discard 1 → draw 1).
       // A PLAY pick carries its "then" on the play itself (it runs once the card
@@ -3996,6 +4005,23 @@ export const pendingChoiceMoves: Partial<
         };
         if (!followUpOnChain) {
           executeEffect(choice.then as ExecutableEffect, effectCtx);
+        }
+      }
+      // rule 383.3.d.1 — the deferred keep-recycle batch: hand it to this
+      // seat's next category prompt, or (its last category answered) fire the
+      // single `recycle` event for everything the seat gave up at once.
+      if (keepRecycleBatch) {
+        const next = draft.pendingChoice as
+          | { type?: string; prompter?: string; then?: unknown; carriedRecycled?: readonly string[] }
+          | undefined;
+        if (
+          next?.type === "reveal-and-pick" &&
+          next.prompter === choice.prompter &&
+          (next.then as { keep?: unknown } | undefined)?.keep !== undefined
+        ) {
+          next.carriedRecycled = carried;
+        } else {
+          fireRecycleEvent(draft, context, choice.prompter, carried);
         }
       }
       // rule 319.7 / rule-id: ogn-019-298 — the pick changed game state (a

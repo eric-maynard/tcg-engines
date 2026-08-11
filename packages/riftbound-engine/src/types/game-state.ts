@@ -757,6 +757,15 @@ export interface RevealAndPickChoice {
   readonly thenBoundTargets?: readonly CardId[];
 
   /**
+   * rule 383.3.d.1 / rule-id: ogn-244-298 — "Recycle the rest" is ONE
+   * instruction per player even though the engine prompts it category by
+   * category, so the cards already recycled for this seat ride along on the
+   * next category's prompt and a single `recycle` event is emitted once the
+   * seat's last category has been answered.
+   */
+  readonly carriedRecycled?: readonly CardId[];
+
+  /**
    * Rule 729 (ogn-235-298): "You may recycle it" — when set the prompter
    * may decline the pick entirely, leaving the revealed card(s) in place.
    */
