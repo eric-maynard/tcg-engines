@@ -2145,6 +2145,12 @@ export interface CostExtras {
    */
   viaFlow?: boolean;
   /**
+   * rule 829.1.c.3 (rule-id: ven-113-166) — WHICH [Flow] instance the
+   * controller elected, as an index into `getFlowCostOptionsForPlay` (printed
+   * first, then granted). Omitted = let the engine pick a payable one.
+   */
+  flowIndex?: number;
+  /**
    * rule-id: ven-083-166 — optional "you may pay [X] as an additional cost"
    * (rule 560) elected by the caster; stacks on top of the base cost.
    * rule-id: unl-178-219 — `energy` may be negative when the paid optional
@@ -3398,7 +3404,12 @@ export function getBaseCostForPlay(
     return { energy: extras.altCost.energy ?? 0, power };
   }
   if (extras.viaFlow) {
-    const flow = chooseFlowCost(cardId, getCardMeta, pool);
+    // rule 829.1.c.3 — the controller's election wins over the engine's guess.
+    const elected =
+      extras.flowIndex === undefined
+        ? undefined
+        : getFlowCostOptionsForPlay(cardId, getCardMeta)[extras.flowIndex];
+    const flow = elected ?? chooseFlowCost(cardId, getCardMeta, pool);
     if (flow) {
       const power: Partial<Record<string, number>> = {};
       for (const domain of flow.power) {

@@ -159,6 +159,11 @@ export function handle_reveal(effect: ExecutableEffect, ctx: EffectContext, _h: 
     ctx.draft.pendingChoice = {
       onPicked: "play",
       onRest: "recycle",
+      // rule 419.3.c / 359.3.e.6 (ogn-025-298 Blind Fury) — "Choose one and
+      // BANISH it, then play it": the banish is its own mandatory instruction
+      // and lands on selection, so a card that cannot be played right now is
+      // still an eligible pick (it simply stays banished, play skipped).
+      playBanishFirst: true,
       ...(revEff.ignoreCost ? { playIgnoreCost: true } : {}),
       prompter: actor,
       revealed,

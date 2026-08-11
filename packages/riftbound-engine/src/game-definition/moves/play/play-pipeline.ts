@@ -471,6 +471,13 @@ export function putPlayedSpellOnChain(
     via?: PlayVia;
     /** rule 820 — extra executions bought with an elected [Repeat] (0 = none). */
     repeatCount?: number;
+    /**
+     * rule 811.1 (unl-042-219 Back Off) — was the card played FROM ITS
+     * OWNER'S HAND? An effect play from the deck / trash / banishment is not,
+     * so the spell's own "if you played this from your hand" gate must read
+     * false when it resolves.
+     */
+    playedFromHand?: boolean;
   },
 ): void {
   const { draft, zones } = io;
@@ -497,6 +504,10 @@ export function putPlayedSpellOnChain(
       cardId: spec.cardId,
       controller: spec.playerId,
       effect: chainEffect,
+      // rule 811.1 (unl-042-219) — record whether the play came from its
+      // owner's HAND: an effect play from the deck / trash / banishment
+      // collapses the spell's "if you played this from your hand" gate.
+      ...(spec.playedFromHand === false ? { playedFromHand: false } : {}),
       resolveTo: spec.resolveTo ?? "trash",
       type: "spell",
     },
@@ -1714,6 +1725,7 @@ export function continueEffectPlay(io: PlayIO, item: PendingPlayItem): "prompted
       playerId: spec.playerId,
       // rule 820.1.c — the [Repeat] elected (and paid) above buys the extra executions.
       ...(optional?.id === REPEAT_COST_ID ? { repeatCount: optional.repeatCount ?? 1 } : {}),
+      playedFromHand: progress.from === "hand",
       resolveTo: spec.recycleAfter ? "mainDeck" : "trash",
       via: spec.via,
     });

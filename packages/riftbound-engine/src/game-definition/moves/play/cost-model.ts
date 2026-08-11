@@ -492,6 +492,8 @@ export function computeTotalCost(
       illegal = `alternative:${selection.alternativeId}`;
     } else if (chosen.id.startsWith(ALTERNATIVE_COST_IDS.flow)) {
       extras.viaFlow = true;
+      // rule 829.1.c.3 — price the [Flow] instance the controller elected.
+      extras.flowIndex = Number(chosen.id.slice(ALTERNATIVE_COST_IDS.flow.length + 1)) || 0;
     } else if (chosen.id === ALTERNATIVE_COST_IDS.hidden) {
       extras.altCost = { energy: 0, power: [] };
     } else {
@@ -659,6 +661,12 @@ export interface LegacyCostParams {
   spentBuffIds?: readonly string[];
   altCost?: boolean;
   viaFlow?: boolean;
+  /**
+   * rule 829.1.c.3 (ven-113-166) — WHICH [Flow] cost the controller elected,
+   * as an index into `getFlowCostOptionsForPlay` (printed first, then the ones
+   * granted this turn). Omitted = the printed / only one.
+   */
+  flowIndex?: number;
   /** playSpell's "exhaust a friendly X" cost names its object as targets[0]. */
   targets?: readonly string[];
   costs?: PlayCostSelection;
@@ -716,7 +724,10 @@ export function selectionFromLegacyParams(cardId: string, params: LegacyCostPara
   if (params.spentBuffIds && params.spentBuffIds.length > 0) {
     paid[ADDITIONAL_COST_IDS.spendBuffAny] = { objects: [...params.spentBuffIds] };
   }
-  const alternativeId = params.viaFlow === true ? ALTERNATIVE_COST_IDS.flow : params.altCost === true ? ALTERNATIVE_COST_IDS.alt : undefined;
+  // rule 829.1.c.3 — the elected [Flow] instance is part of the alternative's id.
+  const flowIndex = params.flowIndex ?? 0;
+  const flowId = flowIndex > 0 ? `${ALTERNATIVE_COST_IDS.flow}-${flowIndex}` : ALTERNATIVE_COST_IDS.flow;
+  const alternativeId = params.viaFlow === true ? flowId : params.altCost === true ? ALTERNATIVE_COST_IDS.alt : undefined;
   return {
     ...(alternativeId ? { alternativeId } : {}),
     ...(Object.keys(paid).length > 0 ? { paid } : {}),
@@ -736,6 +747,8 @@ export function legacyParamsFromSelection<P extends LegacyCostParams>(cardId: st
   const out: LegacyCostParams = { ...params };
   if (sel.alternativeId?.startsWith(ALTERNATIVE_COST_IDS.flow)) {
     out.viaFlow ??= true;
+    // rule 829.1.c.3 — "flow" = the printed instance, "flow-N" = the Nth.
+    out.flowIndex ??= Number(sel.alternativeId.slice(ALTERNATIVE_COST_IDS.flow.length + 1)) || 0;
   } else if (sel.alternativeId === ALTERNATIVE_COST_IDS.alt) {
     out.altCost ??= true;
   }
