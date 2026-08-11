@@ -98,10 +98,7 @@ describe("Sona, Harmonious (ven-sp2-006)", () => {
     const two = await withSonaAt("bf1", 3).build();
     await endTurnToRunePrompt(two);
     const [a, b, c] = two.p1.runes() as [string, string, string];
-    await two.p1.pick(a, b);
-    // The engine offers an "any more?" continuation for the remaining rune — stop choosing here.
-    expect(two.decision()).toMatchObject({ allowDecline: true, kind: "pick", seat: P1 });
-    await two.p1.decline();
+    await two.p1.pick(a, b); // the finalization set is answered once (355.13)
     await two.settle();
     expect(two.turnPlayer()).toBe(P2);
     expect(two.p1.runes({ ready: true }).sort()).toEqual([a, b].sort());
@@ -165,20 +162,20 @@ describe("Sona, Harmonious (ven-sp2-006)", () => {
     const game = await withSonaAt("bf1", 3).resources(P1, { energy: 1 }).hand(P1, RETREAT, "retreat").build();
     await game.p1.endTurn();
     expect(game.chain().map((c) => c.cardId)).toEqual(["sona"]);
+    // rule 402.2 — the runes are named as the trigger is finalized, so only the 3 already on the
+    // board can be chosen; the rune Retreat channels afterwards is never eligible (355.15).
+    const d = game.decision() as PickDecision;
+    expect(d).toMatchObject({ kind: "pick", seat: P1, source: { cardId: "sona" } });
+    const chosen = game.p1.runes({ ready: false });
+    expect(chosen.length).toBe(3);
+    await game.p1.pick(...chosen);
     // P1 holds priority first and answers with Retreat on Sona.
     await game.p1.cast("retreat", { targets: "sona" });
     expect(game.chain().map((c) => c.cardId)).toEqual(["sona", "retreat"]);
-    const r = await game.settle(); // Retreat resolves (Sona → hand, +1 exhausted rune), then Sona's trigger asks for runes
+    await game.settle(); // Retreat resolves (Sona → hand, +1 exhausted rune), then Sona's trigger readies
     expect(game.zoneOf("sona")).toBe("hand");
-    expect(r.reason).toBe("unanswered");
-    const d = game.decision() as PickDecision;
-    expect(d).toMatchObject({ kind: "pick", seat: P1, source: { cardId: "sona" } });
-    const exhausted = game.p1.runes({ ready: false });
-    expect(exhausted.length).toBe(4); // 3 placed + 1 channeled exhausted by Retreat
-    await game.p1.pick(...exhausted.slice(0, 4));
-    await game.settle();
     expect(game.turnPlayer()).toBe(P2);
-    expect(game.p1.runes({ ready: true })).toHaveLength(4);
+    expect(game.p1.runes({ ready: true }).sort()).toEqual([...chosen].sort());
   });
 
   test("snapshot at end of turn: a ready Sona that conquered an empty battlefield THIS turn triggers when the turn ends", async () => {

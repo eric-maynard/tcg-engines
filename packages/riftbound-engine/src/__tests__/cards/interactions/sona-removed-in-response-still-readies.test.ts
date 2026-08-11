@@ -109,7 +109,7 @@ describe("Sona, Harmonious — removed in response to her own end-of-turn trigge
   // triggered ability is FINALIZED — immediately, before P1 (then P2) receive priority — and the finalized item
   // shows them. Engine (when this fails): finalizes the item with no choice and only asks "Choose a target for
   // Sona" as the ability RESOLVES, after both players passed — P1 gets to see P2's response before committing.
-  test.failing("BUG: (a) the 'up to 4 runes' are chosen at FINALIZATION (402.2 / 355.5) — P1 is asked to pick from the 5 exhausted runes before anyone gets priority, and the chain item then carries those 4 targets", async () => {
+  test("(a) the 'up to 4 runes' are chosen at FINALIZATION (402.2 / 355.5) — P1 is asked to pick from the 5 exhausted runes before anyone gets priority, and the chain item then carries those 4 targets", async () => {
     const game = await board().build();
     await game.p1.endTurn();
     const d = sonaRunePick(game);
@@ -254,7 +254,7 @@ describe("Sona, Harmonious — removed in response to her own end-of-turn trigge
   // 402.2 / 355.5 / 355.15: the runes were locked when the trigger was finalized — the rune Retreat channelled
   // afterwards was not on the board then and can never be one of the four (choices are not re-made at resolution).
   // Engine (when this fails): asks at resolution instead and offers all six runes INCLUDING "newRune".
-  test.failing("BUG: (c) the freshly channelled rune is never eligible — Sona's rune choice (locked at finalization, 402.2 / 355.5) can only name r1..r5, so 'newRune' is not offered at any point and stays exhausted", async () => {
+  test("(c) the freshly channelled rune is never eligible — Sona's rune choice (locked at finalization, 402.2 / 355.5) can only name r1..r5, so 'newRune' is not offered at any point and stays exhausted", async () => {
     const game = await board().build();
     await game.p1.endTurn();
     const offeredEarly = sonaRunePick(game)?.options.map((o) => o.card ?? o.key) ?? [];

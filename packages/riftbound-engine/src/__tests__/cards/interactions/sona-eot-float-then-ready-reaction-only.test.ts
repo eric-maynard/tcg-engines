@@ -74,6 +74,11 @@ async function atEndOfTurn(): Promise<Game> {
   expect(game.phase()).toBe("ending");
   expect(game.turnPlayer()).toBe(P1);
   expect(game.chain()).toEqual([expect.objectContaining({ cardId: "sona", controller: P1, triggered: true })]);
+  // rule 402.2 / 355.5 — the four runes are named while the trigger is finalized, before anyone
+  // holds priority. rule 415.1.b: a READY rune is still a legal choice (readying it does nothing),
+  // which is exactly what makes the tap-then-ready line below work.
+  expect(game.decision()).toMatchObject({ kind: "pick", max: 4, seat: P1, source: { cardId: "sona" } });
+  await game.p1.pick(...RUNES);
   expect(game.decision()).toMatchObject({ context: "chain", kind: "action", seat: P1 });
   return game;
 }
@@ -129,14 +134,10 @@ describe("Sona at end of turn — float energy off ready runes, ready them again
 
   // ── (b) ready the runes just tapped ────────────────────────────────────────────────────────
 
-  test("(b) on resolution Sona offers 'up to 4 friendly runes' — exactly r1..r4 (all exhausted a moment ago); P1 picks all four → 4 READY runes AND pool still (4,{}) — energy is not attached to the rune that made it (167)", async () => {
-    const game = await atEndOfTurn();
+  test("(b) Sona named r1..r4 at finalization and readies exactly them on resolution — the runes P1 tapped in between come back → 4 READY runes AND pool still (4,{}) — energy is not attached to the rune that made it (167)", async () => {
+    const game = await atEndOfTurn(); // the finalization pick already named r1..r4
     await floatFour(game);
     await bothPass(game);
-    const d = game.decision();
-    expect(d).toMatchObject({ kind: "pick", max: 4, seat: P1, source: { cardId: "sona" } });
-    expect(d?.kind === "pick" ? d.options.map((o) => o.card ?? o.key).sort() : []).toEqual(RUNES);
-    await game.p1.pick(...RUNES);
     expect(ready(game)).toEqual(RUNES);
     expect(game.chain()).toEqual([]);
     // The chain closed inside the Ending Step, so the engine runs straight on into the Expiration Step in
@@ -150,7 +151,6 @@ describe("Sona at end of turn — float energy off ready runes, ready them again
     const game = await atEndOfTurn();
     await floatFour(game);
     await bothPass(game);
-    await game.p1.pick(...RUNES);
     // From here to P2's open main phase, P1 must never hold an action decision (let alone one listing Rune Prison).
     let p1ActionWindows = 0;
     for (let i = 0; i < 12; i++) {
@@ -196,8 +196,6 @@ describe("Sona at end of turn — float energy off ready runes, ready them again
     await game.p1.cast("discipline", { targets: "sona" });
     await bothPass(game);
     await bothPass(game); // now Sona's trigger
-    expect(game.decision()).toMatchObject({ kind: "pick", max: 4, seat: P1, source: { cardId: "sona" } });
-    await game.p1.pick(...RUNES);
     expect(ready(game)).toEqual(RUNES);
     // as in (b): the Expiration Step follows at once — it found exactly the 2 left floating
     expect(game.trace().expiration[0]?.poolsEmptied?.[P1]?.energy).toBe(2);
@@ -209,7 +207,6 @@ describe("Sona at end of turn — float energy off ready runes, ready them again
     const game = await atEndOfTurn();
     await floatFour(game);
     await bothPass(game);
-    await game.p1.pick(...RUNES);
     const r = await game.settle();
     expect(r.reason).toBe("open");
     expect(game.turnPlayer()).toBe(P2);
@@ -228,7 +225,6 @@ describe("Sona at end of turn — float energy off ready runes, ready them again
     await game.p1.cast("discipline", { targets: "sona" });
     await bothPass(game);
     await bothPass(game);
-    await game.p1.pick(...RUNES);
     await game.settle();
     expect(game.turnPlayer()).toBe(P2);
     expect(game.p1.energy()).toBe(0);
@@ -241,7 +237,6 @@ describe("Sona at end of turn — float energy off ready runes, ready them again
     const game = await atEndOfTurn();
     await floatFour(game);
     await bothPass(game);
-    await game.p1.pick(...RUNES);
     await game.settle(); // → P2's main phase
     await game.p2.do("addResources", { energy: 2 });
     await game.p2.cast("p2Discipline", { targets: "guard" });
@@ -267,7 +262,6 @@ describe("Sona at end of turn — float energy off ready runes, ready them again
     const game = await atEndOfTurn();
     await floatFour(game);
     await bothPass(game);
-    await game.p1.pick(...RUNES);
     await game.settle();
     expect(game.turnPlayer()).toBe(P2);
     await game.advanceTurn();
@@ -311,6 +305,7 @@ describe("Sona at end of turn — float energy off ready runes, ready them again
   test("(e) contrast in one line: with Sona at bf1 End Turn leaves P1 holding priority in the Ending Step (a window to tap); with Sona in base it does not", async () => {
     const atBf = await board().build();
     await atBf.p1.endTurn();
+    await atBf.p1.pick(...RUNES); // the finalization choice comes first (402.2)
     expect(atBf.decision()).toMatchObject({ context: "chain", kind: "action", seat: P1 });
     expect(atBf.p1.can("tapRune", "r1")).toBe(true);
 

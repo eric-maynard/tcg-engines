@@ -44,6 +44,12 @@ describe("Ruling 40b59043b8e603fe — no priority after Annie's end-of-turn read
     await game.p1.endTurn();
     expect(game.phase()).toBe("ending");
     expect(game.chain()).toEqual([expect.objectContaining({ cardId: "annie", controller: P1, triggered: true })]);
+    // rule 402.2 — "ready up to 2 runes" names them while the trigger is finalized; they are still
+    // EXHAUSTED until it resolves, so this hands nothing to Gust yet.
+    const fin = game.decision();
+    if (fin?.kind === "pick" && fin.seat === P1) {
+      await game.p1.pick(...fin.options.map((o) => o.key));
+    }
     expect(game.decision()).toMatchObject({ context: "chain", kind: "action", seat: P1 });
     expect(game.p1.can("cast", "gust")).toBe(false); // runes still exhausted, 0 energy
     expect(game.p1.can("tapRune")).toBe(false);

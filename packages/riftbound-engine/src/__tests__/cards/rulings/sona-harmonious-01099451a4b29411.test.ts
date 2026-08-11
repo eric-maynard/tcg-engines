@@ -47,6 +47,12 @@ describe("Ruling 01099451a4b29411 — killing Sona / Renata in response does not
     await game.p1.endTurn();
     expect(game.phase()).toBe("ending");
     expect(game.chain()).toEqual([expect.objectContaining({ cardId: "sona", controller: P1, triggered: true })]);
+    // rule 402.2 / 355.5 — "ready up to 4 friendly runes" names its runes while the trigger is
+    // finalized, before anyone holds priority.
+    const fin = game.decision();
+    if (fin?.kind === "pick" && fin.seat === P1) {
+      await game.p1.pick(...fin.options.map((o) => o.key));
+    }
     await game.p1.passPriority();
     expect(game.decision()).toMatchObject({ context: "chain", kind: "action", seat: P2 });
     expect(game.p2.can("cast", "snipe")).toBe(true);

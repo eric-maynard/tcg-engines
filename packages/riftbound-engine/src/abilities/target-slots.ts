@@ -24,10 +24,13 @@
  * `executeResolvedItem` strips the slot ids off the positional list again
  * before handing it to the effect as `boundTargets`.
  *
- * Runes ("ready up to 2 runes") and private-zone picks keep their
- * resolution-time prompt (416-style pool objects / hidden information); so do
- * `spend-buff` ("spend any number of buffs" is a payment) and Might-referencing
- * splits (Alpha Strike is a spell and names its set at play time).
+ * Runes are on the board too (rule 355.9.a, and the 355.10.f example "Recycle a
+ * rune you control" TARGETS one), so "ready up to N runes" is a slot like any
+ * other — a rune channelled after the item was finalized can never be one of
+ * them. Private-zone picks keep their resolution-time prompt (hidden
+ * information); so do `spend-buff` ("spend any number of buffs" is a payment)
+ * and Might-referencing splits (Alpha Strike is a spell and names its set at
+ * play time).
  * Leaf module: must not import move definitions.
  */
 import type { CardId as CoreCardId } from "@tcg/core";
@@ -52,6 +55,8 @@ export interface MultiPickSlot {
 }
 
 const PRIVATE_LOCATIONS: readonly string[] = ["hand", "deck", "trash", "banishment", "anywhere"];
+/** rule 355.16 — conditions only an earlier instruction of the SAME resolution answers. */
+const RESOLUTION_DETERMINED_CONDITIONS: readonly string[] = ["discarded-card-type"];
 /** Instructions whose "any number"/"up to" set is a payment or gathers its own candidates. */
 const SELF_GATHERING_STEPS: readonly string[] = ["spend-buff", "play", "look", "reveal", "discard", "recycle", "predict"];
 
@@ -75,7 +80,7 @@ function slotShapeOf(node: AnyEffect): Omit<MultiPickSlot, "path" | "node"> | un
   if (node.chooseAtResolution === true || t.chooseAtResolution === true) {
     return undefined;
   }
-  if (typeof t.type !== "string" || ["self", "trigger-source", "player", "battlefield", "pending-value", "rune", "card"].includes(t.type)) {
+  if (typeof t.type !== "string" || ["self", "trigger-source", "player", "battlefield", "pending-value", "card"].includes(t.type)) {
     return undefined;
   }
   if (typeof t.location === "string" && PRIVATE_LOCATIONS.includes(t.location)) {
@@ -131,6 +136,13 @@ export function collectMultiPickSlots(effect: unknown, path = "", out: MultiPick
     return out;
   }
   if (node.type === "conditional") {
+    // rule 355.16 (unl-080-219 Hwei) — a branch selected by something an EARLIER
+    // instruction of this same item produces (the discarded card's type) is not
+    // known while the item is finalized, so nothing inside it may be pre-locked;
+    // its picks happen as that branch resolves.
+    if (RESOLUTION_DETERMINED_CONDITIONS.includes(String((node.condition as AnyEffect | undefined)?.type))) {
+      return out;
+    }
     collectMultiPickSlots(node.then, join(path, "then"), out);
     collectMultiPickSlots(node.else, join(path, "else"), out);
     return out;

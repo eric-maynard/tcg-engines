@@ -6,7 +6,7 @@
  * Rules: 383.4.a (play effects trigger once the played permanent is on the board and go on the chain
  * as triggered items), 385.1 (a triggered ability only works from the board — a Gemdragon in hand sees
  * nothing), 415 (Ready: exhausted → ready; the runes are then usable again this very turn), "up to 2"
- * = 0, 1 or 2 chosen on resolution, "you play … another Dragon" = a FRIENDLY unit with the Dragon tag
+ * = 0, 1 or 2 chosen as the trigger is finalized (402.2 / 355.5), "you play … another Dragon" = a FRIENDLY unit with the Dragon tag
  * other than me (so my own arrival is exactly one trigger, never two), "runes" = your own runes.
  *
  * Head-judge notes — trickiest situations for THIS card:
@@ -50,12 +50,13 @@ describe("Gentle Gemdragon (unl-104-219)", () => {
     await game.p1.play("gem");
     expect(game.p1.energy()).toBe(0);
     expect(game.chain()).toEqual([expect.objectContaining({ cardId: "gem", controller: P1, triggered: true })]); // one, not two
-    await game.p1.passPriority();
-    await game.p2.passPriority();
+    // rule 402.2 / 355.5 — the runes are named while the trigger is FINALIZED, before priority.
     const d = game.decision() as PickDecision;
     expect(d).toMatchObject({ kind: "pick", max: 2, seat: P1 });
     const [a, b] = game.p1.runes({ ready: false });
     await game.p1.pick(a as string, b as string);
+    await game.p1.passPriority();
+    await game.p2.passPriority();
     await game.settle();
     expect(game.p1.runes({ ready: true }).sort()).toEqual([a, b].sort());
     expect(game.p1.runes({ ready: false })).toHaveLength(6);
@@ -73,10 +74,10 @@ describe("Gentle Gemdragon (unl-104-219)", () => {
     const game = await scenario().runes(P1, "body", 8).hand(P1, CARD, "gem").build();
     await game.p1.tapRunes(8);
     await game.p1.play("gem");
-    await game.p1.passPriority();
-    await game.p2.passPriority();
     const [a, b] = game.p1.runes({ ready: false });
     await game.p1.pick(a as string, b as string);
+    await game.p1.passPriority();
+    await game.p2.passPriority();
     await game.settle();
     await game.p1.tapRunes(2);
     expect(game.p1.energy()).toBe(2);
@@ -87,13 +88,13 @@ describe("Gentle Gemdragon (unl-104-219)", () => {
     const one = await scenario().resources(P1, { energy: 7 }).rune(P1, "body", { alias: "tapped" }).rune(P1, "body", { alias: "r2" }).rune(P1, "body", { alias: "r3" }).hand(P1, CARD, "gem").build();
     await one.p1.tapRune("tapped");
     await one.p1.play("gem");
-    await one.p1.passPriority();
-    await one.p2.passPriority();
     expect(offered(one.decision())).toContain("tapped");
     await one.p1.pick("tapped");
     if (one.decision()?.kind === "pick") {
       await one.p1.decline(); // no second rune wanted
     }
+    await one.p1.passPriority();
+    await one.p2.passPriority();
     await one.settle();
     expect(one.state("tapped").isReady).toBe(true);
     expect(one.p1.runes({ ready: true })).toHaveLength(3);
@@ -102,10 +103,10 @@ describe("Gentle Gemdragon (unl-104-219)", () => {
     const none = await scenario().runes(P1, "body", 8).hand(P1, CARD, "gem").build();
     await none.p1.tapRunes(8);
     await none.p1.play("gem");
-    await none.p1.passPriority();
-    await none.p2.passPriority();
     expect((none.decision() as PickDecision).allowDecline).toBe(true);
     await none.p1.decline();
+    await none.p1.passPriority();
+    await none.p2.passPriority();
     await none.settle();
     expect(none.p1.runes({ ready: true })).toHaveLength(0);
     expect(none.chain()).toEqual([]);
@@ -118,10 +119,10 @@ describe("Gentle Gemdragon (unl-104-219)", () => {
     await game.p1.tapRunes(5);
     await game.p1.play("drake");
     expect(game.chain()).toEqual([expect.objectContaining({ cardId: "gem", controller: P1, triggered: true })]);
-    await game.p1.passPriority();
-    await game.p2.passPriority();
     const [a, b] = game.p1.runes({ ready: false });
     await game.p1.pick(a as string, b as string);
+    await game.p1.passPriority();
+    await game.p2.passPriority();
     await game.settle();
     expect(game.zoneOf("drake")).toBe("base");
     expect(game.p1.runes({ ready: true })).toHaveLength(2);
@@ -158,12 +159,11 @@ describe("Gentle Gemdragon (unl-104-219)", () => {
       ["gem1", true],
       ["gem2", true],
     ]);
-    for (let i = 0; i < 2; i++) {
-      await game.p1.passPriority();
-      await game.p2.passPriority();
-      const [a, b] = game.p1.runes({ ready: false });
-      await game.p1.pick(a as string, b as string);
-    }
+    // Both items are finalized in the same sweep, oldest first, and each names its own two runes
+    // before anything readies — so the second pick still sees all eight exhausted (402.2).
+    const exhausted = game.p1.runes({ ready: false });
+    await game.p1.pick(exhausted[0] as string, exhausted[1] as string);
+    await game.p1.pick(exhausted[2] as string, exhausted[3] as string);
     await game.settle();
     expect(game.p1.runes({ ready: true })).toHaveLength(4);
     expect(game.p1.runes({ ready: false })).toHaveLength(4);
@@ -180,8 +180,6 @@ describe("Gentle Gemdragon (unl-104-219)", () => {
       .hand(P1, CARD, "gem")
       .build();
     await game.p1.play("gem");
-    await game.p1.passPriority();
-    await game.p2.passPriority();
     const opts = offered(game.decision());
     expect(opts).toEqual(expect.arrayContaining(["mine1", "mine2"]));
     expect(opts).not.toContain("theirs");
@@ -200,10 +198,10 @@ describe("Gentle Gemdragon (unl-104-219)", () => {
     await game.p1.tapRunes(8);
     await game.p1.play("gem", { to: "bf1" });
     expect(game.chain()).toEqual([expect.objectContaining({ cardId: "gem", triggered: true })]);
-    await game.p1.passPriority();
-    await game.p2.passPriority();
     const [a, b] = game.p1.runes({ ready: false });
     await game.p1.pick(a as string, b as string);
+    await game.p1.passPriority();
+    await game.p2.passPriority();
     await game.settle();
     expect(game.zoneOf("gem")).toBe("battlefield-bf1");
     expect(game.p1.runes({ ready: true })).toHaveLength(2);

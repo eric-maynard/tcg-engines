@@ -72,6 +72,11 @@ describe("Dark Child - Starter (ogs-017-024)", () => {
     expect(game.turnPlayer()).toBe(P1);
     expect(game.chain()).toEqual([expect.objectContaining({ cardId: "annie", controller: P1, name: "Dark Child - Starter", triggered: true })]);
     expect(game.p1.runes({ ready: true })).toHaveLength(0);
+    // rule 402.2 — the runes are named while the trigger is finalized; naming is not readying.
+    const fin = game.decision();
+    expect(fin).toMatchObject({ kind: "pick", seat: P1, timing: "FIN" });
+    await game.p1.pick(...(fin?.kind === "pick" ? fin.options.slice(0, 2).map((o) => o.key) : []));
+    expect(game.p1.runes({ ready: true })).toHaveLength(0);
     await game.p1.pass();
     expect(game.decision()).toMatchObject({ context: "chain", kind: "action", seat: P2 });
     expect(game.p1.runes({ ready: true })).toHaveLength(0);

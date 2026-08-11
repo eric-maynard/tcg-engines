@@ -95,8 +95,30 @@ async function atEndOfTurn(opts: { sonaAt?: "bf1" | "base" } = {}): Promise<Game
   return game;
 }
 
+/**
+ * rule 402.2 / 355.5 — each of P1's two triggers names its rune set while it is FINALIZED, before
+ * anyone holds priority; the 383.3.d ordering offer (a soft prompt raised once the whole batch is
+ * finalized) comes after them. Answers whichever picks are pending, by source.
+ */
+const FIN_PICKS = { darkChild: ["r1", "r2"], sona: ["r3", "r4", "r5", "r6"] } as const;
+
+async function finRunes(game: Game, picks: { darkChild: readonly string[]; sona: readonly string[] } = FIN_PICKS): Promise<void> {
+  for (let i = 0; i < 4; i++) {
+    const d = game.decision();
+    if (d?.kind !== "pick" || d.seat !== P1) {
+      return;
+    }
+    const src = d.source?.cardId;
+    if (src !== "sona" && src !== "darkChild") {
+      return;
+    }
+    await game.p1.pick(...picks[src]);
+  }
+}
+
 /** Answer P1's order offer so that `top` is the higher of P1's two items (resolves before the other). */
 async function orderP1Only(game: Game, top: "sona" | "darkChild"): Promise<void> {
+  await finRunes(game);
   const d = game.decision();
   expect(d?.kind).toBe("order");
   if (d?.kind !== "order") {
@@ -142,6 +164,7 @@ describe("Sona + Dark Child + Sanction — three simultaneous 'end of turn' trig
     const game = await atEndOfTurn();
     expect(game.phase()).toBe("ending");
     expect(game.turnPlayer()).toBe(P1);
+    await finRunes(game); // 402.2 first, then the 383.3.d order offer
     const d = game.decision();
     expect(d).toMatchObject({ kind: "order", seat: P1 });
     const items = d?.kind === "order" ? d.items.map((i) => i.card) : [];
@@ -183,16 +206,11 @@ describe("Sona + Dark Child + Sanction — three simultaneous 'end of turn' trig
     const game = await atEndOfTurn();
     await orderP1(game, "darkChild");
     expect(game.chain().filter((c) => c.controller === P1).map((c) => c.cardId)).toEqual(["sona", "darkChild"]); // bottom → top
-    await bothPass(game);
-    expect(game.decision()).toMatchObject({ kind: "pick", seat: P1, source: { cardId: "darkChild" } });
-    expect(game.decision()).toMatchObject({ max: 2 });
-    await game.p1.pick("r1", "r2");
+    await bothPass(game); // Dark Child resolves: the r1,r2 it named at finalization ready
     expect(ready(game)).toEqual(["r1", "r2"]);
     expect(game.chain().map((c) => c.cardId)).toEqual(["sona"]);
     expect(game.phase()).toBe("ending");
-    await bothPass(game);
-    expect(game.decision()).toMatchObject({ kind: "pick", max: 4, seat: P1, source: { cardId: "sona" } });
-    await game.p1.pick("r3", "r4", "r5", "r6");
+    await bothPass(game); // then Sona's r3–r6
     expect(ready(game)).toEqual(["r1", "r2", "r3", "r4", "r5", "r6"]);
     expect(game.state("r7").isExhausted).toBe(true);
   });
@@ -201,21 +219,19 @@ describe("Sona + Dark Child + Sanction — three simultaneous 'end of turn' trig
     const game = await atEndOfTurn();
     await orderP1(game, "sona");
     expect(game.chain().filter((c) => c.controller === P1).map((c) => c.cardId)).toEqual(["darkChild", "sona"]);
-    await bothPass(game);
-    expect(game.decision()).toMatchObject({ kind: "pick", max: 4, seat: P1, source: { cardId: "sona" } });
-    await game.p1.pick("r1", "r2", "r3", "r4");
-    expect(ready(game)).toEqual(["r1", "r2", "r3", "r4"]);
+    await bothPass(game); // Sona resolves first: her r3–r6 ready
+    expect(ready(game)).toEqual(["r3", "r4", "r5", "r6"]);
     expect(game.chain().map((c) => c.cardId)).toEqual(["darkChild"]);
-    await bothPass(game);
-    expect(game.decision()).toMatchObject({ kind: "pick", max: 2, seat: P1, source: { cardId: "darkChild" } });
-    await game.p1.pick("r5", "r6");
+    await bothPass(game); // then Dark Child's r1,r2
     expect(ready(game)).toEqual(["r1", "r2", "r3", "r4", "r5", "r6"]);
   });
 
   test("Sona's pick offers only FRIENDLY runes ('ready up to 4 friendly runes') — none of P2's", async () => {
     const game = await atEndOfTurn();
-    await orderP1(game, "sona");
-    await bothPass(game);
+    // her finalization pick, before anything is ordered or resolved
+    while (game.decision()?.kind === "pick" && game.decision()?.source?.cardId !== "sona") {
+      await game.p1.pick(...FIN_PICKS.darkChild);
+    }
     const d = game.decision();
     const offered = d?.kind === "pick" ? d.options.map((o) => o.card ?? o.key) : [];
     expect(offered.sort()).toEqual(["r1", "r2", "r3", "r4", "r5", "r6", "r7"]);
@@ -226,6 +242,7 @@ describe("Sona + Dark Child + Sanction — three simultaneous 'end of turn' trig
   test("contrast (383.2.a.1 — Sona is the rule's own example): with Sona in BASE her intervening-if fails, so she never triggers; only Dark Child goes on the chain and P1, now controlling a single trigger, gets NO order decision", async () => {
     const game = await atEndOfTurn({ sonaAt: "base" });
     expect(game.phase()).toBe("ending");
+    await finRunes(game); // only Dark Child triggered — its set is named at finalization (402.2)
     expect(game.decision()?.kind).not.toBe("order");
     expect(game.chain().filter((c) => c.controller === P1).map((c) => c.cardId)).toEqual(["darkChild"]);
     // 337.4 — P2's Sanction Disempower is still the newest item (it sits on top of Dark Child),
@@ -238,8 +255,7 @@ describe("Sona + Dark Child + Sanction — three simultaneous 'end of turn' trig
   test("320.1: while an end-of-turn trigger is pending P1 may use [Add] (exhaust a readied rune → +[1]) and Reactions, but no Action-speed play, no move, no second endTurn", async () => {
     const game = await atEndOfTurn();
     await orderP1(game, "darkChild");
-    await bothPass(game);
-    await game.p1.pick("r1", "r2"); // Dark Child readied r1, r2; Sona still on the chain
+    await bothPass(game); // Dark Child resolves, readying the r1, r2 it named; Sona still on the chain
     expect(game.chain().map((c) => c.cardId)).toEqual(["sona"]);
     expect(game.p1.energy()).toBe(0);
     expect(game.p1.can("tapRune", "r1")).toBe(true);
@@ -260,11 +276,9 @@ describe("Sona + Dark Child + Sanction — three simultaneous 'end of turn' trig
     const game = await atEndOfTurn();
     await orderP1(game, "darkChild");
     await bothPass(game);
-    await game.p1.pick("r1", "r2");
     await game.p1.tapRune("r1"); // floating [1]
     expect(game.p1.energy()).toBe(1);
     await bothPass(game);
-    await game.p1.pick("r3", "r4", "r5", "r6");
     // Chain empty in the Ending Step → no priority for anyone; the turn rolls over.
     expect(game.chain()).toEqual([]);
     const r = await game.settle();
@@ -286,9 +300,7 @@ describe("Sona + Dark Child + Sanction — three simultaneous 'end of turn' trig
     const game = await atEndOfTurn();
     await orderP1(game, "darkChild");
     await bothPass(game);
-    await game.p1.pick("r1", "r2");
     await bothPass(game);
-    await game.p1.pick("r3", "r4", "r5", "r6");
     await game.settle(); // → P2's main phase
     expect(game.turnPlayer()).toBe(P2);
     await game.p2.tapRunes(2);
