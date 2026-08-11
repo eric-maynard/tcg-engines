@@ -20,6 +20,20 @@ export function recordAdditionalCostsPaid(
   holder.additionalCostsPaid[cardId] = paidIds.length > 0 ? [...paidIds] : false;
 }
 
+/**
+ * rule 805.1.a / 356.2.b.1 — additional costs another permanent GRANTS this
+ * play (a board static's [Accelerate]) are not the card's own printed
+ * additional cost, so a bare "if you paid the additional cost" never keys on
+ * them; only an explicit `costId` reaches one.
+ * Ids mirror `moves/play/cost-model.ts ADDITIONAL_COST_IDS` (leaf module — no import).
+ */
+const GRANTED_COST_IDS = new Set(["accelerate-granted"]);
+
+/** Is `id` an additional cost another permanent GRANTED this play (rather than one the card prints)? */
+export function isGrantedAdditionalCostId(id: string): boolean {
+  return GRANTED_COST_IDS.has(id);
+}
+
 /** Was any (or the named) additional cost of `cardId` paid? Reads the id list and the legacy boolean. */
 export function additionalCostWasPaid(
   state: RiftboundGameState,
@@ -31,7 +45,7 @@ export function additionalCostWasPaid(
     return true;
   }
   if (Array.isArray(v)) {
-    return costId === undefined ? v.length > 0 : v.includes(costId);
+    return costId === undefined ? v.some((id) => !GRANTED_COST_IDS.has(id)) : v.includes(costId);
   }
   return false;
 }

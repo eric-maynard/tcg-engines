@@ -50,6 +50,7 @@ import { resolveTarget } from "../../../abilities/target-resolver";
 import { playIsForbidden, selfPlayIsForbidden } from "../../../abilities/play-restrictions";
 import { createInteractionState, getActiveShowdown, getTurnState } from "../../../chain";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
+import { isGrantedAdditionalCostId } from "../../../operations/additional-costs-paid";
 import type { BuffCardsIo } from "../../../operations/buff-counters";
 import { removeOneBuffCounter } from "../../../operations/buff-counters";
 import { removeFromBoard } from "../../../operations/leave-board";
@@ -1423,7 +1424,11 @@ export function payUnitPlayCosts(
   const paidIds = option.total.paidIds.filter((id) => id !== ADDITIONAL_COST_IDS.deflect);
   return {
     entersReady: option.total.entersReady,
-    paidAdditionalCost: paidIds.length > 0,
+    // rule 805.1.a / 356.2.b.1 — the bare "if you paid the additional cost"
+    // payoff keys on the card's OWN printed additional cost; an [Accelerate]
+    // another permanent grants this play is a separate election and buys only
+    // its own enter-ready.
+    paidAdditionalCost: paidIds.some((id) => !isGrantedAdditionalCostId(id)),
     paidIds,
     suspended: draft.pendingChoice !== undefined && draft.pendingChoice !== null,
   };
