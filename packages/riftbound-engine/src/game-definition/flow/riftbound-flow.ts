@@ -30,7 +30,7 @@ import { fireTriggers } from "../../abilities/trigger-runner";
 import { addToChain, createInteractionState } from "../../chain/chain-state";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import { getChannelCountLimit } from "../../operations/channel-limits";
-import { hasSkipDrawPhaseGrant } from "../moves/play/cost";
+import { hasSkipDrawPhaseGrant, hasSkipPhaseGrant } from "../moves/play/cost";
 import { orderBatchTriggersByTurnOrder } from "../../operations/leave-board";
 import {
   finalizePendingItems,
@@ -397,6 +397,17 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
                 ...context.state.turn,
                 phase: "beginning",
               };
+
+              // rule 443.1.a.2 / 443.2.a — "Skip your Beginning Phase" replaces
+              // the whole phase with nothing, the Scoring Step included: no
+              // [Temporary] kills, no start-of-phase triggers, no Hold scored
+              // (so 470's once-per-battlefield allowance stays available), and
+              // the skip itself triggers nothing. One-sided, like the Draw skip.
+              const beginningPlayer = (context.state.turn?.activePlayer ||
+                context.getCurrentPlayer()) as string;
+              if (hasSkipPhaseGrant(context.state, context.zones, beginningPlayer, "beginning")) {
+                return;
+              }
 
               // Kill Temporary permanents before scoring (rule 728.1.b)
               const turnPlayerId = context.getCurrentPlayer();

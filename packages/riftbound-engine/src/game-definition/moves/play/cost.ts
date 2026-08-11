@@ -749,7 +749,23 @@ export function hasSkipDrawPhaseGrant(
   zones: { getCardsInZone: (zone: CoreZoneId, player: CorePlayerId) => readonly CoreCardId[] },
   playerId: string,
 ): boolean {
+  return hasSkipPhaseGrant(state, zones, playerId, "draw");
+}
+
+/**
+ * rule 443.1.a / 443.1.a.2 — "Skip your <phase> Phase": the named phase is
+ * replaced with nothing for that player, steps included (skipping the Beginning
+ * Phase takes its Scoring Step with it, so no Hold is scored), and the skip
+ * itself triggers nothing (443.2.a). One-sided, exactly like the Draw case.
+ */
+export function hasSkipPhaseGrant(
+  state: RiftboundGameState,
+  zones: { getCardsInZone: (zone: CoreZoneId, player: CorePlayerId) => readonly CoreCardId[] },
+  playerId: string,
+  phase: string,
+): boolean {
   const registry = getGlobalCardRegistry();
+  const printed = new RegExp(`skip your ${phase} phase`, "i");
   const zoneIds = [
     "base",
     ...Object.keys(state.battlefields ?? {}).map((bfId) => getBattlefieldZoneId(bfId) as string),
@@ -760,10 +776,10 @@ export function hasSkipDrawPhaseGrant(
         const effect = (
           ability as { effect?: { type?: string; phase?: string; text?: string } }
         )?.effect;
-        if (effect?.type === "skip-phase" && effect.phase === "draw") {
+        if (effect?.type === "skip-phase" && effect.phase === phase) {
           return true;
         }
-        if (typeof effect?.text === "string" && /skip your draw phase/i.test(effect.text)) {
+        if (typeof effect?.text === "string" && printed.test(effect.text)) {
           return true;
         }
       }
