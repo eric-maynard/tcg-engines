@@ -99,12 +99,9 @@ describe("Tail-Cloaked Matriarch × Shakedown — the trash pick is locked at fi
     expect(game.decision()).toMatchObject({ kind: "yes-no", seat: P1, timing: "FIN" });
   });
 
-  // Expected (402.2 + 355.7 + 355.10.a): the trash is a PUBLIC zone, so "a unit in your trash" is a TARGET and must
-  // be named in the same finalization step as the "you may" — a `pick` with timing FIN, before priority. Actual: the
-  // card's trigger is declared `chooseAtResolution`, so the engine finalizes the item with no target and asks the
-  // pick only as the item RESOLVES (timing RES, `reveal-and-pick`) — the choice is never locked in, which is what
-  // (b) below then goes wrong on.
-  test.failing("BUG: (a) the trash pick is a TARGET in a public zone and must be made at finalization too (402.2 / 355.10.a), not deferred to resolution", async () => {
+  // rule 402.2 / 355.7 / 355.10.a: the trash is a PUBLIC zone, so "a unit in your trash" is a TARGET and is named in
+  // the same finalization step as the "you may" — a `pick` with timing FIN, before anyone holds priority.
+  test("(a) the trash pick is a TARGET in a public zone and must be made at finalization too (402.2 / 355.10.a), not deferred to resolution", async () => {
     const game = await board().build();
     await empower(game);
     await game.p1.yes();
@@ -116,25 +113,27 @@ describe("Tail-Cloaked Matriarch × Shakedown — the trash pick is locked at fi
     const game = await board().build();
     await empower(game);
     await game.p1.yes();
-    await game.settle();
     expect(offered(game.decision())).toEqual(["t2"]);
   });
 
-  // Expected (355.15): the option set was snapshotted when the trigger was finalized, when V was alive at bf1. A V
-  // that reaches the trash in response can be neither substituted for T2 nor added to the choice, so the pick still
-  // offers only T2. Actual: the engine gathers trash candidates as the item RESOLVES, so the freshly-killed V is
-  // offered too and P1 may take the better body it was never allowed to choose.
-  test.failing("BUG: (b) a unit that reaches the trash AFTER finalization must not join the choice (355.15) — the engine offers the late V alongside T2", async () => {
+  // rule 355.15: the option set is snapshotted when the trigger is FINALIZED, while V is still alive at bf1 — only T2
+  // is ever offered. A V that reaches the trash in response can be neither substituted for T2 nor added to the choice,
+  // and nothing is re-asked as the item resolves: the pick made at finalization stands.
+  test("(b) a unit that reaches the trash AFTER finalization does not join the choice (355.15) — the locked T2 still resolves and nothing is re-asked", async () => {
     const game = await board().build();
     await empower(game);
     await game.p1.yes();
+    expect(offered(game.decision())).toEqual(["t2"]); // V is alive at bf1, so it is not a candidate
+    await game.p1.pick("t2");
     await game.p1.passPriority();
     await game.p2.cast("shake", { targets: "v" });
     await game.settle();
     await game.p1.pick("1"); // Shakedown's "unless": P1 takes the 6 damage rather than giving P2 two cards
     await game.settle();
     expect(game.zoneOf("v")).toBe("trash");
-    expect(offered(game.decision())).toEqual(["t2"]);
+    expect(game.zoneOf("t2")).toBe("base"); // the locked pick, not the better body that arrived later
+    expect(game.decision()).toMatchObject({ context: "main", kind: "action", seat: P1 });
+    expect(game.violations()).toEqual([]);
   });
 
   test("(b) the trigger still resolves after the interruption: T2 is played to P1's base for free (the spare energy is untouched) and V stays in the trash", async () => {
@@ -142,12 +141,11 @@ describe("Tail-Cloaked Matriarch × Shakedown — the trash pick is locked at fi
     await empower(game);
     await game.p1.yes();
     expect(game.p1.resources()).toEqual({ energy: 1, power: { chaos: 0 } });
+    await game.p1.pick("t2"); // rule 402.2 — the target is named at finalization, before anyone holds priority
     await game.p1.passPriority();
     await game.p2.cast("shake", { targets: "v" });
     await game.settle();
     await game.p1.pick("1");
-    await game.settle();
-    await game.p1.pick("t2");
     await game.settle();
     expect(game.zoneOf("t2")).toBe("base");
     expect(game.state("t2")).toMatchObject({ controller: P1, isExhausted: true });
@@ -176,7 +174,7 @@ describe("Tail-Cloaked Matriarch × Shakedown — the trash pick is locked at fi
   // removed from the chain during finalization — nothing is asked and no chain item survives. Actual: the engine
   // finalizes the item anyway (its trash choice is deferred to resolution, so finalization sees no target to fail on)
   // and raises an acceptable "you may" whose acceptance then does nothing.
-  test.failing("BUG: (d) a trigger with no legal choice is removed from the chain during finalization (402.4) — the engine keeps it and still asks the 'you may'", async () => {
+  test("(d) a trigger with no legal choice is removed from the chain during finalization (402.4)", async () => {
     const game = await scenario()
       .resources(P1, { energy: 3, power: { chaos: 1 } })
       .unit(P1, "base", MATRIARCH, "mat")

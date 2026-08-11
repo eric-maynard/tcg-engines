@@ -930,17 +930,21 @@ const JSON_CARD_ENGINE_FLAGS: Record<string, Record<string, unknown>> = {
       },
       {
         effect: {
-          // rule 402.1 / 355.10 — the printed "you may" governs the whole
-          // instruction ("you may CHOOSE a unit … Play it"), so finalization
-          // asks a plain yes/no and the trash pick waits for resolution;
-          // rule 355.2: "to your base" pins the destination, so no location
-          // is ever offered.
-          chooseAtResolution: true,
+          // rule 402.1 / 402.2 / 355.10.a — the printed "you may" is decided at
+          // finalization and every choice the ability needs is made in that same
+          // step: the trash is a PUBLIC zone, so the unit is a TARGET named there
+          // and locked (355.15), not re-picked on resolution. Same shape as
+          // Spectral Matron (ogn-226-298); rule 355.2: "to your base" pins the
+          // destination, so no location is ever offered.
           from: "trash",
           ignoreCost: true,
           target: {
             controller: "friendly",
             filter: [{ energyCost: { lte: 3 } }, { powerCost: { lte: 1 } }],
+            location: "trash",
+            // rule 355.10.d.2 — a lone legal target is still a target: the pile
+            // pick is surfaced even when the trash holds exactly one candidate.
+            promptWhenSingle: true,
             type: "unit",
           },
           toLocation: "base",

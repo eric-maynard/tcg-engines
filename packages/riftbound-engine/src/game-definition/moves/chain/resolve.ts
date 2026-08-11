@@ -376,6 +376,33 @@ export function optInIsPerformable(
         }
       }
     }
+    // rule 402.4 / 355.10.a (rule-id: ven-104-166 Tail-Cloaked Matriarch) — "you
+    // may play a <card> from your trash" names its card in a PUBLIC pile as the
+    // item is FINALIZED (the same choice the target planning below removes the
+    // item over). With nothing eligible in the pile there is no legal choice to
+    // make, so the Pending Item leaves the Chain before the "you may" is asked
+    // — and that removal is not a counter (402.4.a).
+    const pileFrom = (leadEffect as { from?: unknown } | undefined)?.from;
+    const pileTarget =
+      opts.atFinalization === true &&
+      leadEffect?.type === "play" &&
+      (pileFrom === "trash" || pileFrom === "banishment")
+        ? ((leadEffect as { target?: TargetDescriptor }).target as TargetDescriptor | undefined)
+        : undefined;
+    if (
+      pileTarget !== undefined &&
+      typeof pileTarget === "object" &&
+      (pileTarget as { location?: unknown }).location === pileFrom &&
+      (pileTarget as { quantity?: unknown }).quantity === undefined
+    ) {
+      const pileCandidates = resolveTarget({ ...pileTarget, quantity: "all" }, {
+        ...buildEffectContext(draft, resolved.controller, resolved.cardId, context),
+        choosing: true,
+      } as Parameters<typeof resolveTarget>[1]);
+      if (pileCandidates.length === 0) {
+        return false;
+      }
+    }
     // rule 355.8 — an ability that must choose a Game Object with no legal
     // candidate does nothing, so a "you may" version offers no prompt either.
     // rule-id: unl-205-219 (Abandoned Hall) — "they may give a unit they
