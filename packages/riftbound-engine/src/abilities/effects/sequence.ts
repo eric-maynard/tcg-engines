@@ -124,6 +124,36 @@ const isSelfExhaustCost = (sub: { type?: string; target?: unknown }): boolean =>
   sub.type === "exhaust" &&
   (sub.target === "self" || (sub.target as { type?: string } | undefined)?.type === "self");
 
+/**
+ * rule 355.4.a / 446.1 (rule-id: unl-198-219 Moonfall) — a Move Effect needs a
+ * valid Location OTHER than the mover's current one, so a unit already standing
+ * at the step's fixed destination ("… move up to one enemy unit to THAT
+ * battlefield") is never a legal choice and is not offered. Only a destination
+ * this step already knows narrows the pool; a caster-chosen one does not.
+ */
+function dropMoversAlreadyThere(
+  sub: unknown,
+  options: readonly string[],
+  ctx: EffectContext,
+  resolverCtx: { readonly battlefieldZone?: string; readonly sourceZone?: string },
+): string[] {
+  const step = sub as { to?: unknown; type?: unknown } | undefined;
+  if (step?.type !== "move") {
+    return [...options];
+  }
+  const to = step.to;
+  const destZone =
+    to === "here"
+      ? (resolverCtx.battlefieldZone ?? ctx.battlefieldZone ?? resolverCtx.sourceZone)
+      : typeof to === "string" && to.startsWith("battlefield-")
+        ? to
+        : undefined;
+  if (typeof destZone !== "string" || !destZone.startsWith("battlefield-")) {
+    return [...options];
+  }
+  return options.filter((id) => ctx.zones.getCardZone(id as CoreCardId) !== destZone);
+}
+
 /** The source permanent is already exhausted, so an "exhaust me" cost is unpayable. */
 function sourceIsExhausted(ctx: EffectContext): boolean {
   const meta = ctx.cards.getCardMeta?.(ctx.sourceCardId as CoreCardId) as
@@ -792,12 +822,16 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
         (subCtx.boundTargets === undefined || pvOptions !== undefined) &&
         ctx.draft.pendingChoice === undefined
       ) {
-        const allOptions =
+        const allOptions = dropMoversAlreadyThere(
+          sub,
           pvOptions ??
-          resolveTarget(
-            { ...(subTarget as TargetDescriptor), quantity: "all" },
-            { ...resolverCtx, choosing: true } as Parameters<typeof resolveTarget>[1],
-          );
+            resolveTarget(
+              { ...(subTarget as TargetDescriptor), quantity: "all" },
+              { ...resolverCtx, choosing: true } as Parameters<typeof resolveTarget>[1],
+            ),
+          ctx,
+          resolverCtx as { battlefieldZone?: string; sourceZone?: string },
+        );
         // rule 809.1.c / 809.1.c.1 / 809.1.d (356.2.a.2) — [Deflect] taxes
         // ABILITIES as well as spells and the surcharge is incurred when the
         // target is CHOSEN, even when the taxed card is the ONLY candidate

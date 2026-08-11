@@ -492,6 +492,21 @@ export function resolveTarget(
     filtered = filtered.filter((id) => id !== ctx.sourceCardId);
   }
 
+  // rule-id: ven-041-166 — "for each Equipment attached to ME": the descriptor
+  // names the source's OWN attachments (`attachedTo:"self"`), or the ones of a
+  // named card, never every Equipment on the board.
+  if (target.attachedTo !== undefined) {
+    const holder = target.attachedTo === "self" ? ctx.sourceCardId : target.attachedTo;
+    filtered =
+      holder === undefined
+        ? []
+        : filtered.filter(
+            (id) =>
+              (ctx.cards.getCardMeta?.(id as CoreCardId) as { attachedTo?: string } | undefined)
+                ?.attachedTo === holder,
+          );
+  }
+
   // rule 355.9.c (unl-215-219) — "another unit" measured against the trigger's
   // subject: the unit that fired the trigger is never a legal choice.
   if (target.excludeTriggerSource && ctx.triggerSourceId !== undefined) {

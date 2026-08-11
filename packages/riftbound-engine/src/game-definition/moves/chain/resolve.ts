@@ -35,6 +35,7 @@ import { fireTriggers } from "../../../abilities/trigger-runner";
 import { withChainItemResolution } from "../../../chain/resolution-guard";
 import { cleanupAndFireDeaths } from "../../../cleanup/post-move-cleanup";
 import { newObjectTargetsFor } from "../../../operations/leave-board";
+import type { BoardIO } from "../../../operations/points";
 import { checkVictory } from "../../../operations/points";
 import { areAllies } from "../../../operations/teams";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
@@ -62,9 +63,14 @@ type Defs = GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCar
  * and the Cleanup's first task is the victory check. Effects that changed
  * scores mid-resolution deliberately skipped it (rule 321), so it happens here,
  * comparing every player exactly once against the final post-resolution scores.
+ *
+ * rule 194.3.a / 483.3.a — the check reads each seat's CURRENT Victory Score, so
+ * the board io must be threaded through: without it `effectiveVictoryScore`
+ * falls back to the unmodified base and a seat under an enemy "+1 to the points
+ * opponents need" would wrongly win here (and nowhere else).
  */
-function runPostResolutionVictoryCheck(draft: RiftboundGameState): void {
-  checkVictory(draft);
+function runPostResolutionVictoryCheck(draft: RiftboundGameState, io?: BoardIO): void {
+  checkVictory(draft, io ? { io } : {});
 }
 
 /**
@@ -408,7 +414,16 @@ export function optInIsPerformable(
       optTarget.type !== "battlefield" &&
       optTarget.quantity === undefined
     ) {
-      const optCtx = buildEffectContext(draft, resolved.controller, resolved.cardId, context);
+      // rule 355.9.c (rule-id: unl-215-219 Star Spring) — "another unit they
+      // control here" measures "another" against the unit whose play fired the
+      // trigger, so this gate must see the same trigger subject the
+      // finalization planning does; otherwise the just-played unit is counted
+      // as a candidate and a target-less trigger still opens a prompt.
+      const trigSubject = (resolved as { triggerEvent?: { cardId?: unknown } }).triggerEvent?.cardId;
+      const optCtx = {
+        ...buildEffectContext(draft, resolved.controller, resolved.cardId, context),
+        ...(typeof trigSubject === "string" ? { triggerSourceId: trigSubject } : {}),
+      };
       const optCandidates = filterMoveToHere(
         leadEffect,
         resolveTarget({ ...optTarget, quantity: "all" }, {
@@ -678,6 +693,7 @@ export function executeResolvedItem(
       options?: { effect?: ExecutableEffect }[];
       notChosenThisTurn?: boolean;
       _chosenIndex?: unknown;
+      _modeRecorded?: boolean;
     };
     const pickedMode =
       menu.type === "choice" && menu.player === undefined && typeof menu._chosenIndex === "number"
@@ -691,7 +707,8 @@ export function executeResolvedItem(
       (pickedQty === "any" || (typeof pickedQty === "object" && pickedQty !== null));
     const picked = multiPickUnbound ? undefined : pickedMode;
     if (picked) {
-      if (menu.notChosenThisTurn === true) {
+      // rule 355.3 — already recorded at finalization (`pending-choice.ts`) ⇒ do not double-count.
+      if (menu.notChosenThisTurn === true && menu._modeRecorded !== true) {
         // rule 517.2.b — "one you haven't already chosen this turn": turn-stamped record.
         const sourceId = resolved.cardId as CoreCardId;
         const currentTurn = draft.turn?.number ?? 0;
@@ -1929,7 +1946,7 @@ export function withDeferredSpellSettle<
           // a point gained mid-resolution wins once the spell is in the trash,
           // never while it is still parked on the chain (rule 321).
           if (draft.deferredSpellSettle === undefined) {
-            runPostResolutionVictoryCheck(draft as RiftboundGameState);
+            runPostResolutionVictoryCheck(draft as RiftboundGameState, context as BoardIO);
           }
         }
       },
@@ -1984,7 +2001,7 @@ export const passChainPriority: Defs["passChainPriority"] = {
           fireFromHiddenTrigger(resolved, draft, context);
           settleResolvedSpellCard(resolved, context, draft);
         });
-        runPostResolutionVictoryCheck(draft);
+        runPostResolutionVictoryCheck(draft, context as unknown as BoardIO);
 
         // Run state-based checks after resolution (rule 543.3/518).
         // rule-id: ogn-246-298 — units reaped here must emit `die` so
@@ -2042,7 +2059,7 @@ export const resolveChain: Defs["resolveChain"] = {
         fireFromHiddenTrigger(resolved, draft, context);
         settleResolvedSpellCard(resolved, context, draft);
       });
-      runPostResolutionVictoryCheck(draft);
+      runPostResolutionVictoryCheck(draft, context as unknown as BoardIO);
 
       // rule-id: ogn-246-298 — SBA deaths after resolution emit `die`.
       cleanupAndFireDeaths(draft, context);

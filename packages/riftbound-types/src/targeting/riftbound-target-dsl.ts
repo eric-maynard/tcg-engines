@@ -361,6 +361,13 @@ export interface Target {
   readonly attachedToSource?: boolean;
 
   /**
+   * rule-id: ven-041-166 (Riven, Shattered) — "for each Equipment attached to
+   * me": only cards currently attached to this card ("self") — or to the named
+   * card id — match.
+   */
+  readonly attachedTo?: string;
+
+  /**
    * rule-id: ogn-256-298 (Fox-Fire) — aggregate constraint over the CHOSEN
    * set: the summed Might of all selected targets must satisfy this
    * comparison ("any number of units ... with total Might 4 or less").
