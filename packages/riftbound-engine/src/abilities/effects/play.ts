@@ -605,15 +605,8 @@ function replaySelfSpell(effect: ExecutableEffect, ctx: EffectContext): void {
   // rule 354.3 / 359.3.d — the card is being played again, so the parked
   // "place it in the trash" step of the resolution it is leaving no longer
   // applies; dropping it keeps the replayed card on the chain.
-  // rule 350.1 / 419.4.a — but that first cast WAS a completed play: its "when
-  // you play a spell" triggers are still owed, so keep the parked entry alive
-  // for them alone rather than dropping it wholesale.
-  const parkedSettle = ctx.draft.deferredSpellSettle;
-  if (parkedSettle?.cardId === cardId) {
-    ctx.draft.deferredSpellSettle =
-      parkedSettle.playTriggersPending === true
-        ? { ...parkedSettle, playTriggersOnly: true }
-        : undefined;
+  if (ctx.draft.deferredSpellSettle?.cardId === cardId) {
+    ctx.draft.deferredSpellSettle = undefined;
   }
   // rule 715.1 / 317.2.c (rule-id: unl-020-219) — "this deals 1 additional
   // Bonus Damage for each time this spell has dealt damage this turn": one
@@ -855,10 +848,6 @@ export function castSpellFromTrash(
   putPlayedSpellOnChain(bag as unknown as PlayIO, {
     cardId,
     playerId,
-    // rule 419.1 / 811.1 — a spell an effect plays out of the trash is not a
-    // play from hand, and its `play-card` event carries that origin.
-    playedFrom: "trash",
-    playedFromHand: false,
     resolveTo: recycleAfter ? "mainDeck" : "trash",
     via: "effect",
   });

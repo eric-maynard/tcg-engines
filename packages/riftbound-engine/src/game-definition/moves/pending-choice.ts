@@ -97,6 +97,7 @@ import {
   getCardEffectiveMight,
   getDeflectSurcharge,
   getPotentialRuneEnergy,
+  lockedEnergyForPurpose,
   payResourceCost,
   spendablePowerPool,
 } from "./play/cost";
@@ -746,6 +747,26 @@ function optInCostForPayability(
 }
 
 /**
+ * rule 429.4 / 419.3 (unl-186-219 Death from Below) — an opt-in whose payoff is
+ * "play this … for [C]" IS a card being played, so resources earmarked "use
+ * only to play <that card type>" fund it. Returns the earmark purpose of the
+ * play, or `undefined` for every other mid-resolution Pay (which no earmark
+ * may fund).
+ */
+function optInPlayPurpose(sourceCardId: string, effect: unknown): string | undefined {
+  const eff = effect as { type?: string; target?: unknown } | undefined;
+  if (eff?.type !== "play") {
+    return undefined;
+  }
+  // Only a "play ME" instruction names the card up front; a pile pick is not
+  // known here, so it keeps the conservative "no earmark" reading.
+  if (eff.target !== undefined && eff.target !== "self") {
+    return undefined;
+  }
+  return getGlobalCardRegistry().getCardType(sourceCardId);
+}
+
+/**
  * rule-id: sfd-119-221 — whether `playerId` can pay a "you may pay [N] to …"
  * trigger's cost right now (energy, power pips, and [Exhaust] on the source).
  */
@@ -810,10 +831,10 @@ function canPayOptInCost(
   // play spells/gear" can never fund a payment demanded while a spell or
   // ability RESOLVES (a counter's ransom, a "you may pay [N] to …") — that is
   // not playing a card, so every earmarked point is unavailable here.
-  const earmarked = Object.values(
-    (state as { restrictedEnergy?: Record<string, Partial<Record<string, number>>> })
-      .restrictedEnergy?.[playerId] ?? {},
-  ).reduce<number>((sum, amount) => sum + (amount ?? 0), 0);
+  // rule 429.4 / 419.3 (unl-186-219) — EXCEPT when the payoff is playing a
+  // card: then the earmark that names that card type funds this payment.
+  const purpose = optInPlayPurpose(sourceCardId, effect);
+  const earmarked = lockedEnergyForPurpose(state, playerId, purpose);
   // rule 444.2.c / 357.1.a: a Pay demanded while an ability resolves is still
   // a Pay, so the payer may exhaust ready runes to fund it — credit their
   // yield here (deductAbilityCost taps them when the cost is actually paid).
@@ -838,7 +859,7 @@ function canPayOptInCost(
     // to play spells/gear" is no more spendable here than earmarked Energy is:
     // a Pay demanded while an ability finalizes or resolves is not playing a
     // card, so those pips are hidden from this payment entirely.
-    if (!canAffordPower(spendablePowerPool(state, playerId, undefined), needed)) {
+    if (!canAffordPower(spendablePowerPool(state, playerId, purpose), needed)) {
       return false;
     }
   }

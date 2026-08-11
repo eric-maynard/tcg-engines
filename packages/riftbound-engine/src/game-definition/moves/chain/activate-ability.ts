@@ -286,10 +286,30 @@ export function isPaymentPromptFor(pendingChoice: unknown, playerId: string): bo
   }
   // rule 355.10.c.1 / 444.2 — a `payChoice` opt-in is the "you may pay [C]. If
   // you do, …" Pay elected AS the item resolves; it is a payment moment too.
-  return (
-    pc.type === "pay-x" ||
-    (pc.type === "opt-in" && (pc.counterRansom !== undefined || pc.payChoice !== undefined))
-  );
+  if (pc.type === "opt-in" && (pc.counterRansom !== undefined || pc.payChoice !== undefined)) {
+    return true;
+  }
+  // rule 429.3.a / 444.2.c / 357.1.a / 419.3 (unl-186-219 "you may play this
+  // from your trash for [rainbow]") — an opt-in that PLAYS a card for an
+  // Energy/Power price carries that play's Pay step, so the same window
+  // `moves/resources.ts runeAddAllowedDuringChoice` opens for rune [Add]s must
+  // open for Reaction [Add] abilities on cards. Every other mid-resolution
+  // "you may pay …" keeps the board frozen.
+  if (pc.type === "opt-in" && (pc as { finalizationChainItemId?: string }).finalizationChainItemId === undefined) {
+    const resolved = (pc as { resolved?: { effect?: { type?: string }; optInCost?: Record<string, unknown> } })
+      .resolved;
+    const optInCost = resolved?.optInCost;
+    if (
+      resolved?.effect?.type === "play" &&
+      optInCost !== undefined &&
+      typeof optInCost === "object" &&
+      (((optInCost.energy as number) ?? 0) > 0 ||
+        (Array.isArray(optInCost.power) && optInCost.power.length > 0))
+    ) {
+      return true;
+    }
+  }
+  return pc.type === "pay-x";
 }
 
 export function isImmediateAddEffect(effect: unknown): boolean {
