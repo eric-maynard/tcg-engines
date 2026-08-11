@@ -36,6 +36,18 @@ function canon(v: unknown): string {
   );
 }
 
+/**
+ * Play moves carry a display-only `params.quote` (the play-options cost quote the
+ * client renders); it is not part of what the affordance under test dispatches.
+ * Drop it so the literal expected shapes below stay exact about everything else.
+ */
+function sansQuote(got: readonly ui.Captured[]): ui.Captured[] {
+  return got.map((c) => {
+    const { quote: _quote, ...params } = c.params;
+    return { ...c, params };
+  });
+}
+
 function expectHuman(labels: readonly string[], what: string): void {
   for (const l of labels) {
     expect({ label: l, raw: RAW_ID.test(l), what }).toEqual({ label: l, raw: false, what });
@@ -102,7 +114,7 @@ describeLive("affordances — sidebar, runes, plays, abilities, movement (defaul
       // Vanilla unit: exactly one variant → the click itself plays it (no confirmation step).
       const { cardId: unit } = await backend.tutor("sfd-018-221");
       expect(movesOf(backend, "playUnit").filter((m) => m.params.cardId === unit)).toHaveLength(1);
-      expect(await ui.capture(page, () => ui.clickCard(page, unit))).toEqual([{ moveId: "playUnit", params: { cardId: unit, location: "base", playerId: P1 }, playerId: P1 }]);
+      expect(sansQuote(await ui.capture(page, () => ui.clickCard(page, unit)))).toEqual([{ moveId: "playUnit", params: { cardId: unit, location: "base", playerId: P1 }, playerId: P1 }]);
       expect((await texts(page)).some((t) => t.startsWith("Play Unit") && t.includes("Void Hatchling to base"))).toBe(true);
       await p1.play(unit);
       await game.settle({ policy: "first" });
@@ -130,7 +142,7 @@ describeLive("affordances — sidebar, runes, plays, abilities, movement (defaul
       const banner = await ui.targetBanner(page);
       expect(banner?.text).toBe("Choose a target for Cleave — Esc to cancel");
       expect([...(banner?.validTargets ?? [])].sort()).toEqual([...new Set(cleaveVariants.map((v) => (v.params.targets as string[])[0] as string))].sort());
-      expect(await ui.capture(page, () => ui.clickCard(page, unit))).toEqual([{ moveId: "playSpell", params: { cardId: cleave, playerId: P1, targets: [unit] }, playerId: P1 }]);
+      expect(sansQuote(await ui.capture(page, () => ui.clickCard(page, unit)))).toEqual([{ moveId: "playSpell", params: { cardId: cleave, playerId: P1, targets: [unit] }, playerId: P1 }]);
       await page.keyboard.press("Escape");
 
       // Two different untargeted spells never collapse into "Play Spell (2 options)": one labelled row per card.
@@ -146,7 +158,7 @@ describeLive("affordances — sidebar, runes, plays, abilities, movement (defaul
 
       // Gear (Seal of Rage, 0 cost): single click plays it.
       const { cardId: seal } = await backend.tutor("ogn-040-298");
-      expect(await ui.capture(page, () => ui.clickCard(page, seal))).toEqual([{ moveId: "playGear", params: { cardId: seal, playerId: P1 }, playerId: P1 }]);
+      expect(sansQuote(await ui.capture(page, () => ui.clickCard(page, seal)))).toEqual([{ moveId: "playGear", params: { cardId: seal, playerId: P1 }, playerId: P1 }]);
     },
     LIVE_TIMEOUT,
   );
@@ -300,9 +312,9 @@ describeLive("affordances — drag gestures & multi-target targeting", () => {
       const variants = movesOf(backend, "playUnit").filter((m) => m.params.cardId === u);
       expect(variants.map((v) => v.params.location).sort()).toEqual(["base", `battlefield-${bf}`].sort());
       let got = await ui.capture(page, () => page.locator(sel(u)).first().dragTo(page.locator(`#player-base[data-drop-zone="player-base"]`).first(), { timeout: 4000 }));
-      expect(got).toEqual([{ moveId: "playUnit", params: { cardId: u, location: "base", playerId: P1 }, playerId: P1 }]);
+      expect(sansQuote(got)).toEqual([{ moveId: "playUnit", params: { cardId: u, location: "base", playerId: P1 }, playerId: P1 }]);
       got = await ui.capture(page, () => page.locator(sel(u)).first().dragTo(page.locator(`.battlefield[data-drop-zone=${JSON.stringify(bf)}] .bf-body`).first(), { timeout: 4000 }));
-      expect(got).toEqual([{ moveId: "playUnit", params: { cardId: u, location: `battlefield-${bf}`, playerId: P1 }, playerId: P1 }]);
+      expect(sansQuote(got)).toEqual([{ moveId: "playUnit", params: { cardId: u, location: `battlefield-${bf}`, playerId: P1 }, playerId: P1 }]);
 
       // Champion dragged to base (single base variant → direct; several → modal "Play to base").
       const champ = p1.champion() as string;
@@ -358,7 +370,7 @@ describeLive("affordances — drag gestures & multi-target targeting", () => {
         await ui.clickCard(page, t1);
         await page.evaluate(`Array.from(document.querySelectorAll('#targetBanner .target-banner-btn')).find(b => b.textContent.startsWith('Done')).click()`);
       });
-      expect(got).toEqual([{ moveId: "playSpell", params: { cardId: sing, playerId: P1, targets: [t1] }, playerId: P1 }]);
+      expect(sansQuote(got)).toEqual([{ moveId: "playSpell", params: { cardId: sing, playerId: P1, targets: [t1] }, playerId: P1 }]);
       banner = await ui.targetBanner(page);
       expect(banner).toBeNull();
       expect(backend.pageErrors.filter((e) => !/favicon|card-image/.test(e))).toEqual([]);
@@ -738,11 +750,13 @@ describeLive("affordances — every pendingChoice type renders a titled, labelle
           variants: [{ pickedPlayerId: P1 }, { pickedPlayerId: P2 }],
         },
         {
-          act: `clickModalButton:${nameOf(foe)} 3`,
-          buttons: [`${nameOf(foe)} 3`, `${nameOf(a)} 1 · ${nameOf(foe)} 2`],
+          // rule 465.2.c — the ordered drag lane (combat-assign.test.ts covers reorder / Tank / advanced); here: titled,
+          // one Confirm button naming the derived split, dispatching the exact enumerated allocation.
+          act: `cdConfirm`,
+          buttons: [`Confirm — ${nameOf(foe)} 3`],
           expectParams: { allocation: { [foe]: 3 } },
           name: "combat-damage",
-          pending: { battlefieldId: bf, defaultAllocation: { [foe]: 3 }, lethalNeed: {}, options: [foe, a], playerId: "$me", side: "attacker", tier: {}, total: 3, type: "combat-damage" },
+          pending: { battlefieldId: bf, defaultAllocation: { [foe]: 3 }, lethalNeed: { [a]: 1, [foe]: 3 }, options: [foe, a], playerId: "$me", side: "attacker", tier: { [a]: 1, [foe]: 1 }, total: 3, type: "combat-damage" },
           title: `Assign 3 combat damage at ${bfName} (attacker)`,
           variants: [{ allocation: { [foe]: 3 } }, { allocation: { [a]: 1, [foe]: 2 } }],
         },
@@ -864,6 +878,8 @@ describeLive("affordances — every pendingChoice type renders a titled, labelle
             if (!(await ui.clickModalButton(page, arg))) {
               failures.push(`[${c.name}] no modal button "${arg}"`);
             }
+          } else if (kind === "cdConfirm") {
+            await page.evaluate(`document.querySelector('#choiceOverlay [data-cd-confirm]').click()`);
           } else if (kind === "clickCard") {
             await page.evaluate(`document.querySelector('#choiceOverlay .choice-modal-card[data-card-id="${arg}"]').click()`);
           } else if (kind === "filterThenClick") {
