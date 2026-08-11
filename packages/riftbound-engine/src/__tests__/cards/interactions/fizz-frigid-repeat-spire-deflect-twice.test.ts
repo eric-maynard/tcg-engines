@@ -174,10 +174,13 @@ describe("Fizz → Frigid Touch from trash × Marai Spire × Pouty Poro — cost
     expect(game.state("poro").might).toBe(2);
   });
 
-  // Same gap as (a): the effect-play asks the [Repeat] election as a RES-timing opt-in ("Pay [1] to use …") before any
-  // target pick, so the first decision is a yes-no — and the Repeat is offered even with 0 power, i.e. unpayable (355.8).
-  test.failing("BUG: (c) with NO spare power at all the enemy Poro is not even offered for the trash play (Deflect unpayable, 355.8) — Fizz, Vanilla and Holder are", async () => {
+  // rule 355.1.a — the [Repeat] election opens the dialog (it is still payable here: Spire prices it at [1] ENERGY, and
+  // P1 has 2 spare energy). Only the object choice that follows feels the empty power pool.
+  test("(c) with NO spare power at all the enemy Poro is not even offered for the trash play (Deflect unpayable, 355.8) — Fizz, Vanilla and Holder are", async () => {
     const game = await fizzIntoFrigidTouch({ calm: 0 });
+    if (game.decision()?.kind === "yes-no") {
+      await game.p1.no();
+    }
     const d = game.decision() as PickDecision;
     expect(d.kind).toBe("pick");
     const offered = d.options.map((o) => o.card ?? o.key).sort();
@@ -189,7 +192,6 @@ describe("Fizz → Frigid Touch from trash × Marai Spire × Pouty Poro — cost
 
   // Expected (419.3.b, 356.2.b, 356.4.c, 809.1.c, 820.2): the trash play still runs Make Choices, so P1 may elect
   // [Repeat]: +[2] −[1] Spire = +[1]; naming the Poro for both executions = +2 power → exactly 1 energy + 2 calm.
-  // Actual: the effect-play path never offers a spell's Repeat — P1 goes straight to a single-target pick.
   test("(a) the Fizz-played Frigid Touch offers its [Repeat]; paying it and naming the Poro for BOTH executions costs exactly 1 energy + 2 power under Marai Spire", async () => {
     const game = await fizzIntoFrigidTouch();
     const offered = await makeChoices(game, true, ["poro", "poro"]);
@@ -208,7 +210,7 @@ describe("Fizz → Frigid Touch from trash × Marai Spire × Pouty Poro — cost
 
   // ── (b) Repeat paid, Poro + Vanilla ───────────────────────────────────────────────────
 
-  // Expected: one Deflect choice → 1 energy + 1 power; Poro −2 (→0), Vanilla −2 (→2). Actual: no Repeat offer.
+  // One Deflect choice → 1 energy + 1 power; Poro −2 (→0), Vanilla −2 (→2).
   test("(b) Repeat paid, Poro for the first execution and Vanilla for the second: 1 energy + 1 power; Poro → 0, Vanilla → 2 (820.2.a)", async () => {
     const game = await fizzIntoFrigidTouch();
     expect(await makeChoices(game, true, ["poro", "vanilla"])).toBe(true);
@@ -220,7 +222,7 @@ describe("Fizz → Frigid Touch from trash × Marai Spire × Pouty Poro — cost
 
   // ── (d) as (a) without Marai Spire ────────────────────────────────────────────────────
 
-  // Expected: no Spire discount → Repeat +[2] in full → 2 energy + 2 power. Actual: no Repeat offer.
+  // No Spire discount → Repeat +[2] in full → 2 energy + 2 power.
   test("(d) without Marai Spire the same play (Repeat, Poro ×2) costs 2 energy + 2 power", async () => {
     const game = await fizzIntoFrigidTouch({ spire: false });
     expect(await makeChoices(game, true, ["poro", "poro"])).toBe(true);
@@ -229,12 +231,16 @@ describe("Fizz → Frigid Touch from trash × Marai Spire × Pouty Poro — cost
 
   // ── (e) timing of choices, recycle rider, played once ─────────────────────────────────
 
-  // Engine gap: on the effect-play path the additional-cost election is a RES-timing opt-in that precedes the target
-  // pick, so the first decision is not the FIN-timing target choice that 355.5 / 356.2.b require.
-  test.failing("BUG: (e) targets are fixed at PLAY time: the target prompt is a finalization-time (FIN) choice, and P2's first priority window over Frigid Touch already shows the Poro locked on the item — Deflect already paid", async () => {
+  // rule 355.1.a — the [Repeat] election is itself part of Make Choices and is asked BEFORE the object choice of
+  // 355.5, so the effect-play dialog opens with the election; both prompts are finalization-time (FIN).
+  test("(e) targets are fixed at PLAY time: the whole play dialog is finalization-time (FIN), and P2's first priority window over Frigid Touch already shows the Poro locked on the item — Deflect already paid", async () => {
     const game = await fizzIntoFrigidTouch();
-    const d = game.decision();
-    expect(d).toMatchObject({ kind: "pick", seat: P1, timing: "FIN" });
+    const first = game.decision();
+    expect(first).toMatchObject({ seat: P1, source: { cardId: "ft" }, timing: "FIN" });
+    if (first?.kind === "yes-no") {
+      await game.p1.no(); // decline [Repeat] — 355.1.a elects it inside Make Choices, ahead of the 355.5 object choice
+      expect(game.decision()).toMatchObject({ kind: "pick", seat: P1, timing: "FIN" });
+    }
     await makeChoices(game, false, ["poro"]);
     expect(game.decision()).toMatchObject({ context: "chain", kind: "action", seat: P1 });
     await game.p1.passPriority();
