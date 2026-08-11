@@ -274,7 +274,7 @@ describe("Piercing Light [Repeat] × The Boss × Counter Strike — which damage
 
   // Narrower half of the same defect, isolated from the [Repeat] bug: even with only ONE execution, the
   // "then deal 2 to up to one other unit" clause must still resolve after B has taken lethal damage.
-  test.failing("BUG: at minimum execution 1's SECOND clause must still resolve after B's death — V is dealt its 2 (321, 359.3.e.7); the engine stops the item at the death", async () => {
+  test("at minimum execution 1's SECOND clause must still resolve after B's death — V is dealt its 2 (321, 359.3.e.7)", async () => {
     const game = await castAndResolve();
     await game.p2.no();
     await game.settle();

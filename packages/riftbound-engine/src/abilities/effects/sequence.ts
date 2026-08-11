@@ -1177,12 +1177,24 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
             slotK < 0 && seqSlots !== undefined && stepSlotIdx >= 0
               ? seqSlots.bound.slice(stepSlotIdx + 1).filter((id): id is string => id !== undefined)
               : undefined;
+          // rule 820.2.a / 355.15 (sfd-023-221 × ogn-269-298) — when the steps
+          // are the EXECUTIONS of a [Repeat]ed spell, each owns its own locked
+          // pick: the deferred remainder must carry the LATER executions' ids,
+          // never the ids of the execution that just parked the question.
+          const repeatCarry =
+            repeatedSubSequences && ctx.boundTargets !== undefined
+              ? ctx.boundTargets.slice(i - repeatVacated.filter((v) => v < i).length + 1)
+              : undefined;
           const carry =
             slotK >= 0 && ctx.boundTargets !== undefined
               ? ctx.boundTargets.slice(slotK + 1)
-              : (slotCarry ?? ((subCtx.boundTargets ?? ctx.boundTargets) as readonly string[] | undefined));
+              : (repeatCarry ??
+                slotCarry ??
+                ((subCtx.boundTargets ?? ctx.boundTargets) as readonly string[] | undefined));
           const restSeq =
-            slotK >= 0 || slotCarry !== undefined
+            repeatCarry !== undefined
+              ? { boundTargetsOverride: [...repeatCarry], effects: rest, type: "sequence" }
+              : slotK >= 0 || slotCarry !== undefined
               ? {
                   boundTargetsOverride: [...(carry ?? [])],
                   effects: rest,
