@@ -17,24 +17,36 @@
  *   every construction rule this is ADVISORY (server/deck-rules.ts): an
  *   oversized or off-identity sideboard still loads and plays, flagged as not
  *   tournament-legal; only `enforceLegality` lobbies refuse it.
- * - In both Bo1 and Bo3, once both players' Legends, Chosen Champions and the
- *   battlefields for this game are revealed (Duel: the random pick, rule 485.5;
- *   Match: after `battlefield_select`, 486.5) and BEFORE opening hands are
- *   drawn / mulligans taken, each player may swap cards 1-for-1 between main
- *   deck and sideboard — so main-deck size and sideboard size are invariant.
- *   Swaps are simultaneous and hidden: the opponent learns only
- *   choosing/locked, never counts or identities. There is no timer; play
- *   continues when both have locked in, at which point each main deck is
- *   rebuilt from the post-swap list, shuffled with the engine RNG, and the
- *   opening hands are drawn (rule 116) for the mulligan (117).
+ * - Sideboarding happens BETWEEN the games of a match — before game 2 and
+ *   game 3 of a Bo3 — never before game 1: game 1 is always played with the
+ *   registered main deck (you have seen nothing of the opponent yet, and OP
+ *   policy gives no pre-match swap window). So a Bo3 game 1, a Bo1 Duel, and
+ *   the sandbox (Goldfish / Claude) all go straight from the reveal to the
+ *   mulligan even when sideboards are registered. The one exception is the
+ *   explicit lobby / API option `sideboardBeforeGame1` (default false) — a
+ *   testing / kitchen-table switch that opens the swap window before game 1.
+ * - When the window IS open (game ≥ 2, or `sideboardBeforeGame1`): once both
+ *   players' Legends, Chosen Champions and the battlefields for this game are
+ *   revealed (Duel: the random pick, rule 485.5; Match: after
+ *   `battlefield_select`, 486.5) and BEFORE opening hands are drawn /
+ *   mulligans taken, each player may swap cards 1-for-1 between main deck and
+ *   sideboard — so main-deck size and sideboard size are invariant. Swaps are
+ *   simultaneous and hidden: the opponent learns only choosing/locked, never
+ *   counts or identities. There is no timer; play continues when both have
+ *   locked in, at which point each main deck is rebuilt from the post-swap
+ *   list, shuffled with the engine RNG, and the opening hands are drawn (rule
+ *   116) for the mulligan (117).
  * - The phase exists only when at least one seat has a non-empty sideboard;
  *   otherwise the flow is exactly as before. Seats with nothing to swap, and
  *   the sandbox opponent seat (Goldfish / Claude), lock in immediately.
  * - Nothing is persisted: swaps are per game. `session.postSideboardDecks`
- *   keeps the post-swap configuration for a Bo3 follow-up game (TODO: no
- *   end-to-end Bo3 game-2 flow exists yet — when it does, create game 2 with
- *   `createGameFromDecks(post[P1], post[P2], …)` so this same phase runs
- *   between games).
+ *   keeps the post-swap configuration for the next game of the match.
+ *   TODO(Bo3 game-2 flow): no end-to-end "next game" flow exists yet. When it
+ *   does, create game N+1 with `createGameFromDecks(post[P1] ?? decks[P1],
+ *   post[P2] ?? decks[P2], seed, { …, gameNumber: N + 1 })` — `gameNumber > 1`
+ *   is what arms this phase, so between-game sideboarding arrives with that
+ *   flow and needs no further change here (DESIGN: the gate lives in
+ *   `sideboardWindowOpen`, the mechanics below are game-number agnostic).
  */
 
 import { getGlobalCardRegistry, riftboundDefinition } from "@tcg/riftbound";
@@ -62,6 +74,16 @@ import {
   lobbyByCode,
 } from "./state";
 
+/**
+ * Is the sideboard swap window open for this game? Only BETWEEN games of a
+ * match (game 2+); never before game 1 unless the lobby / API explicitly set
+ * `sideboardBeforeGame1` (see the policy note at the top of this file).
+ */
+export function sideboardWindowOpen(options?: { gameNumber?: number; sideboardBeforeGame1?: boolean }): boolean {
+  const gameNumber = Math.max(1, Math.floor(options?.gameNumber ?? 1));
+  return gameNumber > 1 || options?.sideboardBeforeGame1 === true;
+}
+
 /** Create a game from two deck configurations */
 export function createGameFromDecks(
   deck1: DeckConfig,
@@ -74,10 +96,15 @@ export function createGameFromDecks(
     names?: Record<string, string>;
     /** Initiative roll results for match log narration. */
     initiativeRoll?: { p1Roll: number; p2Roll: number; winner: string };
+    /** 1-based game number within the match (default 1). Game 2+ opens the sideboard window. */
+    gameNumber?: number;
+    /** Testing / kitchen-table switch: allow sideboarding before game 1 too (default false). */
+    sideboardBeforeGame1?: boolean;
   },
 ): GameSession {
   const P1 = "player-1";
   const P2 = "player-2";
+  const gameNumber = Math.max(1, Math.floor(options?.gameNumber ?? 1));
 
   // Deck construction legality (rule 103: copy limit, 40-card minimum, domain
   // identity, sideboard policy…) is ADVISORY — see server/deck-rules.ts. Only
@@ -117,9 +144,12 @@ export function createGameFromDecks(
   const log: LogEntry[] = legalityNotes.map((n) => makeLogEntry(n));
 
   const decks: [string, DeckConfig][] = [[P1, deck1], [P2, deck2]];
-  // A sideboard phase runs only if some seat brought a sideboard; then the
-  // opening hands wait until sideboarding completes (completeSideboard).
-  const sideboarding = decks.some(([, d]) => (d.sideboardCardIds?.length ?? 0) > 0);
+  // A sideboard phase runs only BETWEEN games (game 2+, or the explicit
+  // `sideboardBeforeGame1` opt-in) and only if some seat brought a sideboard;
+  // then the opening hands wait until sideboarding completes (completeSideboard).
+  // Game 1 always plays the registered main deck — sideboards ride along
+  // untouched in `session.decks` for the next game of the match.
+  const sideboarding = sideboardWindowOpen(options) && decks.some(([, d]) => (d.sideboardCardIds?.length ?? 0) > 0);
   const sideboardSeats: Record<string, SideboardSeatState> = {};
   for (const [pid, deck] of decks) {
     // Register and initialize main deck
@@ -343,7 +373,7 @@ export function createGameFromDecks(
   );
 
   const names = options?.names ?? { [P1]: "Player 1", [P2]: "Player 2" };
-  const session: GameSession = { clients: new Map(), decks: { [P1]: deck1, [P2]: deck2 }, engine, log, playerNames: names, players: [P1, P2], pregame, sandbox: isSandbox, seq: 0 };
+  const session: GameSession = { clients: new Map(), decks: { [P1]: deck1, [P2]: deck2 }, engine, gameNumber, log, playerNames: names, players: [P1, P2], pregame, sandbox: isSandbox, seq: 0 };
   // Duel: legends, champions and the random battlefields are all known now —
   // sideboard (if anyone can) before the mulligan. Match waits for battlefield_select.
   if (gameMode === "duel") {advancePastReveal(session);}

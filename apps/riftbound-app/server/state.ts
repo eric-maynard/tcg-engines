@@ -66,6 +66,12 @@ export interface Lobby {
    * and ordinary duels — illegal decks play with a visible warning only.
    */
   enforceLegality?: boolean;
+  /**
+   * Kitchen-table switch (default false): open the sideboard swap window
+   * before game 1 too. OP policy sideboards only BETWEEN games of a match
+   * (server/pregame.ts), so by default game 1 goes straight to the mulligan.
+   */
+  sideboardBeforeGame1?: boolean;
 }
 
 /**
@@ -144,6 +150,7 @@ export function lobbyView(lobby: Lobby, viewer: "host" | "guest") {
     id: lobby.id,
     ...(lobby.sandbox ? { opponentDeck: { deckId: lobby.opponentDeck?.deckId, deckName: lobby.opponentDeck?.deckName, mode: lobby.opponentDeck?.mode ?? "default" } } : {}),
     sandbox: lobby.sandbox,
+    sideboardBeforeGame1: lobby.sideboardBeforeGame1 === true,
     status: lobby.status,
   };
 }
@@ -256,9 +263,14 @@ export interface GameSession {
    */
   opponent?: OpponentHandle;
   /**
+   * 1-based game number within the match (createGameFromDecks `gameNumber`,
+   * default 1). The sideboard swap window only opens for game 2+ (server/pregame.ts).
+   */
+  gameNumber?: number;
+  /**
    * Each seat's deck as it stands after sideboarding (main/side post-swap),
-   * recorded when the sideboard phase completes. A Bo3 follow-up game should
-   * be created from these so game 2 starts from the game-1 configuration.
+   * recorded when the sideboard phase completes. The next game of a Bo3 should
+   * be created from these (falling back to `decks`) with `gameNumber` + 1.
    */
   postSideboardDecks?: Record<string, DeckConfig>;
   /** Each seat's registered deck (as passed to createGameFromDecks) — lets the AI seat describe ITS list. */

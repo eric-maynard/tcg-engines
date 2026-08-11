@@ -137,6 +137,12 @@ export function lobbyWsMessage(ws: ServerWebSocket<WsData>, msg: Record<string, 
     broadcastLobby(lobby);
   }
 
+  // Kitchen-table switch (host only, while waiting): sideboard before game 1 too. Default off — sideboards only between games.
+  if (msg.type === "set_sideboard_before_game1" && role === "host" && lobby.status === "waiting") {
+    lobby.sideboardBeforeGame1 = msg.enabled === true;
+    broadcastLobby(lobby);
+  }
+
   if (msg.type === "start_game" && role === "host" && lobby.guest && lobby.host.ready && lobby.guest.ready) {
     // Deck legality (server/deck-rules.ts) is advisory unless this lobby opted
     // into enforcement: then refuse to start and name each flagged seat's
@@ -249,6 +255,7 @@ function startLobbyGame(lobby: Lobby, chosen: string): void {
       "player-2": lobby.guest?.name ?? "Player 2",
     },
     sandbox: lobby.sandbox,
+    sideboardBeforeGame1: lobby.sideboardBeforeGame1 === true,
   });
   // Hand the solo opponent driver (Claude seat) over to the game session.
   if (lobby.opponent) {

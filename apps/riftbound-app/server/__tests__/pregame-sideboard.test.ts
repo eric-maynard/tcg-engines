@@ -2,8 +2,11 @@
  * Pregame sideboarding (assumed OP policy — see the "Sideboarding" note at the
  * top of server/pregame.ts): a `sideboard` phase sits between the reveal
  * (legends / champions / this game's battlefields) and the mulligan, only when
- * some seat registered a sideboard; swaps are 1-for-1, private, validated, and
- * on both locks the main decks are rebuilt + shuffled and hands drawn.
+ * some seat registered a sideboard AND the swap window is open — game 2+ of a
+ * match, or the explicit `sideboardBeforeGame1` opt-in; never before game 1 by
+ * default. Swaps are 1-for-1, private, validated, and on both locks the main
+ * decks are rebuilt + shuffled and hands drawn. The mechanics tests below opt
+ * into `sideboardBeforeGame1` (or `gameNumber: 2`) to reach the phase.
  */
 
 import { describe, expect, test } from "bun:test";
@@ -15,6 +18,7 @@ import {
   createGameFromDecks,
   handlePregameMessage,
   lockSideboard,
+  sideboardWindowOpen,
   swapSideboard,
 } from "../pregame";
 import { buildGameSnapshot } from "../snapshot";
@@ -60,9 +64,90 @@ describe("phase gating", () => {
     expect(payload.opponent).toBeUndefined();
   });
 
-  test("one seat with a sideboard (Duel) ⇒ phase 'sideboard' right after the random battlefields, no hands yet; the seat with nothing to swap is auto-locked", () => {
+  test("Bo3 game 1 with sideboards registered on BOTH seats ⇒ no sideboarding before game 1: battlefield_select → straight to mulligan with 4-card hands; sideboards ride along in session.decks for game 2", () => {
     expect(SPELLS.length).toBe(4);
-    const s = createGameFromDecks(withSideboard(SPELLS), BASE, "sb-duel", { gameMode: "duel", sandbox: false });
+    for (const sandbox of [false, true]) {
+      const s = createGameFromDecks(withSideboard(SPELLS), withSideboard(SPELLS.slice(0, 2)), `sb-bo3-g1-${sandbox}`, { gameMode: "match", sandbox });
+      expect(s.gameNumber).toBe(1);
+      expect(s.pregame?.phase).toBe("battlefield_select");
+      expect(s.pregame?.sideboard).toBeUndefined();
+      // Hands are drawn at creation (no phase to wait for).
+      expect(handOf(s, P1)).toHaveLength(4);
+      expect(handOf(s, P2)).toHaveLength(4);
+      s.pregame!.battlefieldSelections[P1] = BASE.battlefieldIds[0] as string;
+      s.pregame!.battlefieldSelections[P2] = BASE.battlefieldIds[1] as string;
+      advancePastReveal(s);
+      expect(s.pregame?.phase).toBe("mulligan");
+      const payload = buildPregamePayload(s, P1) as Record<string, unknown>;
+      expect(payload.phase).toBe("mulligan");
+      expect(payload.you).toBeUndefined();
+      expect(swapSideboard(s, P1, "a", "b")).toEqual({ error: "Not in the sideboard phase", ok: false });
+      expect(lockSideboard(s, P1).ok).toBe(false);
+      // Nothing leaked into the engine; the registered sideboard is kept for the next game.
+      expect(Object.keys(getInternalSnapshot(s.engine).cards).some((id) => id.includes("-side-"))).toBe(false);
+      expect(s.decks?.[P1]?.sideboardCardIds).toEqual(SPELLS);
+      expect(s.decks?.[P2]?.sideboardCardIds).toEqual(SPELLS.slice(0, 2));
+      expect(s.postSideboardDecks).toBeUndefined();
+    }
+  });
+
+  test("Bo3 game 1 over the WebSocket: the second battlefield pick lands both seats on the mulligan frame (never a 'sideboard' frame)", () => {
+    const s = createGameFromDecks(withSideboard(SPELLS), withSideboard(SPELLS.slice(0, 2)), "sb-bo3-g1-ws", { gameMode: "match" });
+    const sent: Record<string, Record<string, unknown>[]> = { a: [], b: [] };
+    const fakeWs = (key: "a" | "b", playerId: string) =>
+      ({ data: { connId: key, gameId: "g", playerId }, send: (raw: string) => sent[key]!.push(JSON.parse(raw)) }) as never;
+    const wsA = fakeWs("a", P1);
+    const wsB = fakeWs("b", P2);
+    s.clients.set("a", { playerId: P1, ws: wsA });
+    s.clients.set("b", { playerId: P2, ws: wsB });
+    expect(handlePregameMessage(wsA, { battlefieldId: BASE.battlefieldIds[0], type: "pregame_battlefield_select" }, s, "g", P1)).toBe(true);
+    expect(handlePregameMessage(wsB, { battlefieldId: BASE.battlefieldIds[2], type: "pregame_battlefield_select" }, s, "g", P2)).toBe(true);
+    for (const key of ["a", "b"] as const) {
+      expect(sent[key].some((f) => (f.pregame as { phase?: string } | null)?.phase === "sideboard")).toBe(false);
+      expect((sent[key].at(-1)!.pregame as { phase: string }).phase).toBe("mulligan");
+    }
+    // A stray sideboard message before game 1 is refused, not acted on.
+    expect(handlePregameMessage(wsA, { type: "sideboard_lock" }, s, "g", P1)).toBe(true);
+    expect(sent.a.at(-1)!.type).toBe("error");
+  });
+
+  test("Bo1 Duel / goldfish game 1 with sideboards ⇒ mulligan directly by default (no pre-game-1 window)", () => {
+    for (const sandbox of [false, true]) {
+      const s = createGameFromDecks(withSideboard(SPELLS), withSideboard(SPELLS.slice(0, 3)), `sb-duel-g1-${sandbox}`, { gameMode: "duel", sandbox });
+      expect(s.pregame?.phase).toBe("mulligan");
+      expect(s.pregame?.sideboard).toBeUndefined();
+      expect(handOf(s, P1)).toHaveLength(4);
+      expect(handOf(s, P2)).toHaveLength(4);
+    }
+  });
+
+  test("the window opens BETWEEN games: gameNumber 2 (and 3) of a match arms the phase after battlefield_select; sideboardWindowOpen is the single gate", () => {
+    expect(sideboardWindowOpen()).toBe(false);
+    expect(sideboardWindowOpen({ gameNumber: 1 })).toBe(false);
+    expect(sideboardWindowOpen({ gameNumber: 0 })).toBe(false);
+    expect(sideboardWindowOpen({ gameNumber: 2 })).toBe(true);
+    expect(sideboardWindowOpen({ gameNumber: 3 })).toBe(true);
+    expect(sideboardWindowOpen({ gameNumber: 1, sideboardBeforeGame1: true })).toBe(true);
+    for (const gameNumber of [2, 3]) {
+      const s = createGameFromDecks(withSideboard(SPELLS), withSideboard(SPELLS.slice(0, 2)), `sb-bo3-g${gameNumber}`, { gameMode: "match", gameNumber });
+      expect(s.gameNumber).toBe(gameNumber);
+      expect(s.pregame?.phase).toBe("battlefield_select");
+      expect(handOf(s, P1)).toHaveLength(0);
+      s.pregame!.battlefieldSelections[P1] = BASE.battlefieldIds[0] as string;
+      s.pregame!.battlefieldSelections[P2] = BASE.battlefieldIds[1] as string;
+      advancePastReveal(s);
+      expect(s.pregame?.phase).toBe("sideboard");
+      expect((buildPregamePayload(s, P1) as unknown as SbPayload).you?.side).toHaveLength(4);
+    }
+    // Game 2 with no sideboards anywhere still has nothing to do.
+    const bare = createGameFromDecks(BASE, BASE, "sb-bo3-g2-bare", { gameMode: "match", gameNumber: 2 });
+    expect(bare.pregame?.sideboard).toBeUndefined();
+    expect(handOf(bare, P1)).toHaveLength(4);
+  });
+
+  test("one seat with a sideboard (Duel, sideboardBeforeGame1 opt-in) ⇒ phase 'sideboard' right after the random battlefields, no hands yet; the seat with nothing to swap is auto-locked", () => {
+    expect(SPELLS.length).toBe(4);
+    const s = createGameFromDecks(withSideboard(SPELLS), BASE, "sb-duel", { gameMode: "duel", sandbox: false, sideboardBeforeGame1: true });
     expect(s.pregame?.phase).toBe("sideboard");
     expect(handOf(s, P1)).toHaveLength(0);
     expect(handOf(s, P2)).toHaveLength(0);
@@ -86,8 +171,8 @@ describe("phase gating", () => {
     expect(p1.opponent.status).toBe("locked");
   });
 
-  test("Match (Bo3): battlefield_select first; once both battlefields are chosen the reveal advances into 'sideboard' (not mulligan)", () => {
-    const s = createGameFromDecks(withSideboard(SPELLS), withSideboard(SPELLS.slice(0, 2)), "sb-match", { gameMode: "match" });
+  test("Match (Bo3) game 2: battlefield_select first; once both battlefields are chosen the reveal advances into 'sideboard' (not mulligan)", () => {
+    const s = createGameFromDecks(withSideboard(SPELLS), withSideboard(SPELLS.slice(0, 2)), "sb-match", { gameMode: "match", gameNumber: 2 });
     expect(s.pregame?.phase).toBe("battlefield_select");
     s.pregame!.battlefieldSelections[P1] = BASE.battlefieldIds[0] as string;
     s.pregame!.battlefieldSelections[P2] = BASE.battlefieldIds[1] as string;
@@ -102,7 +187,7 @@ describe("phase gating", () => {
 
 describe("swap validation", () => {
   function twoSided() {
-    return createGameFromDecks(withSideboard(SPELLS), withSideboard(SPELLS.slice(0, 3)), "sb-swap", { gameMode: "duel" });
+    return createGameFromDecks(withSideboard(SPELLS), withSideboard(SPELLS.slice(0, 3)), "sb-swap", { gameMode: "duel", sideboardBeforeGame1: true });
   }
 
   test("a legal swap moves the cards across (in place), sizes unchanged; swapping back undoes it", () => {
@@ -150,7 +235,7 @@ describe("swap validation", () => {
 
   test("copy limit (rule 103.2.b) is advisory: a deck registering 4× a name across main + sideboard still seats (flagged in the shared log, no card names), and swapping the 4th copy into the main deck is allowed", () => {
     // Main deck holds 1× X; sideboard brings three more X plus a spell.
-    const s = createGameFromDecks(withSideboard([X, X, X, SPELLS[0] as string]), BASE, "sb-copies", { gameMode: "duel" });
+    const s = createGameFromDecks(withSideboard([X, X, X, SPELLS[0] as string]), BASE, "sb-copies", { gameMode: "duel", sideboardBeforeGame1: true });
     const note = s.log.find((e) => e.text.includes("not tournament-legal"));
     expect(note?.text).toContain("Player 1");
     expect(note?.text).toContain("TOO_MANY_COPIES");
@@ -169,7 +254,7 @@ describe("swap validation", () => {
 
 describe("lock-in and deck rebuild", () => {
   test("both locked ⇒ main decks rebuilt from the post-swap lists (swapped-in card in the engine deck/hand, swapped-out card gone), reshuffled with the engine RNG, 4-card hands drawn, phase → mulligan, post-swap configs recorded", () => {
-    const s = createGameFromDecks(withSideboard(SPELLS), withSideboard(SPELLS.slice(0, 3)), "sb-lock", { gameMode: "duel" });
+    const s = createGameFromDecks(withSideboard(SPELLS), withSideboard(SPELLS.slice(0, 3)), "sb-lock", { gameMode: "duel", sideboardBeforeGame1: true });
     const seat = s.pregame!.sideboard![P1]!;
     const out = seat.main[0]!;
     const inn = seat.side[2]!;
@@ -210,7 +295,7 @@ describe("lock-in and deck rebuild", () => {
   });
 
   test("goldfish / sandbox: the opponent seat auto-locks, so the human's lock completes the phase at once", () => {
-    const s = createGameFromDecks(withSideboard(SPELLS), withSideboard(SPELLS.slice(0, 2)), "sb-goldfish", { gameMode: "duel", sandbox: true });
+    const s = createGameFromDecks(withSideboard(SPELLS), withSideboard(SPELLS.slice(0, 2)), "sb-goldfish", { gameMode: "duel", sandbox: true, sideboardBeforeGame1: true });
     expect(s.pregame?.phase).toBe("sideboard");
     expect(s.pregame?.sideboard?.[P2]?.locked).toBe(true);
     expect((buildPregamePayload(s, P1) as unknown as SbPayload).opponent.status).toBe("locked");
@@ -221,7 +306,7 @@ describe("lock-in and deck rebuild", () => {
   });
 
   test("sandbox where only the auto-locked opponent seat has a sideboard ⇒ nobody has a decision: skip straight to the mulligan with hands drawn", () => {
-    const s = createGameFromDecks(BASE, withSideboard(SPELLS), "sb-ai-only", { gameMode: "duel", sandbox: true });
+    const s = createGameFromDecks(BASE, withSideboard(SPELLS), "sb-ai-only", { gameMode: "duel", sandbox: true, sideboardBeforeGame1: true });
     expect(s.pregame?.phase).toBe("mulligan");
     expect(handOf(s, P1)).toHaveLength(4);
     expect(handOf(s, P2)).toHaveLength(4);
@@ -230,7 +315,7 @@ describe("lock-in and deck rebuild", () => {
 
 describe("privacy", () => {
   test("the opponent's pregame payload and game snapshot never contain my main-deck or sideboard lists (ids or the sideboard card names)", () => {
-    const s = createGameFromDecks(withSideboard(SPELLS), withSideboard(SPELLS.slice(0, 1)), "sb-privacy", { gameMode: "duel", sandbox: false });
+    const s = createGameFromDecks(withSideboard(SPELLS), withSideboard(SPELLS.slice(0, 1)), "sb-privacy", { gameMode: "duel", sandbox: false, sideboardBeforeGame1: true });
     const mine = s.pregame!.sideboard![P1]!;
     swapSideboard(s, P1, mine.main[3]!.id, mine.side[3]!.id);
     const oppPayload = JSON.stringify(buildPregamePayload(s, P2));
@@ -252,7 +337,7 @@ describe("privacy", () => {
   });
 
   test("over the WebSocket: a swap is acknowledged only to the acting seat; a bad swap gets an error frame; reconnect (fresh payload) restores the in-progress state", () => {
-    const s = createGameFromDecks(withSideboard(SPELLS), withSideboard(SPELLS.slice(0, 2)), "sb-ws", { gameMode: "duel" });
+    const s = createGameFromDecks(withSideboard(SPELLS), withSideboard(SPELLS.slice(0, 2)), "sb-ws", { gameMode: "duel", sideboardBeforeGame1: true });
     const sent: Record<string, Record<string, unknown>[]> = { a: [], b: [] };
     const fakeWs = (key: "a" | "b", playerId: string) =>
       ({ data: { connId: key, gameId: "g", playerId }, send: (raw: string) => sent[key]!.push(JSON.parse(raw)) }) as never;

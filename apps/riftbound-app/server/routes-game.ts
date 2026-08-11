@@ -35,6 +35,8 @@ export async function handleGameRoutes(req: Request, url: URL, _ctx: RouteCtx): 
       sandbox?: boolean;
       /** Opt-in tournament enforcement, like a lobby's `enforceLegality` (server/ws-lobby.ts). */
       enforceLegality?: boolean;
+      /** Open the sideboard swap window before game 1 (default false — OP policy sideboards only between games; server/pregame.ts). */
+      sideboardBeforeGame1?: boolean;
       /** {kind:"goldfish"} | {kind:"claude", model, apiKey?} — the key is held in memory only. */
       opponent?: unknown;
     };
@@ -82,7 +84,7 @@ export async function handleGameRoutes(req: Request, url: URL, _ctx: RouteCtx): 
       }
     }
     const gameId = crypto.randomUUID();
-    const session = createGameFromDecks(deck1, deck2, body.seed, { gameMode: "duel", sandbox: (body.sandbox ?? false) && SANDBOX_ENABLED });
+    const session = createGameFromDecks(deck1, deck2, body.seed, { gameMode: "duel", sandbox: (body.sandbox ?? false) && SANDBOX_ENABLED, sideboardBeforeGame1: body.sideboardBeforeGame1 === true });
     attachOpponent(session, opponent.spec, { gameId });
     gameSessions.set(gameId, session);
     gameLogger.logGameCreated(gameId, session.players, "duel", body.seed ?? "random", {

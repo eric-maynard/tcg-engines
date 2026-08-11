@@ -156,7 +156,7 @@ describe("Bo3 vs Goldfish: the bot seat picks its battlefield server-side", () =
 
   test("with a sideboard on the human's deck: bot battlefield → sideboard phase with the bot already locked; the human's lock reaches the mulligan", async () => {
     const side = ["ogn-005-298", "ogn-008-298"].filter((id) => !BASE.mainDeckCardIds.includes(id));
-    const s = createGameFromDecks({ ...BASE, sideboardCardIds: side }, BASE, "bot-sb", { gameMode: "match", sandbox: true });
+    const s = createGameFromDecks({ ...BASE, sideboardCardIds: side }, BASE, "bot-sb", { gameMode: "match", gameNumber: 2, sandbox: true });
     await runBotPregame(s);
     expect(selectBattlefield(s, P1, BASE.battlefieldIds[2]).ok).toBe(true);
     expect(s.pregame?.phase).toBe("sideboard");

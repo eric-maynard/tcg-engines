@@ -18,6 +18,8 @@ export interface CreateLobbyBody {
   opponent?: unknown;
   /** Tournament switch: refuse to start with a not-tournament-legal deck (default false — warn only). */
   enforceLegality?: boolean;
+  /** Kitchen-table switch: allow sideboarding before game 1 (default false — sideboards only between games). */
+  sideboardBeforeGame1?: boolean;
 }
 
 /**
@@ -63,6 +65,7 @@ export function createLobby(body: CreateLobbyBody, userId: string | null): { sta
     opponent,
     ...(isSandbox ? { opponentDeck: oppDeck.spec } : {}),
     sandbox: isSandbox,
+    ...(body.sideboardBeforeGame1 === true ? { sideboardBeforeGame1: true } : {}),
     status: "waiting",
   };
   syncOpponentSeatDeck(lobby);

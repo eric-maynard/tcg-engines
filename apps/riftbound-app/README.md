@@ -111,20 +111,28 @@ widely published organized-play policy and states its assumptions here and at th
   spells / gear — no legend, champion slot, battlefields or runes). The 3-copies-per-name limit (rule 103.2.b, Chosen
   Champion included) is counted across main deck + sideboard. Both are advisory like every construction rule (§Deck
   legality): an oversized sideboard still loads, swaps and plays, flagged `SIDEBOARD_TOO_LARGE`.
-- In **both Bo1 and Bo3**, after both players' legends, chosen champions and this game's battlefields are revealed
-  (Bo1: the random pick; Bo3: after battlefield selection) and **before opening hands / mulligans**, each player may
-  swap cards **1-for-1** between main deck and sideboard (sizes never change), simultaneously and hidden — the opponent
-  sees only *Sideboarding… / Locked in*, never counts or cards. No timer: play continues when both lock in; each main
-  deck is then rebuilt from the post-swap list, shuffled with the engine RNG, and 4-card hands are drawn for the mulligan.
+- Sideboarding happens **only between the games of a match** (before game 2 / game 3 of a Bo3) — **never before
+  game 1**: a Bo3 game 1, a Bo1 duel and practice games all go straight from the reveal to the mulligan even with
+  sideboards registered (they ride along in `session.decks` for the next game). The only exception is the explicit
+  lobby / `POST /api/game/create` option `sideboardBeforeGame1: true` (default false; lobby WS `set_sideboard_before_game1`),
+  a kitchen-table / testing switch.
+- When the window is open (game ≥ 2, or that opt-in): after both players' legends, chosen champions and this game's
+  battlefields are revealed (Bo1: the random pick; Bo3: after battlefield selection) and **before opening hands /
+  mulligans**, each player may swap cards **1-for-1** between main deck and sideboard (sizes never change),
+  simultaneously and hidden — the opponent sees only *Sideboarding… / Locked in*, never counts or cards. No timer: play
+  continues when both lock in; each main deck is then rebuilt from the post-swap list, shuffled with the engine RNG,
+  and 4-card hands are drawn for the mulligan.
 - The phase appears **only if some seat has a non-empty sideboard** (starter decks have none, so default flows are
   unchanged). Seats with nothing to swap and the practice opponent (Goldfish / Claude) lock in immediately
   (TODO: model-driven sideboarding for the Claude seat). Swaps are per game — nothing is written to the deck DB.
-- **Bo3 between games:** `session.postSideboardDecks` holds each seat's post-swap main/side; a game-2 flow (not wired
-  end-to-end yet) should call `createGameFromDecks(post["player-1"], post["player-2"], …)` so the same phase runs
-  between games.
+- **Bo3 between games (TODO):** `session.postSideboardDecks` holds each seat's post-swap main/side and
+  `session.gameNumber` the game just played; the game-2 flow (not wired end-to-end yet) should call
+  `createGameFromDecks(post[P1] ?? decks[P1], post[P2] ?? decks[P2], seed, { …, gameNumber: n + 1 })` —
+  `gameNumber > 1` is what opens the window (`sideboardWindowOpen`), so between-game sideboarding arrives with that flow.
 
 **Try it.** Deck builder (`/builder`): turn on **Add to: Sideboard** above the Sideboard list and click cards (or
-import a list with a `Sideboard:` section — export writes it back), save, then Play with that deck. After the
+import a list with a `Sideboard:` section — export writes it back), save, then create the game with
+`sideboardBeforeGame1: true` (until the Bo3 game-2 flow lands, that is the only way to reach the phase). After the
 battlefield reveal the pregame overlay shows *Sideboarding*: Main deck / Sideboard columns (click a main-deck card then
 a sideboard card, or drag one onto the other, to swap; *undo* per swap), the opponent's revealed legend / champion /
 battlefield, and **Lock in**. Practice games offer a *Skip sideboarding* checkbox (remembered in `localStorage`).
