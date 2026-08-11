@@ -280,7 +280,7 @@ describe("Heedless Resurrection — trash target locked at play time × Disposal
 
   // 355.8 + 356.2.a.1 + 355.16: the only killable unit costs 0 and the only trash unit costs 2 — no (target, kill)
   // pair is legal, so Heedless cannot be played at all. Engine: offers the cast with sacrifice = Sprite.
-  test.failing("BUG: (e) board = Sprite only, trash = {T2}: Heedless Resurrection is NOT a legal play (no trash unit costs ≤ the Sprite's 0)", async () => {
+  test("(e) board = Sprite only, trash = {T2}: Heedless Resurrection is NOT a legal play (no trash unit costs ≤ the Sprite's 0)", async () => {
     const game = await spriteOnly().build();
     expect(game.p1.can("cast", "hr")).toBe(false);
     await expect(game.p1.cast("hr", { sacrifice: "sprite" })).rejects.toThrow();

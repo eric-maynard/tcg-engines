@@ -315,11 +315,12 @@ function mandatoryKillCandidates(
   // not a legal payment "unless they have no choice": for "kill a friendly unit
   // … play a unit from your trash that costs no more Energy and no more Power
   // than the killed unit" only victims that cap IN at least one trash unit may
-  // be named (all of them when none does).
+  // be named. When no victim does, there is no legal payment at all and the
+  // spell is unplayable (357.2) — not a free pass to kill something for nothing.
   const spell = (getGlobalCardRegistry().getAbilities(cardId) ?? []).find((a) => a.type === "spell") as
     | { effect?: { type?: string; from?: string; target?: { type?: string } } }
     | undefined;
-  if (spell?.effect?.type !== "play" || spell.effect.from !== "trash" || all.length <= 1) {
+  if (spell?.effect?.type !== "play" || spell.effect.from !== "trash") {
     return all;
   }
   const registry = getGlobalCardRegistry();
@@ -334,8 +335,7 @@ function mandatoryKillCandidates(
       (id) => (registry.getEnergyCost(id) ?? 0) <= capEnergy && (registry.getPowerCost(id) ?? []).length <= capPower,
     );
   };
-  const useful = all.filter(enables);
-  return useful.length > 0 ? useful : all;
+  return all.filter(enables);
 }
 
 /**
@@ -1646,20 +1646,25 @@ export const playSpell: Defs["playSpell"] = {
             }
             if (distinct && acc.includes(pool[k] as string)) continue;
             const next = [...acc, pool[k] as string];
-            // rule 355.8 (sfd-196-221 Defiant Dance) — "… and ANOTHER unit …"
-            // names two mandatory, distinct targets, so a partial pick is not a
-            // legal play; only complete tuples are offered. Independent
-            // instructions without "another" may still be left unchosen.
-            if (!distinct || depth === pools.length - 1) tuples.push(next);
+            // rule 355.8 — every mandatory target must have a legal choice made
+            // as the spell is put on the chain, so only COMPLETE tuples are
+            // legal plays. This holds for uniform descriptors too (ogn-248-298
+            // Icathian Rain's six "Deal 2 to a unit" instructions): a partial
+            // pick would defer the rest to resolution-time prompts, after the
+            // reaction window closed. Slots that are "up to"/quantity≠1 never
+            // reach here (collectIndependentTargetSlots filters them out).
+            if (depth === pools.length - 1) tuples.push(next);
             build(depth + 1, k, next);
           }
         };
         build(0, 0, []);
         if (overflowed && !distinct) {
           // Guard against combinatorial blow-up on many-instruction spells.
+          // Degrade to "every instruction aimed at the same card" rather than a
+          // partial tuple — rule 355.8 still needs all mandatory slots bound.
           tuples.length = 0;
           for (const id of pools[0] ?? []) {
-            tuples.push([id]);
+            if (pools.every((p) => p.includes(id))) tuples.push(pools.map(() => id));
           }
         }
         for (const t of tuples) {

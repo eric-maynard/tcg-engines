@@ -48,7 +48,8 @@ function board(extra: Record<string, number> = { calm: 2 }) {
 describe("Pouty Poro × Falling Star — Deflect is paid per choice", () => {
   test("choosing the enemy Poro (once) costs exactly +1 power, payable from ANY domain (809.1.c.1)", async () => {
     const game = await board({ calm: 2 }).build();
-    await game.p1.cast("fs", { targets: "theirPoro" });
+    // rule 355.8 — both instructions are targeted at play time; the Poro is chosen exactly once.
+    await game.p1.cast("fs", { targets: ["theirPoro", "vanilla"] });
     // Base cost 2 energy + fury fury, plus 1 calm for Deflect (fury spell, fury Poro, calm power is fine).
     expect(game.p1.resources()).toEqual({ energy: 0, power: { fury: 0, calm: 1 } });
     await game.settle();
@@ -85,7 +86,8 @@ describe("Pouty Poro × Falling Star — Deflect is paid per choice", () => {
   test("(c) P1's OWN Poro is chosen at no extra cost — Deflect only taxes spells an OPPONENT controls", async () => {
     const game = await board({}).build(); // exactly 2 fury, nothing spare
     expect(targetsOffered(game, "fs")).toContain("myPoro");
-    await game.p1.cast("fs", { targets: "myPoro" });
+    // rule 355.8 — both instructions are targeted at play time.
+    await game.p1.cast("fs", { targets: ["myPoro", "myPoro"] });
     expect(game.p1.resources()).toEqual({ energy: 0, power: { fury: 0 } });
     await game.settle();
     expect(game.zoneOf("myPoro")).toBe("trash");

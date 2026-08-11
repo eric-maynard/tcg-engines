@@ -33,7 +33,10 @@ type Built = Awaited<ReturnType<ReturnType<typeof board>["build"]>>;
 
 /** Cast the Rain aiming the six instances at `targets` (up front if the engine takes a 6-tuple, else one by one). */
 async function castAt(game: Built, targets: string[]) {
-  const upFront = await game.p1.try((p) => p.cast("rain", { targets }));
+  // rule 355.8 — all six mandatory targets are bound up front; pad short lists with the last pick.
+  const full = [...targets];
+  while (full.length < 6) full.push(targets.at(-1) as string);
+  const upFront = await game.p1.try((p) => p.cast("rain", { targets: full }));
   if (!upFront.ok) {
     await game.p1.cast("rain", { targets: targets[0] });
   }
@@ -53,7 +56,7 @@ async function castAt(game: Built, targets: string[]) {
 describe("Icathian Rain (ogn-248-298)", () => {
   test("costs 7 energy + 3 (hybrid) power; goes to trash after resolving", async () => {
     const game = await board().build();
-    await game.p1.cast("rain", { targets: "a" });
+    await game.p1.cast("rain", { targets: ["a", "a", "a", "a", "a", "a"] });
     expect(game.p1.resources()).toEqual({ energy: 0, power: { rainbow: 0 } });
     expect(game.chain()).toEqual([expect.objectContaining({ cardId: "rain", triggered: false })]);
     await game.settle({ policy: "first" });
@@ -90,34 +93,43 @@ describe("Icathian Rain (ogn-248-298)", () => {
     expect(game.state("c").damage).toBe(2);
   });
 
-  test("355.9.a.1: a unit an earlier instance already killed is not offered to a later instance's choose-target prompt", async () => {
+  // rule 355.8: the six "Deal 2 to a unit" instructions are mandatory targets, so all six are
+  // chosen as the spell is put on the chain — a partial pick would defer the rest to
+  // resolution-time prompts raised after the reaction window already closed.
+  test("355.8: all six targets are locked at play time — a partial target list is refused", async () => {
+    const game = await board().build();
+    await expect(game.p1.cast("rain", { targets: ["a", "b"] })).rejects.toThrow();
+    expect(game.zoneOf("rain")).toBe("hand");
+    await game.p1.cast("rain", { targets: ["a", "a", "a", "a", "a", "a"] });
+    expect(game.chain()[0]).toMatchObject({ cardId: "rain", targets: ["a", "a", "a", "a", "a", "a"] });
+  });
+
+  // rule 355.9.a.1: instances aimed at a unit an earlier instance already killed simply do
+  // nothing — targets are never re-chosen, and no prompt is raised on resolution.
+  test("355.9.a.1: instances aimed at an already-killed unit fizzle — no resolution-time re-pick", async () => {
     const game = await scenario()
       .resources(P1, { energy: 7, power: { rainbow: 3 } })
       .battlefield("bf1", { controller: P2 })
       .unit(P1, "base", { might: 2, name: "Weak" }, "weak")
       .unit(P2, "bf1", { might: 20 }, "a")
-      .unit(P2, "base", { might: 20 }, "b")
       .hand(P1, CARD, "rain")
       .build();
-    await game.p1.cast("rain", { targets: ["weak", "a"] });
-    let firstPrompt: string[] | undefined;
-    let deadAtPrompt: string | undefined;
+    await game.p1.cast("rain", { targets: ["weak", "weak", "weak", "weak", "weak", "weak"] });
+    let sawPick = false;
     for (let i = 0; i < 20; i++) {
       const d = game.decision();
       if (d?.kind === "action" && d.context === "chain") {
         await game.acting().pass();
       } else if (d?.kind === "pick" && d.seat === P1) {
-        if (firstPrompt === undefined) {
-          firstPrompt = d.options.map((o) => o.card ?? o.key);
-          deadAtPrompt = game.zoneOf("weak");
-        }
-        await game.p1.pick("b");
+        sawPick = true;
+        break;
       } else {
         break;
       }
     }
-    expect(deadAtPrompt).toBe("trash"); // the 2-Might unit died to the first instance
-    expect(firstPrompt).not.toContain("weak"); // …so it is no longer a legal choice
+    expect(sawPick).toBe(false);
+    expect(game.zoneOf("weak")).toBe("trash");
+    expect(game.state("a").damage ?? 0).toBe(0);
   });
 
   test("no [Action]/[Reaction]: not castable on the opponent's turn", async () => {

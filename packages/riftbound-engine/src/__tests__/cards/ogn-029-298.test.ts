@@ -27,7 +27,8 @@ function board() {
 describe("Falling Star (ogn-029-298)", () => {
   test("costs 2 energy + 2 fury power; goes to trash after resolving", async () => {
     const game = await board().build();
-    await game.p1.cast("fs", { targets: "atBf" });
+    // rule 355.8 — both "Deal 3 to a unit" instructions are mandatory targets, chosen at play time.
+    await game.p1.cast("fs", { targets: ["atBf", "atBf"] });
     expect(game.p1.resources()).toEqual({ energy: 0, power: { fury: 0 } });
     expect(game.zoneOf("fs")).toBe("chain");
     await game.settle();
@@ -47,10 +48,16 @@ describe("Falling Star (ogn-029-298)", () => {
   test("first instruction: deals 3 to the chosen unit — any unit anywhere, either side, is a legal choice", async () => {
     const game = await board().build();
     const targets = game.p1.option("cast", "fs")?.fields.find((f) => f.arg === "targets")?.options;
-    expect(targets).toEqual(expect.arrayContaining([["atBf"], ["atBase"], ["mine"]]));
-    await game.p1.cast("fs", { targets: "atBase" });
+    expect(targets).toEqual(
+      expect.arrayContaining([
+        ["atBf", "atBf"],
+        ["atBase", "atBase"],
+        ["mine", "mine"],
+      ]),
+    );
+    await game.p1.cast("fs", { targets: ["atBase", "atBase"] });
     await game.settle();
-    expect(game.state("atBase").damage).toBe(3);
+    expect(game.state("atBase").damage).toBe(6);
     expect(game.state("atBf").damage).toBe(0);
   });
 
@@ -79,13 +86,15 @@ describe("Falling Star (ogn-029-298)", () => {
     expect(game.zoneOf("big")).toBe("trash");
   });
 
-  test("rule 355.8: locking only ONE target still resolves the second instruction — the caster is prompted for it", async () => {
+  // rule 355.8: both instructions name a mandatory target, so both are chosen as the spell is put
+  // on the chain — a one-target cast is not a legal play and no pick is deferred to resolution.
+  test("rule 355.8: a single-target cast is refused; both targets are locked at play time", async () => {
     const game = await board().build();
-    await game.p1.cast("fs", { targets: "atBf" });
+    await expect(game.p1.cast("fs", { targets: "atBf" })).rejects.toThrow();
+    expect(game.zoneOf("fs")).toBe("hand");
+    await game.p1.cast("fs", { targets: ["atBf", "atBase"] });
     await game.settle();
-    expect(game.decision()?.kind).toBe("pick");
-    await game.p1.pick("atBase");
-    await game.settle();
+    expect(game.decision()?.kind).not.toBe("pick");
     expect(game.state("atBf").damage).toBe(3);
     expect(game.state("atBase").damage).toBe(3);
   });
@@ -96,7 +105,7 @@ describe("Falling Star (ogn-029-298)", () => {
       .unit(P2, "base", { might: 6 }, "big")
       .hand(P1, FALLING_STAR, "fs")
       .build();
-    await game.p1.cast("fs", { targets: "big" });
+    await game.p1.cast("fs", { targets: ["big", "big"] });
     await game.settle();
     expect(game.zoneOf("big")).toBe("trash");
   });
