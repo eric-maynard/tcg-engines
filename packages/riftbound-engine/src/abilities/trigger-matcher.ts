@@ -508,6 +508,17 @@ function triggerMatchesEvent(
             ? "move"
             : e,
     );
+  // rule 416.1.b (rule-id: ogn-235-298) — "when you recycle one or more cards
+  // to your MAIN DECK": a recycled rune goes under the Rune Deck and is not a
+  // card at all ("Runes aren't cards"), so a rune-only recycle fires nothing.
+  // Triggers written about runes ("when you recycle a rune", sfd-203-221) use
+  // the plain `recycle` event and are unaffected.
+  if (event.type === "recycle" && trigger.event.split("-or-").includes("recycle-cards-to-deck")) {
+    const registry = getGlobalCardRegistry();
+    if (!event.cardIds.some((id) => registry.getCardType(id as string) !== "rune")) {
+      return false;
+    }
+  }
   // rule 446.1 / 190.6.a (ogn-277-298) — a battlefield's "When a unit moves
   // from here" is the engine `move` event narrowed by ORIGIN to THIS
   // battlefield: a retreat to base and a Ganking hop to another battlefield

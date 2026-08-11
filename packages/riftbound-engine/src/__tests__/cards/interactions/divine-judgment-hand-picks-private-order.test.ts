@@ -285,7 +285,7 @@ describe("(d) Karma, Channeler: how many 'when you recycle one or more cards to 
 
   // Expected: runes recycled to the Rune Deck are not "cards to your Main Deck" → no Karma trigger at all.
   // Actual: a rune-only recycle still fires Karma once.
-  test.failing("BUG: recycling ONLY runes (P1 at quota everywhere else) does not trigger Karma at all (416.1.b; 'Runes aren't cards')", async () => {
+  test("recycling ONLY runes (P1 at quota everywhere else) does not trigger Karma at all (416.1.b; 'Runes aren't cards')", async () => {
     const b = scenario()
       .resources(P1, { energy: 7, power: { order: 2 } })
       .battlefield("bf1", { controller: P1 })
