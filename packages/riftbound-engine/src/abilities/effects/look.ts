@@ -368,6 +368,7 @@ export function handle_look(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
     reduceCost?: { energy?: number };
     ignoreEnergyCost?: boolean;
     ignoreCost?: boolean;
+    banishBeforePlay?: boolean;
     maxMightAboveKilled?: number;
     followUp?: unknown;
   };
@@ -433,6 +434,11 @@ export function handle_look(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
     // rule 356.1.b.1 (ogn-242-298) — "play it, ignoring its cost": nothing is
     // paid, energy and power alike.
     ...(onPicked === "play" && lookEff.ignoreCost ? { playIgnoreCost: true } : {}),
+    // rule 356.4 / 359.3.e.6 (ogn-242-298) — "you may BANISH a unit from among
+    // them AND play it": the banish is its own instruction and happens on
+    // selection, so the pick stays selectable even when the play that follows
+    // cannot be performed; the card then stays in banishment.
+    ...(onPicked === "play" && lookEff.banishBeforePlay ? { playBanishFirst: true } : {}),
     // rule 386.2 (ogn-291-298) — "Put those you don't [recycle] back in any
     // order": keeping every looked-at card leaves two or more on top, and
     // their order is the looker's decision. Declining the recycle is the only

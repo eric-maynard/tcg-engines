@@ -16,6 +16,11 @@ const abilities: Ability[] = [
         { target: { controller: "friendly", type: "unit" }, type: "kill" },
         {
           amount: 5,
+          // rule 356.4 / 359.3.e.6 (ruling 5ae85425a6107723) — "you may BANISH
+          // a unit … AND play it": the banish is its own instruction, so a unit
+          // whose play cannot be performed (Cruel Patron with no friendly unit
+          // left to kill) is still a legal pick and simply stays banished.
+          banishBeforePlay: true,
           filter: { excludeCardTypes: ["spell", "legend", "battlefield", "rune", "gear", "equipment"] },
           from: "deck",
           ignoreCost: true,

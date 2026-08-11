@@ -57,10 +57,9 @@ describe("Ruling 5ae85425a6107723 — Hooking your only unit into Cruel Patron: 
     expect(d.allowDecline || d.min === 0).toBe(true);
   });
 
-  // Expected (ruling): Cruel Patron is a selectable option (6 ≤ 5+1); selecting him banishes him, the play then fails for
-  // want of a friendly unit to kill, and he stays in banishment. Actual (engine): with no friendly unit left the engine
-  // pre-filters Cruel Patron out of the offer entirely (only the Skulkers are listed), so he can never end up banished.
-  test.failing("BUG: ruling 5ae85425a6107723 — engine hides the unplayable Cruel Patron from the offer instead of letting it be selected (and stay banished)", async () => {
+  // Cruel Patron is a selectable option (6 ≤ 5+1); selecting him banishes him, the play then fails for want of a
+  // friendly unit to kill, and he stays in banishment (rule 356.4 — the banish is its own instruction).
+  test("ruling 5ae85425a6107723 — the unplayable Cruel Patron is still offered; selecting him banishes him and he stays banished, the rest are recycled", async () => {
     const game = await board().build();
     const offer = await hookBait(game);
     expect(offer.options.map((o) => o.card ?? o.key)).toContain("patron");

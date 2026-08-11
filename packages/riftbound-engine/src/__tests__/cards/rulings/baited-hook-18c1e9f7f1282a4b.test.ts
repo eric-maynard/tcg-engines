@@ -65,11 +65,7 @@ async function hookBait(game: Game): Promise<Pick> {
 const offered = (d: Pick) => d.options.map((o) => o.card ?? o.key).sort();
 
 describe("Ruling 18c1e9f7f1282a4b — Baited Hook LOOKS, it does not REVEAL: Undertitan's [Add] [2] never happens", () => {
-  // Expected: Baited Hook's "look at the top 5" is not a reveal, so Undertitan's "As I'm revealed from your deck,
-  // [Add] [2]" never applies — P1's energy stays 0 in every branch.
-  // Actual: the engine fires Undertitan's reveal ability during the LOOK — P1 is at 2 energy as soon as the top 5
-  // are looked at (and keeps it whichever card is picked). Every other assertion below holds.
-  test("ruling 18c1e9f7f1282a4b — engine treats Baited Hook's look as a reveal and adds [2]; while the top 5 are being looked at (Undertitan among them and offered), P1 has gained no energy", async () => {
+  test("while the top 5 are being looked at (Undertitan among them and offered), P1 has gained no energy", async () => {
     const game = await board().build();
     const d = await hookBait(game);
     expect(game.zoneOf("bait")).toBe("trash");
@@ -78,7 +74,7 @@ describe("Ruling 18c1e9f7f1282a4b — Baited Hook LOOKS, it does not REVEAL: Und
     expect(game.state("titan").zone).toBe("mainDeck"); // still a private card of the deck, merely looked at
   });
 
-  test("ruling 18c1e9f7f1282a4b — engine adds [2] off the look; choosing Undertitan: it is banished and played for free (its 'when you play me' gives Pal +2), yet still no [Add] [2] — energy stays 0; the rest are recycled", async () => {
+  test("choosing Undertitan: it is banished and played for free (its 'when you play me' gives Pal +2), yet still no [Add] [2] — energy stays 0; the rest are recycled", async () => {
     const game = await board().build();
     await hookBait(game);
     await game.p1.pick("titan");
@@ -93,7 +89,7 @@ describe("Ruling 18c1e9f7f1282a4b — Baited Hook LOOKS, it does not REVEAL: Und
     expect(game.violations()).toEqual([]);
   });
 
-  test("ruling 18c1e9f7f1282a4b — engine adds [2] off the look; choosing another unit: Undertitan is recycled to the bottom with the rest, unrevealed — energy stays 0", async () => {
+  test("choosing another unit: Undertitan is recycled to the bottom with the rest, unrevealed — energy stays 0", async () => {
     const game = await board().build();
     await hookBait(game);
     await game.p1.pick("two");
