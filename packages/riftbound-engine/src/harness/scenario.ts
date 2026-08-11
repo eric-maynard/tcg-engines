@@ -15,6 +15,7 @@ import type { StaticAbilityContext } from "../abilities/static-abilities";
 import { recalculateStaticEffects } from "../abilities/static-abilities";
 import { riftboundDefinition } from "../game-definition/definition";
 import { CardDefinitionRegistry, setGlobalCardRegistry, getGlobalCardRegistry } from "../operations/card-lookup";
+import { recordDepartedOwner } from "../operations/leave-board";
 import type { GamePhase, RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../types";
 import { basicRuneDef, domainsOf, FILLER_UNIT_DEF, loadDefaultCardPool, toLookupPayload } from "./card-pool";
 import type { HarnessEngine } from "./internal";
@@ -90,6 +91,24 @@ function resolveZone(spec: ScenarioSpec, zone: string): string {
     return `battlefield-${zone}`;
   }
   return zone;
+}
+
+/**
+ * rule 186.1 — a token object exists only on the board. A scenario that seeds a
+ * token printing into a pile or a private zone describes a token that already
+ * ceased to exist, so nothing is placed there at all (an engine that "played" it
+ * back out of banishment would be replaying an object that is not there).
+ */
+function tokenSeededOffBoard(def: CardDefLike, zone: string): boolean {
+  const isToken = (def as { isToken?: boolean }).isToken === true || String(def.id ?? "").startsWith("token-def-");
+  const onBoard =
+    zone === "base" ||
+    zone === "legendZone" ||
+    zone === "championZone" ||
+    zone === "battlefieldRow" ||
+    zone.startsWith("battlefield-") ||
+    zone.startsWith("facedown-");
+  return isToken && !onBoard;
 }
 
 function resolveDef(pool: CardPool, def: DefSpec, fallbackName: string): CardDefLike {
@@ -297,7 +316,15 @@ export function buildScenarioEngine(spec: ScenarioSpec, pool: CardPool): BuiltSc
   // 4. Cards.
   for (const c of spec.cards) {
     const def = resolveDef(pool, c.def, c.id);
-    placeCard(engine, c.id, def, c.owner, c.controller ?? c.owner, resolveZone(spec, c.zone), c.meta);
+    const zone = resolveZone(spec, c.zone);
+    // rule 186.1: a token seeded off the board has already ceased to exist — it
+    // is no game object (so nothing can play or target it), only an owner record.
+    if (tokenSeededOffBoard(def, zone)) {
+      getGlobalCardRegistry().register(c.id, toLookupPayload(def, c.id));
+      recordDepartedOwner(peekCurrentState(engine), c.id, c.owner);
+      continue;
+    }
+    placeCard(engine, c.id, def, c.owner, c.controller ?? c.owner, zone, c.meta);
     ids.push(c.id);
   }
 
