@@ -124,7 +124,7 @@ describe("Smoke and Mirrors — the [Temporary] gate is re-read at resolution, t
     expect(game.violations()).toEqual([]);
   });
 
-  test.failing('BUG: "Draw 1" is skipped when the swap is ignored — it is a separate instruction with no complement (135.2.b.5.a), unlinked to the move, so 359.3.e.10 / 359.3.e.11 make it execute anyway. Expected: P1 draws the top card. Actual: the engine drops the whole effect (hand unchanged, deck untouched) when either chosen unit has left.', async () => {
+  test('"Draw 1" still happens when the swap is ignored: it is a separate instruction with no complement (135.2.b.5.a), unlinked to the move, so 359.3.e.10 / 359.3.e.11 make it execute anyway', async () => {
     const game = await board().build();
     const deckBefore = game.p1.deck().length;
     await cast(game);
@@ -153,7 +153,7 @@ describe("Smoke and Mirrors — the [Temporary] gate is re-read at resolution, t
     expect(game.violations()).toEqual([]);
   });
 
-  test.failing("BUG: the Sprite follows A into the base instead of taking A's finalized location. Move destinations are chosen when the spell is played (355.4) and cannot change afterwards (355.15), so the locked pair is A→bfB and Sprite→bfA — the Sprite must land at bfA (and keep it for P1) even though A no longer starts there. Expected: sprite at bfA. Actual: the engine re-derives 'the other's location' at resolution and sends the Sprite to P1's base, leaving bfA uncontrolled.", async () => {
+  test("the Sprite takes A's FINALIZED location, not A's new one: move destinations are chosen when the spell is played (355.4) and cannot change afterwards (355.15), so the locked pair stays A\u2192bfB and Sprite\u2192bfA", async () => {
     const game = await board().build();
     await cast(game);
     await game.p1.cast("flash", { targets: ["A"] });

@@ -1622,7 +1622,17 @@ export function executeResolvedItem(
     mistargeted &&
     effect.type === "discard" &&
     (effect as { then?: unknown }).then !== undefined;
-  if (splashRider || revealAmountRider) {
+  // rule 135.2.b.5.a / 359.3.e.10 (rule-id: unl-083-219 Smoke and Mirrors) —
+  // "…move each to the other's location. Draw 1": the draw is a separate
+  // instruction with no complement, unlinked to the swap, so losing a member of
+  // the locked pair ignores the swap alone and the draw still happens.
+  const swapThenRider =
+    mistargeted &&
+    effect.type === "swap-locations" &&
+    (effect as { then?: unknown }).then !== undefined;
+  if (swapThenRider) {
+    executeEffect((effect as { then: ExecutableEffect }).then, effectCtx);
+  } else if (splashRider || revealAmountRider) {
     executeEffect({ ...(effect as object), _splashOnly: true } as ExecutableEffect, effectCtx);
   } else if (discardRider) {
     executeEffect({ ...(effect as object), then: undefined } as ExecutableEffect, effectCtx);

@@ -28,6 +28,7 @@ export function handle_swapLocations(
     target2?: TargetDescriptor;
     requireKeywordOnEither?: string;
     then?: ExecutableEffect;
+    _swapZones?: readonly (string | undefined)[];
   };
   const resolverCtx = {
     cards: ctx.cards,
@@ -50,8 +51,16 @@ export function handle_swapLocations(
     b ??= seconds[0];
   }
 
-  const zoneA = a ? (ctx.zones.getCardZone(a as CoreCardId) as string | undefined) : undefined;
-  const zoneB = b ? (ctx.zones.getCardZone(b as CoreCardId) as string | undefined) : undefined;
+  // rule 355.4 / 355.15 — the two destinations were fixed when the pair was
+  // named (`play-time-destinations.ts lockSwapDestinations`): "the other's
+  // location" is never re-derived here, so a partner moved in response does not
+  // drag its counterpart along.
+  const zoneA =
+    spec._swapZones?.[0] ??
+    (a ? (ctx.zones.getCardZone(a as CoreCardId) as string | undefined) : undefined);
+  const zoneB =
+    spec._swapZones?.[1] ??
+    (b ? (ctx.zones.getCardZone(b as CoreCardId) as string | undefined) : undefined);
   const keyword = spec.requireKeywordOnEither;
   const getMeta = ((id: CoreCardId) => ctx.cards.getCardMeta?.(id)) as Parameters<
     typeof hasKeyword

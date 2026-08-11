@@ -311,6 +311,60 @@ export function raisePlayTimeDestinationChoice(
   return false;
 }
 
+/** Every `swap-locations` instruction of `effect`, root or sequence step. */
+function collectSwapNodes(effect: unknown, out: AnyEffect[] = []): AnyEffect[] {
+  if (!effect || typeof effect !== "object" || Array.isArray(effect)) {
+    return out;
+  }
+  const node = effect as AnyEffect;
+  if (node.type === "sequence" && Array.isArray(node.effects)) {
+    for (const sub of node.effects) {
+      collectSwapNodes(sub, out);
+    }
+    return out;
+  }
+  if (node.type === "swap-locations") {
+    out.push(node);
+  }
+  return out;
+}
+
+/**
+ * rule 355.4 / 355.15 (rule-id: unl-083-219 Smoke and Mirrors) — "move each to
+ * the other's location" performs two moves, and their destinations are Relevant
+ * Choices of PLAYING the spell: each unit is bound for where its partner stands
+ * when the pair is named. Freeze the pair's locations on the instruction
+ * (`_swapZones`, positional with `item.targets`) so a partner moved in response
+ * cannot drag its counterpart along — "the other's location" is never re-derived
+ * at resolution (446.3).
+ */
+export function lockSwapDestinations(item: ChainItemLike, ctx: EffectContext): void {
+  if (item.countered === true || item.effect === undefined) {
+    return;
+  }
+  let nodes = collectSwapNodes(item.effect);
+  if (nodes.length === 0 || nodes.every((n) => n._swapZones !== undefined)) {
+    return;
+  }
+  if (!nodes.every((n) => Object.isExtensible(n))) {
+    item.effect = JSON.parse(JSON.stringify(item.effect));
+    nodes = collectSwapNodes(item.effect);
+  }
+  const targets = (item.targets as readonly string[] | undefined) ?? [];
+  for (const node of nodes) {
+    if (node._swapZones !== undefined) {
+      continue;
+    }
+    const zones = targets
+      .slice(0, 2)
+      .map((id) => ctx.zones.getCardZone(id as CoreCardId) as string | undefined);
+    if (zones.length !== 2 || zones.some((z) => z === undefined)) {
+      continue; // the pair is not on the board yet — nothing to lock
+    }
+    node._swapZones = zones;
+  }
+}
+
 /**
  * The finalization checkpoint (run at the end of every move, before anyone
  * gets priority): raise the first unmade destination choice on any FINALIZED
@@ -326,6 +380,7 @@ export function raiseChainDestinationChoices(
     if (!item || item.status === "pending") {
       continue;
     }
+    lockSwapDestinations(item, makeCtx(item));
     if (collectDestinationNodes(item.effect).every((n) => n._dest !== undefined)) {
       continue;
     }
