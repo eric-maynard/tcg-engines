@@ -73,23 +73,27 @@ async function driveChompers(game: Game): Promise<{ destinations: string[]; aske
 }
 
 describe("Ruling d039a38c7976af6b — the Merchant leaving empties the battlefield: control is lost at once and Chompers can't be played there", () => {
-  // Expected (A): as soon as the Merchant's move to base completes, bf1 has no P1 unit → controller null immediately; the
-  // Chompers play offers only P1's base. Actual: the engine keeps P1 as bf1's controller through the whole chain (control
-  // only lapses at the next open-state Cleanup) and offers "battlefield-bf1" as a destination.
-  test.failing("BUG: ruling d039a38c7976af6b (A, open state on my turn) — engine keeps control of the emptied bf1 during the chain and offers it to Chompers; control should drop immediately and only base be legal", async () => {
+  // RULING-CONFLICT: riftjudge d039a38c7976af6b says control of the emptied bf1 is lost IMMEDIATELY ("in open or closed
+  // state"), so Chompers may never be played there; rule 190.4 / 323.6 (plus the official clarification 9a32cc…, and the
+  // engine's one adjudicated model in E/operations/battlefield-control.ts) says control lapses only at a Cleanup that
+  // runs in an OPEN State — engine follows the CR. The Merchant's own move trigger is on the chain when Chompers is
+  // discarded and played, so the state is CLOSED: P1 still controls the emptied bf1 and it is a legal destination.
+  // Control lapses at the first Open Cleanup once the chain empties.
+  test("RULING-CONFLICT (A, open state on my turn): control of the emptied bf1 is KEPT while the Merchant's move trigger resolves — bf1 is offered to Chompers — and only lapses at the first Open Cleanup", async () => {
     const game = await board().build();
     await game.p1.move("merchant", "base");
     expect(game.zoneOf("merchant")).toBe("base");
     expect(game.chain()).toEqual([expect.objectContaining({ cardId: "merchant", triggered: true })]);
     expect(game.p1.units("bf1")).toEqual([]);
-    expect(game.gameState.battlefields.bf1?.controller).toBeNull(); // "immediately"
+    expect(game.gameState.battlefields.bf1?.controller).toBe(P1); // closed state — control kept
     const hand = game.p1.hand().length;
     const { destinations } = await driveChompers(game);
-    expect(destinations).not.toContain("battlefield-bf1");
-    expect(game.zoneOf("chomp")).toBe("base");
+    expect(destinations).toContain("battlefield-bf1");
+    expect(game.zoneOf("chomp")).toBe("base"); // base was picked when offered
     expect(game.p1.power("fury")).toBe(0);
     expect(game.p1.hand()).toHaveLength(hand - 1 + 1); // discarded Chompers, drew 1
     expect(game.decision()).toMatchObject({ context: "main", kind: "action", seat: P1 });
+    expect(game.gameState.battlefields.bf1?.controller).toBeNull(); // lapsed at the first Open Cleanup
   });
 
   // RULING-CONFLICT: this ruling's "control is lost immediately, in open or closed state" contradicts the engine's one
