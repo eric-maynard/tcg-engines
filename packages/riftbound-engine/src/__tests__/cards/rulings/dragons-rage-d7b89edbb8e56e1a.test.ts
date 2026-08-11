@@ -67,23 +67,18 @@ describe("Ruling d7b89edbb8e56e1a — Reversing a Defy aimed at your own Dragon'
     expect(chain[0]).toMatchObject({ cardId: "rage", controller: P1 });
   });
 
-  // Expected: the New Choices dialog for Defy's "a spell" slot can only offer Dragon's Rage (the sole other spell on the
-  // chain), already marked current. Actual: the engine offers the UNITS Victim and Brute (Dragon's Rage's own move
-  // candidates) as new "targets" for Defy, and Rage is not even listed.
-  test.failing("BUG: ruling d7b89edbb8e56e1a — Defy's new-choice menu must be exactly [Dragon's Rage] (engine offers enemy units instead of spells)", async () => {
+  // RULING-CONFLICT: this facet originally demanded a New Choices dialog listing exactly [Dragon's Rage] (already
+  // current); rule 753.2 says a player may not make new choices when there is no legal choice they could make this way,
+  // and Dragon's Rage — the sole other spell on the chain (355.9.c bars Defy itself) — is already Defy's target. So the
+  // engine raises no dialog at all and Defy keeps aiming at Dragon's Rage. Core spec: core-rules/new-choices.test.ts.
+  test("ruling d7b89edbb8e56e1a — no new choices are offered for Defy: its only legal target is the one it already has (753.2)", async () => {
     const game = await rageDefyReversal();
     await game.p1.passPriority();
     await game.p2.passPriority();
-    const d = game.decision();
-    expect(d).toMatchObject({ kind: "pick", seat: P1 });
-    expect(d?.kind === "pick" ? d.newChoices?.grantedBy : undefined).toBe("reversal");
-    const offered = d?.kind === "pick" ? d.options.map((o) => o.card ?? o.key) : [];
-    expect(offered).toEqual(["rage"]);
-    expect(d?.kind === "pick" ? d.options[0]?.current : false).toBe(true); // it already holds that value
-    expect((await game.p1.try((p) => p.pick("defy"))).ok).toBe(false);
-    await game.p1.keepChoices();
+    expect(game.decision()).toMatchObject({ context: "chain", kind: "action" });
     const defy = game.chain().find((c) => c.cardId === "defy");
     expect(defy?.targets ?? ["rage"]).toEqual(["rage"]);
+    expect(defy?.controller).toBe(P1);
   });
 
   // Expected: keeping the (only) choice, Defy — now P1's — resolves and counters Dragon's Rage: Rage goes to the trash

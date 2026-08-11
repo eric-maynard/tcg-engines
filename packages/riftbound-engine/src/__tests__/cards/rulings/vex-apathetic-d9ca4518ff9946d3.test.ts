@@ -7,7 +7,8 @@
  * Q: Vex is at a battlefield; an opponent plays Tideturner to base — is it stunned before its move trigger resolves?
  * A: Depends on the Turn Player. Both triggers fire at once; the Turn Player's goes on the chain first (resolves last).
  *    Turn Player plays Tideturner → Vex's trigger is on top: Tideturner is stunned/can't move BEFORE its swap resolves,
- *    so Tideturner stays — but the chosen partner still moves to Tideturner's location (partial resolution).
+ *    so Tideturner stays and the exchange is cancelled outright (see the RULING-CONFLICT note below: this ruling calls for
+ *    partial resolution, ruling b449100f59889211 on the same pair calls for cancellation — the engine cancels).
  *    Non-Turn Player plays Tideturner → Tideturner's trigger is on top: the swap completes, then the stun applies.
  * Rules: 383.3.d.1 (simultaneous triggers: Turn Player's first), 340 (LIFO), 423 (Stun), 359.3.e.11 (do as much of an
  *        instruction as possible), 811 (Hidden play as a Reaction on the opponent's turn).
@@ -68,11 +69,13 @@ describe("Ruling d9ca4518ff9946d3 — Vex vs Tideturner: who is Turn Player deci
     expect(game.locationOf("vex")).toBe("bfV");
   });
 
-  // RULING-CONFLICT: this ruling's nuance says the partner still moves ("partial resolution"); ruling b449100f59889211 on the
-  // same pair says the swap fails entirely. Expected per THIS ruling: Tideturner stays in base (stunned, can't move) and
-  // Anchor moves to base anyway. Actual: the engine treats the swap as all-or-nothing once Tideturner itself can't move —
-  // Anchor stays at bfA (it does resolve partially the other way round, cf. Vilemaw's Lair c7cd0f18454c9d64).
-  test.failing("BUG: ruling d9ca4518ff9946d3 — stunned Tideturner stays but the chosen Anchor should still move to base (partial resolution); engine cancels the whole swap and leaves Anchor at bfA", async () => {
+  // RULING-CONFLICT: riftjudge d9ca4518ff9946d3 says the partner still moves ("partial resolution"); riftjudge
+  // b449100f59889211 on the SAME pair says "the swap fails … the effect is effectively cancelled". Two rulings disagree,
+  // so the engine keeps one behaviour (all-or-nothing) rather than flipping: "Move me to its location and it to my
+  // original location" is a single exchange whose two halves are defined in terms of each other — with Tideturner unable
+  // to move there is no "my original location" to send the partner to, so 359.3.e.11 ("as much as possible") leaves
+  // nothing to do. Green companion spec: rulings/vex-apathetic-b449100f59889211.test.ts.
+  test("ruling d9ca4518ff9946d3 — the stunned Tideturner can't move, so the whole swap is cancelled and Anchor stays at bfA", async () => {
     const game = await scenario()
       .turn(3)
       .battlefield("bfA", { controller: P1 })
@@ -89,7 +92,7 @@ describe("Ruling d9ca4518ff9946d3 — Vex vs Tideturner: who is Turn Player deci
     expect(game.chain()).toEqual([]);
     expect(game.locationOf("tt")).toBe("base");
     expect(game.state("tt").isStunned).toBe(true);
-    expect(game.locationOf("anchor")).toBe("base"); // the partner's half still happens
+    expect(game.locationOf("anchor")).toBe("bfA"); // the partner's half is cancelled too
     expect(game.locationOf("vex")).toBe("bfV");
     expect(game.decision()).toMatchObject({ context: "main", kind: "action", seat: P1 });
     expect(game.violations()).toEqual([]);
