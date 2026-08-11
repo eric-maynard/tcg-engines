@@ -1,12 +1,13 @@
 /**
  * Pregame affordances vs a bot (gated — see _gate.ts):
- *  - Bo3 vs Goldfish: the d20 roll overlay is SHOWN (both dice + who won; the
- *    human chooses when it wins, the bot elects to go first when it wins), then
- *    "Choose Your Battlefield" renders the three options as card images (hover
- *    = full text), a lock-in is final (options disabled, "Locked: X — waiting…";
- *    a second raw WS pick gets an error frame), the Goldfish has already picked
- *    server-side so the game reaches the mulligan, and every pregame screen has
- *    a "Leave match" button that returns to the play menu and frees the game.
+ *  - Bo3 vs Goldfish — ORDER: "Choose Your Battlefield" FIRST (rules 113 /
+ *    486.5; three options as card images, hover = full text, lock-in is final:
+ *    options disabled, "Locked: X — waiting…", a second raw WS pick gets an error
+ *    frame; the Goldfish has already picked server-side), THEN the d20 roll
+ *    overlay (rule 115; both dice + who won; the human chooses when it wins —
+ *    the answer goes on the game socket —, the bot elects to go first when it
+ *    wins), then the mulligan; every pregame screen has a "Leave match" button
+ *    that returns to the play menu and frees the game.
  *  - "Skip animations in practice games" restores the instant start (no overlay).
  * Server side: apps/riftbound-app/server/pregame.ts (runBotPregame,
  * selectBattlefield, abandonPregame) + server/__tests__/pregame-bot.test.ts.
@@ -57,7 +58,7 @@ const leaveBtnProbe = `(() => { const b = document.getElementById("pregameLeaveB
 
 describeLive("pregame vs a bot — roll overlay, card-art battlefield picker, final lock-in, Leave match", () => {
   test(
-    "Bo3 vs Goldfish: roll overlay shows both dice + winner (human chooses / bot decides) → battlefield options are card images with hover text → lock-in is final (UI + raw WS refused) → mulligan (Goldfish already picked) → Leave match returns to the menu and frees the game",
+    "Bo3 vs Goldfish: battlefield picker FIRST (card images, hover text, final lock-in — UI + raw WS refused) → THEN the roll overlay (both dice + winner; human chooses / bot decides) → mulligan → Leave match returns to the menu and frees the game",
     async () => {
       browser = await BrowserBackend.startBrowser({ viewport: { height: 900, width: 1440 } });
       const page = browser.page;
@@ -66,33 +67,10 @@ describeLive("pregame vs a bot — roll overlay, card-art battlefield picker, fi
       expect(await page.evaluate<boolean | null>(`(() => { const t = document.getElementById("soloSkipAnimToggle"); return t ? t.checked : null; })()`)).toBe(false);
       await page.locator("#soloDeckPicker .start-btn").first().click({ timeout: 10_000 });
 
-      // 1. The d20 overlay appears with both server rolls; a Leave button is on it too.
-      await until(page, `Boolean(document.querySelector("#coinOverlay.visible"))`, 15_000);
-      await until(page, `["settled","choose","decided","waiting"].includes(document.getElementById("coinOverlay").dataset.stage || "")`, 10_000);
-      const roll = await page.evaluate<{ r1: string; r2: string; result: string; stage: string; leave: boolean }>(`(() => ({
-        r1: document.getElementById("duelRoll1").textContent, r2: document.getElementById("duelRoll2").textContent,
-        result: document.getElementById("coinResult").textContent || "",
-        stage: document.getElementById("coinOverlay").dataset.stage || "",
-        leave: Boolean(document.querySelector("#coinOverlay #coinLeaveBtn")),
-      }))()`);
-      expect(Number(roll.r1)).toBeGreaterThanOrEqual(1);
-      expect(Number(roll.r2)).toBeGreaterThanOrEqual(1);
-      expect(Number(roll.r1)).not.toBe(Number(roll.r2));
-      expect(roll.result).toMatch(/rolled higher/);
-      expect(roll.leave).toBe(true);
-      const humanWon = Number(roll.r1) > Number(roll.r2);
-      if (humanWon) {
-        // Human won: the go-first / go-second choice is offered; take "I'll go first".
-        await until(page, `document.getElementById("coinOverlay").dataset.stage === "choose" && document.getElementById("coinChoose").style.display === "flex"`, 5_000);
-        await page.locator("#coinChoose .coin-choose-btn").first().click();
-      } else {
-        // Bot won: it decides (go first) and the overlay says so, then proceeds by itself.
-        await until(page, `document.getElementById("coinOverlay").dataset.stage === "decided"`, 5_000);
-        expect(await page.evaluate<string>(`document.getElementById("coinDetail").textContent`)).toMatch(/won the roll and chose to go first/);
-      }
-
-      // 2. Battlefield picker: three card-image options, name under the art, Leave button on top.
+      // 1. Battlefield picker FIRST (rules 113 / 486.5 before 115): three card-image options, name under the art, Leave button on top — and NO roll yet.
       await until(page, `Boolean(document.querySelector("#pregameOverlay.visible #bfChoices .bf-choice"))`, 20_000);
+      expect(await page.evaluate<boolean>(`window.__coinSeen`)).toBe(false);
+      expect(await page.evaluate<string>(`(document.querySelector("#pregameContent .pregame-info") || {}).textContent || ""`)).toMatch(/decided after battlefields are locked/);
       const picker = await page.evaluate<{ n: number; imgs: number; names: string[]; disabled: number; hint: string; leave: unknown; coinHidden: boolean }>(`(() => ({
         n: document.querySelectorAll("#bfChoices .bf-choice").length,
         imgs: Array.from(document.querySelectorAll("#bfChoices .bf-choice img.bf-choice-img")).filter((i) => (i.getAttribute("src") || "").startsWith("/card-image/")).length,
@@ -138,9 +116,37 @@ describeLive("pregame vs a bot — roll overlay, card-art battlefield picker, fi
       const errs = await page.evaluate<{ error: string; errorCode?: string }[]>(`window.__wsErrs`);
       expect(errs[0]?.errorCode).toBe("BATTLEFIELD_SELECT");
       expect(String(errs[0]?.error)).toMatch(/already locked in|Not choosing battlefields/);
-      // The Goldfish picked server-side already ⇒ both locked ⇒ mulligan, with OUR first pick in play.
-      await until(page, `Boolean(pregameState && pregameState.phase === "mulligan" && document.querySelector("#pregameOverlay.visible .mulligan-btn-keep"))`, 20_000);
+
+      // 3b. THEN the d20 overlay (rule 115) with both server rolls; a Leave button is on it too.
+      await until(page, `Boolean(document.querySelector("#coinOverlay.visible"))`, 15_000);
+      await until(page, `["settled","choose","decided","waiting"].includes(document.getElementById("coinOverlay").dataset.stage || "")`, 10_000);
+      const roll = await page.evaluate<{ r1: string; r2: string; result: string; stage: string; leave: boolean }>(`(() => ({
+        r1: document.getElementById("duelRoll1").textContent, r2: document.getElementById("duelRoll2").textContent,
+        result: document.getElementById("coinResult").textContent || "",
+        stage: document.getElementById("coinOverlay").dataset.stage || "",
+        leave: Boolean(document.querySelector("#coinOverlay #coinLeaveBtn")),
+      }))()`);
+      expect(Number(roll.r1)).toBeGreaterThanOrEqual(1);
+      expect(Number(roll.r2)).toBeGreaterThanOrEqual(1);
+      expect(Number(roll.r1)).not.toBe(Number(roll.r2));
+      expect(roll.result).toMatch(/rolled higher/);
+      expect(roll.leave).toBe(true);
+      const humanWon = Number(roll.r1) > Number(roll.r2);
+      if (humanWon) {
+        // Human won: the go-first / go-second choice is offered (answer goes on the GAME socket); take "I'll go first".
+        await until(page, `document.getElementById("coinOverlay").dataset.stage === "choose" && document.getElementById("coinChoose").style.display === "flex"`, 5_000);
+        await page.locator("#coinChoose .coin-choose-btn").first().click();
+        await until(page, `document.getElementById("coinOverlay").dataset.stage === "decided"`, 5_000);
+        expect(await page.evaluate<string>(`document.getElementById("coinDetail").textContent`)).toMatch(/You go first/);
+      } else {
+        // Bot won: it decides (go first) and the overlay says so, then proceeds by itself.
+        await until(page, `document.getElementById("coinOverlay").dataset.stage === "decided"`, 5_000);
+        expect(await page.evaluate<string>(`document.getElementById("coinDetail").textContent`)).toMatch(/won the roll and chose to go first/);
+      }
+      // ⇒ mulligan (hands drawn only now, rule 116), with OUR first battlefield pick in play; the roll overlay is gone.
+      await until(page, `Boolean(pregameState && pregameState.phase === "mulligan" && document.querySelector("#pregameOverlay.visible .mulligan-btn-keep")) && !document.querySelector("#coinOverlay.visible")`, 20_000);
       expect(await page.evaluate<string>(`pregameState.battlefieldSelected`)).toBe(ids[0] as string);
+      expect(await page.evaluate<string>(`pregameState.firstPlayer`)).toBe(humanWon ? "player-1" : "player-2");
       // The locked picker rendering (what a player sees while a slower opponent chooses): options inert + status line.
       const lockedRender = await page.evaluate<{ disabled: number; status: string; badge: number }>(`(() => {
         const box = document.createElement("div");
