@@ -1,0 +1,88 @@
+/* lobby.css — Play menu / solo deck picker / lobby room keep a FIXED footprint
+   while the player changes selections (deck, Opponent, Opponent's deck, Bo1/Bo3,
+   Duel/Match, opening a rich dropdown). Loaded after gameplay.css.
+
+   Rules of the road:
+   - panels have an explicit width (content never sizes them — a long deck name
+     ellipsizes inside the picker instead of stretching the panel);
+   - rows that gain/lose a line reserve that line up front (status lines, the
+     seat cards' legality note, the picker button's subtitle);
+   - dropdown menus are position:absolute (gameplay.css) so opening one never
+     pushes siblings;
+   - buttons keep their width regardless of label. */
+
+.start-screen {
+  --lobby-panel-w: 560px;
+}
+
+/* The solo picker gets the same anchored panel as the other lobby steps. */
+#soloDeckPicker {
+  background: #14121f;
+  border: 1px solid #2a2740;
+  border-radius: 12px;
+  padding: 28px 32px;
+  text-align: left;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+}
+#lobbyRoom, #soloDeckPicker {
+  box-sizing: border-box;
+  width: var(--lobby-panel-w);
+  min-width: 0;
+  max-width: none;
+  flex-shrink: 0;
+}
+
+/* Rich deck picker: fills the panel, never sizes it; the button is the same
+   height with or without a subtitle line ("-- Choose a deck --"). */
+.start-screen .deck-dd { width: 100%; min-width: 0; box-sizing: border-box; }
+.start-screen .deck-dd-btn { box-sizing: border-box; min-height: 52px; }
+.start-screen .deck-dd-text { min-height: 32px; justify-content: center; position: relative; }
+/* The name ellipsizes (gameplay.css); the legality chip is pinned at the right
+   edge of the text column so a long name can't push it out of view. */
+.start-screen .deck-dd-name { padding-right: 40px; box-sizing: border-box; }
+.start-screen .deck-dd-name > .deck-dd-legal { position: absolute; right: 0; top: 1px; margin-left: 0 !important; }
+.start-screen .deck-dd-menu { box-sizing: border-box; }
+
+/* Status lines: one reserved line even when empty. */
+#soloDeckStatus { min-height: 14px; line-height: 14px; }
+#deckLoadStatus { min-height: 16px; line-height: 16px; }
+#lobbyStatus { min-height: 16px; line-height: 16px; }
+#joinError { min-height: 16px; line-height: 16px; }
+#soloDeckPicker .ai-opp-hint { min-height: 14px; line-height: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Solo picker rows. The Opponent <select> keeps one width whatever its options
+   say (labels gain "(mock)" / new entries after /api/ai/status answers). */
+#soloDeckPicker h2 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#soloDeckPicker .ai-opp-row { min-height: 38px; }
+#soloOpponent { width: 230px; box-sizing: border-box; }
+#soloDeckPicker .opp-deck-row, #lobbyRoom .opp-deck-row { min-height: 74px; }
+
+/* Buttons: width independent of label ("Play" / "Start Game" / "Starting…"). */
+.start-screen .start-btn { min-width: 150px; box-sizing: border-box; }
+
+/* Lobby room seat cards: fixed box with the legality note's lines reserved, so
+   "Deck: Legal ✓" / "⚠ not tournament-legal…" arriving never grows the row. */
+#lobbyRoom .lobby-player-card {
+  box-sizing: border-box;
+  width: 200px;
+  max-width: 200px;
+  height: 112px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+#lobbyRoom .lobby-player-card .lpc-status { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#lobbyRoom .lobby-player-card .lpc-legality {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+/* Centre the "host vs guest" row inside the fixed-width panel. */
+#lobbyRoom > div:has(> .lobby-player-card) { justify-content: center; }
+
+/* Mode buttons share the row equally and reserve two lines of description, so
+   the selector is the same height at any panel width / active state. */
+#lobbyRoom .mode-selector { display: flex; }
+#lobbyRoom .mode-btn { flex: 1 1 0; min-width: 0; }
+#lobbyRoom .mode-btn .mode-desc { line-height: 13px; min-height: 26px; }
