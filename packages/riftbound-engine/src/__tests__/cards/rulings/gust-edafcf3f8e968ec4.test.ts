@@ -102,13 +102,22 @@ describe("Ruling edafcf3f8e968ec4 — targets lock on play; split amounts and re
     expect(game.locationOf("mover")).toBe("bf1");
   });
 
-  // Expected (ruling step 1 / rule 355.4): the Move DESTINATION is also a play-time choice, made before anyone gets priority
-  // (as the engine already does for Charm). Actual: for Dragon's Rage the destination prompt only appears as the spell
-  // RESOLVES (timing RES, after both players passed).
-  test.failing("BUG: ruling edafcf3f8e968ec4 — Dragon's Rage asks the move destination on resolution instead of on play (355.4)", async () => {
+  // RULING-CONFLICT: riftjudge edafcf3f8e968ec4 reads rule 355.4 as fixing THIS spell's move destination at play too;
+  // riftjudge 25b00b80ac336276 and fecbe8e7b2277037 both say the opposite for Dragon's Rage specifically — only the
+  // target is declared when it is played and the destination is chosen as it RESOLVES, because the reflexive "another
+  // enemy unit at its destination" reads the units standing there at that moment, so a response (Flash, Fight or
+  // Flight) must still be able to change the answer. CR 355.4 does not speak to a destination its own follow-up picks
+  // from, so those two clarifying rulings win; the engine keeps exactly this one destination open
+  // (moves/play/play-time-destinations.ts `dependsOnDestination`) and every other move spell (Charm, Gust) still
+  // chooses at play.
+  test("Dragon's Rage: playing it declares only the target — the destination waits for resolution (RULING-CONFLICT, see note)", async () => {
     const game = await rageBoard().build();
     await game.p1.cast("rage", { targets: "mover" });
-    expect(game.decision()).toMatchObject({ kind: "pick", seat: P1, semantics: "destination", timing: "FIN" });
+    expect(game.decision()).toMatchObject({ context: "chain", kind: "action", seat: P1 });
+    expect(game.locationOf("mover")).toBe("bf1");
+    await game.p1.passPriority();
+    await game.p2.passPriority();
+    expect(game.decision()).toMatchObject({ kind: "pick", seat: P1, semantics: "destination", timing: "RES" });
   });
 
   test("Dragon's Rage steps 2–3: it resolves (Mover moves to bf2) and THEN a NEW triggered chain item appears whose target — another enemy unit at the destination — is chosen at that item's own finalization; P2 gets priority against it; it resolves as a fight", async () => {
