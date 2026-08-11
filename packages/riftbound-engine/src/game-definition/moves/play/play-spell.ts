@@ -2547,6 +2547,10 @@ export const playSpell: Defs["playSpell"] = {
         }
         continue;
       }
+      // rule-id: sfd-136-221 (rule 355.5 / 820.2) — a counter played via [Flow]
+      // names its victim as it is PLAYED, exactly like the same card cast from
+      // hand: one variant per legal chain item.
+      const flowCounterSpec = counterChainTarget(spellEffect);
       // rule-id: sfd-017-221 (rule 355.8) — lift a sequence's lead target.
       // rule-id: ogn-254-298 — lift a "next time it…" replacement's chosen unit.
       const tgt =
@@ -2556,7 +2560,7 @@ export const playSpell: Defs["playSpell"] = {
         findConditionalBranchTarget(spellEffect) ??
         findSequenceLeadTarget(spellEffect);
       const isCardTarget =
-        counterChainTarget(spellEffect) === undefined &&
+        flowCounterSpec === undefined &&
         // rule-id: ogn-198-298 — an off-board play's card is chosen from the
         // trash/hand as the effect resolves, never as a play-time board target.
         (offBoardPlayZone(spellEffect) === undefined ||
@@ -2599,6 +2603,35 @@ export const playSpell: Defs["playSpell"] = {
             cardId: cardId as string,
             playerId: context.playerId as string,
             targets: [],
+            viaFlow: true,
+          });
+        }
+      } else if (flowCounterSpec) {
+        // rule 425.1 (sfd-045-221) — items sourced from the same card are
+        // distinct objects; name by card id while unambiguous, else by item id.
+        const seenFlowItems = new Set<string>();
+        for (const item of interaction.chain?.items ?? []) {
+          if (
+            !isLegalCounterTarget(flowCounterSpec, item, undefined, {
+              controllerOf: (id) =>
+                context.cards.getCardController?.(id as CoreCardId) ??
+                context.cards.getCardOwner(id as CoreCardId),
+              playerId: context.playerId as string,
+              zoneOf: (id) => context.zones.getCardZone(id as CoreCardId),
+            })
+          ) {
+            continue;
+          }
+          const key = seenFlowItems.has(item.cardId) ? item.id : item.cardId;
+          if (seenFlowItems.has(key)) {
+            continue;
+          }
+          seenFlowItems.add(key);
+          seenFlowItems.add(item.cardId);
+          results.push({
+            cardId: cardId as string,
+            playerId: context.playerId as string,
+            targets: [key],
             viaFlow: true,
           });
         }
@@ -2646,7 +2679,7 @@ export const playSpell: Defs["playSpell"] = {
             // one variant per ordered target list of length n+1.
             const firstTarget = base.targets?.[0];
             if (
-              isCardTarget &&
+              (isCardTarget || flowCounterSpec !== undefined) &&
               firstTarget !== undefined &&
               base.targets?.length === 1 &&
               flowCandidates.length > 0 &&
@@ -2657,6 +2690,12 @@ export const playSpell: Defs["playSpell"] = {
                 tails = tails.flatMap((tail) => flowCandidates.map((id) => [...tail, id]));
               }
               for (const tail of tails) {
+                // rule 820.2.a — a COUNTER may not name the same chain item
+                // twice, so it keeps the distinct-only shape (the plain
+                // `{repeatCount: n}` variant already names it once).
+                if (flowCounterSpec !== undefined && tail.every((id) => id === firstTarget)) {
+                  continue;
+                }
                 results.push({ ...base, repeatCount: n, targets: [firstTarget, ...tail] });
               }
             }

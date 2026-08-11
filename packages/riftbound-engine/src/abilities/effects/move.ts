@@ -17,7 +17,12 @@ import {
   stageContested,
   toBattlefieldId,
 } from "../../operations/arrive-at-battlefield";
-import { keepLegalArrivals, moveDestinationOptions, singleLocationOptions } from "../move-destinations";
+import {
+  keepLegalArrivals,
+  moveDestinationOptions,
+  openBattlefieldOptions,
+  singleLocationOptions,
+} from "../move-destinations";
 import { attachedUnitOf, detachEquipment } from "./_attachment";
 
 /**
@@ -929,13 +934,28 @@ export function handle_move(effect: ExecutableEffect, ctx: EffectContext, h: Eff
   // battlefield the instruction resolves doing nothing (rule 425.1.c); the
   // whole group travels to the single destination the controller picks.
   if (dest === "open-battlefield") {
-    const open = Object.entries(ctx.draft.battlefields ?? {})
-      .filter(
-        ([bfId, bf]) =>
-          bf.controller === null &&
-          ctx.zones.getCardsInZone(`battlefield-${bfId}` as CoreZoneId).length === 0,
-      )
-      .map(([bfId]) => `battlefield-${bfId}`);
+    const open = openBattlefieldOptions(ctx);
+    // rule 355.4 / 355.15 — the shared destination was named at FINALIZATION
+    // (`play-time-destinations.ts`); it is re-checked here, never re-offered, so
+    // a battlefield that has since stopped being open simply moves nobody
+    // (359.3.e.6) instead of handing the controller another open battlefield.
+    const boundOpenDest = (effect as unknown as { _dest?: string | null })._dest;
+    if (boundOpenDest !== undefined) {
+      if (boundOpenDest === null || !open.includes(boundOpenDest)) {
+        return;
+      }
+      const arrivedAtBound: string[] = [];
+      for (const cardId of moveTargets) {
+        if (ctx.zones.getCardZone(cardId as CoreCardId) === boundOpenDest) {
+          continue;
+        }
+        if (moveCardWithEvent(ctx, cardId, boundOpenDest) === boundOpenDest) {
+          arrivedAtBound.push(cardId);
+        }
+      }
+      arriveByEffect(ctx, arrivedAtBound, boundOpenDest);
+      return;
+    }
     if (open.length === 0) {
       return;
     }

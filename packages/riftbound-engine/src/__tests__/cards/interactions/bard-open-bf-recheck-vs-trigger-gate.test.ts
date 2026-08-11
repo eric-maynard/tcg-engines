@@ -164,7 +164,7 @@ describe("Bard's open-battlefield re-check vs its paid-cost trigger gate", () =>
     expect(game.chain()).toEqual([]);
   });
 
-  test.failing("BUG: the move destination must be chosen at FINALIZATION (355.4) — with two open battlefields the engine asks nobody then, and asks per-mover at resolution instead (446.3)", async () => {
+  test("the move destination must be chosen at FINALIZATION (355.4) — with two open battlefields it is asked once, before priority", async () => {
     // Expected: right after the movers are locked, P1 is asked which open battlefield they go to.
     // Actual: no destination prompt at FIN; at resolution the engine raises one RES-timing
     // "Choose a destination for One [u1]" prompt PER mover, so the group can even split up.
@@ -179,13 +179,13 @@ describe("Bard's open-battlefield re-check vs its paid-cost trigger gate", () =>
     ]);
   });
 
-  test.failing("BUG: the destination is never re-offered (355.15) — with bfC closed the movers must stay put, but the engine re-picks the other still-open battlefield", async () => {
+  test("the destination is never re-offered (355.15) — with bfC closed the movers must stay put, the other still-open battlefield is no substitute", async () => {
     // Expected: P1 named bfC at finalization; bfC is occupied at resolution, so the instruction
     // is ignored (359.3.e.6) and u1/u2/u3 stay where they are — bfD is NOT a substitute.
-    // Actual: the destination is resolved late, so all three movers land on bfD.
     const game = await board(true).build();
     await game.p1.play("bard", { payOptional: true, to: "base" });
     await game.p1.pick("u3", "u1", "u2");
+    await game.p1.pick("battlefield-bfC"); // the destination, named at finalization (355.4)
     await game.p1.passPriority();
     await game.p2.cast("thrill", { targets: "squat" });
     await game.p2.passPriority();

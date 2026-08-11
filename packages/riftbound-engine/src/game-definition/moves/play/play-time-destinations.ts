@@ -23,6 +23,7 @@ import {
   hasCasterChosenDestination,
   keepLegalArrivals,
   moveDestinationOptions,
+  openBattlefieldOptions,
   singleLocationOptions,
 } from "../../../abilities/move-destinations";
 import { collectSequenceTargetSlots, isRestatementOf, type SpellEffectTargetShape } from "./targeting";
@@ -236,14 +237,19 @@ export function raisePlayTimeDestinationChoice(
     // rule 355.4 (rule-id: unl-054-219 Tricksy Tentacles) — "Move any number of
     // enemy units … to a single location": the whole chosen group shares ONE
     // destination, so it is named at finalization like a single mover's.
-    if (node.to === "single-location") {
+    // rule 355.4 (rule-id: sfd-079-221 Bard, Mercurial) — "…to an open
+    // battlefield" is likewise one destination for the whole group (170.11.c).
+    if (node.to === "single-location" || node.to === "open-battlefield") {
       const movers = ((item.targets as readonly string[] | undefined) ?? []).filter((m) =>
         isOnBoard(ctx, m),
       );
       if (movers.length === 0) {
         continue;
       }
-      const options = singleLocationOptions(movers, ctx);
+      const options =
+        node.to === "open-battlefield"
+          ? openBattlefieldOptions(ctx)
+          : singleLocationOptions(movers, ctx);
       if (options.length === 0) {
         node._dest = null;
         continue;

@@ -147,7 +147,7 @@ describe("Kennen's granted Flow × Hard Bargain (Reaction, Repeat) from the tras
   // Flow variant must list the chain spells (vs, disc) as targets exactly like the hand cast does, and
   // a cast naming Discipline must be accepted. Actual: the from-trash Flow variants carry no `targets`
   // field at all; the counter's victim is only looked up at resolution (see the (c) decline BUG).
-  test.failing("BUG: (b) the counter target is chosen at play time on the Flow play too (355.5 / 820.2) — Discipline (or Void Seeker) is offered and naming Discipline is accepted", async () => {
+  test("(b) the counter target is chosen at play time on the Flow play too (355.5 / 820.2) — Discipline (or Void Seeker) is offered and naming Discipline is accepted", async () => {
     const game = await board().build();
     await conquerAndGrant(game);
     await stackDiscipline(game);

@@ -53,7 +53,16 @@ export function hasCasterChosenDestination(effect: unknown): boolean {
   // rule 355.4 (rule-id: sfd-129-221 Temptation) — "to a location where there's
   // a unit with the same controller" is still a free choice of the caster among
   // several Locations, so it is named when the spell is PLAYED like any other.
-  if (to === "choose" || to === "any-battlefield" || to === "single-location" || to === "same-controller-unit") {
+  // rule 355.4 (rule-id: sfd-079-221 Bard, Mercurial) — "move any number of
+  // your units to an open battlefield": one caster-chosen destination shared by
+  // the whole group, named at finalization like "…to a single location".
+  if (
+    to === "choose" ||
+    to === "any-battlefield" ||
+    to === "single-location" ||
+    to === "open-battlefield" ||
+    to === "same-controller-unit"
+  ) {
     return true;
   }
   return typeof to === "object" && to !== null && typeof to.battlefield === "string";
@@ -73,6 +82,21 @@ export function singleLocationOptions(movers: readonly string[], ctx: EffectCont
     "base",
     ...Object.keys(ctx.draft.battlefields ?? {}).map((bfId) => `battlefield-${bfId}`),
   ].filter((z) => z !== shared);
+}
+
+/**
+ * rule 170.11.c (rule-id: sfd-079-221 Bard, Mercurial) — the OPEN battlefields:
+ * uncontrolled AND unoccupied. Shared by the finalization-time choice and by
+ * the move as it executes (355.4.a re-check).
+ */
+export function openBattlefieldOptions(ctx: EffectContext): string[] {
+  return Object.entries(ctx.draft.battlefields ?? {})
+    .filter(
+      ([bfId, bf]) =>
+        bf.controller === null &&
+        ctx.zones.getCardsInZone(`battlefield-${bfId}` as CoreZoneId).length === 0,
+    )
+    .map(([bfId]) => `battlefield-${bfId}`);
 }
 
 /**
@@ -202,6 +226,13 @@ export function moveDestinationOptions(
       return undefined;
     }
     return singleLocationOptions([moverId], ctx);
+  }
+
+  if (to === "open-battlefield") {
+    if (!onBoard) {
+      return undefined;
+    }
+    return openBattlefieldOptions(ctx).filter((z) => z !== currentZone);
   }
 
   if (to === "same-controller-unit") {
