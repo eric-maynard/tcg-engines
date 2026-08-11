@@ -216,6 +216,13 @@ export interface RiftboundCardMeta {
   staticTags?: string[];
 
   /**
+   * rule 465.2.c.10: "…don't take damage" conferred on this card by ANOTHER
+   * permanent's static ability. Stripped and re-granted on every static
+   * recalculation, so the protection ends the moment its source leaves.
+   */
+  staticNoDamage?: boolean;
+
+  /**
    * Rule 355.8 (unl-182-219): mode indexes already picked from a "choose one
    * you haven't already chosen" effect on this card. Read by the `choice`
    * executor to hide already-taken options on subsequent Repeat casts.

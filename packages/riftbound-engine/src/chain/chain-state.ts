@@ -260,6 +260,15 @@ export interface TurnInteractionState {
 
   /** Counter for generating unique chain item IDs */
   nextChainItemId: number;
+
+  /**
+   * rule 340.2 / 346 — a chain that emptied on a resolution owes its Focus
+   * pass, but the pass only happens once the chain is really empty: a trigger
+   * placed during that resolution's cleanup keeps the chain alive, and Focus
+   * is neither passed nor awarded while it is. Set by `resolveTopItem` in
+   * deferred mode and consumed by `applyPendingFocusPass`.
+   */
+  focusPassPending?: boolean;
 }
 
 /**
@@ -632,6 +641,78 @@ export function resolveTopItem(state: TurnInteractionState): {
 }
 
 /**
+ * rule 340.2 / 346 — hand Focus to the next Relevant Player because the chain
+ * emptied. Exported so the resolution path can run it AFTER the cleanup that
+ * may place a trigger back on the chain.
+ */
+export function passFocusForEmptiedChain(state: TurnInteractionState): TurnInteractionState {
+  const sd = getActiveShowdown(state);
+  if (!sd) {
+    return state;
+  }
+  const idx = sd.relevantPlayers.indexOf(sd.focusPlayer);
+  const nextFocus = sd.relevantPlayers[(idx + 1) % sd.relevantPlayers.length];
+  const top = state.showdownStack.length - 1;
+  return {
+    ...state,
+    showdownStack: [
+      ...state.showdownStack.slice(0, top),
+      { ...state.showdownStack[top], focusPlayer: nextFocus, passedPlayers: [] },
+    ],
+  };
+}
+
+/** The Focus seating of one showdown, as it stood before a resolution. */
+export interface FocusSnapshot {
+  readonly index: number;
+  readonly focusPlayer: string;
+  readonly passedPlayers: string[];
+}
+
+/** Snapshot the active showdown's Focus seating (before `resolveTopItem`). */
+export function snapshotFocus(state: TurnInteractionState): FocusSnapshot | undefined {
+  const index = state.showdownStack.length - 1;
+  if (index < 0) {
+    return undefined;
+  }
+  const sd = state.showdownStack[index];
+  return { focusPlayer: sd.focusPlayer, index, passedPlayers: [...sd.passedPlayers] };
+}
+
+/**
+ * rule 340.2 / 346 — Focus is neither passed nor awarded while the chain is
+ * non-empty. A trigger placed by the cleanup that follows a resolution keeps
+ * the chain alive, so the Focus pass `resolveTopItem` already performed is
+ * rolled back and owed until the chain really empties.
+ */
+export function settleFocusAfterResolution(
+  state: TurnInteractionState,
+  before: FocusSnapshot | undefined,
+): TurnInteractionState {
+  const chainAlive = (state.chain?.items.length ?? 0) > 0;
+  if (chainAlive) {
+    if (!before || before.index >= state.showdownStack.length) {
+      return state;
+    }
+    const sd = state.showdownStack[before.index];
+    if (sd.focusPlayer === before.focusPlayer) {
+      return state;
+    }
+    const showdownStack = [...state.showdownStack];
+    showdownStack[before.index] = {
+      ...sd,
+      focusPlayer: before.focusPlayer,
+      passedPlayers: before.passedPlayers,
+    };
+    return { ...state, focusPassPending: true, showdownStack };
+  }
+  if (state.focusPassPending !== true) {
+    return state;
+  }
+  return { ...passFocusForEmptiedChain(state), focusPassPending: false };
+}
+
+/**
  * rule-id: ogn-064-298 (rule 425.1.a / 425.1.a.1) — a countered item is
  * cleared from the chain as part of being countered, not left pending until
  * the next all-pass. Removes `itemId` and re-seats priority as if it had left
@@ -657,20 +738,15 @@ function afterItemsLeft(state: TurnInteractionState, items: ChainItem[]): TurnIn
   if (items.length === 0) {
     // Chain is now empty. Rule 346 (Vendetta; old 552): when the last item
     // resolves during a Showdown, Focus passes to the next Relevant Player.
-    let showdownStack = state.showdownStack;
     const sd = getActiveShowdown(state);
     // rule 346.1 / 340.2.a: Focus does NOT pass when the emptied chain was
     // opened by a triggered (or Add) ability rather than a played item.
-    if (sd && !state.chain.openedByTrigger) {
-      const idx = sd.relevantPlayers.indexOf(sd.focusPlayer);
-      const nextFocus = sd.relevantPlayers[(idx + 1) % sd.relevantPlayers.length];
-      const top = showdownStack.length - 1;
-      showdownStack = [
-        ...showdownStack.slice(0, top),
-        { ...showdownStack[top], focusPlayer: nextFocus, passedPlayers: [] },
-      ];
-    }
-    return { ...state, chain: null, showdownStack };
+    // rule 340.2 / 346 — plus any pass rolled back earlier because a trigger
+    // kept this chain alive (`settleFocusAfterResolution`): it comes due now,
+    // however the chain finally emptied.
+    const owed = (sd !== null && !state.chain.openedByTrigger) || state.focusPassPending === true;
+    const next: TurnInteractionState = { ...state, chain: null, focusPassPending: false };
+    return owed && sd !== null ? passFocusForEmptiedChain(next) : next;
   }
 
   // Chain still has items — reset passes, give priority to controller of new top item

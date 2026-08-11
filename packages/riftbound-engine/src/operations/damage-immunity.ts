@@ -16,6 +16,8 @@ interface ImmunityState {
 interface ImmunityMeta {
   readonly empowered?: boolean;
   readonly combatRole?: string;
+  /** rule 465.2.c.10 — denial conferred by ANOTHER permanent's static. */
+  readonly staticNoDamage?: boolean;
 }
 
 type ImmunityCondition = {
@@ -83,13 +85,19 @@ export function unitIgnoresDamage(
   state: ImmunityState | undefined,
   getMeta?: (cardId: string) => ImmunityMeta | undefined,
 ): boolean {
-  let meta: ImmunityMeta | undefined;
-  let metaRead = false;
+  // rule 465.2.c.10 — "Other units you control here don't take damage." is a
+  // static on ANOTHER card; the recalculation pass stamps the protection onto
+  // every unit it currently covers, so no ability lookup here could see it.
+  const meta = getMeta?.(cardId);
+  if (meta?.staticNoDamage === true) {
+    return true;
+  }
   for (const ability of getGlobalCardRegistry().getAbilities(cardId) ?? []) {
     const ab = ability as {
       type?: string;
       condition?: ImmunityCondition;
-      effect?: { type?: string; restriction?: string };
+      target?: unknown;
+      effect?: { type?: string; restriction?: string; target?: unknown };
     };
     if (ab.type !== "static" || ab.effect?.type !== "restriction") {
       continue;
@@ -97,9 +105,15 @@ export function unitIgnoresDamage(
     if (ab.effect.restriction !== "no-damage") {
       continue;
     }
-    if (!metaRead) {
-      meta = getMeta?.(cardId);
-      metaRead = true;
+    // rule 465.2.c.10 — a denial that names OTHER units ("Other units you
+    // control here don't take damage.") protects them, never its own source;
+    // that grant reaches them through `staticNoDamage` above.
+    const subject = ab.effect.target ?? ab.target;
+    if (subject !== undefined && subject !== "self") {
+      const descriptor = subject as { excludeSelf?: boolean; includeSelf?: boolean };
+      if (typeof subject !== "object" || descriptor.excludeSelf === true || descriptor.includeSelf !== true) {
+        continue;
+      }
     }
     if (evaluateCondition(ab.condition, cardId, state, meta) === true) {
       return true;

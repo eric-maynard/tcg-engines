@@ -12,6 +12,8 @@ export {
   endShowdown,
   getActiveShowdown,
   getTurnState,
+  settleFocusAfterResolution,
+  snapshotFocus,
   hasChainPriorityPermission,
   hasShowdownPermission,
   holdsChainPriority,

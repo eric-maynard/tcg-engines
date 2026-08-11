@@ -399,7 +399,7 @@ function gather(io: DamageIO, req: DamageRequest): Gathered {
     }
   }
 
-  const immune = unitIgnoresDamage(target, io.draft, (id) => metaOf(io, id) as { empowered?: boolean; combatRole?: string } | undefined);
+  const immune = unitIgnoresDamage(target, io.draft, (id) => metaOf(io, id) as { empowered?: boolean; combatRole?: string; staticNoDamage?: boolean } | undefined);
   const bonus = immune ? 0 : bonusFor(io, req, target);
   const candidates: Candidate[] = [];
   const meta = metaOf(io, target);

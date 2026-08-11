@@ -13,6 +13,8 @@ import {
   allPlayersPassed,
   passPriority as passPriorityState,
   resolveTopItem,
+  settleFocusAfterResolution,
+  snapshotFocus,
 } from "../../../chain";
 import type { EffectContext, ExecutableEffect } from "../../../abilities/effect-executor";
 import { executeEffect } from "../../../abilities/effect-executor";
@@ -1992,6 +1994,10 @@ export const passChainPriority: Defs["passChainPriority"] = {
 
     // If all passed, auto-resolve the top item
     if (allPlayersPassed(draft.interaction)) {
+      // rule 340.2 / 346 — Focus is not passed while the chain stays alive; the
+      // seating before this resolution is restored if the cleanup below lands a
+      // trigger on the Chain.
+      const focusBefore = snapshotFocus(draft.interaction);
       const { resolved, newState } = resolveTopItem(draft.interaction);
       draft.interaction = newState;
 
@@ -2013,6 +2019,9 @@ export const passChainPriority: Defs["passChainPriority"] = {
           draft,
           context as unknown as Parameters<typeof openPendingContestedShowdown>[1],
         );
+      }
+      if (draft.interaction) {
+        draft.interaction = settleFocusAfterResolution(draft.interaction, focusBefore);
       }
     }
   },
@@ -2050,6 +2059,8 @@ export const resolveChain: Defs["resolveChain"] = {
       return;
     }
 
+    // rule 340.2 / 346 — see `passPriority`.
+    const focusBefore = snapshotFocus(draft.interaction);
     const { resolved, newState } = resolveTopItem(draft.interaction);
     draft.interaction = newState;
 
@@ -2067,6 +2078,9 @@ export const resolveChain: Defs["resolveChain"] = {
       // into an enemy battlefield contested it; the Cleanup after the chain
       // empties opens that showdown mandatorily.
       openPendingContestedShowdown(draft, context as unknown as Parameters<typeof openPendingContestedShowdown>[1]);
+    }
+    if (draft.interaction) {
+      draft.interaction = settleFocusAfterResolution(draft.interaction, focusBefore);
     }
   },
 };

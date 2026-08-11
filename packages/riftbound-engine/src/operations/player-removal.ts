@@ -240,10 +240,22 @@ export function removePlayer(
         focusPlayer: string;
         active: boolean;
       };
+      // rule 652.5.b.1 — Focus goes to the NEXT player in order after the
+      // removed one, not back to the head of the list (a player who may have
+      // already passed this round).
+      const order = [...mutable.relevantPlayers];
       mutable.relevantPlayers = mutable.relevantPlayers.filter((p) => p !== playerId);
       mutable.passedPlayers = mutable.passedPlayers.filter((p) => p !== playerId);
       if (mutable.focusPlayer === playerId) {
-        mutable.focusPlayer = mutable.relevantPlayers[0] ?? "";
+        const from = order.indexOf(playerId);
+        let next = "";
+        for (let step = 1; step <= order.length && next === ""; step += 1) {
+          const candidate = order[(from + step) % order.length];
+          if (candidate !== undefined && candidate !== playerId) {
+            next = candidate;
+          }
+        }
+        mutable.focusPlayer = next;
       }
       // If no relevant players remain, end the showdown.
       if (mutable.relevantPlayers.length === 0) {

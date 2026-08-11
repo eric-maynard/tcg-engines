@@ -1201,6 +1201,21 @@ function applyStaticEffect(
         );
       }
     }
+  } else if (effectType === "restriction" && effect.restriction === "no-damage") {
+    // rule 465.2.c.10 — "Other units you control here don't take damage.": the
+    // denial belongs to the SOURCE, so it is re-derived every pass and ends the
+    // moment the source leaves the board. A self-only restriction is read
+    // straight off the abilities in `damage-immunity.ts`; this flag carries the
+    // conferred case, which no per-card ability lookup can see.
+    for (const targetId of targetIds) {
+      if (source && targetId === source.id) {
+        continue;
+      }
+      ctx.cards.updateCardMeta(
+        targetId as CoreCardId,
+        { staticNoDamage: true } as Partial<RiftboundCardMeta>,
+      );
+    }
   } else if (effectType === "grant-tag") {
     // rule 135.2 / 136.2 — "I am a Mech." on an attached Equipment gives the
     // WEARER the tag (targets were already remapped by `resolveStaticTargets`),
@@ -1317,6 +1332,16 @@ export function recalculateStaticEffects(ctx: StaticAbilityContext): boolean {
       }
     }
 
+    // rule 465.2.c.10 — a conferred "doesn't take damage" is re-derived every
+    // pass, so it ends the moment its source leaves the board.
+    if (meta.staticNoDamage === true) {
+      ctx.cards.updateCardMeta(
+        card.id as CoreCardId,
+        { staticNoDamage: false } as Partial<RiftboundCardMeta>,
+      );
+      changed = true;
+    }
+
     // rule 135.2 — tags conferred by a continuous effect are re-derived every
     // pass, so the tag ends the moment the granting effect stops applying
     // (the Equipment is detached, leaves the board, …).
@@ -1361,7 +1386,7 @@ export function recalculateStaticEffects(ctx: StaticAbilityContext): boolean {
   // ability layer, because a keyword aura can select on tag ("Your Mechs each
   // have [Assault]" must see a unit the Hexplate just made a Mech).
   const PASS_0_EFFECTS = new Set(["grant-tag"]);
-  const PASS_1_EFFECTS = new Set(["grant-keyword", "grant-keywords", "grant-ability"]);
+  const PASS_1_EFFECTS = new Set(["grant-keyword", "grant-keywords", "grant-ability", "restriction"]);
   const PASS_2_EFFECTS = new Set(["modify-might"]);
 
   // rule 476.3 — the ability layer is re-checked after the arithmetic layer, so
@@ -1479,9 +1504,17 @@ export function recalculateStaticEffects(ctx: StaticAbilityContext): boolean {
         for (const passEffect of passEffects) {
           // rule-id: unl-058-219 — with no `affects`, honour the effect's own
           // group target descriptor (e.g. "Your token units") over self.
+          // rule 465.2.c.10 — a denial ("Other units you control here don't
+          // take damage.") names its subject on the ABILITY, since the effect
+          // itself carries only the restriction; read that descriptor too.
+          const descriptor =
+            passEffect.target ??
+            (passEffect.type === "restriction"
+              ? (ability as unknown as { target?: unknown }).target
+              : undefined);
           const targetIds =
             affects === undefined
-              ? (resolveStaticTargetsFromDescriptor(passEffect.target, card, grantableCards, ctx) ??
+              ? (resolveStaticTargetsFromDescriptor(descriptor, card, grantableCards, ctx) ??
                 defaultTargetIds)
               : defaultTargetIds;
           // rule 364.3 (unl-210-219) — a `while-unit-state` condition names the
