@@ -90,8 +90,7 @@ describe("Ruling 0acaf686cce74d3a — Nocturne revealed by Teemo's defend trigge
   // Expected: while Teemo's trigger reveals the top 5, Nocturne's "as you reveal me" replacement asks P1 (a) banish
   // me? → yes, (b) play me for [rainbow]? → yes, (c) where? → the offer includes bf1 (the battlefield being
   // defended); choosing it puts Nocturne AT bf1, [rainbow] spent, and it picks up the Defender designation.
-  // Actual: Teemo's reveal never raises Nocturne's offer — the 5 cards are simply recycled and no prompt appears.
-  test.failing("BUG: ruling 0acaf686cce74d3a — Teemo's reveal of Nocturne surfaces no banish/play offer (engine recycles it silently); ruling: P1 may banish it, play it for [rainbow] directly to the defending bf1", async () => {
+  test("ruling 0acaf686cce74d3a — P1 may banish Nocturne off Teemo's reveal and play it for [rainbow] directly to the defending bf1", async () => {
     const game = await teemoDefendsAndReveals();
     // (a) banish offer
     let d = game.decision();
@@ -125,11 +124,14 @@ describe("Ruling 0acaf686cce74d3a — Nocturne revealed by Teemo's defend trigge
       }
     }
     expect(placed).toBe(true);
+    // rule 464.2.c.3.a — the designation is picked up AT arrival, while the combat is still open.
+    expect(game.state("noc").combatRole).toBe("defender");
     await game.settle({ maxSteps: 20 });
     expect(game.zoneOf("noc")).toBe("battlefield-bf1");
     expect(game.p1.power("rainbow")).toBe(0); // played "for [rainbow]" — not its printed [4][chaos]
     expect(game.p1.energy()).toBe(0);
-    expect(game.state("noc").combatRole).toBe("defender"); // late arrivals become defenders (464.2.c.3.a)
+    // rule 466 — the combat has since ended, so the designation is gone but the battlefield stands.
+    expect(game.state("noc").meta.combatRoleAt).toBe("bf1");
     expect(game.p1.banishment()).not.toContain("noc");
   });
 });
