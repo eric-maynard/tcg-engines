@@ -2278,10 +2278,12 @@ export const playSpell: Defs["playSpell"] = {
               break;
             }
             results.push({ ...base, repeatCount: n });
-            if (base.paidAdditionalCost === true) {
-              // the paid line's target slot already carries the cost's victim;
-              // per-execution target permutations are enumerated off the
-              // unpaid bases only.
+            // rule 820.2.a (ogn-146-298 × sfd-078-221) — a `spend-buff` cost
+            // rides in `spentBuffIds`, so the paid line's targets ARE the
+            // executions' own choices and vary per execution like an unpaid
+            // base's. Every other paid shape carries its victim in targets[0]
+            // (or prices its own spec), so those keep the single-target line.
+            if (base.paidAdditionalCost === true && optionalPay?.kind !== "spend-buff") {
               continue;
             }
             // rule 820.2.a — the extra execution makes its OWN choices, so the

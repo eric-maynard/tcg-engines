@@ -3803,9 +3803,30 @@ function ignoredBaseCost(
   extras: CostExtras,
 ): PlayResourceCost {
   const boardIncrease = getBoardCostIncrease(state, playerId, cardId, extras);
-  const energy = boardIncrease.energy + getRuntimePlayCostIncrease(state, playerId, cardId);
+  // rule 356.1.b.3 / 356.2.b.1 / 820.1.c.1 — "ignore this spell's cost" zeroes
+  // the BASE cost only. The [Repeat] surcharge is an ADDITIONAL cost added
+  // after the base is ignored, so it is still due (riftjudge: "Academy + Call
+  // to Glory: you still pay to repeat"). Its tiers already carry rule 356.4.c
+  // discounts (Ezreal) via `getEffectiveSpellRepeatCost`.
+  const repeatN = Math.max(0, extras.repeatCount ?? 0);
+  const repeatTiers =
+    repeatN > 0 ? getEffectiveSpellRepeatCost(state, playerId, cardId, extras.board) : undefined;
+  const repeatEnergy = getRepeatEnergySurcharge(cardId, repeatN, repeatTiers);
+  const repeatPower = getRepeatPowerSurcharge(cardId, repeatN, repeatTiers);
+  const energy =
+    boardIncrease.energy + getRuntimePlayCostIncrease(state, playerId, cardId) + repeatEnergy;
   const named: Partial<Record<string, number>> = {};
   let any = 0;
+  for (const [domain, n] of Object.entries(repeatPower)) {
+    if (!n || n <= 0) {
+      continue;
+    }
+    if (domain === "rainbow") {
+      any += n;
+    } else {
+      named[domain] = (named[domain] ?? 0) + n;
+    }
+  }
   for (const [domain, n] of Object.entries(boardIncrease.power)) {
     if (!n || n <= 0) {
       continue;

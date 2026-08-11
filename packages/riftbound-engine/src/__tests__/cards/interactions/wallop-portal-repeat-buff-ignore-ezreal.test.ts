@@ -158,7 +158,7 @@ describe("Wallop × Temporal Portal × Ezreal, Prodigy — Repeat 'equal to its 
   // Expected (356.1.b / 356.1.b.3 / 356.2.b.1): "ignore this spell's cost" zeroes only the base 2; the
   // Repeat [2] is an additional cost added afterwards and stays due (Ezreal: → [1]) ⇒ 6 → 5.
   // Actual: the engine wipes the Repeat cost together with the base cost — 0 energy is charged.
-  test.failing("BUG: (with Ezreal) buff + Repeat should cost 0 + (2−1) = 1 energy — 'ignore this spell's cost' does not waive the Repeat additional cost (356.1.b.3, 356.2.b.1, 356.4.c)", async () => {
+  test("(with Ezreal) buff + Repeat should cost 0 + (2−1) = 1 energy — 'ignore this spell's cost' does not waive the Repeat additional cost (356.1.b.3, 356.2.b.1, 356.4.c)", async () => {
     const game = await portalOn({ ezreal: true });
     await game.p1.cast("wallop", { payOptional: true, repeat: 1, targets: ["u1"] });
     expect(game.state("u1").isBuffed).toBe(false);
@@ -168,7 +168,7 @@ describe("Wallop × Temporal Portal × Ezreal, Prodigy — Repeat 'equal to its 
   // Expected (820.2 / 820.2.a): with the Repeat paid there are two "Ready a unit" executions whose targets
   // are chosen at play time — [U1, U2] must be an offered target tuple for the buff+Repeat election too.
   // Actual: the buff+Repeat variants only carry a single target; ["u1","u2"] is rejected.
-  test.failing("BUG: (with Ezreal) buff + Repeat should offer two play-time targets and ready BOTH units — one buff spent, one spell played (820.2.a, 135.2.b.3, 820.3.a)", async () => {
+  test("(with Ezreal) buff + Repeat should offer two play-time targets and ready BOTH units — one buff spent, one spell played (820.2.a, 135.2.b.3, 820.3.a)", async () => {
     const game = await portalOn({ ezreal: true });
     expect(targetsOfferedFor(game, true, 1)).toContainEqual(["u1", "u2"]);
     await game.p1.cast("wallop", { payOptional: true, repeat: 1, targets: ["u1", "u2"] });
@@ -216,7 +216,7 @@ describe("Wallop × Temporal Portal × Ezreal, Prodigy — Repeat 'equal to its 
   });
 
   // Expected: 0 (ignored base) + Repeat [2] = 2 energy ⇒ 6 → 4. Actual: 0 charged (Repeat wiped with the base).
-  test.failing("BUG: (no Ezreal) buff + Repeat should cost 0 + 2 = 2 energy (356.1.b.3 — riftjudge 'Academy + Call to Glory: you still pay to repeat')", async () => {
+  test("(no Ezreal) buff + Repeat should cost 0 + 2 = 2 energy (356.1.b.3 — riftjudge 'Academy + Call to Glory: you still pay to repeat')", async () => {
     const game = await portalOn();
     await game.p1.cast("wallop", { payOptional: true, repeat: 1, targets: ["u1"] });
     expect(game.state("u1").isBuffed).toBe(false);
