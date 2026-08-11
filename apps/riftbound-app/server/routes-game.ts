@@ -13,10 +13,26 @@ import { json } from "./http";
 import { gameLogger } from "./log";
 import { createGameFromDecks } from "./pregame";
 import { buildAvailableMoves, buildGameSnapshot, buildHistoryLog } from "./snapshot";
-import { type DeckConfig, type RouteCtx, type RouteResult, gameSessions } from "./state";
+import { type DeckConfig, type GameSession, type RouteCtx, type RouteResult, gameSessions } from "./state";
 import { aiStatus, attachOpponent, parseOpponentSpec, runOpponent } from "./ai-opponent";
 import { rewindSession } from "./rewind";
 import { applySessionMove } from "./turn";
+
+/**
+ * rule 108.7.c / 128.4 / 723 — the REST surface has no user→seat binding, so a
+ * duel snapshot served here is served to an unauthenticated caller: it must
+ * never carry the identity of anyone's private cards (hands, decks, facedown).
+ * `SPECTATOR` is a viewer that owns no card, so every private zone redacts to
+ * the opaque `hidden-…` stand-in. Sandbox sessions (goldfish/hotseat, one human
+ * driving both seats) keep the full state the UI needs.
+ */
+const SPECTATOR = "spectator";
+
+function restSnapshot(session: GameSession) {
+  // A Claude seat is a real opponent, so its cards stay private too (snapshot.ts).
+  const redacted = !session.sandbox || session.opponent?.info.kind === "claude";
+  return buildGameSnapshot(session, redacted ? SPECTATOR : undefined);
+}
 
 export async function handleGameRoutes(req: Request, url: URL, _ctx: RouteCtx): RouteResult {
   const { pathname } = url;
@@ -92,7 +108,7 @@ export async function handleGameRoutes(req: Request, url: URL, _ctx: RouteCtx): 
       sandbox: body.sandbox ?? false,
       source: "api",
     });
-    return json({ gameId, legality, state: buildGameSnapshot(session) });
+    return json({ gameId, legality, state: restSnapshot(session) });
   }
 
   // GET /api/game/:id/state — get full game state snapshot
@@ -100,7 +116,7 @@ export async function handleGameRoutes(req: Request, url: URL, _ctx: RouteCtx): 
     const gameId = pathname.split("/")[3];
     const session = gameSessions.get(gameId);
     if (!session) {return json({ error: "Game not found" }, 404);}
-    return json(buildGameSnapshot(session));
+    return json(restSnapshot(session));
   }
 
   // GET /api/game/:id/moves — enumerate available moves for a player
