@@ -31,6 +31,19 @@ describe("Sky Cruiser (ven-060-166)", () => {
     expect(nonGear.p1.can("activate", "cruiser")).toBe(false);
   });
 
+  test("activating without naming the discard is rejected, never a silent no-op", async () => {
+    // rule 357.2: every part of an activation cost is paid as the ability is activated —
+    // a "Discard N" activation with no `discardId` must be illegal, not accepted-and-ignored.
+    const game = await board().hand(P1, GEAR, "snaxInHand").build();
+    const res = game.engine.executeMove("activateAbility" as never, {
+      params: { abilityIndex: 0, cardId: "cruiser", playerId: P1 } as never,
+      playerId: P1 as never,
+    });
+    expect(res.success).toBe(false);
+    expect(game.zoneOf("snaxInHand")).toBe("hand");
+    expect(game.p1.energy()).toBe(1);
+  });
+
   test("with a gear in hand the ability is activatable; the gear is trashed and 4 damage lands", async () => {
     const game = await board().hand(P1, GEAR, "snaxInHand").build();
     expect(game.p1.can("activate", "cruiser")).toBe(true);

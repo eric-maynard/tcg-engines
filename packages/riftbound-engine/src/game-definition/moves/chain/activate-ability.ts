@@ -1760,8 +1760,11 @@ export const activateAbility: Defs["activateAbility"] = {
         if (eligible.length < discardSpec.amount) {
           return false;
         }
+        // rule 357.2: the cost is paid AS the ability is activated, so the
+        // discard must be named here — an unnamed one would leave the reducer
+        // nothing to trash and silently accept a cost that was never paid.
         const discardId = context.params.discardId as string | undefined;
-        if (discardId && !eligible.includes(discardId)) {
+        if (!discardId || !eligible.includes(discardId)) {
           return false;
         }
       }
