@@ -31,6 +31,7 @@ let _previewHideTimer = null;
 let _previewMaxTimer = null;  // hard backstop: nothing keeps the panel up longer than this
 let _previewPointer = { x: -1, y: -1 }; // last known pointer position (client coords)
 let _previewCheckQueued = false;
+let _previewSuppressAt = null; // after a click: no re-show until the pointer really moves (a re-render under a still cursor re-fires mouseover)
 const PREVIEW_HIDE_DELAY_MS = 60; // bridge the gap between two adjacent cards without a flash
 const PREVIEW_MAX_VISIBLE_MS = 8000;
 
@@ -90,6 +91,9 @@ function _previewStateText(card, el) {
 function showPreview(eventOrEl, maybeEl) {
   const el = maybeEl || (eventOrEl && eventOrEl.nodeType === 1 ? eventOrEl : null);
   if (!el) return;
+  // Inline onmouseenter callers: honour the after-click latch too.
+  if (eventOrEl && typeof eventOrEl.clientX === "number" && _previewSuppressAt
+      && Math.abs(eventOrEl.clientX - _previewSuppressAt.x) < 5 && Math.abs(eventOrEl.clientY - _previewSuppressAt.y) < 5) return;
   const previewEl = document.getElementById("cardPreview");
   if (!previewEl) return;
   const card = previewCardFor(el);
@@ -274,7 +278,11 @@ function validatePreview() {
   if (!hit) { hidePreview(true); return; } // pointer outside the viewport
   const surface = previewSurface(hit);
   if (surface === el) return;
-  if (surface) { showPreview(surface); return; } // a re-render swapped in a new node for the same slot
+  if (surface) { // a re-render swapped in a new node for the same slot
+    if (_previewSuppressAt && Math.abs(x - _previewSuppressAt.x) < 5 && Math.abs(y - _previewSuppressAt.y) < 5) { hidePreview(true); return; }
+    showPreview(surface);
+    return;
+  }
   hidePreview(true);
 }
 
@@ -288,8 +296,15 @@ function queuePreviewCheck() {
 // Delegated driver: mouseover/mouseout bubble, so one listener covers every
 // surface rendered now or later (battlefields, prompt tiles, trash…).
 (function wireHoverPreview() {
+  function suppressed(x, y) {
+    if (!_previewSuppressAt) return false;
+    if (Math.abs(x - _previewSuppressAt.x) < 5 && Math.abs(y - _previewSuppressAt.y) < 5) return true;
+    _previewSuppressAt = null;
+    return false;
+  }
   function over(e) {
     _previewPointer = { x: e.clientX, y: e.clientY };
+    if (suppressed(e.clientX, e.clientY)) return;
     const el = previewSurface(e.target);
     if (!el) {
       // Pointer is over a non-card: if the panel is still up its subject was
@@ -318,6 +333,7 @@ function queuePreviewCheck() {
     document.addEventListener("mouseout", out);
     document.addEventListener("pointermove", (e) => {
       _previewPointer = { x: e.clientX, y: e.clientY };
+      suppressed(e.clientX, e.clientY); // clears the click latch once the pointer travels
       queuePreviewCheck();
     }, { passive: true });
     // The element under a stationary cursor can be replaced by a re-render,
@@ -333,7 +349,7 @@ function queuePreviewCheck() {
     setInterval(queuePreviewCheck, 400);
     document.addEventListener("scroll", () => hidePreview(true), true);
     document.addEventListener("wheel", () => hidePreview(true), { passive: true, capture: true });
-    document.addEventListener("pointerdown", () => hidePreview(true), true);
+    document.addEventListener("pointerdown", (e) => { _previewSuppressAt = { x: e.clientX, y: e.clientY }; hidePreview(true); }, true);
     document.addEventListener("keydown", (e) => { if (e.key === "Escape" || e.key === "Esc") hidePreview(true); }, true);
     document.documentElement.addEventListener("mouseleave", () => hidePreview(true));
     window.addEventListener("blur", () => hidePreview(true));
@@ -455,11 +471,16 @@ function returnToPlayMenu() {
   if (typeof _coinFlipShown !== "undefined") _coinFlipShown = false;
   setSandboxGame(false);
 
-  // Wipe the previous game's board so nothing shows behind the menu.
-  for (const id of ["board", "gameLog", "chainOverlay", "choiceOverlay", "actionBarBtns"]) {
+  // Wipe the previous game's board so nothing shows behind the menu. Only the
+  // per-zone containers: #startScreen (the menu itself) lives inside #board,
+  // and #chainBox / #choiceBox are static children of their overlays.
+  for (const id of ["opponent-hand", "opponent-base", "opponent-legendChampion", "opponent-runePool", "opponent-decks", "opponentInfo",
+    "battlefieldRow", "phaseBar", "player-base", "player-legendChampion", "player-runePool", "player-hand", "player-decks", "playerInfo",
+    "resourceBar", "gameLog", "chainBox", "choiceBox", "actionBarBtns"]) {
     const el = document.getElementById(id);
     if (el) el.innerHTML = "";
   }
+  if (typeof closeBfSpread === "function") { try { closeBfSpread(); } catch { /* */ } }
   document.querySelectorAll(".chain-overlay.visible, #choiceOverlay.visible, #targetBanner.visible, #cardPreview.visible").forEach((el) => el.classList.remove("visible"));
   if (typeof hidePreview === "function") { try { hidePreview(); } catch { /* */ } }
 
