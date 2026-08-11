@@ -97,16 +97,14 @@ const NO_ERRORS = 0;
  * many end up in play.
  * rule 485.4.a / 486.4.a: a duel/match deck provides 3 battlefields; only 2 of them
  * are put into play (rule 485.4), so the deck count is 3, never 2.
- * - duel: 3 battlefields in the deck (2 in play, rule 485.4)
- * - ffa3: 3 battlefields (one per player, rule 645)
- * - ffa4: 4 battlefields (one per player, rule 646)
- * - magmaChamber: 3 battlefields (rule 647)
- * - match: 3 battlefields (same as duel)
+ * rule 488.4.a / 489.4.a: multiplayer decks likewise provide three; a mode's
+ * "Battlefield Count" is how many end up in play, and 488.4.b's removal of the
+ * first player's three is a setup step, not a deck-construction reduction.
  */
 const BATTLEFIELD_COUNT_BY_MODE: Record<GameMode, number> = {
   duel: 3,
   ffa3: 3,
-  ffa4: 4,
+  ffa4: 3,
   magmaChamber: 3,
   match: 3,
 };
