@@ -2460,6 +2460,7 @@ export const playSpell: Defs["playSpell"] = {
       }
       // rule-id: ven-154-166 (rule 355.8) — a Flow play makes the same two
       // caster choices as a play from hand: lock [reference, victim].
+      const flowStart = results.length;
       const flowRefPair = findReferencePair(spellEffect);
       if (flowRefPair) {
         for (const [refId, victimId] of enumerateReferencePairs(flowRefPair, resolverCtx)) {
@@ -2533,6 +2534,60 @@ export const playSpell: Defs["playSpell"] = {
           playerId: context.playerId as string,
           viaFlow: true,
         });
+      }
+
+      // rule 829.1.b.2 / 419.1 — [Flow] only changes the zone the spell is
+      // played FROM; it is still "a spell you play", so printed and granted
+      // [Repeat] instances ride on the Flow play exactly as on a play from
+      // hand (rule 356.2.b.1: the Repeat tier is an optional ADDITIONAL cost
+      // on top of the Flow cost that replaced the base cost).
+      const flowRepeat = getEffectiveSpellRepeatCost(
+        state,
+        context.playerId as string,
+        cardId as string,
+        board,
+      );
+      if (flowRepeat && flowRepeat.length > 0 && !flowRepeat.some((t) => (t.discard ?? 0) > 0)) {
+        const flowBases = results.slice(flowStart);
+        const flowCandidates = flowBases
+          .map((b) => b.targets?.[0])
+          .filter((id): id is string => id !== undefined);
+        for (const base of flowBases) {
+          // rule 820.1.c.3 — each Repeat instance is paid at most once.
+          for (let n = 1; n <= flowRepeat.length; n++) {
+            if (
+              !canAffordCard(
+                state,
+                context.playerId as string,
+                cardId as string,
+                { board, repeatCount: n, targets: base.targets, viaFlow: true },
+                meta,
+                potential,
+              )
+            ) {
+              break;
+            }
+            results.push({ ...base, repeatCount: n });
+            // rule 820.2.a — every execution makes its own choices, so offer
+            // one variant per ordered target list of length n+1.
+            const firstTarget = base.targets?.[0];
+            if (
+              isCardTarget &&
+              firstTarget !== undefined &&
+              base.targets?.length === 1 &&
+              flowCandidates.length > 0 &&
+              flowCandidates.length ** n <= 256
+            ) {
+              let tails: string[][] = [[]];
+              for (let slot = 0; slot < n; slot++) {
+                tails = tails.flatMap((tail) => flowCandidates.map((id) => [...tail, id]));
+              }
+              for (const tail of tails) {
+                results.push({ ...base, repeatCount: n, targets: [firstTarget, ...tail] });
+              }
+            }
+          }
+        }
       }
     }
     return results.map((r) => withCostsParam(r));

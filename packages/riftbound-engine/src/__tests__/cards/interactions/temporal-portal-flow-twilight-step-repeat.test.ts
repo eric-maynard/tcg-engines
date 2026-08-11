@@ -119,7 +119,7 @@ describe("Temporal Portal → Twilight Step played from TRASH via Flow (± Repea
   // Expected (829.1.b.2 / 419.1): "the next spell you play this turn" keys on the PLAY, not the origin zone, so the
   // Flow variant of the trash copy must carry the same single Repeat instance. Actual: after the Portal the trash
   // copy's cast option is unchanged (max 1 target, no repeatCount) — the grant is only applied to plays from hand.
-  test.failing("BUG: (a) the Portal grant also attaches to the TRASH copy played via Flow — its cast option offers Repeat ×1 and up to 2 targets (829.1.b.2, 419.1)", async () => {
+  test("(a) the Portal grant also attaches to the TRASH copy played via Flow — its cast option offers Repeat ×1 and up to 2 targets (829.1.b.2, 419.1)", async () => {
     const game = await board().build();
     await portal(game);
     expect(repeatOptions(game, "tsFlow")).toEqual([1]);
@@ -162,7 +162,7 @@ describe("Temporal Portal → Twilight Step played from TRASH via Flow (± Repea
   // Expected: Determine Total Cost = Flow 4+[chaos] (replaces base) + Repeat 2+[chaos] (printed cost, additional)
   // = 6 energy + 2 chaos → pool {2, chaos 0}; ONE chain item carrying both targets; one card played.
   // Actual: no Flow+Repeat variant exists, the cast is rejected.
-  test.failing("BUG: (b) Flow + Repeat elected: total = 6 energy + 2 chaos (356.1.a + 356.2.b.1 + 206); a single chain item with targets [A, E]; counted as ONE card played (820.3.a)", async () => {
+  test("(b) Flow + Repeat elected: total = 6 energy + 2 chaos (356.1.a + 356.2.b.1 + 206); a single chain item with targets [A, E]; counted as ONE card played (820.3.a)", async () => {
     const game = await board().build();
     await portal(game);
     await game.p1.cast("tsFlow", { flow: true, repeat: 1, targets: ["a", "e"] });
@@ -178,7 +178,7 @@ describe("Temporal Portal → Twilight Step played from TRASH via Flow (± Repea
   // Expected: both executions happen (A → bf2, E → P2's base), exactly one "when you play a spell" trigger
   // (Student 2 → 3), and — having been played via Flow — the card is BANISHED, Repeat notwithstanding.
   // Actual: the Flow+Repeat cast cannot be made (bug (a)).
-  test.failing("BUG: (c)(d) Flow + Repeat resolves: A bf1→bf2 and E bf2→P2's base (different units, different destinations, 820.2.a); ONE Student trigger; Twilight Step BANISHED not trashed (829.1.b.1, 820.3.a)", async () => {
+  test("(c)(d) Flow + Repeat resolves: A bf1→bf2 and E bf2→P2's base (different units, different destinations, 820.2.a); ONE Student trigger; Twilight Step BANISHED not trashed (829.1.b.1, 820.3.a)", async () => {
     const game = await board().build();
     await portal(game);
     await game.p1.cast("tsFlow", { flow: true, repeat: 1, targets: ["a", "e"] });
