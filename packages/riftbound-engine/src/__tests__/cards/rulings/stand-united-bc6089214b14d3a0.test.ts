@@ -55,7 +55,7 @@ describe("Ruling bc6089214b14d3a0 — Stand United doubles each of Lee Sin's buf
 
   // Spending ONE of four buffs leaves three, each still +2 under Stand United → 5 + 6 − 4 = 7, and Lee Sin is still a
   // buffed unit (the rider keeps applying to the remaining buffs).
-  test.failing("BUG: step 5: Wallop spending one of Lee Sin's buffs leaves 3 buffs → 5 + (3 × 2) − 4 = 7, still buffed", async () => {
+  test("step 5: Wallop spending one of Lee Sin's buffs leaves 3 buffs → 5 + (3 × 2) − 4 = 7, still buffed", async () => {
     const game = await throughStandUnited();
     await game.p1.cast("wallop", { answers: ["lee"], payOptional: true, targets: "lee" });
     if (game.decision()?.kind === "pick" && game.decision()?.seat === P1) {

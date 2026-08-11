@@ -80,7 +80,7 @@ describe("Ruling 95293baff70ed4c7 — a 0-Might unit with no damage does not die
 
   // Wounded (3 + buff = 4 Might, 3 damage) spends its buff for Call to Glory → 3 Might with 3 damage → it
   // dies in the cleanup right after the cost is paid, before Call to Glory resolves (which then does nothing).
-  test.failing("BUG: ruling 95293baff70ed4c7 — a damaged unit made lethal by spending its buff as a cost dies before the spell resolves", async () => {
+  test("ruling 95293baff70ed4c7 — a damaged unit made lethal by spending its buff as a cost dies before the spell resolves", async () => {
     const game = await scenario()
       .battlefield("bf1", { controller: P1 })
       .unit(P1, "bf1", { might: 3, name: "Wounded" }, "wounded", { buffed: true, damage: 3 })

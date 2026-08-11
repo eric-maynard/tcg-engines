@@ -29,6 +29,8 @@ import {
 import type { TimingClass } from "../../../chain";
 import { isLegalCounterTarget } from "../../../chain/counter-target";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
+import type { BuffCardsIo } from "../../../operations/buff-counters";
+import { hasBuffCounter, removeOneBuffCounter } from "../../../operations/buff-counters";
 import { removeFromBoard } from "../../../operations/leave-board";
 import { executeEffect } from "../../../abilities/effect-executor";
 import { collectChoiceNodes, raisePlayTimeModeChoice } from "./play-time-modes";
@@ -76,6 +78,8 @@ import {
   spellEffectHasLegalTargets,
 } from "./targeting";
 import { notePlayThisTurn } from "../../../operations/plays-this-turn";
+import type { PostMoveCleanupContext } from "../../../cleanup/post-move-cleanup";
+import { cleanupAndFireDeaths } from "../../../cleanup/post-move-cleanup";
 
 type Defs = GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>;
 
@@ -270,14 +274,10 @@ function spendBuffCandidates(
       zones: context.zones,
     },
   ) as string[];
-  const meta = context.cards as {
-    getCardMeta?: (cardId: CoreCardId) => { buffed?: boolean } | undefined;
-  };
-  return ids.filter(
-    (id) =>
-      meta.getCardMeta?.(id as CoreCardId)?.buffed === true ||
-      context.counters.getFlag(id as CoreCardId, "buffed") === true,
-  );
+  const meta = context.cards as BuffCardsIo;
+  // rule 703 — a unit spent down to its `extraBuffs` counters is still buffed
+  // and can still pay.
+  return ids.filter((id) => hasBuffCounter(meta, context.counters, id));
 }
 
 /**
@@ -2425,6 +2425,11 @@ export const playSpell: Defs["playSpell"] = {
     let spellAdditionalCost: CostExtras["additionalCost"];
     let exhaustCostPaid = false;
     let ignoreBaseCost = false;
+    // rule 319.8 / 322 / 323 — a Cleanup follows the payment of a cost that
+    // lowers a unit's Might (ruling 95293baff70ed4c7): spending a damaged
+    // unit's own buff can make it lethal, and it dies before the spell it paid
+    // for resolves.
+    let spentBuffFrom: string | undefined;
     if (paidAdditionalCost) {
       const optional = getOptionalPlayCost(cardId);
       if (optional?.kind === "spend-buff") {
@@ -2432,11 +2437,9 @@ export const playSpell: Defs["playSpell"] = {
         // readers look at top-level meta.buffed, so mirror the flag there.
         const chosen = spendBuffCandidates(draft, context, playerId, cardId)[0];
         if (chosen) {
-          context.counters.setFlag(chosen as CoreCardId, "buffed", false);
-          context.cards.updateCardMeta?.(chosen as CoreCardId, {
-            buffed: false,
-          } as Partial<RiftboundCardMeta>);
+          removeOneBuffCounter(context.cards as BuffCardsIo, context.counters, chosen);
           exhaustCostPaid = true;
+          spentBuffFrom = chosen as string;
           ignoreBaseCost = optional.ignoresBaseCost === true;
           // rule 702.2.b — paying with a buff is a spend: "When you spend a
           // buff" triggers fire as the cost is paid.
@@ -2982,6 +2985,17 @@ export const playSpell: Defs["playSpell"] = {
           } as any,
         );
       }
+    }
+
+    // rule 319.8 / 322 / 323 (ruling 95293baff70ed4c7) — the spell is on the
+    // chain and the Cleanup that ends the action runs: a unit whose spent buff
+    // left it with lethal damage dies now, before the spell resolves.
+    if (spentBuffFrom !== undefined && !draft.pendingChoice) {
+      cleanupAndFireDeaths(draft, {
+        cards: context.cards,
+        counters: context.counters,
+        zones: context.zones,
+      } as unknown as PostMoveCleanupContext);
     }
   },
 };
