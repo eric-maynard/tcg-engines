@@ -2177,6 +2177,13 @@ export interface CostExtras {
    */
   assumeChooseDiscount?: boolean;
   /**
+   * rule 356.4.b / 356.4.c.1 (rule-id: sfd-141-221) — which half of an
+   * "[N] or [rainbow] less" discount the caster elects for THIS play. Resolved
+   * by `computePlayResourceCost` (it elects the half the pool can actually
+   * pay); left undefined by callers.
+   */
+  preferPowerWaiver?: boolean;
+  /**
    * rule 822.1.c / 822.4 / 813.4 — this play grants the card [Reaction] for its
    * duration ([Ambush] played to a battlefield where you control units), so
    * "cards with [Reaction] cost … more" audiences (Mystic Vortex) see it.
@@ -2202,7 +2209,7 @@ function getBoardCostReduction(
       ...(extras.targets ?? []),
       ...(extras.chosenTargetId ? [extras.chosenTargetId] : []),
     ],
-    preferAlternative: prefersPowerWaiver(state, playerId, cardId),
+    preferAlternative: extras.preferPowerWaiver ?? prefersPowerWaiver(state, playerId, cardId),
     viaFlow: extras.viaFlow === true,
   });
 }
@@ -3809,6 +3816,48 @@ export function computePlayResourceCost(
   // is zeroed, so an ignored base never shields the play from them.
   if (extras.ignoreBaseCost) {
     return ignoredBaseCost(state, playerId, cardId, extras);
+  }
+  // rule 356.4.b / 356.4.c.1 — an "[N] or [rainbow] less" discount is ONE
+  // discount whose half the CASTER elects, and the election is made while the
+  // cost is determined: elect the half this pool can actually pay rather than
+  // guessing from the printed pips alone (other waivers may already cover them).
+  if (extras.preferPowerWaiver === undefined) {
+    const preferred = prefersPowerWaiver(state, playerId, cardId);
+    const elective =
+      JSON.stringify(getBoardCostReduction(state, playerId, cardId, { ...extras, preferPowerWaiver: false })) !==
+      JSON.stringify(getBoardCostReduction(state, playerId, cardId, { ...extras, preferPowerWaiver: true }));
+    let elected = preferred;
+    if (elective) {
+      const first = computePlayResourceCost(
+        state,
+        playerId,
+        cardId,
+        { ...extras, preferPowerWaiver: preferred },
+        getCardMeta,
+        false,
+      );
+      if (!canPayResourceCost(state, playerId, cardId, first)) {
+        const alt = computePlayResourceCost(
+          state,
+          playerId,
+          cardId,
+          { ...extras, preferPowerWaiver: !preferred },
+          getCardMeta,
+          false,
+        );
+        if (canPayResourceCost(state, playerId, cardId, alt)) {
+          elected = !preferred;
+        }
+      }
+    }
+    return computePlayResourceCost(
+      state,
+      playerId,
+      cardId,
+      { ...extras, preferPowerWaiver: elected },
+      getCardMeta,
+      consume,
+    );
   }
   const pool = state.runePools[playerId];
   const modifier = getCostModifier(cardId, getCardMeta);

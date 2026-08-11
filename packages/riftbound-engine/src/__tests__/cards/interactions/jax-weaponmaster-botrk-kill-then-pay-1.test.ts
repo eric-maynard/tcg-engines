@@ -129,8 +129,8 @@ describe("Jax, Unrelenting [Weaponmaster] → Blade of the Ruined King's kill �
     expect(game.state("jax").might).toBe(7); // 3 + 4
   });
 
-  test.failing(
-    "BUG: the Blade is attached to Jax BEFORE its kill cost is paid — rule 356.4.c/821.1.c.6 pay the cost first, then attach",
+  test(
+    "the Blade is attached to Jax only AFTER its kill cost is paid — rule 356.4.c/821.1.c.6 pay the cost first, then attach",
     async () => {
       // Expected: while the "kill a friendly unit" payment is still being chosen the Blade has not
       // moved — costs are paid as part of taking the action, before it takes effect.

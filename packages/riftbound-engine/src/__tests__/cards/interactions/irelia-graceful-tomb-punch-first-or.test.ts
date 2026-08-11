@@ -152,7 +152,7 @@ describe("Sandswept Tomb (fixed) × Irelia, Graceful (elective) on one Punch Fir
   // total is 0 Energy + [body] (the Tomb already ate the other pip) and the spell IS castable. Actual: the
   // engine never asks — `moves/play/cost.ts prefersPowerWaiver` auto-elects the [rainbow] half whenever the
   // pool cannot cover the PRINTED pips, leaving a 1-Energy total this pool cannot pay, so the cast is refused.
-  test.failing("BUG: the Power-only caster is stranded — 0 energy + one [body] must be enough for Punch First on Irelia at the Tomb via the [1]-less half (356.4.b, 356.4.c.1)", async () => {
+  test("the Power-only caster is not stranded — 0 energy + one [body] must be enough for Punch First on Irelia at the Tomb via the [1]-less half (356.4.b, 356.4.c.1)", async () => {
     const game = await board({ energy: 0, power: { body: 1 } }).build();
     expect(game.p1.can("cast", "pf")).toBe(true);
     await game.p1.cast("pf", { targets: "irelia" });

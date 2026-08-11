@@ -61,19 +61,14 @@ export function handle_weaponmasterAttach(
   }
   deductAbilityCost(draft, playerId, equipCost, ctx.zones, ctx.counters);
 
-  // rule 434 / 355.8 — the same attach the ordinary [Equip] resolution does,
-  // including the Mighty check and the "fizzles if either card left the board"
-  // guard, so the two paths cannot drift.
-  handle_equipAttach(
-    { equipmentId, type: "equip-attach", unitId } as unknown as ExecutableEffect,
-    ctx,
-    h,
-  );
+  const attach = { equipmentId, type: "equip-attach", unitId } as unknown as ExecutableEffect;
 
   // rule 821.1.c.3 / 818.1.c.3 (sfd-178-221 Blade of the Ruined King):
   // [A] waives one power pip only — the "Kill a friendly unit" half of the
   // Equip cost is still owed on the Weaponmaster path. rule 428.1.a.1 — it is
   // an Active Kill, so a token ceases to exist (186.1).
+  // rule 356.4.c / 821.1.c.6 — the whole cost is paid BEFORE the action takes
+  // effect, so the kill happens first and the Equipment only moves afterwards.
   if (equipCost.killFriendlyUnit === true && !draft.pendingChoice) {
     const fodder = weaponmasterSacrificeOptions(draft, playerId, unitId, ctx);
     if (fodder.length === 1) {
@@ -83,17 +78,25 @@ export function handle_weaponmasterAttach(
         sourceCardId: equipmentId,
       } as EffectContext);
     } else if (fodder.length > 1) {
-      // rule 357.2: the payer picks which friendly unit pays.
+      // rule 357.2: the payer picks which friendly unit pays; the attach rides
+      // along as the prompt's continuation so it lands only once paid.
       draft.pendingChoice = {
         effect: { target: { type: "unit" }, type: "kill" },
         options: fodder as never,
         playerId: playerId as never,
         remaining: 1,
         sourceCardId: equipmentId as never,
+        then: attach,
         type: "choose-target",
       } as RiftboundGameState["pendingChoice"];
+      return;
     }
   }
+
+  // rule 434 / 355.8 — the same attach the ordinary [Equip] resolution does,
+  // including the Mighty check and the "fizzles if either card left the board"
+  // guard, so the two paths cannot drift.
+  handle_equipAttach(attach, ctx, h);
 
   // rule 821.1.c / 476.1 (sfd-150-221 Last Rites): the non-resource part of the
   // Equip cost — "Recycle N cards from your trash" — is paid by its payer
