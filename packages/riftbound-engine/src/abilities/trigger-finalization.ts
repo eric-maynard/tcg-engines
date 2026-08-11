@@ -28,7 +28,7 @@
 
 import type { CardId as CoreCardId } from "@tcg/core";
 import type { ChainItem, ChainTargetSlot } from "../chain/chain-state";
-import { removeChainItem } from "../chain/chain-state";
+import { addToChain, createInteractionState, removeChainItem } from "../chain/chain-state";
 import { legalChosenPlayers } from "./chosen-player";
 import { revealHandChosenPlayerWhich } from "./reveal-hand-player";
 import type { PostMoveCleanupContext } from "../cleanup/post-move-cleanup";
@@ -1170,6 +1170,44 @@ function reseatPriorityOnTop(draft: RiftboundGameState): void {
 }
 
 /**
+ * rule 387.1.a / 321 / 370.1.a.1 (unl-192-219 Alpha Strike) — "Then for each
+ * unit this kills, do this: …". The clause parked its body while the effect was
+ * resolving (`effects/for-each.ts`), because no unit had died yet: the rule 520
+ * kills, and the replacements that answer them (372 / 373), belong to the
+ * Cleanup that follows. One Chain Item per unit that ACTUALLY left the board is
+ * minted here, the moment the board is settled and before anyone gets Priority
+ * — a death a replacement replaced never happened, so it mints nothing.
+ */
+function mintKillReflexives(draft: RiftboundGameState, ctx: FinalizationContext): void {
+  const parked = draft.pendingKillReflexives;
+  if (parked === undefined || parked.length === 0) {
+    return;
+  }
+  draft.pendingKillReflexives = undefined;
+  const turnOrder = Object.keys(draft.players ?? {});
+  for (const record of parked) {
+    for (const id of record.ids) {
+      const zone = ctx.zones.getCardZone?.(id as CoreCardId) as string | undefined;
+      if (zone === "base" || (zone ?? "").startsWith("battlefield-")) {
+        continue;
+      }
+      draft.interaction = addToChain(
+        draft.interaction ?? createInteractionState(),
+        {
+          cardId: id,
+          controller: record.controller,
+          effect: record.effect as ChainItem["effect"],
+          status: "pending",
+          triggered: true,
+          type: "ability",
+        },
+        turnOrder,
+      );
+    }
+  }
+}
+
+/**
  * Finalize Pending items (triggers AND plays an effect queued) oldest-first
  * (rule 337.1.b) until one of them needs an answer or none is left — nobody
  * receives Priority in between (337.1.a / 337.4). Safe to call whenever no
@@ -1180,6 +1218,7 @@ export function finalizePendingItems(draftLike: unknown, ctx: FinalizationContex
   if (!ctx?.cards || !ctx?.zones || typeof ctx.zones.getCardsInZone !== "function") {
     return;
   }
+  mintKillReflexives(draft, ctx);
   for (let guard = 0; guard < 64; guard++) {
     if (draft.pendingChoice) {
       return;

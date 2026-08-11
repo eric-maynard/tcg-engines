@@ -15,7 +15,6 @@ import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import { legalBoundIds } from "../target-slots";
 import {
   type EffectHelpers,
-  dieWouldBeReplaced,
   getTargetIds,
   getEffectiveMight,
   resolveAmount,
@@ -146,12 +145,12 @@ function noteLethalDamage(ctx: EffectContext, targetId: string, total: number, d
   if (might <= 0 || total < might || total - dealt >= might) {
     return;
   }
-  // rule 370.1.a.1 — a death a certain replacement replaces never happens
-  // (Guardian Angel: the gear dies instead and the unit is recalled), so this
-  // source killed nothing and must not be credited with the kill.
-  if (dieWouldBeReplaced(targetId, ctx)) {
-    return;
-  }
+  // rule 373 / 370.1.a.1 — whether a replacement actually replaces THIS death
+  // is not known yet: a single-use shield facing several simultaneous deaths
+  // saves exactly one, and which one is its controller's choice at the Cleanup.
+  // So every lethal crossing is recorded here and the per-kill item queued from
+  // this ledger carries a `this-kills-target` re-check (`for-each.ts`), which
+  // reads the board once the Cleanup has settled who really died.
   const ledger = (ctx.draft.effectKills ??= {});
   const list = (ledger[ctx.sourceCardId] ??= []);
   if (!list.includes(targetId)) {

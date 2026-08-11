@@ -19,6 +19,20 @@ export function handle_forEach(effect: ExecutableEffect, ctx: EffectContext, h: 
     if (ledger) {
       delete ledger[ctx.sourceCardId];
     }
+    // rule 321 / 387.1.a / 370.1.a.1 — nothing has DIED yet: the rule 520 kills
+    // (and any replacement answering them, 372/373) happen in the Cleanup after
+    // this resolution ends. So a "do this:" body cannot mint its items here —
+    // park it with the lethally damaged candidates and let the finalization pass
+    // mint one item per unit that really died (`trigger-finalization.ts`).
+    const inner = (forEachEffect as { effect?: ExecutableEffect }).effect;
+    if (forEachEffect.type === "reflexive" && inner !== undefined && killed.length > 0) {
+      (ctx.draft.pendingKillReflexives ??= []).push({
+        controller: ctx.playerId as never,
+        effect: JSON.parse(JSON.stringify(inner)) as unknown,
+        ids: [...killed] as never,
+      });
+      return;
+    }
     for (const targetId of killed) {
       executeEffect({ ...forEachEffect, target: { type: "self" } }, { ...ctx, sourceCardId: targetId });
     }

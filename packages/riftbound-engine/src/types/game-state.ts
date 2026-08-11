@@ -1916,6 +1916,16 @@ export interface RiftboundGameState {
   effectKills?: Record<string, string[]>;
 
   /**
+   * rule 321 / 387.1.a (unl-192-219 Alpha Strike) — "Then for each unit this
+   * kills, do this: …". No death happens while the effect resolves, so the
+   * reflexive items cannot be created there: the clause parks its body plus the
+   * lethally-damaged candidates here and the finalization pass mints one item
+   * per unit that the Cleanup really killed (a replaced death, 370.1.a.1, mints
+   * nothing).
+   */
+  pendingKillReflexives?: { controller: PlayerId; effect: unknown; ids: CardId[] }[];
+
+  /**
    * rule 364.3 (ogn-053-298): spell/ability-created continuous effects that
    * act as static abilities until end of turn. Re-applied on every
    * `recalculateStaticEffects` pass (so units that start matching later are

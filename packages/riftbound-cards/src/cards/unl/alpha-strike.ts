@@ -38,7 +38,9 @@ const abilities: Ability[] = [
           type: "damage",
         },
         {
-          effect: { amount: 1, type: "gain-xp" },
+          // rule 387.1 / 388.1 — "do this:" makes the rider a Reflexive Trigger:
+          // one Chain Item per kill, not an inline gain during this resolution.
+          effect: { effect: { amount: 1, type: "gain-xp" }, type: "reflexive" },
           target: {
             filter: "killed-by-this",
             type: "unit",
