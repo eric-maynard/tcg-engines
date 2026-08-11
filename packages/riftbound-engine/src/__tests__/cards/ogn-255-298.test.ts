@@ -45,6 +45,13 @@ function board(def = 2, atk = 3) {
 /** Pass priority (both seats) until the chain is empty, staying inside the showdown. */
 async function resolveChain(game: Game): Promise<void> {
   for (let i = 0; i < 8 && game.chain().length > 0; i++) {
+    // rule 383.3.d — two attackers = two non-interchangeable Fox triggers, so their
+    // controller is offered the (soft) order; keeping the listed order is fine here.
+    const d = game.decision();
+    if (d?.kind === "order" && d.defaultable) {
+      await game.acceptTriggerOrder();
+      continue;
+    }
     await game.acting().pass();
   }
   expect(game.chain()).toHaveLength(0);

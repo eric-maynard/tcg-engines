@@ -18,6 +18,7 @@
 
 import type { CardId as CoreCardId, PlayerId as CorePlayerId, ZoneId as CoreZoneId } from "@tcg/core";
 import { fireTriggers } from "../abilities/trigger-runner";
+import { collapseTriggerBatch } from "../chain";
 import { getCardEffectiveMight } from "../game-definition/moves/play/cost";
 import type { RiftboundCardMeta, RiftboundGameState } from "../types";
 
@@ -77,6 +78,10 @@ function fireStaticBecomeMighty(
   before: Map<string, number>,
 ): void {
   const getMeta = (id: CoreCardId) => context.cards.getCardMeta(id);
+  // rule 383.3.d — ONE static recalculation pushes every watched unit over the
+  // threshold at the same moment, so the items these per-unit events add are
+  // simultaneous and their controller gets to order them.
+  const chainLenBefore = draft.interaction?.chain?.items.length ?? 0;
   for (const id of boardUnitIds(draft, context)) {
     const was = before.get(id);
     if (was === undefined || was >= MIGHTY_THRESHOLD) {
@@ -94,6 +99,7 @@ function fireStaticBecomeMighty(
       draft,
     } as unknown as Parameters<typeof fireTriggers>[1]);
   }
+  collapseTriggerBatch(draft.interaction, chainLenBefore);
 }
 
 /**

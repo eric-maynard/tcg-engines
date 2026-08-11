@@ -149,9 +149,7 @@ describe("Darius aura in → out → in × Fiora, Worthy — 'becomes Mighty' re
 
   // Expected (383.3.d, DESIGN "Trigger ordering"): the two items are NOT interchangeable — one readies A, the other B (each
   // reads its own triggering unit) — so after both are finalized their controller P1 gets the soft `order` offer.
-  // Actual: the engine's interchangeability signature ignores the triggering object (only effect JSON + source card), treats
-  // the two Fiora items as copies and skips the offer, going straight to P1's priority window.
-  test.failing("BUG: (a) P1, controlling both simultaneous triggers, is offered to ORDER them (soft `order` decision, defaultable) once both are finalized (383.3.d)", async () => {
+  test("(a) P1, controlling both simultaneous triggers, is offered to ORDER them (soft `order` decision, defaultable) once both are finalized (383.3.d)", async () => {
     const game = await board().build();
     await game.p1.move("darius", "bf1");
     expect(await answerFioraOptIns(game, [true, true])).toBe(2);

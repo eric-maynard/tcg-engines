@@ -1100,7 +1100,13 @@ function raiseTriggerOrderPrompt(
       sourceBound || modal
         ? json
         : JSON.stringify(it.effect ?? null, (k, v) => (k.startsWith("_") ? undefined : v));
-    return `${sourceBound ? it.cardId : ""}|${identity}`;
+    // rule 383.3.d — an effect that reads the TRIGGERING object ("ready it",
+    // `{type:"trigger-source"}`) does something different per instance even when
+    // its JSON and its source card are identical: one Fiora item readies A, the
+    // other readies B. The triggering object is part of that item's identity, so
+    // two such items are NOT interchangeable and their controller orders them.
+    const triggerObject = /"trigger-source"/.test(json) ? (it.triggerEvent?.cardId ?? "") : "";
+    return `${sourceBound ? it.cardId : ""}|${triggerObject}|${identity}`;
   };
   // rule 383.3.d — only abilities that triggered SIMULTANEOUSLY are ordered by
   // their controller. Items carrying different `triggerBatch` stamps entered the

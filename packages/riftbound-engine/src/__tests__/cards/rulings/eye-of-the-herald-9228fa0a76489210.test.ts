@@ -30,10 +30,21 @@ function board() {
 const recruits = (game: Game) => game.findAll({ name: "Recruit", owner: P1 });
 
 async function passBoth(game: Game): Promise<void> {
-  for (let i = 0; i < 2; i++) {
+  for (let passed = 0, i = 0; passed < 2 && i < 6; i++) {
     const d = game.decision();
+    // rule 383.3.d — the two Ahri triggers read different attackers, so P2 is offered
+    // the (soft) order once they are finalized; keep the listed order and carry on.
+    if (d?.kind === "order" && d.defaultable) {
+      await game.acceptTriggerOrder();
+      continue;
+    }
     expect(d).toMatchObject({ context: "chain", kind: "action" });
     await game.seat(d!.seat).passPriority();
+    passed += 1;
+  }
+  const tail = game.decision();
+  if (tail?.kind === "order" && tail.defaultable) {
+    await game.acceptTriggerOrder();
   }
 }
 
@@ -65,7 +76,15 @@ describe("Ruling 9228fa0a76489210 — the Herald's Recruit token attacking into 
   test("after they resolve: Knight is 3 → 2 this turn; the Recruit was hit by its own trigger but sits at the 1-Might floor (still 1, never 0); then the showdown proceeds with P1's Focus", async () => {
     const game = await board().build();
     await game.p1.move("knight", "bf1");
-    for (let i = 0; i < 10 && game.decision()?.kind === "action" && (game.decision() as { context?: string }).context === "chain"; i++) {
+    for (let i = 0; i < 10; i++) {
+      const d = game.decision();
+      if (d?.kind === "order" && d.defaultable) {
+        await game.acceptTriggerOrder(); // rule 383.3.d — soft offer, listed order kept
+        continue;
+      }
+      if (d?.kind !== "action" || (d as { context?: string }).context !== "chain") {
+        break;
+      }
       await game.acting().passPriority();
     }
     expect(game.chain()).toEqual([]);
