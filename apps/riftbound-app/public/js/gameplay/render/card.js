@@ -150,24 +150,6 @@ function renderCardElement(card, isFacedown = false, zone = "") {
     return `<div class="card facedown"><div class="card-back card-back-art card-back-art--main"></div></div>`;
   }
 
-  // W13: if the viewing player has hidden this specific hand card, render
-  // a facedown stand-in with an Unhide button so they can toggle it back.
-  // Purely client-side — the card still participates normally in gameplay.
-  const isOwnedByViewer = card.owner === viewingPlayer;
-  if (zone === "hand" && isOwnedByViewer && card.id && isHandCardHidden(card.id)) {
-    return `
-      <div class="card facedown hand-hidden" data-card-id="${esc(card.id)}" data-zone="hand"
-           onpointerdown="onPointerDown(event, '${esc(card.id)}')">
-        <div class="card-back card-back-art card-back-art--main"></div>
-        <button class="card-hide-btn"
-                type="button"
-                title="Uncover this card (local view only)"
-                onpointerdown="event.stopPropagation();"
-                onclick="event.stopPropagation(); toggleHideHandCard('${esc(card.id)}');">Show</button>
-      </div>
-    `;
-  }
-
   const classes = ["card"];
   if (card.cardType) classes.push("type-" + card.cardType);
   if (card.meta?.exhausted) {
@@ -201,22 +183,6 @@ function renderCardElement(card, isFacedown = false, zone = "") {
   const pointerAttr = (isLegendZone && !isPlayable && !hasPrintedAbility)
     ? ""
     : `onpointerdown="onPointerDown(event, '${esc(card.id)}')"`;
-
-  // W13: per-card cover toggle on viewer-owned hand cards. Click replaces
-  // the face with a card-back; state persists in localStorage.
-  // rule 811.1: "Hide" is the Discretionary Action gated on the [Hidden]
-  // keyword (engine move `hideCard`), so this purely cosmetic local toggle
-  // must NOT be labelled "Hide" — it would read as that rules action on
-  // every hand card, including cards without [Hidden].
-  let hideBtn = "";
-  if (zone === "hand" && isOwned && card.id) {
-    hideBtn = `<button
-      class="card-hide-btn"
-      type="button"
-      title="Cover this card in your own view only (local, persists via localStorage) — not the [Hidden] Hide action"
-      onpointerdown="event.stopPropagation();"
-      onclick="event.stopPropagation(); toggleHideHandCard('${esc(card.id)}');">Cover</button>`;
-  }
 
   // rule-827 (ven-021-166): effective Might = base + mightModifier + staticMightBonus + buff.
   // (combat-role keyword bonus added below via combatRoleMightBonus)
@@ -298,7 +264,6 @@ function renderCardElement(card, isFacedown = false, zone = "") {
       ${effMight != null && !mightBadge ? `<div class="card-might-chip" aria-hidden="true">${effMight}</div>` : ""}
       ${attachBadge}
       ${namedBadge}
-      ${hideBtn}
       <div class="card-name">${esc(card.name || "")}</div>
     </div>
   `;
