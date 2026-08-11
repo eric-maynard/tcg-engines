@@ -46,11 +46,10 @@ describe("Ruling 028477afc1c302eb — Assault is on before any Gust window", () 
     expect(game.state("lookout").combatRole).toBe("defender");
   });
 
-  // Expected: when P2 first gets to act (Focus passed in the showdown) Vayne is already 5 Might, so Gust's
+  // When P2 first gets to act (Focus passed in the showdown) Vayne is already 5 Might, so Gust's
   // "3 [Might] or less" requirement excludes it — only the 2-Might Lookout is offered and naming Vayne is
-  // rejected (355.8). Actual: the engine's target enumeration still offers Vayne (it does get ignored on
-  // resolution — see the next test — but the choice itself should be illegal).
-  test("BUG: ruling 028477afc1c302eb — engine still OFFERS the 5-Might attacking Vayne as a Gust target (should list only Lookout)", async () => {
+  // rejected outright (355.8).
+  test("at P2's first opportunity Gust does NOT even offer the 5-Might attacking Vayne — only Lookout is a legal target; naming Vayne is rejected (355.8)", async () => {
     const game = await board().build();
     await game.p1.move("vayne", "bf1");
     await game.p1.passFocus();

@@ -49,10 +49,9 @@ describe("Ruling e14491b195336ffc — no XP when Guardian Angel saves Alpha Stri
     expect(game.violations()).toEqual([]);
   });
 
-  // Expected: the death was replaced (unit recalled, only the GEAR Guardian Angel was killed — and by its own effect),
-  // so "for each unit this kills" counts zero and P1 stays at 0 XP. Actual: the engine credits Alpha Strike with a
-  // kill and P1 gains 1 XP.
-  test("ruling e14491b195336ffc — engine awards 1 XP although Guardian Angel replaced the death (no unit was killed)", async () => {
+  // The death was replaced (unit recalled; only the GEAR Guardian Angel was killed — by its own effect), so
+  // "for each unit this kills" counts zero.
+  test("ruling e14491b195336ffc — no XP: Guardian Angel replaced the death, so Alpha Strike killed no unit and P1 stays at 0 XP", async () => {
     const game = await board().build();
     await game.p1.cast("alpha", { targets: ["champ", "guarded"] });
     await game.settle();

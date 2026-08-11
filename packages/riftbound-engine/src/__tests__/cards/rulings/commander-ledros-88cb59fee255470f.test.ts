@@ -57,10 +57,8 @@ describe("Ruling 88cb59fee255470f — Ledros's discount counts only units that a
     expect(game.zoneOf("soraka")).toBe("battlefield-bf1");
   });
 
-  // BUG — expected: only Big died, so the discount is [order]×1 → P1 pays 6 + [order]×3 and keeps 1 order.
-  // Actual: the engine counts every unit named for the cost (357.2.a-style "cost still paid"), discounting
-  // [order]×2 and leaving 2 order.
-  test("engine discounts for the Soraka-saved unit too (order left 2, should be 1)", async () => {
+  // Only Big died, so the discount is [order]×1 → P1 pays 6 + [order]×3 and keeps 1 order (the saved Pawn earns nothing).
+  test("only the unit that actually died discounts: Pawn (saved) + Big (dead) → pays 6 + [order]×3, 1 order left", async () => {
     const game = await board(true).build();
     await game.p1.play("ledros", { costs: { paid: { "kill-any": ["pawn", "big"] } } });
     await game.settle();
@@ -69,9 +67,8 @@ describe("Ruling 88cb59fee255470f — Ledros's discount counts only units that a
     expect(game.p1.resources()).toEqual({ energy: 0, power: { order: 1 } }); // 4 − 3 = 1
   });
 
-  // BUG — expected: naming ONLY the Soraka-saved Pawn yields no discount at all: full 6 + [order]×4 is paid
-  // (order 4 → 0). Actual: [order]×1 is discounted (order left 1).
-  test("a cost-kill that Soraka replaces still discounts [order] (should be full price)", async () => {
+  // Naming ONLY the Soraka-saved Pawn yields no discount at all: the full 6 + [order]×4 is paid (order 4 → 0).
+  test("a cost-kill that Soraka replaces gives no discount: naming only Pawn pays the full 6 + [order]×4", async () => {
     const game = await board(true).build();
     await game.p1.play("ledros", { costs: { paid: { "kill-any": ["pawn"] } } });
     await game.settle();
