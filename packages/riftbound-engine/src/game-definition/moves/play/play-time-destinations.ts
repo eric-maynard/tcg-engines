@@ -78,7 +78,16 @@ function dependsOnDestination(effect: unknown): boolean {
     return false;
   }
   const node = effect as AnyEffect;
-  if (node.location === "same" || node.location === "move-to-or-from") {
+  // rule 355.10.d (rule-id: ven-148-166 Shadow Dash) — a follow-up that reads
+  // EVERY card at the destination ("if you have exactly two units there, THEY
+  // each get +1") is a programmatic count, never a choice, so it gives the
+  // caster nothing to re-decide: the destination stays a Relevant Choice of
+  // playing (355.4). Only a follow-up whose candidates the caster PICKS among
+  // (ogn-258-298) needs the destination left open until resolution.
+  if (
+    (node.location === "same" || node.location === "move-to-or-from") &&
+    node.quantity !== "all"
+  ) {
     return true;
   }
   return Object.values(node).some((v) => dependsOnDestination(v));
