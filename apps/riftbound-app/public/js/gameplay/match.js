@@ -285,6 +285,16 @@ function matchHandlePregame(pregame, state, onDone) {
   if (ini.kind === "roll" && ini.decided && !skip) {
     const overlay = document.getElementById("coinOverlay");
     const showing = overlay && overlay.classList.contains("visible");
+    if (showing && (overlay.dataset.stage === "rolling" || !_coinFlipShown)) {
+      // Decided while the dice were still rolling (a bot chooser answers at once): let the roll play out, then say who goes first.
+      _initiativeShownKey = key;
+      showCoinFlip({ p1Roll: ini.p1Roll, p2Roll: ini.p2Roll, winner: ini.chooser, firstPlayer: pregame.firstPlayer }, () => {
+        overlay.classList.remove("visible");
+        _coinFlipShown = false;
+        onDone();
+      });
+      return true;
+    }
     if (showing) {
       // We were on the roll screen (chose, or waited for the other seat): say who goes first, linger, proceed.
       const coinChoose = document.getElementById("coinChoose");
