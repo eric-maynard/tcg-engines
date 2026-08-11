@@ -110,6 +110,45 @@ function isSingleChoice(target: AnyEffect): boolean {
   return q === undefined || q === 1;
 }
 
+/** Whether `needle` sits anywhere inside `haystack` (object identity). */
+function containsNode(haystack: unknown, needle: AnyEffect): boolean {
+  if (haystack === needle) {
+    return true;
+  }
+  if (!haystack || typeof haystack !== "object") {
+    return false;
+  }
+  return Object.values(haystack as Record<string, unknown>).some((v) => containsNode(v, needle));
+}
+
+/**
+ * rule 820.2.a — a [Repeat]ed spell is stored as a `_repeatExecutions` sequence
+ * of identical copies of the SAME instructions, so every copy restates the same
+ * target descriptor and the shared slot list collapses to one entry: read
+ * positionally, all executions would move the first target. Execution i moves
+ * the target it was declared with — `targets[i]` when the caster named one per
+ * execution, or the execution's own `boundTargetsOverride` group.
+ */
+function repeatExecutionMover(item: ChainItemLike, root: unknown, node: AnyEffect): string | undefined {
+  const seq = root as AnyEffect | undefined;
+  if (!seq || seq.type !== "sequence" || seq._repeatExecutions !== true || !Array.isArray(seq.effects)) {
+    return undefined;
+  }
+  const i = (seq.effects as AnyEffect[]).findIndex((e) => containsNode(e, node));
+  if (i < 0) {
+    return undefined;
+  }
+  const exec = (seq.effects as AnyEffect[])[i] as AnyEffect;
+  const override = exec?.boundTargetsOverride as readonly string[] | undefined;
+  if (Array.isArray(override)) {
+    return moverForNode({ ...item, targets: [...override] } as ChainItemLike, exec, node);
+  }
+  if (seq.independentTargets !== true) {
+    return undefined;
+  }
+  return ((item.targets as readonly string[] | undefined) ?? [])[i];
+}
+
 /**
  * The unit `node` will move, when it is already determined: the source itself
  * ("move me"), the triggering unit, the sequence's pending value, or the target
@@ -137,6 +176,10 @@ export function moverForNode(item: ChainItemLike, root: unknown, node: AnyEffect
   }
   if (root === node) {
     return bound[0];
+  }
+  const repeated = repeatExecutionMover(item, root, node);
+  if (repeated !== undefined) {
+    return repeated;
   }
   const slots = collectSequenceTargetSlots(root as SpellEffectTargetShape);
   if (!slots) {
