@@ -68,6 +68,12 @@ export const passivePolicy: Policy = (d) => {
     }
     return undefined;
   }
+  // rule 113 / 486.5 — the pregame battlefield keep cannot be passed, and a game
+  // nobody drives has to reach turn 1: settling keeps the first battlefield the
+  // seat registered. A caller that cares inspects the decision before settling.
+  if (d.kind === "pick" && d.source?.moveId === "selectBattlefield" && d.options[0]) {
+    return { keys: [d.options[0].key], kind: "pick" };
+  }
   // rule 753 — a "you MAY make new choices" slot nobody answers keeps its value.
   if (d.kind === "pick" && d.newChoices !== undefined && d.allowDecline) {
     return { kind: "decline" };
@@ -207,6 +213,9 @@ export class Game {
       opts.p1,
       opts.p2,
       seed,
+      // rule 486.5 — a seat that registered three battlefields is ASKED which it
+      // keeps; settle() takes the first if nobody answers.
+      { battlefieldSelection: "decision" },
     );
     return Game.attach(engine, {
       autoProcedures: opts.autoProcedures,

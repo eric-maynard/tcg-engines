@@ -124,11 +124,15 @@ async function randomGame(seed: string): Promise<Game> {
   const r = mulberry(`decks:${seed}`);
   const [a1, a2] = DOMAIN_PAIRS[Math.floor(r() * DOMAIN_PAIRS.length)] as [string, string];
   const [b1, b2] = DOMAIN_PAIRS[Math.floor(r() * DOMAIN_PAIRS.length)] as [string, string];
-  return GameCtor.fromDecks({
+  const game = await GameCtor.fromDecks({
     p1: buildDefaultDeck(all, a1, a2, "random", `${seed}-p1`),
     p2: buildDefaultDeck(all, b1, b2, "random", `${seed}-p2`),
     seed,
   });
+  // rule 486.5: these decks register three battlefields each, so the game opens
+  // on the per-seat keep — settle takes the first and lands on P1's turn 1.
+  await game.settle();
+  return game;
 }
 
 // ---------------------------------------------------------------------------

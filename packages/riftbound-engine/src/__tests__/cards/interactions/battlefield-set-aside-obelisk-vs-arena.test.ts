@@ -190,7 +190,7 @@ async function deckWith(battlefields: BattlefieldCard[], mode: "duel" | "match")
 // ===========================================================================
 
 describe("(1) battlefield selection is an explicit, attributable per-seat step (485.4.a, 485.5, 486.5)", () => {
-  test.failing("BUG: Game.fromDecks with three registered battlefields should surface a per-seat selection Decision (486.5) or a logged random pick (485.5) — it silently keeps battlefieldIds[0] and never registers the other two", async () => {
+  test("Game.fromDecks with three registered battlefields surfaces a per-seat selection Decision (486.5) instead of silently keeping battlefieldIds[0]", async () => {
     // Expected (486.5 / 485.5): before play starts each seat is asked to keep exactly one of ITS
     // three battlefields (a `pick` Decision listing those three), or the game logs a random pick.
     // Actual: createPlayableGame takes deck.battlefieldIds[0] for each seat with no Decision, and

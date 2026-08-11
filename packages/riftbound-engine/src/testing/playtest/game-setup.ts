@@ -251,7 +251,14 @@ export function createPlayableGame(
   allCards: CardDef[],
   deck1: DeckConfig,
   deck2: DeckConfig,
-  seed = "playtest"
+  seed = "playtest",
+  /**
+   * rule 486.5 — `"decision"` registers all three of a seat's battlefields and
+   * stops in `setup` so the keep is an attributable per-seat choice; the default
+   * `"auto"` keeps the first registered one (bots/tracers want a board, not a
+   * pregame).
+   */
+  opts: { battlefieldSelection?: "auto" | "decision" } = {}
 ): { engine: Engine; instanceIds: { p1: string[]; p2: string[] } } {
   const P1 = "player-1";
   const P2 = "player-2";
@@ -282,6 +289,9 @@ export function createPlayableGame(
   const instanceIds = { p1: [] as string[], p2: [] as string[] };
 
   const bfInstanceIds: string[] = [];
+  // rule 486.5: with three registered battlefields the keep is a real choice.
+  const needsBattlefieldSelection =
+    opts.battlefieldSelection === "decision" && [deck1, deck2].some((d) => (d.battlefieldIds?.length ?? 0) > 1);
   for (const [pid, deck, bucket] of [
     [P1, deck1, instanceIds.p1],
     [P2, deck2, instanceIds.p2],
@@ -337,6 +347,33 @@ export function createPlayableGame(
       playerId: pid as PlayerId,
     });
 
+    // rule 113 / 485.4.a / 486.5 — a seat REGISTERS three battlefields and keeps
+    // exactly one; the rest are set aside. Which one is the seat's own choice, so
+    // more than one registered battlefield leaves the pick open as a setup
+    // Decision instead of silently keeping index 0.
+    if (needsBattlefieldSelection) {
+      for (const bfDef of deck.battlefieldIds) {
+        const cid = `${pid}-bf-${bfDef}`;
+        registerCard(internal, cid, bfDef, pid, "setAside");
+        internal.zones.setAside ??= {
+          cardIds: [],
+          config: { faceDown: false, id: "setAside", name: "Set Aside", ordered: false, visibility: "public" },
+        };
+        internal.zones.setAside.cardIds.push(cid);
+        const def = defById.get(bfDef);
+        if (def) cardReg.register(cid, makeLookupPayload(def, cid));
+      }
+      // rule 355.5 — a seat with a single registered battlefield has nothing to
+      // choose, so its keep is recorded at once.
+      const onlyBf = deck.battlefieldIds[0];
+      if (deck.battlefieldIds.length === 1 && onlyBf) {
+        engine.executeMove("selectBattlefield", {
+          params: { battlefieldId: `${pid}-bf-${onlyBf}`, discardIds: [], playerId: pid },
+          playerId: pid as PlayerId,
+        });
+      }
+      continue;
+    }
     const bfDef = deck.battlefieldIds[0];
     if (bfDef) {
       const cid = `${pid}-bf-${bfDef}`;
@@ -347,11 +384,39 @@ export function createPlayableGame(
     }
   }
 
+  // Turn order is known before the battlefields are chosen (115 precedes 113's
+  // per-seat selection), so record it either way.
+  engine.applyPatches([
+    { op: "replace", path: ["setup", "firstPlayer"], value: P1 },
+    { op: "replace", path: ["setup", "secondPlayer"], value: P2 },
+  ]);
+  if (needsBattlefieldSelection) {
+    // The game stays in `setup`; the harness surfaces one `selectBattlefield`
+    // pick per seat and calls finalizePregameAfterBattlefields() once both have
+    // chosen (rule 486.5).
+    return { engine, instanceIds };
+  }
+
   engine.executeMove("placeBattlefields", {
     params: { battlefieldIds: bfInstanceIds },
     playerId: P1 as PlayerId,
   });
-  for (const bf of bfInstanceIds) {
+  finalizePregameAfterBattlefields(engine);
+
+  return { engine, instanceIds };
+}
+
+/**
+ * The tail of the pregame once every seat's battlefield is in the row (rule 113 →
+ * 118): give each battlefield its unit / facedown zones, then leave the `setup`
+ * segment through the engine's own `transitionToPlay` move (mirrors Server.ts
+ * finalizePregame). The flow then cascades awaken → beginning → Channel (2 runes)
+ * → draw (1 card) → main for the first player on its own.
+ */
+export function finalizePregameAfterBattlefields(engine: Engine): void {
+  const internal = getInternal(engine);
+  const firstPlayer = (engine.getState().setup?.firstPlayer ?? "player-1") as string;
+  for (const bf of internal.zones.battlefieldRow?.cardIds ?? []) {
     internal.zones[`battlefield-${bf}`] = {
       cardIds: [],
       config: {
@@ -373,18 +438,7 @@ export function createPlayableGame(
       },
     };
   }
-
-  // Transition to playing via the engine's transitionToPlay move so the
-  // FlowManager leaves the `setup` segment and enters `mainGame` (mirrors
-  // Server.ts finalizePregame). The flow then cascades awaken → beginning →
-  // Channel (2 runes) → draw (1 card) → main for P1 on its own.
-  engine.applyPatches([
-    { op: "replace", path: ["setup", "firstPlayer"], value: P1 },
-    { op: "replace", path: ["setup", "secondPlayer"], value: P2 },
-  ]);
-  engine.executeMove("transitionToPlay", { params: {}, playerId: P1 as PlayerId });
-
-  return { engine, instanceIds };
+  engine.executeMove("transitionToPlay", { params: {}, playerId: firstPlayer as PlayerId });
 }
 
 /**

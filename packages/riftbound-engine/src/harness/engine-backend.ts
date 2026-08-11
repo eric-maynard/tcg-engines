@@ -8,6 +8,7 @@
 
 import type { CardDefinitionRegistry } from "../operations/card-lookup";
 import { getGlobalCardRegistry, setGlobalCardRegistry } from "../operations/card-lookup";
+import { finalizePregameAfterBattlefields } from "../testing/playtest/game-setup";
 import { buildCardState } from "./card-state";
 import type { GameBackend, WaitForOptions } from "./backend";
 import {
@@ -372,6 +373,31 @@ export class EngineBackend implements GameBackend {
       });
     }
 
+    // rule 113 / 486.5: the pregame battlefield keep is not an engine
+    // pendingChoice either — the kept card is the answer, every other
+    // battlefield the seat registered is set aside by the same move.
+    if (status === "setup" && target.source?.moveId === "selectBattlefield") {
+      if (answer.kind !== "pick" || answer.keys.length !== 1) {
+        return fail({
+          code: "WRONG_ANSWER_KIND",
+          message: `The battlefield selection needs exactly one pick, got ${answer.kind}`,
+        });
+      }
+      const keep = String(answer.keys[0]);
+      const discardIds = (target.kind === "pick" ? target.options : [])
+        .map((o) => String(o.key))
+        .filter((k) => k !== keep);
+      const result = this.execute(seat, target, answer, {
+        moveId: "selectBattlefield",
+        params: { battlefieldId: keep, discardIds, playerId: seat },
+        playerId: seat,
+      });
+      if (result.ok) {
+        this.finalizePregameIfBattlefieldsChosen();
+      }
+      return { ...result, decision: this.decision() };
+    }
+
     const resolved = resolvePendingAnswer(this.ctx(), target, answer);
     if (resolved.type === "error") {
       return fail(resolved.error);
@@ -485,6 +511,23 @@ export class EngineBackend implements GameBackend {
       key: p.option.key,
       kind: "action",
     });
+  }
+
+  /**
+   * rule 113 → 118: once every seat has kept a battlefield the rest of the
+   * pregame (per-battlefield zones, then `transitionToPlay`) runs on its own —
+   * the same tail `createPlayableGame` runs when no seat had a choice to make.
+   */
+  private finalizePregameIfBattlefieldsChosen(): void {
+    const state = this.engine.getState();
+    if (state.status !== "setup") {
+      return;
+    }
+    const chosen = (state.setup?.battlefieldChoices ?? {}) as Record<string, string | undefined>;
+    if (Object.keys(state.players).some((p) => chosen[p] === undefined)) {
+      return;
+    }
+    finalizePregameAfterBattlefields(this.engine as never);
   }
 
   private execute(

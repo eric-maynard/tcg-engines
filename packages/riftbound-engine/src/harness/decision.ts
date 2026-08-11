@@ -60,6 +60,8 @@ export interface DecisionContext {
   canExecute?(seat: Seat, moveId: string, params: Record<string, unknown>): boolean;
   /** A seat's hand (owner-scoped). Only needed for the pregame mulligan prompt (rule 117). */
   handOf?(seat: Seat): readonly CardRef[];
+  /** A seat's registered battlefields still awaiting its pick (rule 113 / 486.5). */
+  registeredBattlefieldsOf?(seat: Seat): readonly CardRef[];
   /** Whether procedures are auto-run (then they are hidden from menus). */
   readonly autoProcedures: boolean;
   readonly seq: number;
@@ -77,6 +79,15 @@ export function engineDecisionContext(
     handOf: (seat) => {
       const internal = getInternalState(engine);
       return (internal.zones.hand?.cardIds ?? []).filter((id) => internal.cards[id]?.owner === seat);
+    },
+    // rule 113: a registered-but-unselected battlefield waits in the set-aside
+    // holding area; only the ones this seat OWNS are its to keep (486.5).
+    registeredBattlefieldsOf: (seat) => {
+      const internal = getInternalState(engine);
+      const registry = getGlobalCardRegistry();
+      return (internal.zones.setAside?.cardIds ?? []).filter(
+        (id) => internal.cards[id]?.owner === seat && registry.getCardType(id) === "battlefield",
+      );
     },
     label: (card) => cardLabel(engine, card),
     legal: (seat, moveIds) =>
@@ -1047,11 +1058,57 @@ function deriveMulliganDecision(ctx: DecisionContext): Decision | null {
   return d;
 }
 
+/**
+ * rule 113 / 486.5 — "each player selects one of their three Battlefields; the
+ * other two are set aside". The keep is the SEAT's, so it is surfaced as a pick
+ * over exactly that seat's registered battlefields (in turn order, First Player
+ * first) rather than defaulting to the first one registered. A seat that
+ * registered a single battlefield has nothing to decide (355.5).
+ */
+function deriveBattlefieldSelectionDecision(ctx: DecisionContext): Decision | null {
+  const { state } = ctx;
+  const setup = state.setup;
+  if (!setup || !ctx.registeredBattlefieldsOf) {
+    return null;
+  }
+  const chosen = (setup.battlefieldChoices ?? {}) as Record<string, string | undefined>;
+  const first = setup.firstPlayer as Seat | undefined;
+  const order: Seat[] = [
+    ...(first !== undefined ? [first] : []),
+    ...Object.keys(state.players).filter((p) => p !== first),
+  ];
+  for (const seat of order) {
+    // rule 485.4.a — one selection per seat per game.
+    if (chosen[seat] !== undefined) {
+      continue;
+    }
+    const options = ctx.registeredBattlefieldsOf(seat);
+    if (options.length < 2) {
+      continue;
+    }
+    const d: PickDecision = {
+      allowDecline: false,
+      id: decisionId(ctx.seq, seat, "pick", "selectBattlefield"),
+      kind: "pick",
+      max: 1,
+      min: 1,
+      options: options.map((id) => ({ card: id, key: id, label: ctx.label(id) })),
+      prompt: "Select the battlefield you keep; the rest are set aside",
+      seat,
+      source: { moveId: "selectBattlefield" },
+      timing: "PRE",
+    };
+    return d;
+  }
+  return null;
+}
+
 /** The cursor seat's decision, or null when the game is over / nobody can act. */
 export function deriveDecision(ctx: DecisionContext): Decision | null {
   const { state } = ctx;
   if (state.status === "setup") {
-    return deriveMulliganDecision(ctx);
+    // rule 113 precedes 117: battlefields are chosen before the Mulligan.
+    return deriveBattlefieldSelectionDecision(ctx) ?? deriveMulliganDecision(ctx);
   }
   if (state.status !== "playing") {
     return null;
