@@ -3972,21 +3972,26 @@ export function computePlayResourceCost(
     pool?.power ?? {},
   );
   const basePower = reducePowerCost(baseCost.power, deflect.waived, pool?.power ?? {});
-  const repeatPower = getRepeatPowerSurcharge(cardId, repeatN, repeatTiers);
+  const printedRepeatPower = getRepeatPowerSurcharge(cardId, repeatN, repeatTiers);
   // rule 356.4.d / 356.4.f — optional additional costs (Accelerate's [1][D])
   // join the total cost BEFORE a total-cost discount is applied, so pip
   // waivers the printed cost did not consume spill onto them, exactly as
   // `applyDiscountOverflowToAdditionalCost` does for the Energy half.
   const spillWaivers = unusedPowerWaivers(deflect.waived, baseCost.power, basePower);
+  // rule 356.4.f / 356.4.f.1 — an elected [Repeat] tier is an additional cost of
+  // this same play, so a pip waiver the printed cost did not consume eats its
+  // pips too (and the tier still counts as paid at [0]).
+  const repeatPower = reducePowerCost(printedRepeatPower, spillWaivers, pool?.power ?? {});
+  const afterRepeatWaivers = unusedPowerWaivers(spillWaivers, printedRepeatPower, repeatPower);
   const additionalPower = additionalCostPower(extras);
-  const spillPower = reducePowerCost(additionalPower, spillWaivers, pool?.power ?? {});
+  const spillPower = reducePowerCost(additionalPower, afterRepeatWaivers, pool?.power ?? {});
   // rule 356.4.d / 356.4.f (rule-id: ven-055-166 × ven-045-166) — a total-cost
   // discount is measured against the INCREASED total (356.3 increases are part
   // of it), so a pip waiver the printed cost and the additional costs did not
   // consume also cancels a pip an opponent's static ADDED.
   const increasePower = reducePowerCost(
     boardIncrease.power,
-    unusedPowerWaivers(spillWaivers, additionalPower, spillPower),
+    unusedPowerWaivers(afterRepeatWaivers, additionalPower, spillPower),
     pool?.power ?? {},
   );
   // rule 356.3 — an enemy static's [rainbow] surcharge is an added pip, not a
@@ -4198,6 +4203,59 @@ export function payResourceCost(
  * over `computePlayResourceCost` + `canPayResourceCost` (the same computation
  * `deductCost` pays, so the two can never drift).
  */
+/**
+ * rule 356.4.b / 356.4.c.1 (rule-id: sfd-141-221) — an "[N] or [rainbow] less"
+ * discount is ONE discount whose half the CASTER elects. The election is only a
+ * real choice when the two halves produce DIFFERENT totals and this pool can pay
+ * either one; then `elected` is the half the engine takes by default and
+ * `alternative` is the one the caster may still switch to. Undefined otherwise
+ * (no such discount, or only one half is payable — nothing to ask).
+ */
+export function costElectionHalves(
+  state: RiftboundGameState,
+  playerId: string,
+  cardId: string,
+  extras: CostExtras,
+  getCardMeta?: (cardId: CoreCardId) => Partial<RiftboundCardMeta> | undefined,
+):
+  | { alternative: PlayResourceCost; elected: PlayResourceCost; electedIsPower: boolean }
+  | undefined {
+  if (extras.preferPowerWaiver !== undefined || extras.ignoreBaseCost === true) {
+    return undefined;
+  }
+  if (!state.runePools[playerId]) {
+    return undefined;
+  }
+  const byEnergy = computePlayResourceCost(
+    state,
+    playerId,
+    cardId,
+    { ...extras, preferPowerWaiver: false },
+    getCardMeta,
+    false,
+  );
+  const byPower = computePlayResourceCost(
+    state,
+    playerId,
+    cardId,
+    { ...extras, preferPowerWaiver: true },
+    getCardMeta,
+    false,
+  );
+  if (JSON.stringify(byEnergy) === JSON.stringify(byPower)) {
+    return undefined;
+  }
+  if (
+    !canPayResourceCost(state, playerId, cardId, byEnergy) ||
+    !canPayResourceCost(state, playerId, cardId, byPower)
+  ) {
+    return undefined;
+  }
+  return prefersPowerWaiver(state, playerId, cardId)
+    ? { alternative: byEnergy, elected: byPower, electedIsPower: true }
+    : { alternative: byPower, elected: byEnergy, electedIsPower: false };
+}
+
 export function canAffordCard(
   state: RiftboundGameState,
   playerId: string,
