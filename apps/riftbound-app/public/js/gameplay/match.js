@@ -19,6 +19,8 @@ let matchState = null;
 /** Which game's roll/first-player reveal has been shown (so a reconnect / later sync does not replay it). */
 let _initiativeShownKey = null;
 let _initiativeAutoSent = null;
+/** Game number of the last pregame we saw — a new one resets the per-game client latches. */
+let _matchPregameGame = null;
 
 (function injectMatchCss() {
   if (typeof document === "undefined" || document.querySelector("style[data-match-css]")) return;
@@ -248,6 +250,11 @@ function renderMatchDecidedOutsideGame() {
  * next sync or until `onDone` re-enters it.
  */
 function matchHandlePregame(pregame, state, onDone) {
+  // A NEW game's pregame (game 2/3, a rematch): drop the previous game's client latches
+  // (pending battlefield pick, roll-overlay guard, mulligan picks) before anything renders.
+  const gn = (pregame && pregame.gameNumber) || 1;
+  if (_matchPregameGame !== null && _matchPregameGame !== gn) resetPerGameClientState();
+  _matchPregameGame = gn;
   const ini = pregame && pregame.initiative;
   if (!ini) return false;
   const key = `${matchState?.gameNumber ?? pregame.gameNumber ?? 1}:${ini.kind}:${ini.p1Roll ?? ""}:${ini.p2Roll ?? ""}`;
@@ -327,6 +334,17 @@ function matchHandlePregame(pregame, state, onDone) {
     }
   }
   return false;
+}
+
+/** Per-game client latches from pregame.js / state.js that must not leak into the next game of a match. */
+function resetPerGameClientState() {
+  if (typeof _bfSelectPending !== "undefined") _bfSelectPending = null;
+  if (typeof _coinRollInterval !== "undefined" && _coinRollInterval) { clearInterval(_coinRollInterval); _coinRollInterval = null; }
+  if (typeof _coinFlipShown !== "undefined") _coinFlipShown = false;
+  if (typeof mulliganSelected !== "undefined") mulliganSelected = new Set();
+  if (typeof _imagesPreloaded !== "undefined") _imagesPreloaded = false; // sideboarded-in cards may be new art
+  _initiativeAutoSent = null;
+  document.getElementById("coinOverlay")?.classList.remove("visible");
 }
 
 function renderLoserChooses(pregame, ini) {
