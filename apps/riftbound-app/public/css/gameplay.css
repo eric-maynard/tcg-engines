@@ -576,16 +576,124 @@
        resolved against the flexed row and the 126px card scrolled inside a
        ~70px row, showing only its art strip). Width follows via aspect-ratio
        so the whole face stays visible instead of letterboxing. */
-    /* ui-bf-units-overflow: cards may narrow (flex-shrink) so a 3rd/4th unit
-       still fits the single non-wrapping row; min-width keeps them tappable
-       and hands the rest to the strip's horizontal scroll. */
-    .bf-units .card {
-      height: min(126px, calc(100cqb - 6px));
-      width: auto;
-      min-width: 34px;
-      aspect-ratio: 90 / 126;
-      flex-shrink: 1;
+    /* [rule:ui-bf-one-row] ONE row per side, no wrap, no scrollbar: every slot
+       gets width --bfw = clamp(56px, fair share of the row, natural size) so
+       the cards first SHRINK; once they sit at the 56px floor the row OVERLAPS
+       them (negative margin computed from the slot count --n that board.js
+       stamps on the row) like a fanned hand — later cards on top, each keeping
+       a visible strip; :hover lifts one clear of its neighbours. */
+    .bf-units {
+      --bf-gap: 4px;
+      --bf-nat: calc(min(126px, 100cqb - 6px) * 90 / 126);
+      --bf-extra: calc(var(--stacks, 0) * 14px);
+      --bfw: clamp(56px, calc((100cqi - var(--bf-extra) - (var(--n, 1) - 1) * var(--bf-gap) - 8px) / var(--n, 1)), var(--bf-nat));
+      --bf-lap: min(0px, calc((100cqi - var(--bf-extra) - 8px - var(--n, 1) * var(--bfw)) / max(var(--n, 1) - 1, 1) - var(--bf-gap)));
     }
+    .bf-units .card {
+      width: var(--bfw, auto);
+      height: auto;
+      max-height: min(126px, calc(100cqb - 6px));
+      min-width: 0;
+      aspect-ratio: 90 / 126;
+      flex-shrink: 0;
+    }
+    .bf-units > .card ~ .card,
+    .bf-units > .card ~ .unit-stack,
+    .bf-units > .card ~ .bf-facedown,
+    .bf-units > .unit-stack ~ .card,
+    .bf-units > .unit-stack ~ .unit-stack,
+    .bf-units > .unit-stack ~ .bf-facedown,
+    .bf-units > .bf-facedown ~ .card,
+    .bf-units > .bf-facedown ~ .unit-stack,
+    .bf-units > .bf-facedown ~ .bf-facedown {
+      margin-left: var(--bf-lap, 0px);
+    }
+    .bf-units > .card, .bf-units > .unit-stack, .bf-units > .bf-facedown { position: relative; transition: translate 0.12s; }
+    .bf-units > .card:hover, .bf-units > .unit-stack:hover, .bf-units > .bf-facedown:hover { z-index: 30; translate: 0 -3px; }
+    .bf-units > .card.selected, .bf-units > .unit-stack:has(.card.selected) { z-index: 29; }
+    /* Compact badges: when a side is crowded the art is small, so Might is
+       always printed as a chip (damage already has one). */
+    .card-might-chip { display: none; }
+    .bf-units--crowded .card .card-might-chip {
+      display: flex;
+      position: absolute;
+      top: 3px;
+      right: 3px;
+      min-width: 16px;
+      height: 16px;
+      padding: 0 3px;
+      border-radius: 8px;
+      background: rgba(20,16,40,0.92);
+      border: 1px solid #f0c040aa;
+      color: #ffe9a8;
+      font-size: 10px;
+      font-weight: 700;
+      align-items: center;
+      justify-content: center;
+      z-index: 6;
+      pointer-events: none;
+    }
+    .bf-units--crowded .card .card-name { display: none; }
+    /* "⤢ N" chip → spread view (board.js openBfSpread). */
+    .bf-spread-chip {
+      position: absolute;
+      right: 2px;
+      top: 2px;
+      z-index: 40;
+      padding: 1px 6px;
+      border-radius: 9px;
+      border: 1px solid #6a5aa8;
+      background: rgba(30,22,60,0.92);
+      color: #d8ccff;
+      font-size: 10px;
+      font-weight: 700;
+      cursor: pointer;
+      line-height: 14px;
+    }
+    .bf-spread-chip:hover { background: #3a2c78; color: #fff; }
+    .bf-spread {
+      position: fixed;
+      left: 50%;
+      transform: translateX(-50%);
+      width: min(920px, calc(100vw - 32px));
+      overflow: auto;
+      z-index: 1450; /* above the board, below prompts (1500+) and the preview */
+      background: rgba(14,10,30,0.97);
+      border: 1px solid #4a3c8a;
+      border-radius: 10px;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.6);
+      padding: 10px 12px 12px;
+    }
+    .bf-spread-head { display: flex; justify-content: space-between; align-items: center; color: #cfc6e8; font-size: 12px; font-weight: 600; margin-bottom: 8px; }
+    .bf-spread-close { background: none; border: none; color: #a89cd0; font-size: 20px; cursor: pointer; line-height: 1; }
+    .bf-spread-grid { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+    .bf-spread-tile { cursor: pointer; position: relative; }
+    .bf-spread-tile .card { width: 100px; min-width: 100px; height: 140px; max-height: none; margin: 0 !important; translate: none !important; }
+    .bf-spread-tile .card.exhausted, .bf-spread-tile .card.card--exhausted { transform: none; opacity: 0.8; outline: 2px solid #6a6288; }
+    .bf-spread-tile .card.exhausted::after { content: 'EXH'; position: absolute; bottom: 20px; left: 3px; font-size: 8px; background: #2a2640; color: #b8b0d0; padding: 1px 3px; border-radius: 3px; }
+    .bf-spread-tile .card .card-might-chip { display: flex; position: absolute; top: 3px; right: 3px; min-width: 16px; height: 16px; padding: 0 3px; border-radius: 8px; background: rgba(20,16,40,0.92); border: 1px solid #f0c040aa; color: #ffe9a8; font-size: 10px; font-weight: 700; align-items: center; justify-content: center; z-index: 6; }
+    .bf-spread-tile .card .card-name { display: block; }
+    .bf-spread-tile .unit-stack-gear { position: static; }
+    /* rule 434.4 — attached gear tucked UNDER its unit, bottom-right edge
+       peeking (hover/click the edge for the gear itself). */
+    .unit-stack {
+      position: relative;
+      display: inline-flex;
+      flex-shrink: 0;
+      padding: 0 calc(var(--gear-n, 1) * 14px) 0 0;
+    }
+    .unit-stack > .card { position: relative; z-index: 2; }
+    .unit-stack-gear {
+      position: absolute;
+      right: calc((var(--gear-n, 1) - 1 - var(--i, 0)) * 14px);
+      top: calc(10px + var(--i, 0) * 4px);
+      z-index: 1;
+      transition: translate 0.12s;
+    }
+    .unit-stack-gear .card { box-shadow: 0 0 0 1px #b98cff88; }
+    .unit-stack-gear:hover { z-index: 3; translate: 10px -6px; }
+    .unit-stack-gear .card .card-attach { display: none; }
+    .zone-row .unit-stack-gear { top: 8px; }
     .bf-units .card .card-img {
       object-fit: contain;
       background: #1a1730;
@@ -764,26 +872,71 @@
     .card.facedown .card-back.card-back-art { position: absolute; inset: 0; width: auto; height: auto; }
     .card.facedown .card-back.card-back-art::after { content: none; }
 
-    /* rule-id: ogn-197-298 — owner's view of their own Hidden (facedown) card at a battlefield */
+    /* rule 723 — a Hidden card at a battlefield: a card BACK for every seat,
+       slightly tilted, HIDDEN badge, owner-coloured edge (blue = yours, red =
+       theirs). Whether hover may peek is the server's call (data-def-id). */
     .bf-facedown {
       display: inline-block;
       position: relative;
-      opacity: 0.7;
-      outline: 1px dashed #3a5a80;
-      border-radius: 6px;
+      flex-shrink: 0;
     }
-    .bf-facedown::after {
-      content: 'HIDDEN';
+    .card.card--bf-hidden {
+      rotate: -4deg;
+      overflow: hidden;
+      background: #0b1533;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+    }
+    .bf-units .card.card--bf-hidden { width: calc(var(--bfw, 64px) * 0.82); }
+    .card.card--bf-hidden-mine { border-color: #2a7fff; cursor: pointer; }
+    .card.card--bf-hidden-theirs { border-color: #d04040; cursor: help; rotate: 4deg; }
+    .card-hidden-badge {
       position: absolute;
-      top: 2px;
-      left: 2px;
+      top: 3px;
+      left: 3px;
       font-size: 8px;
       letter-spacing: 0.5px;
-      color: #9ab;
-      background: #1a2040cc;
-      padding: 1px 3px;
+      font-weight: 700;
+      color: #dfe6ff;
+      background: rgba(10,14,40,0.85);
+      border: 1px solid rgba(201,214,255,0.4);
+      padding: 1px 4px;
       border-radius: 3px;
       pointer-events: none;
+      z-index: 2;
+    }
+    .card-hidden-peek {
+      position: absolute;
+      right: 3px;
+      bottom: 3px;
+      font-size: 11px;
+      line-height: 1;
+      color: #dfe6ff;
+      background: rgba(10,14,40,0.85);
+      border-radius: 8px;
+      padding: 2px 4px;
+      pointer-events: none;
+      z-index: 2;
+    }
+    /* Preview: ribbon (who may see this) + full-size back for cards this seat may not see. */
+    .card-preview .preview-ribbon {
+      margin: -2px 0 8px;
+      padding: 4px 8px;
+      border-radius: 6px;
+      background: linear-gradient(90deg, #2a1f5a, #40307a);
+      border: 1px solid #7a66c8;
+      color: #efe8ff;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+      text-align: center;
+    }
+    .card-preview .preview-back {
+      position: relative;
+      inset: auto;
+      width: 100%;
+      aspect-ratio: 5 / 7;
+      border-radius: 10px;
+      margin-bottom: 8px;
     }
 
     /* Deck stack */
@@ -1380,26 +1533,26 @@
 
     .bf-units {
       display: flex;
-      gap: 4px;
-      /* ui-bf-units-overflow: NEVER wrap. Each card fills the strip's full
-         height (see .bf-units .card), so a wrapped second row lands entirely
-         below the visible box — the 3rd unit (e.g. a token played "here")
-         simply vanished. One row that narrows its cards keeps every unit on
-         screen; past ~4 units they hit min-width and scroll sideways, which
-         is at least visible and reachable. */
+      gap: var(--bf-gap, 4px);
+      /* [rule:ui-bf-one-row] NEVER wrap and never scroll: a wrapped second row
+         lands below the visible box (the 3rd unit simply vanished) and a
+         scrollbar hides units behind a gesture. The row shrinks then overlaps
+         its cards instead (see .bf-units .card / --bfw / --bf-lap above). */
       flex-wrap: nowrap;
       justify-content: center;
       /* [rule:ui-bf-unit-not-clipped] never collapse below a legible card. */
       min-height: 56px;
       flex: 1 1 56px;
-      overflow-x: auto;
-      overflow-y: hidden;
+      overflow-x: clip;
+      overflow-y: visible;
       align-items: center;
       position: relative;
       z-index: 1;
-      /* Cards inside size to the row via cqb (see .bf-units .card). */
+      /* Cards inside size to the row via cqb/cqi (see .bf-units .card). */
       container-type: size;
     }
+    .bf-units:hover { z-index: 3; } /* a lifted card may overhang the divider */
+    .battlefield--crowded .bf-art { flex-basis: 150px; width: 150px; }
 
     /* Battlefield side tints */
     .bf-units.opponent-side {
@@ -1761,7 +1914,7 @@
     .start-screen {
       position: absolute;
       inset: 0;
-      background: #0a0914ee;
+      background: #0a0914;
       display: flex;
       flex-direction: column;
       align-items: center;

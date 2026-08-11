@@ -102,7 +102,13 @@ function showPreview(eventOrEl, maybeEl) {
     const owner = el.dataset.owner || el.closest("[data-owner]")?.dataset.owner || card.owner;
     if (owner && owner !== viewingPlayer && (zone === "hand" || zone === "mainDeck" || zone === "runeDeck")) return;
   }
-  if (el.classList.contains("facedown") && !el.dataset.defId) return;
+  // rule 723 — a Hidden card at a battlefield: what this seat may see was
+  // decided by the server (real def id only for the controller / a seat with a
+  // look grant; opaque stand-in otherwise). Anything else face-down (opponent
+  // hand backs) is never previewed.
+  const facedown = el.dataset.facedown === "1" || String(el.dataset.zone || "").startsWith("facedown-");
+  const known = !!(el.dataset.defId || (facedown ? "" : card.definitionId));
+  if (el.classList.contains("facedown") && !facedown && !el.dataset.defId) return;
 
   if (_previewHideTimer !== null) { clearTimeout(_previewHideTimer); _previewHideTimer = null; }
   if (_previewEl !== el || _previewMaxTimer === null) {
@@ -110,6 +116,41 @@ function showPreview(eventOrEl, maybeEl) {
     _previewMaxTimer = setTimeout(() => { _previewMaxTimer = null; hidePreview(true); }, PREVIEW_MAX_VISIBLE_MS);
   }
   _previewEl = el;
+
+  const parts = _previewParts(previewEl);
+  const who = (card.controller || card.owner || el.dataset.owner) ? ((card.controller || card.owner || el.dataset.owner) === viewingPlayer ? "you" : pName(card.controller || card.owner || el.dataset.owner)) : "opponent";
+  if (facedown && !known) {
+    // Back only: this seat was not sent the identity, so there is nothing to leak.
+    parts.back.style.display = "block";
+    parts.ribbon.style.display = "none";
+    const img0 = document.getElementById("previewImg");
+    img0.style.display = "none"; img0.setAttribute("data-current", ""); img0.removeAttribute("src");
+    previewEl.classList.remove("card-preview--landscape");
+    previewEl.classList.add("card-preview--facedown");
+    document.getElementById("previewName").textContent = "Facedown card";
+    document.getElementById("previewType").textContent = `Hidden — controlled by ${who}`;
+    const t0 = document.getElementById("previewText");
+    t0.textContent = "Only its controller may look at a hidden card. They can reveal it (play it for its Hidden cost) starting on their next turn — rule 723.";
+    t0.style.display = "";
+    const s0 = document.getElementById("previewStats");
+    s0.innerHTML = ""; s0.style.display = "none";
+    previewEl.classList.add("visible");
+    positionPreview(el, previewEl);
+    return;
+  }
+  parts.back.style.display = "none";
+  previewEl.classList.remove("card-preview--facedown");
+  if (facedown) {
+    const mine = (card.owner || el.dataset.owner) === viewingPlayer;
+    parts.ribbon.textContent = mine
+      ? "Hidden — only you can see this"
+      : (isSandboxGame && !(typeof isVsAiGame === "function" && isVsAiGame()))
+        ? `Hidden by ${who} — visible in sandbox`
+        : `Hidden by ${who} — revealed to you`;
+    parts.ribbon.style.display = "block";
+  } else {
+    parts.ribbon.style.display = "none";
+  }
 
   const imgId = String(card.definitionId || el.dataset.defId || card.id || "").replace(/^player-[12]-(?:(?:main|rune)-\d+-|legend-|champion-|bf-)?/, "");
   const img = document.getElementById("previewImg");
@@ -140,6 +181,27 @@ function showPreview(eventOrEl, maybeEl) {
   // Reveal before measuring so offsetHeight/Width reflect the populated panel.
   previewEl.classList.add("visible");
   positionPreview(el, previewEl);
+}
+
+/** Lazily add the facedown BACK panel and the visibility RIBBON to #cardPreview (markup stays minimal). */
+function _previewParts(previewEl) {
+  let back = previewEl.querySelector("#previewBack");
+  if (!back) {
+    back = document.createElement("div");
+    back.id = "previewBack";
+    back.className = "preview-back card-back-art card-back-art--main";
+    back.style.display = "none";
+    previewEl.insertBefore(back, previewEl.firstChild);
+  }
+  let ribbon = previewEl.querySelector("#previewRibbon");
+  if (!ribbon) {
+    ribbon = document.createElement("div");
+    ribbon.id = "previewRibbon";
+    ribbon.className = "preview-ribbon";
+    ribbon.style.display = "none";
+    previewEl.insertBefore(ribbon, previewEl.firstChild);
+  }
+  return { back, ribbon };
 }
 
 /**
@@ -392,6 +454,14 @@ function returnToPlayMenu() {
   if (typeof _coinRollInterval !== "undefined" && _coinRollInterval) { clearInterval(_coinRollInterval); _coinRollInterval = null; }
   if (typeof _coinFlipShown !== "undefined") _coinFlipShown = false;
   setSandboxGame(false);
+
+  // Wipe the previous game's board so nothing shows behind the menu.
+  for (const id of ["board", "gameLog", "chainOverlay", "choiceOverlay", "actionBarBtns"]) {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = "";
+  }
+  document.querySelectorAll(".chain-overlay.visible, #choiceOverlay.visible, #targetBanner.visible, #cardPreview.visible").forEach((el) => el.classList.remove("visible"));
+  if (typeof hidePreview === "function") { try { hidePreview(); } catch { /* */ } }
 
   // Reset UI to lobby
   document.getElementById("gameSidebar")?.classList.add("hidden");
