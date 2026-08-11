@@ -11,6 +11,12 @@
  *    item; Sacrifice resolves fully first (draw 2, channel 1 rune), and only then does the Altar trigger
  *    finalize onto the chain, where you may exhaust the Altar to draw 1 and put a card back.
  * Rules: 356 (additional cost paid on finalize), 340.3 (pending items finalize), 383.3.
+ *
+ * RULING-CONFLICT (order facet only): riftjudge c7bf35a9c8b2ed16 says the Altar trigger stays Pending until
+ * Sacrifice has fully resolved; CR 337.1.b/337.3/340.1 say the opposite — Sacrifice is appended to the chain
+ * first and its additional cost is paid during ITS finalization, so the Altar trigger is appended AFTER it,
+ * finalizes above it (337.3), and — being the newest Finalized item — resolves FIRST. Engine follows CR.
+ * The end state (last test) is the same either way and matches the ruling.
  */
 import { describe, expect, test } from "bun:test";
 import type { Decision, Game } from "../../../harness";
@@ -44,29 +50,40 @@ describe("Ruling c7bf35a9c8b2ed16 — Sacrifice draws before the Altar of Memori
     expect(game.p1.hand()).toEqual(["keep"]); // nothing drawn yet
   });
 
-  // Expected (ruling): right after the cast the chain is just [Sacrifice]; the Altar trigger is pending and is
-  // NOT yet a chain item / not yet asking its "you may exhaust me". Sacrifice resolves first (hand keep+d1+d2,
-  // 1 rune), THEN the Altar opt-in appears.
-  // Actual: the engine finalizes the Altar trigger straight away ABOVE Sacrifice ([sac, altar]) and asks the
-  // exhaust opt-in immediately; the Altar then resolves (LIFO) before Sacrifice draws.
-  test.failing("BUG: ruling c7bf35a9c8b2ed16 — engine puts the Altar trigger on the chain above Sacrifice and resolves it first", async () => {
+  // RULING-CONFLICT: riftjudge c7bf35a9c8b2ed16 wants the chain to be just [Sacrifice] here, with the Altar
+  // trigger held Pending until Sacrifice has resolved. CR 337.1.b/337.3 finalize the Altar trigger as soon as
+  // Sacrifice's own finalization (which paid the kill) ends, i.e. ABOVE Sacrifice — so the opt-in is asked
+  // straight away and the Altar resolves first (340.1, newest Finalized item). Engine follows CR.
+  // rule 337.3: after finalizing an item, remaining Pending items finalize before anyone gains Priority.
+  test("ruling c7bf35a9c8b2ed16 (RULING-CONFLICT → CR 337/340) — the Altar trigger finalizes above Sacrifice and resolves before it", async () => {
     const game = await board().build();
     await game.p1.cast("sac", { sacrifice: "brute" });
-    // Altar not on the chain yet; no opt-in asked yet.
+    // Altar finalized above Sacrifice; its "you may exhaust me" opt-in is asked during finalization (383.3.a).
+    expect(chainIds(game)).toEqual(["sac", "altar"]);
+    const optIn = game.decision() as Decision;
+    expect(optIn).toMatchObject({ kind: "yes-no", seat: P1, timing: "FIN" });
+    await game.p1.yes();
+    expect(game.p1.hand()).toEqual(["keep"]); // still nothing drawn — finalizing does not resolve
+    // Both pass → the Altar (newest) resolves first: exhaust, draw 1, put a card back.
+    await game.p1.passPriority();
+    await game.p2.passPriority();
+    expect(game.state("altar").isExhausted).toBe(true);
+    const reveal = game.decision() as Decision;
+    expect(reveal).toMatchObject({ kind: "pick", seat: P1 });
+    await game.p1.pick("keep");
+    if (game.decision()?.kind === "pick") {
+      await game.p1.pick("mainDeck-top");
+    }
+    // Sacrifice is still on the chain, undrawn; it resolves only after the Altar is done.
     expect(chainIds(game)).toEqual(["sac"]);
-    expect(game.decision()?.kind).toBe("action");
-    // Both pass → Sacrifice resolves in full.
+    expect(game.p1.hand()).toEqual(["d1"]);
+    expect(game.p1.runes()).toHaveLength(0);
     await game.p1.passPriority();
     await game.p2.passPriority();
     expect(game.zoneOf("sac")).toBe("trash");
-    expect(new Set(game.p1.hand())).toEqual(new Set(["keep", "d1", "d2"]));
+    expect(new Set(game.p1.hand())).toEqual(new Set(["d1", "keep", "d2"])); // "keep" went back on top and was redrawn
     expect(game.p1.runes()).toHaveLength(1);
-    // NOW the Altar trigger finalizes: P1 is asked whether to exhaust it.
-    const d = game.decision() as Decision;
-    expect(d).toMatchObject({ kind: "yes-no", seat: P1 });
-    expect(chainIds(game)).toEqual(["altar"]);
-    await game.p1.yes();
-    expect(game.state("altar").isExhausted).toBe(true);
+    expect(game.chain()).toEqual([]);
   });
 
   test("whatever the order, the end state after opting in: Brute and Sacrifice in trash, Altar exhausted, 3 cards drawn in total and 1 put back (hand 1 → 3), 1 rune channeled", async () => {

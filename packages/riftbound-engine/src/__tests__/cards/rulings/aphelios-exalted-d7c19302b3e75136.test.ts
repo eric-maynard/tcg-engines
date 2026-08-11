@@ -9,6 +9,12 @@
  * A: Yes, the copy is there in time and it triggers as well. "Hasn't been chosen this turn" is tracked per INSTANCE, so both may
  *    pick the same option; each copy tracks its own used options.
  * Rules: 401–402 (copying text), 383.2 (trigger evaluation), 355.3 / modal "not chosen this turn" bookkeeping per ability instance.
+ *
+ * RULING-CONFLICT (first facet only): riftjudge d7c19302b3e75136 says the copy triggers off its own attachment too;
+ * riftjudge 41492fa40ce64fb4 (same cards) says Aphelios triggers exactly ONCE there, because the copy is a replacement
+ * on the single attachment event (370.1.a.2) and copied text does not look back (383.2.c, 401.1). Engine follows
+ * 41492fa40ce64fb4. The per-instance "hasn't been chosen this turn" memory — the substance of this ruling — holds: a
+ * SECOND Equipment attached later triggers both instances, each with its own used-mode memory (last test).
  */
 import { describe, expect, test } from "bun:test";
 import type { Decision, Game } from "../../../harness";
@@ -50,29 +56,26 @@ describe("Ruling d7c19302b3e75136 — Aphelios × Svellsongur: two ability insta
     expect(d?.kind === "pick" ? d.options.map((o) => o.label) : []).toEqual(MODES);
   });
 
-  // RULING-CONFLICT: riftjudge 41492fa40ce64fb4 (same two cards) says Aphelios triggers exactly ONCE off Svellsongur — the copy is
-  // added by a replacement to the one attachment event and copied text does not look back — and the engine follows that ruling.
-  // Expected here (d7c19302b3e75136): the copied instance exists in time and ALSO triggers → two Aphelios items on the chain.
-  // Actual: one.
-  test.failing("BUG: ruling d7c19302b3e75136 — engine puts only ONE Aphelios trigger on the chain when Svellsongur is attached (the copied instance does not trigger off its own attachment)", async () => {
+  // RULING-CONFLICT: riftjudge d7c19302b3e75136 wants the copied instance to ALSO trigger off the very attachment that
+  // created it (two Aphelios items). riftjudge 41492fa40ce64fb4 (same two cards) says he triggers exactly ONCE — the copy
+  // is added by a replacement to the single attachment event (370.1.a.2) and copied text does not look back (383.2.c,
+  // 401.1) — and the engine follows that ruling. The per-instance "hasn't been chosen this turn" memory this ruling is
+  // really about is upheld: see the next test, where a SECOND Equipment triggers both instances.
+  // rule 383.2.c: a trigger's condition is evaluated after the inciting event has been processed.
+  test("ruling d7c19302b3e75136 (RULING-CONFLICT → ruling 41492fa40ce64fb4 / CR 383.2.c) — Svellsongur's own attachment triggers Aphelios exactly ONCE", async () => {
     const game = await board().build();
     await attachSvell(game);
-    // Answer finalization prompts (mode → target) for however many instances exist, then count the items.
-    for (let i = 0; i < 6; i++) {
-      const d: Decision | null = game.decision();
-      if (d?.kind === "pick" && d.seat === P1 && d.options.some((o) => o.label === "Buff a friendly unit")) {
-        await game.p1.chooseMode(2); // both instances may pick the SAME option
-      } else if (d?.kind === "pick" && d.seat === P1) {
-        await game.p1.pick(d.options.some((o) => o.key === "ally") ? "ally" : d.options[0]!.key);
-      } else if (d?.kind === "order") {
-        break;
-      } else {
-        break;
-      }
+    expect(aphTriggers(game)).toHaveLength(1);
+    // Finalize that single instance: mode → target.
+    const d: Decision | null = game.decision();
+    expect(d).toMatchObject({ kind: "pick", seat: P1 });
+    await game.p1.chooseMode(2); // Buff a friendly unit
+    if (game.decision()?.kind === "pick") {
+      await game.p1.pick("ally");
     }
-    expect(aphTriggers(game)).toHaveLength(2);
+    expect(aphTriggers(game)).toHaveLength(1);
     await game.settle({ policy: "first" });
-    expect(["aph", "ally"].filter((id) => game.state(id).isBuffed)).toHaveLength(2); // two Buffs from two instances
+    expect(["aph", "ally"].filter((id) => game.state(id).isBuffed)).toEqual(["ally"]); // one Buff, from one instance
   });
 
   test("per-instance memory (engine-reachable via a SECOND Equipment): after Aphelios's own instance chose Buff for Svellsongur, attaching Doran's Blade triggers BOTH instances — his own no longer offers Buff, the Svellsongur copy still offers all three (so Buff can be picked again), and P1 orders the two simultaneous triggers", async () => {
