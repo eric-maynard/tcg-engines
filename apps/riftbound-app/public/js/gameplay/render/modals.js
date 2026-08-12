@@ -697,6 +697,9 @@ function revealPickInfo(pending) {
   const remaining = Math.max(1, Number(pending.remaining) || 1);
   const upTo = pending.upTo === true;
   const multi = remaining > 1;
+  // rule 386.2 — a prompt that re-parks over the cards it did not take (Predict)
+  // allows more picks than `remaining` describes; see PendingChoice.repeatMax.
+  const repeatsOverRest = Math.max(0, Number(pending.repeatMax) || 0) > 1;
   const optional = pending.optional === true;
   const fromDeckTop = place.zone === "mainDeck";
   const deckWord = place.mine ? "your deck" : "their deck";
@@ -744,6 +747,10 @@ function revealPickInfo(pending) {
     if (on === "play") return "can't be played now";
     return "not eligible";
   };
+  // rule 386.2 — "put the rest back in any order": the decline path raises an
+  // order-top arrangement, so the un-picked cards are REORDERED, not left as
+  // they are. That has to reach the helper line, not only the decline button.
+  const orderNext = pending.onDecline && pending.onDecline.type === "order-top" && place.n >= 2;
   /** Fate of the cards NOT picked (one line; also the ineligible cards' caption). */
   const restNote = (() => {
     switch (pending.onRest) {
@@ -751,16 +758,19 @@ function revealPickInfo(pending) {
       case "trash": return "go to the trash";
       case "draw": return "go to your hand";
       default:
+        if (orderNext) return "go back on top of the deck in an order you choose";
         if (fromDeckTop) return place.n > 1 ? "stay on top of the deck" : "stays on top of the deck";
         if (place.zone === "hand") return "stay in hand";
         return "stay where they are";
     }
   })();
-  const orderNext = pending.onDecline && pending.onDecline.type === "order-top" && place.n >= 2;
-
   // ---- headline -----------------------------------------------------------
   let what;
   if (visionLike && !multi && place.n === 1) what = `top card of ${place.mine ? "your" : "their"} deck: keep it on top, or recycle it to the bottom?`;
+  // rule 386.2 ([Predict N]) — the prompt takes one pick at a time but re-parks
+  // over the rest, so ANY number of them can be recycled; `repeatMax` is that
+  // ceiling. Saying "recycle one" would understate the effect.
+  else if (visionLike && repeatsOverRest) what = `${place.text}: recycle any number of them to the bottom, one at a time${optional ? " — or keep them on top" : ""}`;
   else if (visionLike) what = `${place.text}: recycle ${optional || upTo ? (multi ? `up to ${remaining}` : "one") : qty} to the bottom${optional ? " or keep them on top" : ""}`;
   else if (on === "draw") what = `${place.text}: pick ${qty} to draw${pending.onRest === "recycle" ? ", the rest go to the bottom" : ""}`;
   else if (on === "play") what = `${place.text}: ${optional ? "you may play one" : "play one"}${pending.onRest === "recycle" ? ", the rest go to the bottom" : ""}`;
@@ -803,7 +813,7 @@ function revealPickInfo(pending) {
   };
   const sidebarLabel = (cid) => `${verb} ${promptName(cid)}${on === "play" && pending.playTo ? ` to ${promptName(pending.playTo)}` : ""}`;
 
-  return { title, seen, rules, pickCostText, restNote, cardLabel, whyNot, declineLabel, confirmLabel, sidebarLabel, verb, verbPast, multi, upTo, remaining, optional, place, visionLike };
+  return { title, seen, rules, pickCostText, restNote, cardLabel, whyNot, declineLabel, confirmLabel, sidebarLabel, verb, verbPast, multi, upTo, remaining, optional, place, visionLike, repeatsOverRest };
 }
 
 // Un-sent multi-pick selection (reset whenever the prompt changes).
@@ -831,7 +841,7 @@ function renderRevealAndPick(pending, box) {
   // One-line instruction: what a click does + what happens to the rest.
   const clickDoes = info.multi
     ? `Click cards to select ${info.upTo ? `up to ${info.remaining}` : need} (${sel.length} selected), then confirm. Cards you don't pick ${info.restNote}.`
-    : `Click a card's button to ${info.verb.toLowerCase()} THAT card.${shownIds.length > 1 || pending.onRest ? ` Cards you don't pick ${info.restNote}.` : ""}${info.optional ? "" : " You must pick one."}`;
+    : `Click a card's button to ${info.verb.toLowerCase()} THAT card.${info.repeatsOverRest ? " You'll be asked again about the cards that are left, so you can pick as many as you like." : ""}${shownIds.length > 1 || pending.onRest ? ` Cards you don't pick ${info.restNote}.` : ""}${info.optional ? "" : " You must pick one."}`;
   html += `<div class="rp-instruction" data-rp-instruction>${esc(clickDoes)}</div>`;
 
   html += `<div class="choice-modal-cards rp-cards${shownIds.length > 8 ? " rp-cards--lots" : shownIds.length > 5 ? " rp-cards--many" : ""}">`;

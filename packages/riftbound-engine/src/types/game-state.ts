@@ -847,6 +847,14 @@ export interface RevealAndPickChoice {
   /** Picks already taken for this prompt (batchIndex for "one or more" triggers). */
   readonly taken?: number;
   /**
+   * rule 386.2 ([Predict N] "Recycle any of them"): this prompt takes ONE pick
+   * but re-parks over the cards that are left, so up to this many cards can be
+   * picked in total, one prompt at a time. Distinct from `remaining`/`upTo`,
+   * which describe picks answerable within this single prompt. Present only so
+   * the prompt can say "any number", never "one".
+   */
+  readonly repeatMax?: number;
+  /**
    * rule 356.1 / rule-id: unl-135-219 — "They reveal their hand. You may pay
    * 2 XP to choose a card from their hand": the REVEAL is free and
    * unconditional, only the pick costs. Charged when the prompter picks;

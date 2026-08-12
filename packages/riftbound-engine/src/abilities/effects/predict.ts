@@ -91,6 +91,12 @@ export function handle_predict(effect: ExecutableEffect, ctx: EffectContext, _h:
     prompter: ctx.playerId,
     revealed: topN,
     revealer: ctx.playerId,
+    // rule 386.2 — "Recycle ANY of them": each pick re-enters Predict over the
+    // cards that are left, so 0..topN recycles are reachable even though only
+    // one card can be picked per prompt. The prompt has no way to know that
+    // from a single pendingChoice, and printing "recycle one" understates the
+    // effect — carry the ceiling so the UI can say "any number (one at a time)".
+    repeatMax: topN.length,
     sourceCardId: ctx.sourceCardId,
     // The already-offered look replacements ride along so the chained Predict
     // over the rest does not ask about the same card again.
