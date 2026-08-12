@@ -74,7 +74,7 @@ describe("Ruling 81ae24ccaa2ea59b — Mask of Foresight's 'friendly' reaches a t
 
   // Expected +1 from P1's Mask on P3's lone attacker (teammates are friendly, 489.8.e).
   // Actual: the trigger does not fire at all for a teammate's unit — Ally stays a flat 3 (mightModifier 0).
-  test.failing("BUG: ruling 81ae24ccaa2ea59b — a TEAMMATE's lone attacker gets nothing; the Mask only sees its own controller's units", async () => {
+  test("ruling 81ae24ccaa2ea59b — a TEAMMATE's lone attacker gets nothing; the Mask only sees its own controller's units", async () => {
     const game = await teamBoard(1, false, P3);
     await game.seat(P3).move("ally", "bf1");
     await drainChain(game);
@@ -82,7 +82,7 @@ describe("Ruling 81ae24ccaa2ea59b — Mask of Foresight's 'friendly' reaches a t
   });
 
   // Same cause: with no trigger for the teammate at all, two Masks are still worth nothing to Ally.
-  test.failing("BUG: ruling 81ae24ccaa2ea59b — two Masks should make the teammate's lone attacker +2; it stays +0", async () => {
+  test("ruling 81ae24ccaa2ea59b — two Masks should make the teammate's lone attacker +2; it stays +0", async () => {
     const game = await teamBoard(2, false, P3);
     await game.seat(P3).move("ally", "bf1");
     await drainChain(game);

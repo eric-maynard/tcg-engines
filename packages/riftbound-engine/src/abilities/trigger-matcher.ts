@@ -49,6 +49,28 @@ export interface TriggerMatcherState {
   };
   /** rule 190.4 — battlefield control, for "a battlefield you control" subjects. */
   readonly battlefields?: Record<string, { readonly controller?: string | null } | undefined>;
+  /** rule 489.8.e / 740.1.a — team map, so "friendly" can reach a teammate. */
+  readonly teams?: Readonly<Record<string, number>>;
+}
+
+/**
+ * rule 489.8.e / 740.1.a — two seats are on the same side when they are the
+ * same player or teammates. Solo games carry no team map, so this is identity.
+ */
+function alliedSeats(
+  state: TriggerMatcherState | undefined,
+  a: string,
+  b: string | undefined,
+): boolean {
+  if (b === undefined) {
+    return false;
+  }
+  if (a === b) {
+    return true;
+  }
+  const teams = state?.teams;
+  const teamA = teams?.[a];
+  return teamA !== undefined && teamA === teams?.[b];
 }
 
 /**
@@ -1014,10 +1036,22 @@ function triggerMatchesEvent(
           : "playerId" in event
             ? event.playerId
             : undefined;
-    if (desc.controller === "friendly" && subjectOwner !== undefined && subjectOwner !== card.owner) {
+    // rule 489.8.e / 740.1.a (ruling 81ae24ccaa2ea59b) — in team modes a
+    // TEAMMATE's objects are friendly too (and never enemy), so "when a
+    // friendly unit attacks or defends alone" fires off an ally's unit.
+    // `alliedSeats` degrades to identity in solo games.
+    if (
+      desc.controller === "friendly" &&
+      subjectOwner !== undefined &&
+      !alliedSeats(state, subjectOwner, card.owner)
+    ) {
       return false;
     }
-    if (desc.controller === "enemy" && subjectOwner !== undefined && subjectOwner === card.owner) {
+    if (
+      desc.controller === "enemy" &&
+      subjectOwner !== undefined &&
+      alliedSeats(state, subjectOwner, card.owner)
+    ) {
       return false;
     }
     // rule 740.1.a (rule-id: ogn-292-298) — "when A PLAYER chooses A FRIENDLY
