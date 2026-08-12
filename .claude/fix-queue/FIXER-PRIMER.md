@@ -31,6 +31,15 @@ Recipe: 1) dump enriched abilities. 2) JSON wrong → explicit `abilities` in th
 3) JSON right → jump to the effect/trigger/static/cost section below. 4) run only the card's test file while iterating.
 
 ## 2. Targets / filters
+- **A SOLE LEGAL OPTION IS STILL A CHOICE (rule 355.10.d.2)** — never re-introduce an `options.length === 1` (or
+  `>= 2`) short-circuit that binds the only candidate instead of asking. Being the only valid choice does NOT make a
+  selection programmatic: the object is still targeted ("when you choose me" 355.14.d / 359.2 fires, the [Deflect]
+  surcharge 809.1.c.1 is owed at pick time) and a declinable choice stays declinable. Raise the normal
+  `pendingChoice` with `soleOption: true` (targets, destinations, modes, cost payers, split recipients). A
+  PROGRAMMATIC selection (355.10.d — "each unit", "all units with 2 or less Might") is not a choice and must NOT be
+  prompted. Bots/tests do not click: `E/harness/engine-backend.ts confirmSoleOptions` answers a `soleOption` prompt
+  immediately (and `passivePolicy` does the same in `settle()`); `scenario().interactive()` surfaces it instead.
+  Spec: `E/__tests__/core-rules/sole-option-choices.test.ts`; design note: DESIGN.md "A sole legal option is still a choice".
 - `T/targeting/riftbound-target-dsl.ts` — `Target {type, controller, location, filter, quantity, excludeSelf, totalMight}`;
   `Location` = `base|battlefield|here|same|trash|hand|deck|anywhere|…`; `SimpleFilter` = `mighty buffed damaged stunned ready
   exhausted token equipped attacking defending in-combat alone facedown`; object filters `{tag} {excludeTag} {might:{lt,lte,gt,gte,eq}}
@@ -893,3 +902,4 @@ prompt — reuse the `opt-in` pattern (`die-replacement-batch.ts offerOptionalSh
 - **Same-file contention with another LIVE lane** (their uncommitted hunk in a shared file breaks your land, or vice versa): never edit/revert their hunk. Build YOUR version of that file (`git show HEAD:<path>` + only your hunk) under `do_not_commit/<you>-src/<same relative path>` and land with `LAND_SRC_DIR=$PWD/do_not_commit/<you>-src bash .claude/fix-queue/land-patch.sh …` — the gate takes that file from your override dir (`src_override=` in the output) and the rest from the shared tree. After your commit the shared file's diff vs HEAD is exactly the other lane's hunk.
 - **/tmp is a 32 GB tmpfs shared by everyone**: keep scratch under do_not_commit/ in the repo when it's big; browser traces go under /tmp/playtest-traces/<pass>/ (auto-pruned after a day); per-worker /tmp/w<N>i<N>* dirs are swept after 12h — don't rely on them persisting.
 - **Keep the shared tree PARSEABLE at all times.** Everyone runs `bun test` against the same working tree, so a half-written engine file (an unbalanced paren, an unterminated string) breaks EVERY lane, not just yours. After each edit to a file you are actively restructuring, run `bun -e 'import("./<path>")'` (fast, no tests) before doing anything else; if you must leave a file mid-refactor for more than a moment, leave it syntactically valid. If your own tests suddenly fail to parse in a file you did not touch, don't "fix" it — SendMessage the owner (or main) and keep working elsewhere.
+- **Do NOT revert `soleOption` prompting (50d33ab).** A choice with exactly one legal option is prompted on purpose (rule 355.10.d.2, and the user asked for it explicitly: "don't short-circuit choices"). If sole-option prompts break a test you are fixing, the test is what changes: build the scenario with `.interactive()` when it asserts the prompt, or answer/confirm the prompt in the driver; non-interactive drivers (EngineBackend) already auto-confirm. The three files that implement it (`moves/chain/resolve.ts`, `moves/pending-choice.ts`, `harness/decision.ts`) are coordinator-embargoed — a land touching them is refused unless the label starts with `coordinator`; ask main instead of working around it.
