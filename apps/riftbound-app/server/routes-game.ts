@@ -241,6 +241,8 @@ export async function handleGameRoutes(req: Request, url: URL, _ctx: RouteCtx): 
     const gameId = pathname.split("/")[3];
     const session = gameSessions.get(gameId);
     if (!session) {return json({ error: "Game not found" }, 404);}
+    // No viewer: this route has no user→seat binding either, so seat-scoped
+    // lines (rule 128.3 / 486.5) come back in their public wording or not at all.
     return json({ log: buildHistoryLog(session) });
   }
 

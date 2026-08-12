@@ -950,7 +950,19 @@ export function selectBattlefield(session: GameSession, playerId: string, battle
   }
   pregame.battlefieldSelections[playerId] = battlefieldId;
   const bfName = registry.get(battlefieldId)?.name ?? battlefieldId;
-  session.log.push(makeLogEntry(`${actorName(playerId, session.playerNames)} locked in a battlefield (${bfName}).`, { rewindable: true }));
+  const who = actorName(playerId, session.playerNames);
+  // rule 486.5 — the two picks are SIMULTANEOUS, so naming this one in the
+  // shared stream now would hand the other seat the answer before it chooses.
+  // The line is scoped to its own seat and becomes public (naming the
+  // battlefield) the moment both seats have locked in.
+  session.log.push(makeLogEntry(`${who} locked in a battlefield (${bfName}).`, {
+    rewindable: true,
+    visibility: {
+      publicText: `${who} locked in a battlefield.`,
+      seats: [playerId],
+      until: "battlefields-locked",
+    },
+  }));
   const allSelected = session.players.every((p) => pregame.battlefieldSelections[p]);
   if (!allSelected) {
     return { completed: false, ok: true };
@@ -989,12 +1001,13 @@ export async function runBotPregame(session: GameSession, opts: { gameId?: strin
       return;
     }
     botPregameInFlight.add(session);
-    let pick: { defId: string; note: string };
+    let pick: { defId: string; note: string; publicNote: string };
     try {
       pick = await chooseBotBattlefield(session, seat, options);
     } catch (error) {
       console.error("[pregame] bot battlefield pick failed:", (error as Error)?.message ?? error);
-      pick = { defId: options[0] as string, note: `${actorName(seat, session.playerNames)} picked a battlefield (fallback).` };
+      const note = `${actorName(seat, session.playerNames)} picked a battlefield (fallback).`;
+      pick = { defId: options[0] as string, note, publicNote: note };
     } finally {
       botPregameInFlight.delete(session);
     }
@@ -1002,7 +1015,12 @@ export async function runBotPregame(session: GameSession, opts: { gameId?: strin
     if (session.pregame !== pregame || pregame.phase !== "battlefield_select" || pregame.battlefieldSelections[seat]) {
       return;
     }
-    session.log.push(makeLogEntry(pick.note));
+    // rule 486.5 — same simultaneity as the human's own lock-in: the bot's
+    // rationale names the battlefield, so it stays on the bot's seat until
+    // both seats have locked (`selectBattlefield`).
+    session.log.push(makeLogEntry(pick.note, {
+      visibility: { publicText: pick.publicNote, seats: [seat], until: "battlefields-locked" },
+    }));
     const r = selectBattlefield(session, seat, pick.defId);
     if (r.ok) {
       if (r.completed && opts.gameId) {gameLogger.logStateChange(opts.gameId, "battlefield_select", pregame.phase);}

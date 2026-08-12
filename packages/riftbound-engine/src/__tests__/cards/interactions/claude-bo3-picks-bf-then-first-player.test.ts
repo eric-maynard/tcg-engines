@@ -47,6 +47,7 @@ import {
   runBotPregame,
   selectBattlefield,
 } from "../../../../../../apps/riftbound-app/server/pregame";
+import { buildGameSnapshot } from "../../../../../../apps/riftbound-app/server/snapshot";
 import type { GameSession } from "../../../../../../apps/riftbound-app/server/state";
 
 const TRIFARIAN_WAR_CAMP = "ogn-294-298";
@@ -197,17 +198,27 @@ describe("(a) game 1 battlefield_select — asked exactly once, with everything 
     expect(JSON.stringify(payload)).not.toContain(ROCKFALL_PATH);
   });
 
-  test.failing("BUG: the bot's locked pick must stay hidden until BOTH seats have locked — the shared log already names Rockfall Path (486.5: the battlefields are placed simultaneously)", async () => {
-    // Expected (486.5 / 485.5, as asserted for the engine in setup-bf-simultaneous-then-mulligan-redact):
-    // until every seat has chosen, a selection is hidden information — neither its id nor its name may
-    // reach the other seat. Actual: `runBotPregame` pushes "🤖 Haiku chose its battlefield: Rockfall
-    // Path" and `selectBattlefield` pushes "Claude … locked in a battlefield (Rockfall Path)" onto
-    // `session.log`, which is a single shared stream rendered into both seats' snapshots.
+  test("486.5: the bot's locked pick reaches NO other seat until both have locked — and both are named once they have", async () => {
+    // `session.log` is one shared stream, so the fix is the same shape as the
+    // zones': the stream keeps the full line and `buildGameSnapshot` redacts it
+    // PER VIEWER (server/snapshot.ts `visibleLogEntry`). What must never carry
+    // the name is therefore the human's FRAME, which is what this asserts —
+    // plus the seatless (REST / spectator) rendering.
     const { session } = claudeMatch(answering(2));
     await runBotPregame(session);
     expect(session.pregame?.battlefieldSelections[P1]).toBeUndefined(); // the human has NOT locked
-    const shared = session.log.map((e) => e.text).join("\n");
-    expect(shared).not.toContain("Rockfall Path");
+
+    const logFor = (viewer?: string) =>
+      (buildGameSnapshot(session, viewer).log as { text: string }[]).map((e) => e.text).join("\n");
+    expect(logFor(P1)).not.toContain("Rockfall Path");
+    expect(logFor()).not.toContain("Rockfall Path");
+    expect(logFor(P1)).toMatch(/chose its battlefield|locked in a battlefield/);
+    expect(logFor(P2)).toContain("Rockfall Path"); // the seat that chose still reads its own pick
+
+    // Both locked ⇒ 486.5 is satisfied and the picks are public to everyone.
+    expect(selectBattlefield(session, P1, HUMAN_DECK.battlefieldIds[1] as string)).toMatchObject({ ok: true });
+    expect(logFor(P1)).toContain("Rockfall Path");
+    expect(logFor(P1)).toContain(nameOf(HUMAN_DECK.battlefieldIds[1] as string));
   });
 
   test("once the human locks, both picks are public and the pregame moves on — nothing is left waiting on the bot", async () => {

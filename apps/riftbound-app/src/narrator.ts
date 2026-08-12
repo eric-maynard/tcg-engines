@@ -15,6 +15,33 @@
  * game snapshot without any serialization concerns.
  */
 
+/**
+ * A condition that turns a seat-scoped entry public once it holds. Evaluated
+ * per snapshot build (server/snapshot.ts `logGateOpen`), never stored, so a
+ * line written before the condition holds is published the moment it does.
+ *
+ * - `battlefields-locked` — rule 486.5: battlefield selection is SIMULTANEOUS,
+ *   so a seat's pick is Secret from the other seat until both have locked in.
+ */
+export type LogRevealGate = "battlefields-locked";
+
+/**
+ * rule 128.3 / 108.7.c — who may read one match-log line.
+ *
+ * The match log is ONE shared stream rendered into every seat's snapshot, so a
+ * line that names something only one seat may know has to say so here: it is
+ * the log's counterpart of the per-seat zone redaction in
+ * `buildGameSnapshot`. Absent ⇒ the line is public information (rule 108.2).
+ */
+export interface LogVisibility {
+  /** Seats entitled to the full line. Any other viewer gets `publicText`, or nothing. */
+  seats: string[];
+  /** When this condition holds the line becomes public to everyone. */
+  until?: LogRevealGate;
+  /** What an unentitled viewer reads instead. Absent ⇒ the entry is withheld entirely. */
+  publicText?: string;
+}
+
 /** A single narrated match-log entry. */
 export interface LogEntry {
   /** The human-readable narration line. */
@@ -32,6 +59,12 @@ export interface LogEntry {
    * rebuilt (e.g. replay history index). Not required for rendering.
    */
   key?: string;
+  /**
+   * Who may read this line (see {@link LogVisibility}). Absent = public.
+   * `buildGameSnapshot` strips or rewrites the entry per viewer, so a
+   * restricted entry never reaches a client that is not entitled to it.
+   */
+  visibility?: LogVisibility;
 }
 
 /**
@@ -53,6 +86,8 @@ export interface MakeLogEntryOptions {
   rewindable?: boolean;
   /** Stable key (e.g. replay history index). */
   key?: string;
+  /** Restrict the line to some seats (rule 128.3); absent = public. */
+  visibility?: LogVisibility;
 }
 
 /** Build a {@link LogEntry} for the given narration text. */
@@ -64,6 +99,7 @@ export function makeLogEntry(
     key: opts?.key,
     rewindable: opts?.rewindable ?? false,
     text,
+    ...(opts?.visibility ? { visibility: opts.visibility } : {}),
     timestamp: formatTimestamp(opts?.timestampMs),
   };
 }

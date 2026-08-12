@@ -59,10 +59,17 @@ function renderZones() {
 
   // Deck stacks. W12: the viewing player's main deck is peekable via
   // right-click; opponent decks and the rune deck stay inert.
+  // rule 108.4.d / 128.3: a deck's ORDER is Secret to every player, its owner
+  // included, so the server ships this seat its own deck as faceless entries
+  // (no definitionId) in every real mode. The peek is a SANDBOX tool: offer it
+  // only where the deck actually came through readable, or right-click opens
+  // an empty dialog.
+  const myMainDeck = zoneForPlayer("mainDeck", viewingPlayer);
+  const deckReadable = myMainDeck.some(c => c && c.definitionId);
   // rule 108.2.d: the trash is Public Information — render it beside the decks
   // for both players so discarded cards never vanish from the board.
   document.getElementById("player-decks").innerHTML =
-    renderDeckStack(zoneForPlayer("mainDeck", viewingPlayer), "Main", { peekable: true }) +
+    renderDeckStack(myMainDeck, "Main", { peekable: deckReadable }) +
     renderDeckStack(zoneForPlayer("runeDeck", viewingPlayer), "Rune") +
     renderTrashStack(zoneForPlayer("trash", viewingPlayer), viewingPlayer);
   document.getElementById("opponent-decks").innerHTML =

@@ -1207,6 +1207,34 @@ interface Choice {
   fallback: boolean;
 }
 
+/**
+ * rule 723 / 811.1.d — the public wording of one 🤖 action line, or undefined
+ * when the line names nothing the other seats may not know.
+ *
+ * The only action whose own label names a card that STAYS private is [Hidden]:
+ * the card goes from hand to a facedown zone, so everyone sees that a card was
+ * hidden and where, and nobody but its owner sees which. Every other label
+ * names cards the action itself makes public (a play, a move, a discard to the
+ * trash), and a look at a Secret zone never reaches a label at all — the
+ * engine flags the prompt `private` and `describeAnswer` drops the card there.
+ */
+export function publicActionLine(session: GameSession, moves: readonly FlatMove[], line: string): string | undefined {
+  let out = line;
+  for (const m of moves) {
+    if (m.moveId !== "hideCard" || typeof m.params.cardId !== "string") {
+      continue;
+    }
+    // The tagged form is what the label carries; the bare name is what a free
+    // -text rationale would use. Both have to go.
+    for (const named of [tag(session, m.params.cardId), cardName(session, m.params.cardId)]) {
+      if (named) {
+        out = out.split(named).join("a card");
+      }
+    }
+  }
+  return out === line ? undefined : out;
+}
+
 const sleep = (ms: number) => (ms > 0 ? new Promise<void>((r) => setTimeout(r, ms)) : Promise.resolve());
 
 /** True when `seat` must decide something right now (and the game is live). */
@@ -1361,8 +1389,18 @@ export class ClaudeOpponent implements OpponentHandle {
     return redactKey(text, this.#apiKey ?? envApiKey());
   }
 
-  #log(session: GameSession, text: string): void {
-    session.log.push(makeLogEntry(text, { key: anchorKeyAfterLastMove(session, `ai${session.log.length}`) }));
+  /**
+   * Push one 🤖 line onto the shared match log. `publicText` (rule 128.3) is
+   * what the OTHER seats read when the full line names something only this
+   * seat may know — a card it hid facedown (723 / 811.1.d), a card still in
+   * its hand. Omit it and the line is public, which is the normal case: what
+   * the seat DID is public information (108.2).
+   */
+  #log(session: GameSession, text: string, publicText?: string): void {
+    session.log.push(makeLogEntry(text, {
+      key: anchorKeyAfterLastMove(session, `ai${session.log.length}`),
+      ...(publicText === undefined ? {} : { visibility: { publicText, seats: [this.seat] } }),
+    }));
   }
 
   #push(session: GameSession, moveId: string): void {
@@ -1683,7 +1721,13 @@ export class ClaudeOpponent implements OpponentHandle {
         legal.find((m) => m.moveId === want.moveId && m.params.cardId === want.params.cardId && same(m.params.location, want.params.location) && same(m.params.targets, want.params.targets) && same(m.params.destination, want.params.destination) && m.params.paidAdditionalCost !== true) ??
         legal.find((m) => m.moveId === want.moveId && m.params.cardId === want.params.cardId && m.params.paidAdditionalCost !== true);
       if (!match) {
-        this.#log(session, `🤖 ${this.shortName}: paid for ${tag(session, String(want.params.cardId))} but the play is not available — will reconsider.`);
+        // rule 108.7.c — the play never happened, so that card is still in this
+        // seat's HAND: only the seat itself may read which one it was.
+        this.#log(
+          session,
+          `🤖 ${this.shortName}: paid for ${tag(session, String(want.params.cardId))} but the play is not available — will reconsider.`,
+          `🤖 ${this.shortName}: paid for a card it could not play — will reconsider.`,
+        );
         return true;
       }
       const r = applySessionMove(session, this.seat, match.moveId, { ...match.params });
@@ -1838,7 +1882,11 @@ export class ClaudeOpponent implements OpponentHandle {
       const ok = this.#apply(session, choice);
       const line = `🤖 ${this.shortName}: ${choice.label}${choice.rationale ? ` — '${choice.rationale}'` : ""}${choice.fallback ? " (fallback)" : ""}`;
       if (ok) {
-        this.#log(session, line);
+        this.#log(
+          session,
+          line,
+          publicActionLine(session, [...choice.moves, ...(choice.play ? [choice.play] : [])], line),
+        );
         this.#memory.push(`${choice.label}${choice.rationale ? ` — ${choice.rationale}` : ""}`);
         stuck = 0;
       } else {
@@ -1852,7 +1900,8 @@ export class ClaudeOpponent implements OpponentHandle {
         // Even the Goldfish move failed: force the turn along or give up this segment.
         const fb = goldfishFallbackMove(session, this.seat);
         if (fb && applySessionMove(session, this.seat, fb.moveId, { ...fb.params }).success) {
-          this.#log(session, `🤖 ${this.shortName}: ${fb.label} (fallback)`);
+          const fbLine = `🤖 ${this.shortName}: ${fb.label} (fallback)`;
+          this.#log(session, fbLine, publicActionLine(session, [fb as FlatMove], fbLine));
           this.#push(session, fb.moveId);
           stuck = 0;
           continue;
@@ -1977,23 +2026,43 @@ function seededIndex(seedText: string, n: number): number {
  * Goldfish, or any model failure/timeout → a pick seeded by the game seed.
  * Returns the definition id plus a shared-log line explaining who chose how.
  */
-export async function chooseBotBattlefield(session: GameSession, seat: string, optionDefIds: readonly string[]): Promise<{ defId: string; note: string }> {
+export async function chooseBotBattlefield(
+  session: GameSession,
+  seat: string,
+  optionDefIds: readonly string[],
+): Promise<{ defId: string; note: string; publicNote: string }> {
   const seeded = (): string => {
     const seed = `${session.engine.getRNG().getSeed()}|bf|${seat}|${optionDefIds.join(",")}`;
     return optionDefIds[seededIndex(seed, optionDefIds.length)] as string;
   };
+  // rule 486.5 — the pick is simultaneous with the human's, so every note comes
+  // in two wordings: the full one (kept on the bot's own seat until both are
+  // locked, server/pregame.ts) and a `publicNote` that names no battlefield.
   const ai = session.opponent;
   if (ai instanceof ClaudeOpponent) {
     const r = await ai.pickBattlefield(session, optionDefIds);
     if ("index" in r) {
       const defId = optionDefIds[r.index] as string;
-      return { defId, note: `🤖 ${ai.shortName} chose its battlefield: ${defName(defId) ?? defId}${r.rationale ? ` — '${r.rationale}'` : ""}` };
+      return {
+        defId,
+        note: `🤖 ${ai.shortName} chose its battlefield: ${defName(defId) ?? defId}${r.rationale ? ` — '${r.rationale}'` : ""}`,
+        publicNote: `🤖 ${ai.shortName} chose its battlefield.`,
+      };
     }
     const defId = seeded();
-    return { defId, note: `🤖 ${ai.shortName}: ${r.error} — battlefield picked at random (${defName(defId) ?? defId}).` };
+    return {
+      defId,
+      note: `🤖 ${ai.shortName}: ${r.error} — battlefield picked at random (${defName(defId) ?? defId}).`,
+      publicNote: `🤖 ${ai.shortName}: ${r.error} — battlefield picked at random.`,
+    };
   }
   const defId = seeded();
-  return { defId, note: `🐟 ${session.playerNames[seat] ?? "Goldfish"} picked a battlefield at random: ${defName(defId) ?? defId}.` };
+  const fish = session.playerNames[seat] ?? "Goldfish";
+  return {
+    defId,
+    note: `🐟 ${fish} picked a battlefield at random: ${defName(defId) ?? defId}.`,
+    publicNote: `🐟 ${fish} picked a battlefield at random.`,
+  };
 }
 
 const pendingTimers = new WeakMap<GameSession, ReturnType<typeof setTimeout>>();

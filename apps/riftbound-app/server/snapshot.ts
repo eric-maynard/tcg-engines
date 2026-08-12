@@ -12,7 +12,7 @@ import {
 } from "@tcg/riftbound";
 import type { CostReductionContext, RiftboundCardMeta } from "@tcg/riftbound";
 import type { PlayerId } from "@tcg/core";
-import { type LogEntry, actorName, makeLogEntry } from "../src/narrator";
+import { type LogEntry, type LogRevealGate, actorName, makeLogEntry } from "../src/narrator";
 import { registry } from "./cards";
 import { type GameSession, getInternalSnapshot } from "./state";
 
@@ -139,6 +139,13 @@ export function formatMoveLog(
   playerId: string,
   params: Record<string, unknown>,
   playerNames: Record<string, string>,
+  /**
+   * The seat this line is being rendered for (rule 128.3). A pick taken out of
+   * a PRIVATE look is named only to the seat that looked; every other viewer —
+   * including the seatless spectator view — reads the count. Absent = not the
+   * chooser, i.e. the redacted rendering.
+   */
+  viewer?: string,
 ): string {
   const actor = actorName(playerId, playerNames);
 
@@ -374,8 +381,10 @@ export function formatMoveLog(
       if (picked.length > 0) {
         // rule 128.4 — the pick came out of a PRIVATE look (nothing was
         // revealed, 424.1), so the shared log must not name it: the opponent
-        // would learn a card that only the looker is allowed to know.
-        if (params.privateChoice === true) {
+        // would learn a card that only the looker is allowed to know. The
+        // looker's OWN frame still names it — the look happened, and a player
+        // may re-read what they were shown.
+        if (params.privateChoice === true && viewer !== playerId) {
           return picked.length === 1
             ? `${actor} chose a card.`
             : `${actor} chose ${picked.length} cards.`;
@@ -459,14 +468,60 @@ export function anchorKeyAfterLastMove(session: GameSession, suffix = ""): strin
   return `after-replay-${index}${serial !== undefined ? `~${serial}` : ""}${suffix ? `-${suffix}` : ""}`;
 }
 
-export function buildHistoryLog(session: GameSession): LogEntry[] {
+/**
+ * Has a {@link LogRevealGate} opened? A gated line is seat-scoped until then
+ * and public afterwards, so the answer is recomputed on every snapshot build
+ * rather than frozen into the entry when it was written.
+ */
+function logGateOpen(session: GameSession, gate: LogRevealGate): boolean {
+  switch (gate) {
+    case "battlefields-locked": {
+      // rule 486.5 — the picks are simultaneous: nothing is published until
+      // every seat has locked one in. Past the pregame they are on the board.
+      const { pregame } = session;
+      if (!pregame) {return true;}
+      return session.players.every((p) => Boolean(pregame.battlefieldSelections[p]));
+    }
+    default: {
+      return false;
+    }
+  }
+}
+
+/**
+ * rule 128.3 — redact ONE shared-log entry for one viewer.
+ *
+ * `session.log` is a single stream rendered into every seat's snapshot, so an
+ * entry that names something only one seat may know carries a
+ * {@link LogVisibility}; this is where it is enforced, exactly as
+ * `buildGameSnapshot` enforces per-seat zone redaction. Returns the entry as
+ * that viewer may read it, or `undefined` when they may not read it at all.
+ */
+export function visibleLogEntry(
+  session: GameSession,
+  entry: LogEntry,
+  viewer: string | undefined,
+): LogEntry | undefined {
+  const rule = entry.visibility;
+  if (!rule) {return entry;}
+  if (viewer !== undefined && rule.seats.includes(viewer)) {return entry;}
+  if (rule.until && logGateOpen(session, rule.until)) {return entry;}
+  if (rule.publicText === undefined) {return undefined;}
+  return { ...entry, text: rule.publicText, visibility: undefined };
+}
+
+export function buildHistoryLog(session: GameSession, viewer?: string): LogEntry[] {
   const anchored = new Map<number, LogEntry[]>();
   const entries: LogEntry[] = []; // Manual entries (setup messages) first
   let history: ReturnType<GameSession["engine"]["getReplayHistory"]> = [];
   try {
     history = session.engine.getReplayHistory();
   } catch { /* History not available */ }
-  for (const entry of session.log) {
+  for (const raw of session.log) {
+    // rule 128.3 — the shared stream is redacted per viewer before anything
+    // else looks at it, so no later branch can re-admit a withheld line.
+    const entry = visibleLogEntry(session, raw, viewer);
+    if (!entry) {continue;}
     const m = entry.key?.match(/^after-replay-(-?\d+)(?:~(\d+))?/);
     if (!m) {
       entries.push(entry);
@@ -544,6 +599,7 @@ export function buildHistoryLog(session: GameSession): LogEntry[] {
         playerId,
         params,
         session.playerNames,
+        viewer,
       );
       if (text) {
         entries.push(
@@ -846,7 +902,10 @@ export function buildGameSnapshot(session: GameSession, viewingPlayer?: string) 
         ? state.interaction.showdownStack[state.interaction.showdownStack.length - 1]
         : null,
     },
-    log: buildHistoryLog(session),
+    // rule 128.3 — the match log is redacted per viewer exactly like the zones
+    // above: a line naming something only one seat may know is withheld (or
+    // shown in its public wording) for everybody else.
+    log: buildHistoryLog(session, viewingPlayer),
     pendingChoice: redactPrivateChoice(enrichPendingChoice(state.pendingChoice), redactFor),
     // rule 383.3.d — the soft "order your simultaneous triggers" offer is not a
     // pendingChoice (nothing is blocked); ship it so the client can label the
