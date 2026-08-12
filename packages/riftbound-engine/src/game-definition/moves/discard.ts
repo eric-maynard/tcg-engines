@@ -120,14 +120,23 @@ export const discardMoves: Partial<
   },
 
   drawCard: {
-    reducer: (_draft, context) => {
+    reducer: (draft, context) => {
       const { playerId, count = 1 } = context.params;
-      context.zones.drawCards({
-        count,
-        from: "mainDeck" as CoreZoneId,
-        playerId: playerId as CorePlayerId,
-        to: "hand" as CoreZoneId,
-      });
+      for (let i = 0; i < count; i++) {
+        context.zones.drawCards({
+          count: 1,
+          from: "mainDeck" as CoreZoneId,
+          playerId: playerId as CorePlayerId,
+          to: "hand" as CoreZoneId,
+        });
+        // rule 745 — one card from the top of the Main Deck to the hand is ONE
+        // draw, and rule 316 counts them over the whole turn, so this move is a
+        // draw event like any other ("when you draw your second card each turn").
+        fireTriggers(
+          { playerId: playerId as string, type: "draw" },
+          { cards: context.cards, counters: context.counters, draft, zones: context.zones },
+        );
+      }
     },
   },
 
