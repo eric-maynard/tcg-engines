@@ -437,6 +437,14 @@ export interface BattlefieldState {
    * afterwards makes the combat a No Result (466.3.d), not a defender win.
    */
   combatNoDefendersAtCleanup?: boolean;
+
+  /**
+   * rule 466.1.a.2 — the attacking units that were HERE when the Combat Cleanup
+   * ran: only those are recalled by it. A unit that arrives afterwards (during
+   * the 466.2 window) was never in step 3d, so nothing recalls it and its
+   * presence alongside a defender makes the result a No Result (466.3.d).
+   */
+  combatAttackersAtCleanup?: readonly string[];
   /** rules 371.2/372/373 — the Combat Cleanup parked a die-replacement prompt; the result step re-reads the board on re-run. */
   combatCleanupSuspended?: boolean;
 

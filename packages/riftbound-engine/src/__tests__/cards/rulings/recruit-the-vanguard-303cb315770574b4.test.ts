@@ -57,17 +57,29 @@ describe("Ruling 303cb315770574b4 — the attacker cannot spawn Recruits into th
     expect(game.violations()).toEqual([]);
   });
 
-  // Expected (the printed reminder: "they can be played to your base or to battlefields you control"): the
-  // DEFENDER controls bf1 throughout the showdown, so at least one Recruit may be placed there.
-  // Actual: the engine never offers a destination for these tokens — all four go to the caster's base.
-  test.failing(
-    "BUG: ruling 303cb315770574b4 — the defender, who does control bf1, cannot put any Recruit there; the engine forces all four into the base",
+  // The printed reminder: "they can be played to your base or to battlefields you control" — the DEFENDER
+  // controls bf1 throughout the showdown (190.4.b), so each Recruit is offered base OR bf1 and may be
+  // spawned straight into the combat. (`settle()` is passive and takes the first option, the base.)
+  test(
+    "ruling 303cb315770574b4 — the defender, who does control bf1, is offered bf1 for every Recruit and may reinforce the showdown",
     async () => {
       const game = await attack(P2);
       expect(game.decision()).toMatchObject({ context: "showdown", kind: "action", seat: P2 });
       await game.p2.cast("rtv");
+      await game.p2.passPriority();
+      await game.p1.passPriority();
+      for (let i = 0; i < 4; i++) {
+        const decision = game.decision();
+        if (decision?.kind !== "pick") {
+          break;
+        }
+        expect(decision.options?.map((o) => o.key)).toContain("battlefield-bf1");
+        await game.p2.pick("battlefield-bf1");
+      }
+      expect(game.p2.units("bf1")).toHaveLength(5); // the Guard plus all four Recruits
       await game.settle({ maxSteps: 20 });
-      expect(game.p2.units("bf1").length).toBeGreaterThan(1); // the Guard plus at least one Recruit
+      // The reinforced defence wins the combat, so bf1 stays P2's.
+      expect(game.gameState.battlefields.bf1?.controller).toBe(P2);
     },
   );
 });

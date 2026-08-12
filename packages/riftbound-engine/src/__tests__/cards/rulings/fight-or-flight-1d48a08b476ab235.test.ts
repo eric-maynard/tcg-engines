@@ -92,7 +92,7 @@ describe("Ruling 1d48a08b476ab235 — combat runs to the end (and heals every un
   // Expected (466.1.a.1): the combat still reaches its Resolution Step and its Combat Cleanup heals all units.
   // Actual: with no unit left on either side the engine short-circuits combat resolution, so the damaged
   // bystanders keep their damage (the Veteran stays on 2).
-  test.failing("BUG: ruling 1d48a08b476ab235 — with BOTH sides pulled out the engine skips the Combat Cleanup, so damaged units elsewhere are not healed", async () => {
+  test("ruling 1d48a08b476ab235 — with BOTH sides pulled out the engine skips the Combat Cleanup, so damaged units elsewhere are not healed", async () => {
     const game = await attack();
     // Let only the attack trigger resolve; the showdown then opens with P1 on focus.
     await game.p1.passPriority();
