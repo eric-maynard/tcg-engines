@@ -285,6 +285,16 @@ document.addEventListener("pointermove", (e) => {
     document.body.appendChild(ghost);
     dragState.ghost = ghost;
 
+    // Starting a drag replaces the whole interaction object, so an open cost
+    // payment for some OTHER card is discarded here. DESIGN.md §Paying costs:
+    // never take the prompt away without saying so.
+    if (interaction.mode === "costPayment" && interaction.pendingCardId &&
+        interaction.pendingCardId !== dragState.cardId && typeof showToast === "function") {
+      const pending = typeof findCard === "function" ? findCard(interaction.pendingCardId) : null;
+      const pendingName = String(pending?.name || interaction.pendingCardId).replace(/^player-[12]-/, "");
+      showToast(`Payment for ${pendingName} cancelled`);
+    }
+
     // Enter interaction mode for highlights
     interaction = {
       mode: "awaitTarget",
