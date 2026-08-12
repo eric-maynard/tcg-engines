@@ -20,7 +20,7 @@ export function recycleToDeckBottom(cardId: string, ctx: EffectContext): void {
 type KeepCategory = "unit" | "gear" | "rune" | "hand";
 
 /**
- * rule 424.4.a / rule-id: ogn-244-298 — "Each player chooses N units, N gear,
+ * rule 416.1 / rule-id: ogn-244-298 — "Each player chooses N units, N gear,
  * N runes and N cards in their hands. Recycle the rest." Collect one player's
  * cards for one category.
  */
