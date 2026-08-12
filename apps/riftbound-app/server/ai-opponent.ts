@@ -285,6 +285,7 @@ function sigOf(m: FlatMove): string {
 }
 
 const PLAY_MOVES = new Set(["playUnit", "playSpell", "playGear", "playFromChampionZone"]);
+
 const MAX_VARIANTS_PER_OPTION = 6;
 const MAX_MENU = 60;
 
@@ -516,17 +517,28 @@ export function planPayment(
   return steps;
 }
 
+/** Canonical key for one play's target tuple, order-insensitive. */
+function targetKey(moveId: string, cardId: string, targets: unknown): string | undefined {
+  const list = Array.isArray(targets) ? targets.map(String) : typeof targets === "string" ? [targets] : [];
+  return list.length === 0 ? undefined : `${moveId}|${cardId}|${canon([...list].sort())}`;
+}
+
 /**
  * Plays the seat COULD make if it tapped runes: enumerate the play moves under
  * a temporarily flush pool (engine.applyPatches records no history), then
  * restore the real pool. Enumeration is read-only.
+ *
+ * rule 809.1.c.1 — the same pass records each target tuple's Power surcharge as
+ * the ENGINE quotes it (the decision's `targets` field), so a "Pay & play" plan
+ * can fund the [Deflect] tax the target incurs instead of only the card's cost.
  */
-function probeAffordablePlays(session: GameSession, seat: string): FlatMove[] {
+function probeAffordablePlays(session: GameSession, seat: string): { moves: FlatMove[]; surcharge: Map<string, number> } {
   const { engine } = session;
   const before = engine.getState();
   const realPool = before.runePools[seat];
+  const surcharge = new Map<string, number>();
   if (!realPool || before.status !== "playing") {
-    return [];
+    return { moves: [], surcharge };
   }
   const rich = {
     ...realPool,
@@ -539,12 +551,28 @@ function probeAffordablePlays(session: GameSession, seat: string): FlatMove[] {
     out = engine
       .enumerateMoves(seat as PlayerId, { moveIds: [...PLAY_MOVES], validOnly: true })
       .map((m) => ({ moveId: m.moveId, params: (m.params ?? {}) as Record<string, unknown>, playerId: (m.playerId as string) ?? seat }));
+    const richDecision = deriveActionDecision(engineDecisionContext(engine, session.seq, true), seat, true);
+    for (const option of richDecision?.options ?? []) {
+      const field = option.fields?.find((f) => f.name === "targets");
+      if (!PLAY_MOVES.has(option.moveId) || !field?.surcharge) {
+        continue;
+      }
+      for (const cardId of new Set(option.variants.map((v) => String(v.params.cardId)))) {
+        field.options?.forEach((o, i) => {
+          const key = targetKey(option.moveId, cardId, o);
+          const owed = field.surcharge?.[i] ?? 0;
+          if (key !== undefined && owed > 0) {
+            surcharge.set(key, owed);
+          }
+        });
+      }
+    }
   } catch {
     out = [];
   } finally {
     engine.applyPatches([{ op: "replace", path: ["runePools", seat], value: realPool }]);
   }
-  return out;
+  return { moves: out, surcharge };
 }
 
 /** The numbered legal-action list for `seat` (concede excluded; End turn last). */
@@ -574,8 +602,12 @@ export function buildSeatMenu(session: GameSession, seat: string): { items: Menu
   const legalPlayCards = new Set(legal.filter((m) => PLAY_MOVES.has(m.moveId)).map((m) => String(m.params.cardId)));
   if (pool && legal.some((m) => m.moveId === "exhaustRune" || m.moveId === "recycleRune")) {
     const runes = seatRunes(session, seat, legal);
-    const byCard = new Map<string, FlatMove[]>();
-    for (const v of probeAffordablePlays(session, seat)) {
+    // rule 809.1.c.1 / 356.2 — the [Deflect] tax is owed for the TARGET, not
+    // the card, so one plan per (card, surcharge): a taxed line needs its extra
+    // Power of any Domain funded or the play is refused after the taps land.
+    const byPlan = new Map<string, { cardId: string; surcharge: number; variants: FlatMove[] }>();
+    const probed = probeAffordablePlays(session, seat);
+    for (const v of probed.moves) {
       if (legalPlaySigs.has(sigOf(v)) || legalPlayCards.has(String(v.params.cardId))) {
         continue;
       }
@@ -585,11 +617,15 @@ export function buildSeatMenu(session: GameSession, seat: string): { items: Menu
       if (v.moveId === "playSpell" && v.params.mode !== undefined) {
         continue;
       }
-      const list = byCard.get(String(v.params.cardId)) ?? [];
-      list.push(v);
-      byCard.set(String(v.params.cardId), list);
+      const cardId = String(v.params.cardId);
+      const tKey = targetKey(v.moveId, cardId, v.params.targets);
+      const surcharge = (tKey !== undefined ? probed.surcharge.get(tKey) : undefined) ?? 0;
+      const key = `${cardId}|${surcharge}`;
+      const entry = byPlan.get(key) ?? { cardId, surcharge, variants: [] };
+      entry.variants.push(v);
+      byPlan.set(key, entry);
     }
-    for (const [cardId, variants] of byCard) {
+    for (const { cardId, surcharge, variants } of byPlan.values()) {
       const cost = handPlayCost(session, cardId) ?? (() => {
         try {
           const st = buildCardState(session.engine, cardId);
@@ -601,7 +637,21 @@ export function buildSeatMenu(session: GameSession, seat: string): { items: Menu
       if (!cost) {
         continue;
       }
-      const taps = planPayment(cost, { energy: pool.energy, power: pool.power as Record<string, number> }, runes);
+      const purse = { energy: pool.energy, power: pool.power as Record<string, number> };
+      // "Pay & play" exists for a play the POOL cannot cover; a card the pool
+      // already pays for is blocked only by the target's surcharge, which
+      // 809.1.d/429.3 dims at the target rather than replans as a payment.
+      const baseTaps = planPayment(cost, purse, runes);
+      if (!baseTaps || baseTaps.length === 0) {
+        continue;
+      }
+      // rule 356.2 — the surcharge is part of the TOTAL cost, so the plan must
+      // fund it too (Power of any Domain, 809.1.c ⇒ planned as [rainbow]) or
+      // the taps land and the play is then refused.
+      const taps =
+        surcharge > 0
+          ? planPayment({ energy: cost.energy, power: [...cost.power, ...Array.from({ length: surcharge }, () => "rainbow")] }, purse, runes)
+          : baseTaps;
       if (!taps || taps.length === 0) {
         continue;
       }
@@ -620,7 +670,7 @@ export function buildSeatMenu(session: GameSession, seat: string): { items: Menu
         raw.push({
           item: {
             kind: "payplay",
-            label: `Pay & ${labelMove(session, v)} (auto: ${tapText}, then play)`,
+            label: `Pay & ${labelMove(session, v)}${surcharge > 0 ? ` (+${surcharge} [rainbow] [Deflect] surcharge)` : ""} (auto: ${tapText}, then play)`,
             moves: taps,
             play: v,
             sig: `payplay:${s}`,
@@ -1795,6 +1845,17 @@ export class ClaudeOpponent implements OpponentHandle {
 }
 
 function describeAnswer(session: GameSession, d: Decision, a: Answer): string {
+  // rule 128.3 / 424.1.a — this line lands in the shared session log and is
+  // broadcast to every client, so a PRIVATE prompt (a look at a Secret zone —
+  // a look is not a Reveal) may only name the ability that asked, never the
+  // cards it looked at. The engine flags the prompt itself; the answer has not
+  // been applied yet, so it is still the open one.
+  const pendingPrivate =
+    (session.engine.getState().pendingChoice as { private?: boolean } | undefined)?.private === true;
+  if (pendingPrivate) {
+    const what = a.kind === "decline" ? "declined" : "answered privately";
+    return `${shortenRefs(session, d.prompt)} → ${what}`;
+  }
   const optLabel = (key: string): string => {
     const opts = d.kind === "pick" ? d.options : d.kind === "order" ? d.items : d.kind === "distribute" ? d.buckets : [];
     return shortenRefs(session, opts.find((o) => o.key === key)?.label ?? key);

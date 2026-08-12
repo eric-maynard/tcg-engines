@@ -246,6 +246,11 @@ export function handle_createToken(effect: ExecutableEffect, ctx: EffectContext,
   // once-each-turn use is spent only now, never by a declined offer.
   if (count > 0 && tokenReplacement.replacementKey) {
     consumePlayTokenReplacement(ctx, tokenReplacement.replacementKey);
+  } else {
+    // rule 375 — a fresh play-token event: whatever a previous event's
+    // replacement added is no longer part of "them".
+    (ctx.draft as { replacementAddedTokenIds?: readonly string[] }).replacementAddedTokenIds =
+      undefined;
   }
   // rule 811.1.d.3: a hidden spell / hidden permanent's play effect that plays
   // a unit must play it at the battlefield the card was facedown at.
@@ -607,6 +612,17 @@ export function handle_createToken(effect: ExecutableEffect, ctx: EffectContext,
   // are recorded here for a remainder carrying `pendingValueFromCreated`.
   if (createdIds.length > 0) {
     (ctx.draft as { lastCreatedTokenIds?: readonly string[] }).lastCreatedTokenIds = [...createdIds];
+    // rule 375 / 393-394.1 (unl-086-219 Zilean × sfd-198-221 Arise!) — a token
+    // the replacement ADDED belongs to the same play event, so the generating
+    // effect's linked "Then do this: … of them" reaches it too.
+    if (tokenReplacement.replacementKey) {
+      const prior =
+        (ctx.draft as { replacementAddedTokenIds?: readonly string[] }).replacementAddedTokenIds ?? [];
+      (ctx.draft as { replacementAddedTokenIds?: readonly string[] }).replacementAddedTokenIds = [
+        ...prior,
+        ...createdIds,
+      ];
+    }
   }
   // rule-id: sfd-081-221 — a follow-up instruction printed on the same
   // sentence ("… and each opponent may …") rides along as `then`, and waits

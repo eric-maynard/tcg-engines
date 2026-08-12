@@ -327,8 +327,18 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
     // inner sequence has no `target` of its own, so without this seed the
     // play step fell through to a board scan and never added the pending
     // chain item that keeps the turn closed (rule 355.2 location choice).
+    // rule 375 / 393-394.1 (unl-086-219 Zilean × sfd-198-221 Arise!) — the
+    // tokens a play-token replacement ADDED are part of the same event, so the
+    // linked remainder ("Then do this: Ready up to two of them") sees them
+    // alongside the ones the instruction itself played.
+    const replacementAdded = (ctx.draft as { replacementAddedTokenIds?: readonly string[] })
+      .replacementAddedTokenIds;
+    const withReplacementCopies = (ids: readonly string[]): readonly string[] =>
+      replacementAdded && replacementAdded.length > 0
+        ? [...ids, ...replacementAdded.filter((id) => !ids.includes(id))]
+        : ids;
     let pending: readonly string[] | undefined =
-      seq.pendingValueBound ??
+      (seq.pendingValueBound ? withReplacementCopies(seq.pendingValueBound) : undefined) ??
       // rule 354.2 (sfd-154-221) — a remainder resumed after the source step's
       // own play-time prompt names what that step created ("… to ready IT").
       ((seq as { pendingValueFromCreated?: boolean }).pendingValueFromCreated === true
@@ -1167,9 +1177,7 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
             seq.pendingValue?.source === i && pending !== undefined && pending.length > 0
               ? [...pending]
               : undefined;
-          ctx.draft.pendingChoice = {
-            ...(parked as object),
-            then:
+          const restThen =
               carry !== undefined && carry.length > 0
                 ? {
                     boundTargetsOverride: carry,
@@ -1199,7 +1207,27 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
                       ...(seq.pendingValue?.source === i
                         ? { pendingValueFromCreated: true }
                         : {}),
-                    },
+                    };
+          // rule 375 / 393-394.1 (unl-086-219 Zilean × sfd-198-221 Arise!) —
+          // the parked prompt may already be carrying the play-token event's
+          // own replacement offer, which is raised INSTEAD of it once every
+          // destination is answered. The linked remainder ("Then do this:
+          // Ready up to two of them") belongs to the event, so it rides on
+          // that offer too — otherwise merely being offered the copy would
+          // switch the instruction's second sentence off.
+          const parkedThenChoice = (parked as { thenChoice?: { then?: unknown } }).thenChoice;
+          ctx.draft.pendingChoice = {
+            ...(parked as object),
+            ...(parkedThenChoice !== undefined && parkedThenChoice.then === undefined
+              ? {
+                  thenChoice: {
+                    ...(parkedThenChoice as object),
+                    then: restThen,
+                    thenIsSequenceRest: true,
+                  },
+                }
+              : {}),
+            then: restThen,
             // The continuation is the REST OF THE SEQUENCE, not the prompt's
             // own follow-up: it must still run when an optional prompt is
             // declined ("you may [Predict], then reveal the top card").
