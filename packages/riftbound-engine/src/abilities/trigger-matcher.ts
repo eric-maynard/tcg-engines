@@ -135,6 +135,17 @@ function turnEventCountKeyFor(
   if (on === "self" && "cardId" in event && typeof event.cardId === "string") {
     return `${eventType}|c:${event.cardId}${ch}${bf}`;
   }
+  // rule 383.4.c.2 / 124.1 — `conquer` / `hold` / `score` name the acting
+  // PLAYER, but "the first time I conquer each turn" is a per-OBJECT memory:
+  // read this card's own tally (fireTriggers writes one per self that can see
+  // the score), so an object that changed zones comes back with an empty
+  // ledger and a second unit's conquer never spends the first one's memory.
+  if (
+    on === "self" &&
+    (eventType === "conquer" || eventType === "hold" || eventType === "score")
+  ) {
+    return `${eventType}|c:${card.id}${ch}${bf}`;
+  }
   const pid = "owner" in event ? event.owner : "playerId" in event ? event.playerId : card.owner;
   return `${eventType}|p:${pid}${ch}${bf}`;
 }

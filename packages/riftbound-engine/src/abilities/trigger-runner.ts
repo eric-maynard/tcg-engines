@@ -1880,6 +1880,32 @@ export function fireTriggers(rawEvent: GameEvent, ctx: TriggerRunnerContext): nu
       draft.turnEventCounts[key] = (draft.turnEventCounts[key] ?? 0) + 1;
       draft.gameEventCounts[key] = (draft.gameEventCounts[key] ?? 0) + 1;
     }
+    // rule 383.4.c.2 / 124.1 — a `conquer` / `hold` / `score` event names the
+    // acting player, not a unit, yet "the first time I conquer each turn" is a
+    // per-OBJECT memory. Tally it against every self that can read it — the
+    // actor's units at that battlefield and the battlefield card itself — so
+    // `turnEventCountKeyFor` has a per-card key to count, and a unit that
+    // changes zones (124.1) comes back with no memory of the old object's.
+    const scoreBf = (event as { battlefieldId?: unknown }).battlefieldId;
+    if (
+      (event.type === "conquer" || event.type === "hold" || event.type === "score") &&
+      typeof scoreBf === "string"
+    ) {
+      const actor = (event as { playerId?: unknown }).playerId;
+      const selves = [
+        scoreBf,
+        ...ctx.zones.getCardsInZone(`battlefield-${scoreBf}` as CoreZoneId).filter((id) => {
+          const controller = ctx.cards.getCardController?.(id) ?? ctx.cards.getCardOwner(id);
+          return typeof actor !== "string" || controller === actor;
+        }),
+      ];
+      for (const self of selves) {
+        for (const key of [`${event.type}|c:${self}`, `${event.type}|c:${self}|bf:${scoreBf}`]) {
+          draft.turnEventCounts[key] = (draft.turnEventCounts[key] ?? 0) + 1;
+          draft.gameEventCounts[key] = (draft.gameEventCounts[key] ?? 0) + 1;
+        }
+      }
+    }
   }
   // rule 377.2.b (ven-125-166) — "if you've chosen an enemy unit this turn":
   // every choose flows through here, so log an enemy-unit choice against the

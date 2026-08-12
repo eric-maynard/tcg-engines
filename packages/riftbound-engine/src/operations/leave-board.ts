@@ -527,6 +527,10 @@ export function clearLKI(draft: RiftboundGameState, cardIds?: readonly string[])
  */
 export function resetObjectState(ctx: LeaveBoardContext, cardId: string): void {
   const id = cardId as CoreCardId;
+  // rule 124.1 — "nothing about the old object is tracked in any capacity":
+  // its per-turn trigger tallies ("the first time I conquer each turn") go too,
+  // so a card replayed out of banishment/trash/deck starts them fresh.
+  forgetPerCardTallies(ctx.draft, [cardId]);
   const counters = ctx.counters;
   counters?.setFlag?.(id, "exhausted", false);
   counters?.setFlag?.(id, "stunned", false);
