@@ -18,7 +18,7 @@ const abilities: Ability[] = [
     effect: {
       effects: [
         { amount: 2, target: { location: "battlefield", type: "unit" }, type: "damage" },
-        { amount: 2, target: { quantity: { upTo: 1 }, type: "unit" }, type: "damage" },
+        { amount: 2, target: { excludeChosen: true, quantity: { upTo: 1 }, type: "unit" }, type: "damage" },
       ],
       type: "sequence",
     },
@@ -37,8 +37,10 @@ export const piercingLight: SpellCard = {
   id: createCardId("sfd-023-221"),
   name: "Piercing Light",
   rarity: "rare",
+  // rule 155 / 159.2.a.1: the printed [Action] tag is what `normalizeSpellTiming` reads —
+  // without it the spell falls back to "standard" (no showdowns), whatever `timing` says.
   rulesText:
-    "[Repeat] [2][fury] (You may pay the additional cost to repeat this spell's effect.)\nDeal 2 to a unit at a battlefield, then deal 2 to up to one other unit.",
+    "[Action] (Play on your turn or in showdowns.)\n[Repeat] [2][fury] (You may pay the additional cost to repeat this spell's effect.)\nDeal 2 to a unit at a battlefield, then deal 2 to up to one other unit.",
   setId: "SFD",
   timing: "action",
 };
