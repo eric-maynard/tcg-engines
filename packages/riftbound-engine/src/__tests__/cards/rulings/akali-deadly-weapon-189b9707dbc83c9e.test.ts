@@ -88,7 +88,7 @@ describe("Ruling 189b9707dbc83c9e — Akali into Teemo: move trigger → defend 
     expect(game.p1.legal().map((o) => o.verb).sort()).toEqual(["concede", "passPriority"]);
   });
 
-  test.failing("BUG: step 3: after Teemo's trigger resolves (1 [Hidden] card revealed → 1 to Akali) the chain is empty, P1 has Focus and NOW Rogue Assassin is legal; it moves Akali to base and the showdown ends with no combat damage", async () => {
+  test("step 3: after Teemo's trigger resolves (1 [Hidden] card revealed → 1 to Akali) the chain is empty, P1 has Focus and NOW Rogue Assassin is legal; it moves Akali to base and the showdown ends with no combat damage", async () => {
     const game = await board().build();
     await game.p1.move("akali", "bf1");
     await game.p1.no(); // skip Akali's optional ping this time
@@ -113,7 +113,10 @@ describe("Ruling 189b9707dbc83c9e — Akali into Teemo: move trigger → defend 
     expect(game.locationOf("akali")).toBe("base");
     expect(game.state("rogue").isExhausted).toBe(true);
     expect(game.state("akali").isReady).toBe(false); // legend not empowered → no ready
-    expect(game.state("akali").damage).toBe(1); // only Teemo's ability damage — no combat damage was dealt
+    // rule 466.1.a.1: no combat damage was ever dealt, but the showdown still
+    // reaches its Resolution Step, whose Combat Cleanup inserts "3c. Heal all
+    // Units" — unqualified by location, so Teemo's 1 comes off Akali in base too.
+    expect(game.state("akali").damage).toBe(0);
     expect(game.state("teemo").damage).toBe(0);
     expect(game.zoneOf("teemo")).toBe("battlefield-bf1");
     expect(game.state("akali").combatRole).toBeNull();
