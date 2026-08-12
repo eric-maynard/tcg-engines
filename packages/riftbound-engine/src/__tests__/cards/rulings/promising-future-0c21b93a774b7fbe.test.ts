@@ -20,6 +20,9 @@ import { P1, P2, scenario } from "../../../harness";
 
 const PROMISING_FUTURE = "ogn-115-298";
 const RELENTLESS_PURSUIT = "sfd-184-221";
+// rule 355.7 / 355.9 (riftjudge 4283ca02526c0650) — the Equipment is named as the
+// spell is played, so Relentless Pursuit needs one in play to be castable at all.
+const RP_EQUIPMENT = "sfd-042-221";
 const U = (n: number) => ({ cardType: "unit", energyCost: 3, might: n, name: `Future Unit ${n}` });
 
 /**
@@ -37,6 +40,7 @@ function board() {
     .deck(P1, [U(1), U(2), U(3), U(4), U(5), U(6)], ["a1", "a2", "a3", "a4", "a5", "a6"])
     .deck(P2, [RELENTLESS_PURSUIT, U(2), U(3), U(4), U(5), U(6)], ["rpDeck", "b2", "b3", "b4", "b5", "b6"])
     .hand(P1, PROMISING_FUTURE, "pf")
+    .gear(P2, RP_EQUIPMENT, "rpEquip")
     .hand(P2, RELENTLESS_PURSUIT, "rpHand");
 }
 
