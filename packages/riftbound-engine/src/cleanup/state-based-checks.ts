@@ -27,6 +27,7 @@ import type {
 import { runDieBatch } from "../abilities/die-replacement-batch";
 import { recalculateStaticEffects } from "../abilities/static-abilities";
 import { fireTriggers, type TriggerRunnerContext } from "../abilities/trigger-runner";
+import { isResolvingChainItem, noteOutstandingCleanup } from "../chain/resolution-guard";
 import { isPresenceUnit } from "../operations/arrive-at-battlefield";
 import { getGlobalCardRegistry } from "../operations/card-lookup";
 import { getDamage } from "../operations/damage-store";
@@ -210,6 +211,26 @@ export function performCleanup(ctx: CleanupContext, opts: CleanupOptions = {}): 
   // statics the deaths themselves invalidate.
   if (recalculateStaticEffects({ cards: ctx.cards, draft: ctx.draft, zones: ctx.zones })) {
     stateChanged = true;
+  }
+
+  // rule 321 / 321.1 — WHEN the numbered Cleanup Tasks of rule 323 may run. A
+  // Cleanup cannot occur while a Chain Item is Resolving; one that qualifies
+  // during a resolution becomes an Outstanding Task and is performed the moment
+  // that resolution ends (`moves/chain/resolve.ts`). That is the ONE condition:
+  // a Closed State does NOT defer a Cleanup — 309.1 makes it merely "a Chain
+  // exists" and 320.1 describes a Cleanup running with items on the Chain — so a
+  // queued trigger never holds a step off; only the steps 323 itself conditions
+  // on an Open State (323.6, 323.12, 323.13) sit out, via `cleanupStateKind`. See
+  // `chain/resolution-guard.ts` for the reading and the two tests that pin it.
+  // Steps 0-0c above are not Cleanup Tasks: rule 522's continuous effects are
+  // ALWAYS applied, and the token / designation bookkeeping that feeds them has
+  // to stay in step with the board a resolving item is changing.
+  // `shieldsOnly` is exempt by construction too — it is not a Cleanup but the
+  // damage-time shield pass owed BETWEEN two damage instances of the one
+  // resolving item (see CleanupOptions).
+  if (opts.shieldsOnly !== true && isResolvingChainItem()) {
+    noteOutstandingCleanup();
+    return { combatPending, hiddenRemoved, killed, stateChanged };
   }
 
   // Step 1: Kill units with damage >= might (rule 520)

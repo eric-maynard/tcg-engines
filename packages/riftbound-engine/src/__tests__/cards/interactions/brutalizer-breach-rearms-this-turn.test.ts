@@ -13,16 +13,22 @@
  * Rules: 136.2.d (the "this" in Brutalizer's text is the ATTACHED Brutalizer) · 124 / 124.1 /
  * 056.1 (banished host = a new object, every temporary modification cleared) · 435.4 / 435.4.a /
  * 435.4.b (a detached card's location is the host's last board location; a Gear that becomes
- * present at a battlefield is Recalled during the NEXT Cleanup) · 149.3 / 323.7 (that recall) ·
- * 419.4.a ("When you play me" fires again on the replay) · 143.4 / 359.2.c (played unit enters
- * exhausted).
+ * present at a battlefield is Recalled during the NEXT Cleanup) · 149.3 / 457.1 / 323.7 (that
+ * recall) · 319.3-319.6 / 321 / 321.1 / 309.1 / 320.1 (WHEN that "next Cleanup" is: as soon as the
+ * Breach has finished resolving — a queued trigger leaves the turn Closed but does not defer a
+ * Cleanup) · 419.4.a ("When you play me" fires again on the replay) · 143.4 / 359.2.c (played unit
+ * enters exhausted).
  *
  * Q: Brutalizer was attached LAST turn, so this turn it grants no +2. P1 flips Temporal Breach on
  *    their own Armed Assailant mid-showdown: the host is banished (Brutalizer detaches), the
  *    Assailant is replayed to the same location as a new object, and its Weaponmaster trigger
  *    fires again and re-equips Brutalizer for [rainbow] less. Does the re-attach make "attached to
- *    me this turn" TRUE for the new object (+2 mid-combat)? And if P1 declines, does the detached
- *    Brutalizer sit unattached at the battlefield until it is recalled at cleanup?
+ *    me this turn" TRUE for the new object (+2 mid-combat)? And where is the detached Brutalizer
+ *    while the [Weaponmaster] item is queued?
+ * A: Yes to the re-arm. And the Brutalizer is already back in P1's base: it detaches at bf1
+ *    (435.4.b), but the Cleanup that follows the Breach's resolution recalls it (323.7) before the
+ *    queued trigger resolves — a Closed State does not defer a Cleanup, only a RESOLVING Chain
+ *    Item does (321 / 321.1). See the recall test at the bottom of this file.
  */
 import { describe, expect, test } from "bun:test";
 import type { Game } from "../../../harness";
@@ -121,8 +127,9 @@ describe("Brutalizer × Temporal Breach × Armed Assailant — the attach event 
 
   test("Brutalizer itself never left the board — it keeps its own object identity; what re-arms is the ATTACH EVENT, not the equipment's memory", async () => {
     const game = await breached();
-    // Mid-resolution, with the host in banishment, the Brutalizer is still a board card.
-    expect(["base", "battlefield-bf1"]).toContain(game.zoneOf("brut"));
+    // With the host in banishment the Brutalizer is still a board card — detached at bf1 (435.4.b)
+    // and then recalled to base by the Cleanup that follows the Breach's resolution (323.7).
+    expect(game.zoneOf("brut")).toBe("base");
     expect(game.state("brut").attachedTo).toBeUndefined();
     await game.p1.pick("brut");
     await game.settle();
@@ -130,24 +137,31 @@ describe("Brutalizer × Temporal Breach × Armed Assailant — the attach event 
     expect(game.zoneOf("brut")).not.toBe("trash");
   });
 
-  // Expected (435.4 / 435.4.b): the host changed zones from a board zone to a non-board zone, so
-  // the detached Brutalizer's location is the last location the host occupied — the contested bf1
-  // — and 435.4.a / 149.3 / 323.7 only recall it during the NEXT Cleanup. Mid-resolution (a Closed
-  // State) no Cleanup has run, so it must still be present at bf1 when the Weaponmaster prompt
-  // opens.
-  // Half fixed: `leave-board.ts detachOnLeave` now leaves the Equipment at the host's last board
-  // location instead of teleporting it to `base` (435.4.b). What still fires too early is the
-  // RECALL: the maintenance pass that follows the Breach's replay runs `performCleanup` step 5
-  // while the [Weaponmaster] item is still queued, and recalls the loose Gear to base there.
-  // Deferring that recall needs the resolution boundary itself to cover the replay
-  // (`chain/resolution-guard.ts` is only held around `resolve.ts`'s own execute), which is a
-  // separate change: gating step 5 on "an item is on the Chain" instead breaks the symmetric
-  // reading in `rulings/eye-of-the-herald-fb0ba503d6b40afd` 4a, where a loose Eye IS at base with a
-  // trigger still waiting.
-  test.failing("BUG: the detached Brutalizer is teleported to base the instant its host is banished — 435.4.b puts it at the host's last location (bf1) and 435.4.a / 149.3 / 323.7 recall it only during the NEXT Cleanup", async () => {
+  // RULING — this test previously asserted the OPPOSITE (`test.failing`: the loose Brutalizer must
+  // still be AT bf1 when the [Weaponmaster] prompt opens, on the theory that a queued trigger holds
+  // the Cleanup off). That reading is wrong; do not flip it back.
+  // 435.4.b still stands and is what `leave-board.ts detachOnLeave` implements: the host changed
+  // zones from a board zone to a non-board one, so the Brutalizer detaches AT bf1, not into base.
+  // But 435.4.a / 149.3 / 457.1 / 323.7 recall an unattached non-Unit Gear at a Battlefield during
+  // the NEXT Cleanup, and that Cleanup is the one the Breach's own resolution makes Outstanding —
+  // 319.3 (a Pending Item added to the Chain), 319.4 (it is Finalized), 319.5 (the Breach leaves
+  // the Chain), 319.6 (objects left and entered the Board). Rule 321 defers a Cleanup ONLY while a
+  // Chain Item is RESOLVING (321.1 keeps it Outstanding until the resolution ends); a Closed State
+  // does not — 309.1 makes that merely "a Chain exists" and 320.1 describes a Cleanup running with
+  // items on the Chain. Only the steps 323 itself conditions on an Open State (323.6 control lapse,
+  // 323.12 / 323.13 opening a Showdown / Combat) sit out; 323.7 is unconditional.
+  // So by the time the queued [Weaponmaster] item resolves and offers the re-equip, the Brutalizer
+  // is already back in P1's base and is equipped out of base (149.2) — which is why the re-equip
+  // tests above still see it land at bf1 afterwards. Same shape as
+  // `rulings/eye-of-the-herald-fb0ba503d6b40afd` 4a, where the loose Eye is at base while the Eye's
+  // move trigger is still waiting on the Chain. Confirmed by the Spinning Axe ruling ("it detaches
+  // and stays at the battlefield until the next Cleanup Recalls it") and by the banish-and-replay
+  // ruling, which has the pending item suppress only the CONTROL step, not the Cleanup itself.
+  test("the detached Brutalizer is recalled to base by the Cleanup that follows the Breach's resolution — the queued [Weaponmaster] item does not hold that Cleanup off (321 / 321.1 / 323.7)", async () => {
     const game = await breached();
-    expect(game.locationOf("brut")).toBe("bf1");
-    expect(game.zoneOf("brut")).toBe("battlefield-bf1");
+    expect(game.zoneOf("brut")).toBe("base");
+    expect(game.locationOf("brut")).toBe("base");
+    expect(game.state("brut").attachedTo).toBeUndefined();
   });
 
   test("declined branch: with no re-equip the Brutalizer is unattached and grants nothing (the Assailant is back to printed 6), and it ends up recalled to P1's base (149.3 / 435.4.a / 323.7)", async () => {

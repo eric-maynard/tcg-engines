@@ -34,7 +34,7 @@ import {
 } from "../../../abilities/target-resolver";
 import { isMultiPickNode, isSlotBound, mapBoundNodes, stripSlotIds } from "../../../abilities/target-slots";
 import { fireTriggers } from "../../../abilities/trigger-runner";
-import { withChainItemResolution } from "../../../chain/resolution-guard";
+import { takeOutstandingCleanup, withChainItemResolution } from "../../../chain/resolution-guard";
 import { cleanupAndFireDeaths } from "../../../cleanup/post-move-cleanup";
 import { newObjectTargetsFor } from "../../../operations/leave-board";
 import type { BoardIO } from "../../../operations/points";
@@ -2082,9 +2082,15 @@ export const passChainPriority: Defs["passChainPriority"] = {
         });
         runPostResolutionVictoryCheck(draft, context as unknown as BoardIO);
 
-        // Run state-based checks after resolution (rule 543.3/518).
+        // rule 321.1 — the Cleanups this resolution made Outstanding (a Pending
+        // Item added to the Chain, objects that left the Board, …) could not
+        // occur while it was resolving; the resolution is over, so they are
+        // performed as this one pass. It runs even with the item's own triggers
+        // now queued on the Chain: a Closed State is not a deferral (309.1 /
+        // 320.1) — see `chain/resolution-guard.ts`.
         // rule-id: ogn-246-298 — units reaped here must emit `die` so
         // "when a friendly unit dies" / Deathknell triggers fire.
+        takeOutstandingCleanup();
         cleanupAndFireDeaths(draft, context);
         // rule-id: ogn-270-298 (rules 323.13 / 320.1) — open the showdown of a
         // battlefield an effect-moved unit contested during this resolution.
@@ -2145,7 +2151,10 @@ export const resolveChain: Defs["resolveChain"] = {
       });
       runPostResolutionVictoryCheck(draft, context as unknown as BoardIO);
 
+      // rule 321.1 — the Cleanup this resolution deferred is performed now that
+      // it has ended (see `passChainPriority` above).
       // rule-id: ogn-246-298 — SBA deaths after resolution emit `die`.
+      takeOutstandingCleanup();
       cleanupAndFireDeaths(draft, context);
       // rule-id: ogn-270-298 (rules 323.13 / 320.1) — a unit an effect moved
       // into an enemy battlefield contested it; the Cleanup after the chain

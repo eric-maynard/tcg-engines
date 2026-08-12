@@ -62,6 +62,13 @@ describe("Ruling fb0ba503d6b40afd — Gusting the Eye's wearer in response to it
     expect(game.state(recruits(game)[0]!)).toMatchObject({ isToken: true, might: 1 });
   });
 
+  // The Eye being at BASE here is the load-bearing half, and it is correct: Gust's resolution has
+  // ENDED, so the Cleanup it makes Outstanding (319.5 / 319.6) occurs and recalls the unattached
+  // Gear the detach left at bf1 (435.4.b → 435.4.a / 149.3 / 457.1 / 323.7). The move trigger still
+  // sitting on the Chain leaves the turn in a Closed State (309.1) but does not defer that Cleanup
+  // — only a Chain Item actually RESOLVING does (321 / 321.1), and 320.1 has a Cleanup running with
+  // items on the Chain. `interactions/brutalizer-breach-rearms-this-turn` pins the same reading
+  // from the other side; do not "fix" one by inverting the other.
   test("4a. LIFO — Gust resolves first: the Squire is back in P1's hand (the Eye falls off into base); the move trigger is still waiting on the chain and no token exists", async () => {
     const game = await gustInResponse();
     await game.p2.passPriority();
