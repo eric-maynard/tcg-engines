@@ -92,14 +92,16 @@ describe("Ruling 7c9324ff14217681 — conquering Zaun Warrens with the Rocket in
     expect((d as OrderDecision).items.map((i) => i.card ?? i.key)).toEqual(expect.arrayContaining(["bf1", "rocket"]));
   });
 
-  test.failing("BUG: ruling 7c9324ff14217681 — after the discard is paid the Rocket's own trigger must return it from the trash to hand; the engine resolves the item but leaves the Rocket in the trash", async () => {
+  test("ruling 7c9324ff14217681 — after the discard is paid the Rocket's own trigger must return it from the trash to hand; the engine resolves the item but leaves the Rocket in the trash", async () => {
     const game = await board(true).build();
     await conquer(game);
     await game.p1.yes();
     if (game.decision()?.kind === "pick") {
       await game.p1.pick("spare");
     }
-    await game.acceptTriggerOrder();
+    // rule 383.3.d — the ruling's whole point: P1 ORDERS the two conquer triggers
+    // so the Warrens resolves first (first key = bottom of the Chain).
+    await game.p1.order(["rocket", "bf1"]);
     await game.settle();
     expect(chainIds(game)).toEqual([]);
     expect(game.zoneOf("rocket")).toBe("hand");

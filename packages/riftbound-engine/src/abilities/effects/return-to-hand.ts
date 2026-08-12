@@ -1,5 +1,5 @@
 // Effect handler: "return-to-hand"
-import type { CardId as CoreCardId } from "@tcg/core";
+import type { CardId as CoreCardId, ZoneId as CoreZoneId } from "@tcg/core";
 import { removeFromBoard } from "../../operations/leave-board";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import { tryReplaceCardEvent } from "./_replacement-gate";
@@ -72,9 +72,25 @@ export function handle_returnToHand(effect: ExecutableEffect, ctx: EffectContext
   // no legal targets fizzles — otherwise Windsinger's on-play "return an
   // enemy unit" bounces itself when the board is empty.
   const hasTargetSpec = "target" in effect && effect.target != null;
-  if (targets.length === 0 && !hasTargetSpec) {
-    bounceToHand([ctx.sourceCardId], ctx);
-  } else {
-    bounceToHand(targets, ctx);
+  const namesOwnSource =
+    effect.target === undefined ||
+    effect.target === "self" ||
+    (typeof effect.target === "object" &&
+      effect.target !== null &&
+      (effect.target as { type?: string }).type === "self");
+  const ids = targets.length === 0 && (!hasTargetSpec || namesOwnSource) ? [ctx.sourceCardId] : targets;
+  // rule 108 / 124.1 (rule-id: ogn-252-298 Super Mega Death Rocket!) — "return
+  // this from your trash to your hand": a card in the trash is not on the
+  // board, so the leave-board choke point has nothing to remove. Move it out of
+  // the trash directly; it is a new object in hand either way.
+  const fromTrash = new Set(
+    ids.filter((cardId) => ctx.zones.getCardZone?.(cardId as CoreCardId) === "trash"),
+  );
+  for (const cardId of fromTrash) {
+    ctx.zones.moveCard({ cardId: cardId as CoreCardId, targetZoneId: "hand" as CoreZoneId });
+  }
+  const onBoard = ids.filter((cardId) => !fromTrash.has(cardId));
+  if (onBoard.length > 0) {
+    bounceToHand(onBoard, ctx);
   }
 }

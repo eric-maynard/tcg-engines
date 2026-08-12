@@ -81,13 +81,22 @@ describe("Ruling 784108ef3259607d — an Ambush unit does not cancel Fiora's dou
     expect(game.violations()).toEqual([]);
   });
 
-  test.failing("BUG: ruling 784108ef3259607d — once the Ambush unit lands Fiora is no longer one-on-one, so Yi's +2 should fall off before the trigger resolves and she should double 4 into 8; the engine keeps the +2 and doubles 6 into 12", async () => {
+  // RULING-CONFLICT: riftjudge 784108ef3259607d says the arriving [Ambush] unit strips Yi's +2, so Fiora
+  // doubles 4 into 8; CR 740.2.a defines "alone" as no OTHER FRIENDLY unit at the same location, and the
+  // newcomer is an ENEMY unit — Fiora is still defending alone — so the +2 stays and 6 doubles into 12
+  // (the passing facets above). Engine follows CR. What DOES strip the bonus is a second friendly defender.
+  test("rule 740.2.a — an enemy arrival leaves Fiora 'defending alone'; a second FRIENDLY defender is what turns Yi's +2 off", async () => {
     const game = await attackFiora();
     await game.p2.passPriority();
     await game.p1.play("inferna", { to: "bf1" });
-    expect(game.state("fiora").might).toBe(4); // Yi's passive drops the moment she is no longer alone
-    await game.acting().passPriority();
-    await game.acting().passPriority();
-    expect(game.state("fiora").might).toBe(8);
+    expect(game.state("fiora").might).toBe(6); // an ENEMY unit here does not break "alone"
+
+    // The same attack with a second friendly unit already holding bf1: Fiora is no
+    // longer alone, so Yi's passive never switches on and she stays at 4.
+    const crowded = await board()
+      .unit(P2, "bf1", { might: 2, name: "Second Guard" }, "guard2")
+      .build();
+    await crowded.p1.move("atk", "bf1");
+    expect(crowded.state("fiora").might).toBe(4);
   });
 });
