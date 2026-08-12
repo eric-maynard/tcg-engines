@@ -1226,6 +1226,29 @@
     }
     .chain-resolve-btn:hover { background: #3a6050; }
 
+    /* Escape hatch for the seat without priority — a chain overlay with an
+       empty action body reads as a hang, and Escape is refused there. */
+    .chain-resync-btn {
+      background: #2a2448;
+      border: 1px solid #3a3560;
+      border-radius: 4px;
+      padding: 6px 12px;
+      color: #a89ac8;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .chain-resync-btn:hover { background: #3a3060; color: #d8d4e8; }
+
+    /* An empty AVAILABLE ACTIONS list must explain itself, not render blank. */
+    .actions-empty {
+      padding: 10px;
+      color: #8a82a8;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+    .actions-empty-title { color: #d8d4e8; font-weight: 600; margin-bottom: 4px; }
+    .actions-empty-body { margin-bottom: 8px; }
+
     .chain-hint {
       font-size: 11px;
       color: #4a4268;

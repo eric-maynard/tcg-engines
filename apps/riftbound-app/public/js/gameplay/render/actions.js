@@ -865,6 +865,24 @@ function renderActions() {
     }
   }
 
+  // A blank AVAILABLE ACTIONS panel is indistinguishable from a hung client.
+  // When the legal-move set is empty — or is only `concede`, which is routed to
+  // the sidebar header above — say so on screen and name the escape, so a dead
+  // end reads as a dead end rather than as a freeze.
+  if (!html.trim()) {
+    const onlyConcede = availableMoves.length > 0 &&
+      availableMoves.every(m => m.moveId === "concede");
+    html = `
+      <div class="actions-empty">
+        <div class="actions-empty-title">${onlyConcede ? "No plays left" : "Waiting — no actions for you right now"}</div>
+        <div class="actions-empty-body">${onlyConcede
+          ? "Conceding is your only legal move. Use <b>Concede</b> in the sidebar header above."
+          : "The other player has priority. If this does not change, resync below."}</div>
+        <button class="action-btn" onclick="if (typeof requestResync === 'function') requestResync()">Resync board</button>
+      </div>
+    `;
+  }
+
   list.innerHTML = html;
   list.querySelectorAll("[data-play-cost-card]").forEach(el => {
     el.addEventListener("click", () => openPlayCostModal(el.dataset.playCostCard));
