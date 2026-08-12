@@ -87,9 +87,15 @@ describe("Ruling c0cb4926965f4409 — what counts as 'played' for [Legion]", () 
     expect(game.p1.can("activate", "noxus")).toBe(false);
   });
 
-  test("nuance: a spell whose targeting is all 'up to' may be played choosing zero — and it counts for [Legion]", async () => {
-    const game = await board().hand(P1, SHURIKEN_FLIP, "flip").build();
-    await game.p1.cast("flip", { targets: [] });
+  test("nuance: a spell played while choosing ZERO for its 'up to one' slot (355.13) is still PLAYED — and it counts for [Legion]", async () => {
+    // rule 355.8 — Shuriken Flip's second instruction ("then move a friendly
+    // unit") names a MANDATORY object, so the board needs a friendly unit for
+    // the spell to be playable at all; the "up to one" damage victim is the
+    // slot this test leaves empty.
+    const game = await board().unit(P1, "base", { might: 1, name: "Ally" }, "ally").hand(P1, SHURIKEN_FLIP, "flip").build();
+    const tuples = (game.p1.option("cast", "flip")?.fields.find((f) => f.name === "targets")?.options ?? []) as string[][];
+    expect(tuples).toContainEqual(["ally"]);
+    await game.p1.cast("flip", { targets: ["ally"] });
     expect(game.chain().map((c) => c.cardId)).toEqual(["flip"]);
     expect(legionOn(game)).toBe(true);
     expect(game.violations()).toEqual([]);

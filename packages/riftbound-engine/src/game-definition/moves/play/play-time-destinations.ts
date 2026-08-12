@@ -207,21 +207,33 @@ export function moverForNode(item: ChainItemLike, root: unknown, node: AnyEffect
   if (!slots) {
     return bound[0];
   }
-  const matches = (s: unknown) =>
-    s === t || isRestatementOf(s as { type: string }, t as { type: string });
-  // rule 355.13 (rule-id: ven-140-166 Shuriken Flip) — a skipped "up to one"
-  // slot is compacted out of the item's list ("…, then move a friendly unit"
-  // played for the move alone), so POSITION no longer names the slot: the picks
-  // that were made fill the MANDATORY slots in printed order.
-  if (bound.length < slots.length) {
-    const mandatory = slots.filter((s) => isSingleChoice(s as AnyEffect));
-    if (mandatory.length === bound.length) {
-      const k = mandatory.findIndex(matches);
-      return k >= 0 ? bound[k] : undefined;
-    }
+  const j = slots.findIndex((s) => s === t || isRestatementOf(s as { type: string }, t as { type: string }));
+  if (j < 0) {
+    return undefined;
   }
-  const j = slots.findIndex(matches);
-  return j >= 0 ? bound[j] : undefined;
+  // rule 355.13 (rule-id: ven-140-166 Shuriken Flip) — an "up to N" slot the
+  // caster answered with NOTHING contributes no id, so the flat play-time list
+  // is SHORTER than the slot list and reading it positionally would hand this
+  // move the wrong object (or none). Fall back to matching the picks against the
+  // MANDATORY slots in order: those are the ones that must have an answer.
+  if (bound.length < slots.length) {
+    const mandatory = slots
+      .map((slot, index) => ({ index, optional: isOptionalSlot(slot) }))
+      .filter((entry) => !entry.optional)
+      .map((entry) => entry.index);
+    const k = mandatory.indexOf(j);
+    return k >= 0 ? bound[k] : undefined;
+  }
+  return bound[j];
+}
+
+/** rule 355.13 — "up to N" / "any number": the slot may legally take no object. */
+function isOptionalSlot(slot: unknown): boolean {
+  const q = (slot as { quantity?: unknown } | undefined)?.quantity;
+  if (q === "any" || q === "all") {
+    return true;
+  }
+  return typeof q === "object" && q !== null && (q as { upTo?: unknown }).upTo !== undefined;
 }
 
 function isOnBoard(ctx: EffectContext, cardId: string): boolean {

@@ -66,7 +66,9 @@ describe("Shuriken Flip (ven-140-166)", () => {
 
   test("from hand: costs 1 energy + 1 fury, deals 2 to the chosen enemy unit at a battlefield (3-Might Big survives with 2), spell goes to the TRASH", async () => {
     const game = await board().build();
-    await game.p1.cast("flip", { targets: "big" });
+    await game.p1.cast("flip", { targets: ["big", "ally"] });
+    // rule 355.4 — the mover's destination is a choice of PLAYING the spell.
+    await game.p1.pick("battlefield-bf2");
     expect(game.p1.resources()).toEqual({ energy: 3, power: { fury: 1 } });
     expect(game.chain()).toEqual([expect.objectContaining({ cardId: "flip", controller: P1, triggered: false })]);
     await game.settle();
@@ -80,7 +82,8 @@ describe("Shuriken Flip (ven-140-166)", () => {
 
   test("exactly lethal: 2 on the 2-Might Small kills it (owner's trash); Big untouched", async () => {
     const game = await board().build();
-    await game.p1.cast("flip", { targets: "small" });
+    await game.p1.cast("flip", { targets: ["small", "ally"] });
+    await game.p1.pick("battlefield-bf2"); // 355.4, at finalization
     await game.settle();
     expect(game.zoneOf("small")).toBe("trash");
     expect(game.p2.trash()).toContain("small");
@@ -90,13 +93,16 @@ describe("Shuriken Flip (ven-140-166)", () => {
   test("targets are ENEMY units AT A BATTLEFIELD only, and 'up to one' offers the empty choice: {∅, big, small} — never Homebody (enemy base) or Ally (friendly)", async () => {
     const game = await board().build();
     const opts = targetsOf(game.p1, "flip");
+    // rule 355.5 / 355.13 — every option names BOTH objects: the (optional)
+    // damage victim and the MANDATORY mover, which is why the empty option is
+    // now ["ally"] rather than [].
     expect(opts).toHaveLength(3);
-    expect(opts).toEqual(expect.arrayContaining([[], ["big"], ["small"]]));
-    expect((await game.p1.try((p) => p.cast("flip", { targets: "home" }))).ok).toBe(false);
-    expect((await game.p1.try((p) => p.cast("flip", { targets: "ally" }))).ok).toBe(false);
+    expect(opts).toEqual(expect.arrayContaining([["ally"], ["big", "ally"], ["small", "ally"]]));
+    expect((await game.p1.try((p) => p.cast("flip", { targets: ["home", "ally"] }))).ok).toBe(false);
+    expect((await game.p1.try((p) => p.cast("flip", { targets: ["ally", "ally"] }))).ok).toBe(false);
     expect(game.zoneOf("flip")).toBe("hand");
     // Choosing zero even though targets exist: cost paid, nobody is damaged.
-    await game.p1.cast("flip", { targets: [] });
+    await game.p1.cast("flip", { targets: ["ally"] });
     expect(game.p1.resources()).toEqual({ energy: 3, power: { fury: 1 } });
     await game.settle();
     expect(game.state("big").damage + game.state("small").damage + game.state("home").damage).toBe(0);
@@ -109,7 +115,7 @@ describe("Shuriken Flip (ven-140-166)", () => {
   test("'up to one' = zero is fine (355.13): with NO enemy unit at any battlefield the spell is still castable from hand, deals nothing, and is trashed", async () => {
     const game = await scenario().resources(P1, { energy: 1, power: { calm: 1 } }).battlefield("bf1", { controller: P1 }).unit(P2, "base", { might: 1 }, "home").unit(P1, "base", { might: 2 }, "ally").hand(P1, CARD, "flip").build();
     expect(game.p1.can("cast", "flip")).toBe(true);
-    await game.p1.cast("flip");
+    await game.p1.cast("flip", { targets: ["ally"] });
     expect(game.p1.resources()).toEqual({ energy: 0, power: { calm: 0 } }); // calm pays the hybrid pip too
     await game.settle();
     expect(game.state("home").damage).toBe(0);
@@ -122,7 +128,10 @@ describe("Shuriken Flip (ven-140-166)", () => {
 
   test("cost colours (hybrid fury|calm pip): fury pays, calm pays, rainbow pays, mind does NOT, and 0 energy is short", async () => {
     const mk = (energy: number, power: Record<string, number>) =>
-      scenario().resources(P1, { energy, power }).battlefield("bf1", { controller: P2 }).unit(P2, "bf1", { might: 3 }, "foe").hand(P1, CARD, "flip").build();
+      // rule 355.8 (ruling b6531d2345e9ef12) — the mover is a target, so the
+      // board needs a friendly unit for the spell to be playable at all; this
+      // test is about the PIP, so keep one present in every variant.
+      scenario().resources(P1, { energy, power }).battlefield("bf1", { controller: P2 }).unit(P2, "bf1", { might: 3 }, "foe").unit(P1, "base", { might: 1 }, "ally").hand(P1, CARD, "flip").build();
     expect((await mk(1, { fury: 1 })).p1.can("cast", "flip")).toBe(true);
     expect((await mk(1, { calm: 1 })).p1.can("cast", "flip")).toBe(true);
     expect((await mk(1, { rainbow: 1 })).p1.can("cast", "flip")).toBe(true);
@@ -131,18 +140,16 @@ describe("Shuriken Flip (ven-140-166)", () => {
     expect((await mk(1, {})).p1.can("cast", "flip")).toBe(false);
   });
 
-  test("'then move a friendly unit' — after the 2 damage P1 must be asked to move one of their units; moving Ally base → its own bf2 completes the spell", async () => {
-    // Expected: a P1 prompt (pick a friendly unit / destination) follows the damage; Ally ends at bf2, flip in trash.
-    // Actual: the spell resolves after the damage with no move prompt; Ally never leaves base.
+  test("'then move a friendly unit' — the mover is named at cast and its DESTINATION is chosen at finalization (355.4/355.5), before anyone has priority; Ally ends at bf2", async () => {
     const game = await board().build();
-    await game.p1.cast("flip", { targets: "big" });
+    await game.p1.cast("flip", { targets: ["big", "ally"] });
+    // rule 355.4 — one Move Destination per Move the spell will perform, chosen
+    // now and frozen (355.15). Nothing has resolved yet, so Big is undamaged.
+    expect(game.decision()).toMatchObject({ kind: "pick", seat: P1, semantics: "destination", timing: "FIN" });
+    expect(game.state("big").damage).toBe(0);
+    await game.p1.pick("battlefield-bf2");
     await game.settle();
     expect(game.state("big").damage).toBe(2);
-    expect(game.decision()).toMatchObject({ seat: P1 });
-    expect(game.decision()?.kind).not.toBe("action");
-    if (game.decision()?.kind === "pick") await game.p1.pick("ally");
-    if (game.decision()?.kind === "pick") await game.p1.pick("bf2");
-    await game.settle();
     expect(game.locationOf("ally")).toBe("bf2");
     // rule 359.3.d — the spell leaves the chain only once its effect has finished,
     // so answer the prompt(s) its resolution is still waiting on.
@@ -153,13 +160,14 @@ describe("Shuriken Flip (ven-140-166)", () => {
   test("the move happens even with ZERO damage targets — Ally leaves base", async () => {
     // Expected: Ally is somewhere other than base after resolving with the first-option policy. Actual: no move exists.
     const game = await board().build();
-    await game.p1.cast("flip", { targets: [] });
+    await game.p1.cast("flip", { targets: ["ally"] });
     await game.settle({ policy: "first" });
     // rule 359.3.d — the spell leaves the chain only once its effect has finished,
     // so answer the prompt(s) its resolution is still waiting on.
     await game.settle({ policy: "first" });
     expect(game.zoneOf("flip")).toBe("trash");
     expect(game.locationOf("ally")).not.toBe("base");
+    expect(game.violations()).toEqual([]);
   });
 
   test("combo line — 2 to Big, then move the 4-Might Ally INTO bf1: the marked 2 carries into the staged combat (4 split 2/2 kills Big and Small; their 5 kills Ally) → bf1 ends empty and uncontrolled, nobody scores", async () => {
@@ -167,10 +175,8 @@ describe("Shuriken Flip (ven-140-166)", () => {
     // defenders die (Big already had 2 of its 3), Ally takes 3+2=5 ≥ 4 and dies; 466.5.b → uncontrolled.
     // Actual: no move prompt, Ally stays in base, no combat.
     const game = await board().script(P1, [{ allocation: { big: 2, small: 2 }, kind: "distribute" }]).build();
-    await game.p1.cast("flip", { targets: "big" });
-    await game.settle();
-    if (game.decision()?.kind === "pick") await game.p1.pick("ally");
-    if (game.decision()?.kind === "pick") await game.p1.pick("bf1");
+    await game.p1.cast("flip", { targets: ["big", "ally"] });
+    await game.p1.pick("battlefield-bf1"); // 355.4 — chosen at finalization
     await game.settle();
     expect(game.zoneOf("big")).toBe("trash");
     expect(game.zoneOf("small")).toBe("trash");
@@ -196,7 +202,7 @@ describe("Shuriken Flip (ven-140-166)", () => {
       .unit(P1, "base", { might: 4, name: "Ally" }, "ally")
       .hand(P1, CARD, "flip")
       .build();
-    await game.p1.cast("flip", { targets: "lone" });
+    await game.p1.cast("flip", { targets: ["lone", "ally"] });
     await game.settle();
     expect(game.zoneOf("lone")).toBe("trash");
     await game.settle({ policy: "first" });
@@ -218,7 +224,7 @@ describe("Shuriken Flip (ven-140-166)", () => {
       .unit(P1, "base", { might: 2, name: "Ally" }, "ally")
       .hand(P1, CARD, "flip")
       .build();
-    await game.p1.cast("flip", { targets: "foe" });
+    await game.p1.cast("flip", { targets: ["foe", "ally"] });
     await game.settle();
     await game.settle({ policy: "first" });
     await game.settle({ policy: "first" });
@@ -232,7 +238,8 @@ describe("Shuriken Flip (ven-140-166)", () => {
   test("[Flow]: from the TRASH it costs the alternate [3] + 1 power (not 1 + pip), resolves normally (2 to Big), then is BANISHED instead of returning to the trash", async () => {
     const game = await board().build();
     expect(game.p1.can("cast", "flipT")).toBe(true);
-    await game.p1.cast("flipT", { flow: true, targets: "big" });
+    await game.p1.cast("flipT", { flow: true, targets: ["big", "ally"] });
+    await game.p1.pick("battlefield-bf2"); // 355.4 — destination named at finalization
     expect(game.p1.resources()).toEqual({ energy: 1, power: { fury: 1 } });
     expect(game.zoneOf("flipT")).toBe("chain");
     await game.settle();
@@ -246,21 +253,27 @@ describe("Shuriken Flip (ven-140-166)", () => {
   });
 
   test("[Flow] cost gate: with only 2 energy the trash copy is NOT playable while the hand copy (1 + pip) still is", async () => {
-    const game = await scenario().resources(P1, { energy: 2, power: { fury: 1 } }).battlefield("bf1", { controller: P2 }).unit(P2, "bf1", { might: 3 }, "foe").hand(P1, CARD, "flip").trash(P1, CARD, "flipT").build();
+    // rule 355.8 — the mover is a target, so keep a friendly unit on the board;
+    // this test is about the [Flow] COST, not about playability.
+    const game = await scenario().resources(P1, { energy: 2, power: { fury: 1 } }).battlefield("bf1", { controller: P2 }).unit(P2, "bf1", { might: 3 }, "foe").unit(P1, "base", { might: 1 }, "ally").hand(P1, CARD, "flip").trash(P1, CARD, "flipT").build();
     expect(game.p1.can("cast", "flipT")).toBe(false);
     expect(game.p1.can("cast", "flip")).toBe(true);
   });
 
   test("hand first, Flow later: the trashed copy from an earlier cast can be flowed the same turn for [3]+pip and ends banished (Big takes 2 + 2 and dies)", async () => {
-    const game = await scenario().resources(P1, { energy: 4, power: { fury: 1, calm: 1 } }).battlefield("bf1", { controller: P2 }).unit(P2, "bf1", { might: 4, name: "Big" }, "big").hand(P1, CARD, "flip").build();
-    await game.p1.cast("flip", { targets: "big" });
+    const game = await scenario().resources(P1, { energy: 4, power: { fury: 1, calm: 1 } }).battlefield("bf1", { controller: P2 }).battlefield("bf2", { controller: P1 }).unit(P2, "bf1", { might: 4, name: "Big" }, "big").unit(P1, "base", { might: 1, name: "Ally" }, "ally").hand(P1, CARD, "flip").build();
+    await game.p1.cast("flip", { targets: ["big", "ally"] });
+    await game.p1.pick("battlefield-bf2"); // 355.4 — destination at finalization
     await game.settle();
     // rule 359.3.d — the spell leaves the chain only once its effect has finished,
     // so answer the prompt(s) its resolution is still waiting on.
     await game.settle({ policy: "first" });
     expect(game.zoneOf("flip")).toBe("trash");
     expect(game.p1.can("cast", "flip")).toBe(true); // now offered from the trash via Flow
-    await game.p1.cast("flip", { flow: true, targets: "big" });
+    await game.p1.cast("flip", { flow: true, targets: ["big", "ally"] });
+    // rule 355.4.a — Ally is already at bf2 after the first cast, so bf2 is no
+    // longer a valid destination for it; send it home instead.
+    await game.p1.pick("base");
     expect(game.p1.resources()).toEqual({ energy: 0, power: { calm: 0, fury: 0 } });
     await game.settle();
     expect(game.zoneOf("big")).toBe("trash"); // 2 + 2 ≥ 4 within the same turn

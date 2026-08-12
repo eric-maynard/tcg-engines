@@ -32,8 +32,13 @@ async function flowCast(): Promise<Game> {
   const game = await board().build();
   const flow = game.p1.option("cast", "flip")?.fields.find((f) => f.arg === "flow");
   expect(flow?.options).toEqual([true]); // from the trash it is only playable as a Flow play
-  await game.p1.cast("flip", { flow: true, targets: ["target"] });
+  // rule 355.5 / 355.12 (ven-140-166) — a [Flow] play names the same objects as
+  // one from hand: the (optional) damage victim AND the mandatory friendly mover.
+  await game.p1.cast("flip", { flow: true, targets: ["target", "ally"] });
   expect(game.chain().map((c) => c.cardId)).toEqual(["flip"]);
+  // rule 355.4 — the Move Destination is part of the same step, asked before
+  // anyone receives Priority.
+  await game.p1.pick("battlefield-bf2");
   expect(game.p1.resources()).toEqual({ energy: 0, power: { rainbow: 0 } }); // the FLOW cost [3]+1 was paid
   await game.p1.passPriority();
   expect(game.decision()).toMatchObject({ context: "chain", kind: "action", seat: P2 });

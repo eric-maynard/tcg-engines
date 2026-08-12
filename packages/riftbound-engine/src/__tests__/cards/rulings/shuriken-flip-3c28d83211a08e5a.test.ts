@@ -29,17 +29,20 @@ function board() {
     .hand(P1, SHURIKEN_FLIP, "flip");
 }
 
-/** Cast (optionally on the enemy Target), resolve, and answer "which friendly unit moves" with `mover`; returns the destination prompt. */
+/**
+ * Cast naming BOTH objects — the (optional) enemy Target and the friendly
+ * `mover`, which rule 355.5 / 355.12 make choices of PLAYING the spell — and
+ * return the Move Destination prompt, which 355.4 puts in the same step.
+ */
 async function castAndChooseMover(targets: string[], mover: "ally" | "holder"): Promise<{ game: Game; dest: Pick }> {
   const game = await board().build();
-  await game.p1.cast("flip", { targets });
-  await game.settle();
-  const who = game.decision();
-  expect(who).toMatchObject({ kind: "pick", seat: P1, semantics: "target" });
-  expect((who as Pick).options.map((o) => o.card ?? o.key).sort()).toEqual(["ally", "holder"]);
-  await game.p1.pick(mover);
+  // rule 355.5 — every option the cast offers names a mover; both friendly units
+  // are legal choices for it.
+  const tuples = (game.p1.option("cast", "flip")?.fields.find((f) => f.name === "targets")?.options ?? []) as string[][];
+  expect([...new Set(tuples.map((t) => t.at(-1) as string))].sort()).toEqual(["ally", "holder"]);
+  await game.p1.cast("flip", { targets: [...targets, mover] });
   const dest = game.decision();
-  expect(dest).toMatchObject({ kind: "pick", seat: P1, semantics: "destination" });
+  expect(dest).toMatchObject({ kind: "pick", seat: P1, semantics: "destination", timing: "FIN" });
   return { dest: dest as Pick, game };
 }
 
@@ -48,7 +51,9 @@ const keys = (d: Pick) => d.options.map((o) => o.zone ?? o.key).sort();
 describe("Ruling 3c28d83211a08e5a — Shuriken Flip's move goes anywhere legal, not necessarily to the damaged unit's battlefield", () => {
   test("damage Target at bf1, move Holder (at bf3): P1 is offered base, bf1 AND bf2 — and may send it to BASE", async () => {
     const { game, dest } = await castAndChooseMover(["target"], "holder");
-    expect(game.state("target").damage).toBe(2); // the damage step already happened ("then move")
+    // rule 355.4 — the destination is asked while the spell is still FINALIZING,
+    // so nothing has resolved yet and the damage has not been dealt.
+    expect(game.state("target").damage).toBe(0);
     expect(keys(dest)).toEqual(["base", "battlefield-bf1", "battlefield-bf2"]);
     await game.p1.pick("base");
     await game.settle();
@@ -72,8 +77,10 @@ describe("Ruling 3c28d83211a08e5a — Shuriken Flip's move goes anywhere legal, 
 
   test("nuance — zero enemy targets chosen ('up to one'): no damage, but the move still executes with a player-chosen destination", async () => {
     const game = await board().build();
-    const field = game.p1.option("cast", "flip")?.fields.find((f) => f.name === "targets");
-    expect(field?.min).toBe(0);
+    // rule 355.13 — the damage victim may be left unchosen; every option still
+    // names the mandatory mover.
+    const tuples = (game.p1.option("cast", "flip")?.fields.find((f) => f.name === "targets")?.options ?? []) as string[][];
+    expect(tuples).toContainEqual(["holder"]);
     const { game: g2, dest } = await castAndChooseMover([], "holder");
     expect(g2.state("target").damage).toBe(0);
     expect(keys(dest)).toContain("base");

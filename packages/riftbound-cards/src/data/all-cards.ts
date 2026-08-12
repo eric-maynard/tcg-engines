@@ -1820,7 +1820,10 @@ const JSON_CARD_ENGINE_FLAGS: Record<string, Record<string, unknown>> = {
               type: "damage",
             },
             {
-              chooseAtResolution: true,
+              // rule 355.10.f / 355.5 — "then move a friendly unit" contains no
+              // "must", so the carve-out does not apply: the mover is a TARGET,
+              // named as the spell is played and locked there (355.15), and with
+              // no friendly unit the spell has no legal play at all (355.8).
               target: { controller: "friendly", type: "unit" },
               to: "choose",
               type: "move",

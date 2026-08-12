@@ -28,31 +28,35 @@ function board() {
 }
 
 describe("Ruling b6531d2345e9ef12 — Shuriken Flip's choices belong to the play, not the resolution", () => {
-  test("ruling: the 'up to one' enemy target is named when the spell is played (and zero is a legal choice)", async () => {
+  test("ruling: BOTH objects are named when the spell is played — the 'up to one' enemy (zero allowed, 355.13) and the MANDATORY friendly mover (355.5)", async () => {
     const game = await board().build();
     const field = game.p1.option("cast", "flip")?.fields?.find((f) => f.name === "targets");
-    expect(field).toMatchObject({ kind: "cards", max: 1, min: 0 });
-    expect(JSON.stringify(field?.options)).toContain("foe");
-    expect(field?.options).toContainEqual([]); // "up to one" ⇒ none is allowed
+    expect(field).toMatchObject({ kind: "cards" });
+    const tuples = (field?.options ?? []) as string[][];
+    // every option ends with a mover; the damage victim is the optional prefix
+    expect(tuples.every((t) => ["ally", "ally2"].includes(t.at(-1) as string))).toBe(true);
+    expect(tuples).toContainEqual(["ally"]); // 355.13 — zero damage targets
+    expect(tuples).toContainEqual(["foe", "ally"]);
 
-    await game.p1.cast("flip", { targets: ["foe"] });
+    await game.p1.cast("flip", { targets: ["foe", "ally"] });
     expect(game.chain().map((c) => c.cardId)).toEqual(["flip"]);
   });
 
-  test.failing(
-    "BUG: ruling b6531d2345e9ef12 — the friendly mover should be chosen at play; the engine leaves it to resolution (pendingChoice at timing RES)",
-    async () => {
-      const game = await board().build();
-      await game.p1.cast("flip", { targets: ["foe"] });
-      // Everything the spell chooses is settled before anyone gets Priority (355.4/355.10).
-      expect(game.decision()).toMatchObject({ kind: "action", seat: P1 });
-      const stop = await game.settle();
-      expect(stop.reason).toBe("open"); // engine: stops "unanswered" on a RES pick of the mover
-    },
-  );
+  test("ruling b6531d2345e9ef12 — the friendly mover is chosen AT PLAY: nothing about it is asked while the spell resolves", async () => {
+    const game = await board().build();
+    await game.p1.cast("flip", { targets: ["foe", "ally"] });
+    // rule 355.4 — the only question left is the Move Destination, and it too is
+    // a choice of PLAYING the spell, asked before anyone receives Priority.
+    expect(game.decision()).toMatchObject({ kind: "pick", seat: P1, semantics: "destination", timing: "FIN" });
+    await game.p1.pick("base");
+    expect(game.decision()).toMatchObject({ kind: "action", seat: P1 });
+    const stop = await game.settle();
+    expect(stop.reason).toBe("open");
+    expect(game.locationOf("ally")).toBe("base");
+  });
 
-  test.failing(
-    "BUG: ruling b6531d2345e9ef12 — the destination should be locked in at play; the engine asks for it during resolution",
+  test(
+    "ruling b6531d2345e9ef12 — the destination is locked in at play, so nothing is asked while the spell resolves",
     async () => {
       // One friendly unit, so the mover is settled without a question and only the destination is left.
       const game = await scenario()
@@ -63,16 +67,19 @@ describe("Ruling b6531d2345e9ef12 — Shuriken Flip's choices belong to the play
         .unit(P1, "bf2", { might: 3, name: "Ally" }, "ally")
         .hand(P1, SHURIKEN_FLIP, "flip")
         .build();
-      await game.p1.cast("flip", { targets: ["foe"] });
+      await game.p1.cast("flip", { targets: ["foe", "ally"] });
+      // rule 355.4 / 402.2 — asked at FINALIZATION …
+      expect(game.decision()).toMatchObject({ semantics: "destination", timing: "FIN" });
+      await game.p1.pick("base");
       const stop = await game.settle();
-      // The ruling's model: the destination was locked in at play, so nothing is asked while resolving.
+      // … and never again while resolving (355.15).
       expect(game.decision()?.source?.pendingChoiceType).not.toBe("choose-destination");
       expect(stop.reason).toBe("open");
     },
   );
 
-  test.failing(
-    "BUG: ruling b6531d2345e9ef12 — with no friendly unit to move the spell should be unplayable (the mover is a target); the engine still offers it",
+  test(
+    "ruling b6531d2345e9ef12 — with no friendly unit to move, the spell is unplayable: the mover is a target and 355.8 needs a valid choice for it",
     async () => {
       const game = await scenario()
         .resources(P1, { energy: 2, power: { rainbow: 1 } })
@@ -87,9 +94,7 @@ describe("Ruling b6531d2345e9ef12 — Shuriken Flip's choices belong to the play
 
   test("ruling: the destination does NOT have to be the damaged unit's battlefield — Base and the other battlefield are both offered", async () => {
     const game = await board().build();
-    await game.p1.cast("flip", { targets: ["foe"] });
-    await game.settle();
-    await game.p1.pick("ally"); // the mover
+    await game.p1.cast("flip", { targets: ["foe", "ally"] });
     const dest = game.decision();
     expect(dest).toMatchObject({ kind: "pick", seat: P1, semantics: "destination" });
     const keys = dest?.options?.map((o) => String(o.key));
@@ -99,9 +104,7 @@ describe("Ruling b6531d2345e9ef12 — Shuriken Flip's choices belong to the play
 
   test("the damage and the move both happen: Foe takes 2 and the chosen ally lands where P1 sent it", async () => {
     const game = await board().build();
-    await game.p1.cast("flip", { targets: ["foe"] });
-    await game.settle();
-    await game.p1.pick("ally");
+    await game.p1.cast("flip", { targets: ["foe", "ally"] });
     await game.p1.pick("base");
     await game.settle();
     expect(game.state("foe").damage).toBe(2);
