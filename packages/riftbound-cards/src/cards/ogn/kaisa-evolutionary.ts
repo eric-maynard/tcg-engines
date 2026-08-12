@@ -14,7 +14,18 @@ const abilities: Ability[] = [
       from: "trash",
       ignoreCost: "energy",
       recycleAfter: true,
-      target: { filter: { energyCost: { lt: { points: "controller" } } }, type: "spell" },
+      // rule 355.10.a / 383.3.b — the trash is a PUBLIC zone, so the spell is a
+      // TARGET named as this trigger is FINALIZED (with every other simultaneous
+      // trigger still unresolved), not a card picked as the instruction resolves:
+      // `location: "trash"` is what routes the choice through finalization.
+      target: {
+        controller: "friendly",
+        filter: { energyCost: { lt: { points: "controller" } } },
+        location: "trash",
+        // rule 355.10.d.2 — a sole legal spell is still a choice: ask for it.
+        promptWhenSingle: true,
+        type: "spell",
+      },
       type: "play",
     },
     optional: true,

@@ -53,11 +53,10 @@ async function kaisaPlaysOpus(): Promise<Game> {
   expect(game.p1.points()).toBe(5);
   expect(game.decision()).toMatchObject({ kind: "yes-no", seat: P1, source: { cardId: "kaisa" } });
   await game.p1.yes();
-  await game.settle();
-  const d = game.decision();
-  expect(d).toMatchObject({ kind: "pick", seat: P1 });
-  expect(d?.kind === "pick" ? d.options.map((o) => o.card) : []).toEqual(["opusT"]);
-  await game.p1.pick("opusT");
+  // rule 355.10.a / 383.3.b — the trash is a PUBLIC zone, so the Opus is a TARGET
+  // named as the trigger is FINALIZED (sole option ⇒ one-click confirm, 355.10.d.2),
+  // not a card picked as the instruction resolves.
+  expect(game.chain()[0]?.targets).toEqual(["opusT"]);
   return game;
 }
 

@@ -83,10 +83,10 @@ describe("Kai'Sa, Evolutionary (ogn-112-298)", () => {
     await game.settle();
     expect(game.p1.points()).toBe(3);
     await game.p1.yes();
-    await game.settle();
-    expect(game.decision()).toMatchObject({ kind: "pick", seat: P1 });
-    expect((game.decision() as { options: { key: string }[] }).options.map((o) => o.key)).toEqual(["disc"]);
-    await game.p1.pick("disc");
+    // rule 355.10.a / 383.3.b — the trash is a PUBLIC zone, so the spell is a
+    // TARGET named as the trigger is FINALIZED; Discipline is the only eligible
+    // one, and a sole legal option is a one-click confirm (355.10.d.2).
+    expect(game.chain()[0]?.targets).toEqual(["disc"]);
     await game.settle();
     if (game.decision()?.kind === "pick") {
       await game.p1.pick("kaisa"); // Discipline's target

@@ -70,6 +70,12 @@ export interface TargetDescriptor {
    */
   readonly excludeBound?: boolean;
   /**
+   * rule 355.13 (rule-id: sfd-023-221) — "up to one OTHER unit": its own slot,
+   * minus whatever an earlier slot of the same instruction already chose
+   * (`chosenTargetIds` on the resolution context).
+   */
+  readonly excludeChosen?: boolean;
+  /**
    * rule 383.3.b.1 — the descriptor names a COST payment ("disempower
    * something you control to …"), which is always the controller's own
    * deliberate choice: prompt even when exactly one candidate is legal
@@ -135,6 +141,12 @@ export interface TargetResolverContext {
    * candidates outside `battlefield-<bfId>` are never legal choices.
    */
   readonly hiddenZone?: string;
+  /**
+   * rule 355.13 (rule-id: sfd-023-221) — objects an earlier slot of the same
+   * instruction already chose; an `excludeChosen` descriptor ("one OTHER
+   * unit") never offers them again.
+   */
+  readonly chosenTargetIds?: readonly string[];
   readonly draft: RiftboundGameState;
   readonly zones: {
     getCardsInZone: (zoneId: CoreZoneId, playerId?: CorePlayerId) => CoreCardId[];
@@ -490,6 +502,12 @@ export function resolveTarget(
   // that permanent; only drop the source when the text says "another"/"other".
   if (target.excludeSelf) {
     filtered = filtered.filter((id) => id !== ctx.sourceCardId);
+  }
+
+  // rule 355.13 (rule-id: sfd-023-221) — "up to one OTHER unit": the objects an
+  // earlier slot of this same instruction chose are not candidates again.
+  if (target.excludeChosen && ctx.chosenTargetIds !== undefined) {
+    filtered = filtered.filter((id) => !ctx.chosenTargetIds?.includes(id));
   }
 
   // rule-id: ven-041-166 — "for each Equipment attached to ME": the descriptor
@@ -1037,7 +1055,7 @@ function matchesFilter(cardId: string, filter: TargetFilter, ctx: TargetResolver
   // rule 206: "costing no more than [3] and no more than [rainbow]" compares
   // the PRINTED cost, Energy and Power as two independent comparisons.
   if ("energyCost" in filter || "powerCost" in filter) {
-    return matchesPrintedCostFilter(cardId, filter);
+    return matchesPrintedCostFilter(cardId, filter, ctx);
   }
   // rule 355.10 — "a friendly unit without [Temporary]": printed OR granted
   // copies of the keyword both disqualify a candidate.
@@ -1204,30 +1222,68 @@ function effectiveMight(
  * is compared as a pip count, so "no more than [rainbow]" is `{lte: 1}`.
  * Usable for cards outside the board zones the resolver scans (trash, hand).
  */
-export function matchesPrintedCostFilter(cardId: string, filter: unknown): boolean {
+export function matchesPrintedCostFilter(
+  cardId: string,
+  filter: unknown,
+  ctx?: TargetResolverContext,
+): boolean {
   if (typeof filter !== "object" || filter === null) {
     return true;
   }
   const f = filter as { energyCost?: unknown; powerCost?: unknown };
   const registry = getGlobalCardRegistry();
-  if ("energyCost" in f && !matchesComparison(registry.getEnergyCost(cardId), f.energyCost)) {
+  if ("energyCost" in f && !matchesComparison(registry.getEnergyCost(cardId), f.energyCost, ctx)) {
     return false;
   }
-  if ("powerCost" in f && !matchesComparison(registry.getPowerCost(cardId).length, f.powerCost)) {
+  if (
+    "powerCost" in f &&
+    !matchesComparison(registry.getPowerCost(cardId).length, f.powerCost, ctx)
+  ) {
     return false;
   }
   return true;
 }
 
-function matchesComparison(value: number, cmp: unknown): boolean {
+/**
+ * rule 206 (rule-id: ogn-112-298) — a cost bound may name a LIVE game value
+ * ("Energy cost less than your points") instead of a printed number. It reads
+ * when the candidate pool is gathered, which for a public-zone target is when
+ * the item is finalized (355.10.a / 383.3.b). A bound this resolver cannot read
+ * constrains nothing rather than rejecting every candidate.
+ */
+function comparisonBound(raw: unknown, ctx?: TargetResolverContext): number | undefined {
+  if (typeof raw === "number") {
+    return raw;
+  }
+  if (raw !== null && typeof raw === "object" && "points" in raw && ctx !== undefined) {
+    const whose = (raw as { points?: string }).points;
+    const pid =
+      whose === "opponent"
+        ? Object.keys(ctx.draft.players).find((p) => p !== ctx.playerId)
+        : ctx.playerId;
+    return (
+      (ctx.draft.players as Record<string, { victoryPoints?: number } | undefined>)[
+        pid ?? ctx.playerId
+      ]?.victoryPoints ?? 0
+    );
+  }
+  return undefined;
+}
+
+function matchesComparison(value: number, cmp: unknown, ctx?: TargetResolverContext): boolean {
   if (typeof cmp !== "object" || cmp === null) {
     return true;
   }
-  const c = cmp as { eq?: number; lt?: number; lte?: number; gt?: number; gte?: number };
-  if (c.eq !== undefined && value !== c.eq) return false;
-  if (c.lt !== undefined && !(value < c.lt)) return false;
-  if (c.lte !== undefined && !(value <= c.lte)) return false;
-  if (c.gt !== undefined && !(value > c.gt)) return false;
-  if (c.gte !== undefined && !(value >= c.gte)) return false;
+  const c = cmp as { eq?: unknown; lt?: unknown; lte?: unknown; gt?: unknown; gte?: unknown };
+  const eq = comparisonBound(c.eq, ctx);
+  const lt = comparisonBound(c.lt, ctx);
+  const lte = comparisonBound(c.lte, ctx);
+  const gt = comparisonBound(c.gt, ctx);
+  const gte = comparisonBound(c.gte, ctx);
+  if (eq !== undefined && value !== eq) return false;
+  if (lt !== undefined && !(value < lt)) return false;
+  if (lte !== undefined && !(value <= lte)) return false;
+  if (gt !== undefined && !(value > gt)) return false;
+  if (gte !== undefined && !(value >= gte)) return false;
   return true;
 }

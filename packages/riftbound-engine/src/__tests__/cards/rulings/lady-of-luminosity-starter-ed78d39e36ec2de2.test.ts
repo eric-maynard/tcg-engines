@@ -127,13 +127,11 @@ describe("Ruling ed78d39e36ec2de2 — 'cost' means printed cost: reductions don'
     expect(game.p1.points()).toBe(4);
     expect(game.decision()).toMatchObject({ kind: "yes-no", seat: P1, source: { cardId: "kaisa" } });
     await game.p1.yes();
+    // rule 355.10.a / 383.3.b — the trash is public, so the spell is a TARGET named as the trigger is
+    // FINALIZED. Only Discipline qualifies (Sky Splitter's PRINTED 8 is not "less than your points"),
+    // so it is the sole candidate and the item carries it (355.10.d.2 one-click confirm).
+    expect(game.chain()[0]?.targets).toEqual(["disc"]);
     await game.settle();
-    const d = game.decision();
-    expect(d).toMatchObject({ kind: "pick", seat: P1 });
-    const offered = d?.kind === "pick" ? d.options.map((o) => o.card ?? o.key) : [];
-    expect(offered).toContain("disc");
-    expect(offered).not.toContain("sky");
-    await game.p1.pick("disc");
     if (game.decision()?.kind === "pick") {
       await game.p1.pick("kaisa"); // Discipline's own target, if asked
     }

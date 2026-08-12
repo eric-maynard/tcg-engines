@@ -49,13 +49,15 @@ async function kaisaConquers(): Promise<Game> {
   return game;
 }
 
-/** …P1 accepts, everyone passes, P1 picks Charm from the trash; it goes on the chain aimed at the Bystander (→ bf1). */
+/** …P1 accepts and NAMES Charm (355.10.a: the trash is public, so it is a target chosen at finalization);
+ * everyone passes and the trigger plays it onto the chain aimed at the Bystander (→ bf1). */
 async function charmTheBystander(game: Game): Promise<void> {
   await game.p1.yes();
+  expect(game.chain()).toEqual([
+    expect.objectContaining({ cardId: "kaisa", targets: ["charm"], triggered: true }),
+  ]);
   await game.p1.passPriority();
-  await game.p2.passPriority(); // Kai'Sa's ability resolves → reveal-and-pick from trash
-  expect(game.decision()).toMatchObject({ kind: "pick", seat: P1, semantics: "from-revealed" });
-  await game.p1.pick("charm");
+  await game.p2.passPriority(); // Kai'Sa's ability resolves → the named Charm is played
   expect(game.chain()).toEqual([expect.objectContaining({ cardId: "charm", controller: P1, targets: ["bystander"] })]);
   expect(game.p1.power("calm")).toBe(0); // Power cost still paid; Energy ignored
 }

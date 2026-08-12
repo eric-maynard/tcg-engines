@@ -59,11 +59,12 @@ async function conquerIntoMarchingOrders(points = 4): Promise<Game> {
   expect(game.p1.points()).toBe(points + 1);
   expect(game.decision()).toMatchObject({ kind: "yes-no", seat: P1, source: { cardId: "kaisa" } });
   await game.p1.yes();
-  await game.settle(); // both pass → the trigger resolves and offers the trash
-  const d = game.decision();
-  expect(d).toMatchObject({ kind: "pick", seat: P1, semantics: "from-revealed" });
-  expect(d?.kind === "pick" ? d.options.map((o) => o.card ?? o.key) : []).toEqual(["mo"]);
-  await game.p1.pick("mo");
+  // rule 355.10.a / 383.3.b — the trash is public, so the spell is a TARGET named as the trigger is
+  // FINALIZED; Marching Orders is the only eligible card, so the item carries it before priority.
+  expect(game.chain()).toEqual([
+    expect.objectContaining({ cardId: "kaisa", targets: ["mo"], triggered: true }),
+  ]);
+  await game.settle(); // both pass → the trigger resolves and plays the named spell
   return game;
 }
 
@@ -89,17 +90,20 @@ async function makeChoices(game: Game, repeat: boolean, pairs: readonly string[]
       await game.p1.answer(repeat);
     } else if (d.kind === "pick" && isPairPrompt(d)) {
       asked = true;
-      // rule 820.2.a — every execution declares its OWN pair at play time, so a
-      // caller that names one pair means "the same pair again" for the rest.
       if (queue.length === 0) {
-        queue.push(...pairs);
+        queue.push(...pairs); // fewer pairs than executions ⇒ name the same pair again
       }
-      const n = Math.max(1, Math.min(d.max, queue.length));
-      const wanted = queue.splice(0, n);
-      // a pair may be asked as one tuple pick or slot by slot — offer what this prompt can take
+      // a pair may be asked as one tuple pick or slot by slot, and a role the play already
+      // locked is not re-asked — take the next wanted object this prompt can actually accept
       const legal = new Set(d.options.map((o) => (o.card ?? o.key) as string));
-      const keys = wanted.filter((k) => legal.has(k));
-      await game.p1.pick(...(keys.length > 0 ? keys : [wanted[0] as string]));
+      const keys: string[] = [];
+      const max = Math.max(1, d.max);
+      while (keys.length < max) {
+        const at = queue.findIndex((k) => legal.has(k) && !keys.includes(k));
+        if (at < 0) break;
+        keys.push(...queue.splice(at, 1));
+      }
+      await game.p1.pick(...(keys.length > 0 ? keys : [(d.options[0]?.card ?? d.options[0]?.key) as string]));
     } else {
       break;
     }
