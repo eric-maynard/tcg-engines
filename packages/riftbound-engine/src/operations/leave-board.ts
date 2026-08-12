@@ -567,6 +567,9 @@ export function resetObjectState(ctx: LeaveBoardContext, cardId: string): void {
     mightModifier: 0,
     modesChosenThisTurn: undefined,
     modesChosenThisTurnByInstance: undefined,
+    // rule 110 — a tag named while the object was on the board is a temporary
+    // modification: the card in the new zone is a plain copy again.
+    namedTag: undefined,
     staticMightBonus: undefined,
     stunned: false,
   });

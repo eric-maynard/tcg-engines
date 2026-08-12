@@ -62,7 +62,7 @@ describe("Ruling 71baa5260d4c633a — Ivern loses his named tag the moment he le
 
   // Expected (rule 110): once Ivern reaches the trash the named tag is no longer tracked on the card.
   // Actual: the engine leaves `namedTag` on the card's meta after it changes to a Non-Board zone.
-  test.failing("BUG: ruling 71baa5260d4c633a — killed Ivern keeps his named tag in the trash (rule 110 says it stops being tracked)", async () => {
+  test("ruling 71baa5260d4c633a — killed Ivern keeps his named tag in the trash (rule 110 says it stops being tracked)", async () => {
     const game = await scenario()
       .resources(P1, { energy: 1 })
       .unit(P1, "base", IVERN, "ivern", { namedTag: "Dog" } as Record<string, unknown>)
@@ -77,7 +77,7 @@ describe("Ruling 71baa5260d4c633a — Ivern loses his named tag the moment he le
   });
 
   // Same deviation on the other Non-Board zone: bouncing him to hand should also drop the tag (rule 110).
-  test.failing("BUG: ruling 71baa5260d4c633a — Ivern bounced to hand keeps his named tag", async () => {
+  test("ruling 71baa5260d4c633a — Ivern bounced to hand keeps his named tag", async () => {
     const game = await scenario()
       .resources(P1, { energy: 1 })
       .unit(P1, "base", IVERN, "ivern", { namedTag: "Poro" } as Record<string, unknown>)
