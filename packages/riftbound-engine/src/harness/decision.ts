@@ -277,28 +277,88 @@ export function reachablePlaysOf(
     of(true).map((m) => `${m.moveId}|${String((m.params as { cardId?: unknown }).cardId ?? "")}`),
   );
   const out: { moveId: string; card: string; needsAdd: NonNullable<ActionField["needsAdd"]> }[] = [];
-  const seen = new Set<string>();
+  /** key → index in `out`, so the cheapest variant of a card replaces in place. */
+  const at = new Map<string, number>();
+  /** key → what that listed variant owes, to keep the cheapest pay line. */
+  const owedBy = new Map<string, number>();
   for (const m of of(false)) {
-    const cardId = (m.params as { cardId?: unknown }).cardId;
+    const params = (m.params ?? {}) as { cardId?: unknown; targets?: unknown };
+    const cardId = params.cardId;
     if (typeof cardId !== "string") {
       continue;
     }
     const key = `${m.moveId}|${cardId}`;
-    if (payable.has(key) || seen.has(key)) {
+    if (payable.has(key)) {
       continue;
     }
+    // rule 809.1.d — a [Deflect] instalment the chosen target adds is part of
+    // what THIS play costs, so price the tuple the enumerator actually
+    // offered rather than the card's bare printed cost. Without the targets a
+    // spell whose only legal target is surcharged prices as fully funded, so
+    // it was silently dropped here and the hand card stayed inert — the one
+    // case the dimmed-target treatment exists for.
+    const targets = Array.isArray(params.targets)
+      ? params.targets.filter((t): t is string => typeof t === "string")
+      : [];
     const short = playCostShortfall(
       state,
       seat,
       cardId,
-      { board } as Parameters<typeof playCostShortfall>[3],
+      { board, ...(targets.length > 0 ? { targets } : {}) } as Parameters<
+        typeof playCostShortfall
+      >[3],
       (id: CardId) => internal.cardMetas[id as string],
     );
     if (!short) {
       continue;
     }
-    seen.add(key);
-    out.push({ card: cardId, moveId: m.moveId, needsAdd: describeShortfall(short) });
+    // rule 809.1.d / 404.2 — the enumerator credits reachable Adds against the
+    // card's own cost but not against a target's surcharge, so that half is
+    // checked here through the same probe `surchargedPlayTargetsOf` uses: a
+    // tuple NOTHING on board could fund is still not offered.
+    if (
+      targets.length > 0 &&
+      deflectSurchargeOf(
+        state,
+        seat,
+        cardId,
+        targets,
+        board as Parameters<typeof deflectSurchargeOf>[4],
+      ) > 0 &&
+      !playTargetPayability(
+        state,
+        seat,
+        cardId,
+        { ...params, board, targets: [...targets] } as Parameters<typeof playTargetPayability>[3],
+        {
+          board: board as Parameters<typeof playTargetPayability>[4]["board"],
+          getCardMeta: (id: CardId) => internal.cardMetas[id as string],
+          getFlag: (id: never, name: string) => {
+            const meta = internal.cardMetas[id as unknown as string] as
+              | { __flags?: Record<string, unknown>; [k: string]: unknown }
+              | undefined;
+            return meta?.__flags?.[name] === true || meta?.[name] === true;
+          },
+        },
+      )
+    ) {
+      continue;
+    }
+    const owed = short.energy + Object.values(short.power).reduce((a, n) => a + (n ?? 0), 0);
+    const row = { card: cardId, moveId: m.moveId, needsAdd: describeShortfall(short) };
+    const idx = at.get(key);
+    if (idx === undefined) {
+      at.set(key, out.length);
+      owedBy.set(key, owed);
+      out.push(row);
+      continue;
+    }
+    // Several tuples of the same card: quote the cheapest way in, so the pay
+    // line names the smallest Add that unlocks the card (rule 357.1.a).
+    if (owed < (owedBy.get(key) ?? Number.POSITIVE_INFINITY)) {
+      owedBy.set(key, owed);
+      out[idx] = row;
+    }
   }
   return out;
 }

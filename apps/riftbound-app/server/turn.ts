@@ -204,7 +204,6 @@ export function sandboxAutoPlay(session: GameSession, goldfish: string): void {
   // move and swallowed UI state such as an expanded rune group).
   if (actions > 0) {
     session.seq++;
-    const goldSnapshot = buildGameSnapshot(session);
     for (const [, client] of session.clients) {
       const clientMoves = buildAvailableMoves(session, client.playerId);
       try {
@@ -213,7 +212,15 @@ export function sandboxAutoPlay(session: GameSession, goldfish: string): void {
           moves: clientMoves,
           playerId: goldfish,
           seq: session.seq,
-          state: goldSnapshot,
+          // rule 357.1.a — one SEAT-LESS snapshot reused for every client is
+          // what made the hand go dead: `reachablePlays` / `unaffordableTargets`
+          // answer "what could THIS seat still pay for?", so a snapshot built
+          // with no viewer ships them empty. The Goldfish auto-passes right
+          // through to the human's next Main Phase, so that seat-less frame was
+          // the LAST one the human held while looking at their opening hand —
+          // every card inert until they touched something themselves. Build it
+          // per seat, as every other broadcaster here does.
+          state: buildGameSnapshot(session, client.playerId),
           type: "state_update",
         }));
       } catch { /* Disconnected */ }

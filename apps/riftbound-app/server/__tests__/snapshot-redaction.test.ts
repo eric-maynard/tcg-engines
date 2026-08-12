@@ -13,6 +13,8 @@ import { describe, expect, test } from "bun:test";
 import { P1, P2, scenario } from "@tcg/riftbound/harness";
 import type { GameSession } from "../state";
 import { buildGameSnapshot } from "../snapshot";
+import { runOpponent } from "../ai-opponent";
+import { sandboxAutoPlay } from "../turn";
 
 const CONSULT_THE_PAST = "ogn-083-298";
 const SCUTTLE_CRAB = "unl-053-219";
@@ -144,5 +146,74 @@ describe("snapshot redaction — facedown cards are per-seat", () => {
     for (const c of hands.filter((c) => c.owner === P2)) {
       expect(c).toMatchObject({ definitionId: "", name: "Hidden card" });
     }
+  });
+});
+
+/**
+ * The broadcast that carries the Goldfish's auto-play used to reuse ONE
+ * seat-less snapshot for every client. A seat-less snapshot is the unredacted
+ * shape (`redactFor` needs a viewer), so the shape is only safe where nothing
+ * is redacted at all — and the same seat-less build is what made
+ * `reachablePlays` come back empty, leaving the human's hand inert at the start
+ * of every Main Phase. It now builds per seat, like every other broadcaster.
+ *
+ * Two properties keep that from ever having been a leak, and both are pinned
+ * here because the frame is pushed to every connected client:
+ *  - the driver only runs in a PASSIVE-Goldfish sandbox, the one mode where
+ *    redaction is off for every viewer anyway (`buildGameSnapshot`'s
+ *    `redactFor`), and
+ *  - `runOpponent` refuses to reach it in the redacted modes (vs-Claude and
+ *    hot seat), so no redacted session ever receives a seat-less frame.
+ */
+describe("Goldfish auto-play broadcast — per-seat frames, and never one in a redacted mode", () => {
+  function clientOf(session: GameSession, seat: string) {
+    const frames: { type: string; state: { zones: Record<string, ZoneCard[]> } }[] = [];
+    session.clients.set(`c-${seat}`, {
+      playerId: seat,
+      ws: { send: (raw: string) => frames.push(JSON.parse(raw) as never) },
+    } as unknown as Parameters<GameSession["clients"]["set"]>[1]);
+    return frames;
+  }
+
+  test("passive goldfish: each client's frame carries exactly what that seat's own snapshot would — no extra card identity rides along", async () => {
+    const game = await scenario()
+      .turn(4)
+      .active(P2)
+      .resources(P1, { energy: 0 })
+      .battlefield("bf2", { controller: P2 })
+      .facedown(P2, "bf2", CONSULT_THE_PAST, "ctp")
+      .rune(P1, "fury", { alias: "r1" })
+      .build();
+    const session = sessionOf(game.engine, true);
+    const frames = clientOf(session, P1);
+
+    sandboxAutoPlay(session, P2);
+
+    const last = frames.at(-1);
+    expect(last?.type).toBe("state_update");
+    expect(JSON.stringify(last?.state.zones)).toBe(JSON.stringify(buildGameSnapshot(session, P1).zones));
+  });
+
+  test("the redacted modes never get one: runOpponent stops before the driver in hot seat and vs-Claude", async () => {
+    const game = await board().build();
+
+    const hotSeat = sessionOf(game.engine, true);
+    hotSeat.hotSeat = true;
+    const hotFrames = clientOf(hotSeat, P1);
+    runOpponent(hotSeat, { humanSeat: P1 });
+    expect(hotFrames).toEqual([]);
+
+    const vsAi = sessionOf(game.engine, true);
+    // The Claude driver is async and pushes its own PER-SEAT frames (ai-opponent
+    // `#push`); what must never happen is the seat-less goldfish broadcast, so
+    // stub `act` to a no-op and assert the driver was never reached.
+    vsAi.opponent = {
+      act: () => Promise.resolve(),
+      info: { kind: "claude", label: "Claude", model: "haiku" },
+      thinking: false,
+    } as unknown as GameSession["opponent"];
+    const aiFrames = clientOf(vsAi, P1);
+    runOpponent(vsAi, { humanSeat: P1 });
+    expect(aiFrames.filter((f) => (f as { moveId?: string }).moveId === "sandboxAutoPlay")).toEqual([]);
   });
 });

@@ -12,7 +12,13 @@ import { type DeckLegality, summarizeLegality, validateDeckConfig } from "./deck
 import { json } from "./http";
 import { gameLogger } from "./log";
 import { createGameFromDecks } from "./pregame";
-import { buildAvailableMoves, buildGameSnapshot, buildHistoryLog } from "./snapshot";
+import {
+  buildAvailableMoves,
+  buildGameSnapshot,
+  buildHistoryLog,
+  buildReachablePlays,
+  buildUnaffordableTargets,
+} from "./snapshot";
 import { type DeckConfig, type GameSession, type RouteCtx, type RouteResult, gameSessions } from "./state";
 import { aiStatus, attachOpponent, parseOpponentSpec, runOpponent } from "./ai-opponent";
 import { rewindSession } from "./rewind";
@@ -28,10 +34,27 @@ import { applySessionMove } from "./turn";
  */
 const SPECTATOR = "spectator";
 
-function restSnapshot(session: GameSession) {
+function restSnapshot(session: GameSession, url: URL) {
   // A Claude seat is a real opponent, so its cards stay private too (snapshot.ts).
   const redacted = !session.sandbox || session.opponent?.info.kind === "claude";
-  return buildGameSnapshot(session, redacted ? SPECTATOR : undefined);
+  const snapshot = buildGameSnapshot(session, redacted ? SPECTATOR : undefined);
+  if (redacted) {
+    return snapshot;
+  }
+  // rule 357.1.a / 809.1.d — "what could I still pay for?" is a per-SEAT
+  // question, and this view has no seat, so both lists came back empty for
+  // every caller: the hand reads as inert on this surface whatever the pool
+  // holds. A sandbox caller names its seat exactly as /moves does
+  // (`?playerId=` / `?player=`); a seatless caller keeps the seatless answer.
+  const seat = url.searchParams.get("playerId") ?? url.searchParams.get("player");
+  if (!seat || !session.players.includes(seat) || session.engine.getState().status !== "playing") {
+    return snapshot;
+  }
+  return {
+    ...snapshot,
+    reachablePlays: buildReachablePlays(session, seat),
+    unaffordableTargets: buildUnaffordableTargets(session, seat),
+  };
 }
 
 export async function handleGameRoutes(req: Request, url: URL, _ctx: RouteCtx): RouteResult {
@@ -108,7 +131,7 @@ export async function handleGameRoutes(req: Request, url: URL, _ctx: RouteCtx): 
       sandbox: body.sandbox ?? false,
       source: "api",
     });
-    return json({ gameId, legality, state: restSnapshot(session) });
+    return json({ gameId, legality, state: restSnapshot(session, url) });
   }
 
   // GET /api/game/:id/state — get full game state snapshot
@@ -116,7 +139,7 @@ export async function handleGameRoutes(req: Request, url: URL, _ctx: RouteCtx): 
     const gameId = pathname.split("/")[3];
     const session = gameSessions.get(gameId);
     if (!session) {return json({ error: "Game not found" }, 404);}
-    return json(restSnapshot(session));
+    return json(restSnapshot(session, url));
   }
 
   // GET /api/game/:id/moves — enumerate available moves for a player
