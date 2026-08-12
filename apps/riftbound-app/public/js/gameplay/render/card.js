@@ -195,8 +195,12 @@ function renderCardElement(card, isFacedown = false, zone = "") {
   // reading as inert (see interactions.js engineBlockReason).
   const blockedWhy =
     isOwned && !isPlayable && typeof engineBlockReason === "function" ? engineBlockReason(card.id) : "";
+  // The STATE reason wins over the pay line: when the engine refuses the card
+  // for its timing or a rider, tapping a rune will not help, and "needs [1] —
+  // tap a rune first" would send the player down the wrong path. Same order the
+  // click handler uses (interactions.js: state reason before the Pay step).
   const addHint =
-    (oneAddAway && typeof reachablePlayHint === "function" ? reachablePlayHint(card.id) : "") || blockedWhy;
+    blockedWhy || (oneAddAway && typeof reachablePlayHint === "function" ? reachablePlayHint(card.id) : "");
   if (blockedWhy) classes.push("blocked-play");
   const hasPrintedAbility = isLegendZone && isOwned && typeof activatedAbilitySegments === "function" && activatedAbilitySegments(card).length > 0;
   const pointerAttr = (isLegendZone && !isPlayable && !hasPrintedAbility)
