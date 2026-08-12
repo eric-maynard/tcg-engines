@@ -73,7 +73,7 @@ describe("Ruling 4ef6ab382699b79d — a chosen unit that changed battlefield is 
   // whole spell whiffs and neither unit is stunned. Actual: the engine re-checks each object on its own —
   // the enemy half fails its "same location" clause and is spared, but the friendly half is still "a
   // friendly unit at a battlefield" and gets stunned at its new battlefield.
-  test.failing("BUG: ruling 4ef6ab382699b79d — with the pair split, NEITHER should be stunned; engine still stuns the friendly half at its new battlefield", async () => {
+  test("ruling 4ef6ab382699b79d — with the pair split, NEITHER should be stunned; engine still stuns the friendly half at its new battlefield", async () => {
     const game = await facebreakerOnThePair();
     await strikeAllyToBf2(game);
     expect(game.locationOf("ally")).toBe("bf2");

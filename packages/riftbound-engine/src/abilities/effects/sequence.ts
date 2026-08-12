@@ -825,6 +825,17 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
           leadIds = ids;
           const leadId = ids[0];
           sameZone = leadId ? ctx.zones.getCardZone(leadId as CoreCardId) : undefined;
+          // rule 355.15 / 359.3.e.5 (ruling 4ef6ab382699b79d) — "at the same
+          // battlefield" is a requirement on the PAIR: if the play-time picks
+          // are no longer together when the item resolves the instruction has
+          // no legal objects at all, so the lead is spared along with its
+          // partner (the item still resolves and simply does nothing).
+          if (sameBound !== undefined && sameBound.length > 0) {
+            const together =
+              sameZone !== undefined &&
+              sameBound.some((id) => ctx.zones.getCardZone(id as CoreCardId) === sameZone);
+            if (!together) continue;
+          }
         }
       }
       if (destRefIdx >= 0) {
