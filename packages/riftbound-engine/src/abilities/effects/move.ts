@@ -781,7 +781,18 @@ export function handle_move(effect: ExecutableEffect, ctx: EffectContext, h: Eff
   // never a free base/battlefield choice.
   if (dest === "target-battlefield") {
     const cardId = moveTargets[0];
-    const destZone = ctx.sameZone;
+    // rule 355.4 / 355.15 (ogn-262-298 Zenith Blade) — "that enemy unit's
+    // battlefield" is a Move Destination of PLAYING the spell, read once and
+    // FROZEN there (`_dest`, stamped by `play/play-time-destinations.ts
+    // lockTargetBattlefieldDestinations`). `ctx.sameZone` is the zone the
+    // sequence handler re-derives NOW, so it is only the fallback for an item
+    // that reached resolution without the finalization pass — a locked anchor
+    // must never chase a target that moved in response.
+    // rule 359.3.e.14 / 359.3.e.14.a — the two instructions are LINKED by "that
+    // enemy unit", so an absent `sameZone` (the earlier instruction was ignored,
+    // its object no longer at a battlefield) still ignores this one: the frozen
+    // anchor answers WHERE the move goes, never WHETHER it happens.
+    const destZone = ctx.sameZone === undefined ? undefined : ((effect as unknown as { _dest?: string | null })._dest ?? ctx.sameZone);
     if (
       cardId === undefined ||
       destZone === undefined ||

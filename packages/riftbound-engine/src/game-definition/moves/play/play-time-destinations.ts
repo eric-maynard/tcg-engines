@@ -207,7 +207,20 @@ export function moverForNode(item: ChainItemLike, root: unknown, node: AnyEffect
   if (!slots) {
     return bound[0];
   }
-  const j = slots.findIndex((s) => s === t || isRestatementOf(s as { type: string }, t as { type: string }));
+  const matches = (s: unknown) =>
+    s === t || isRestatementOf(s as { type: string }, t as { type: string });
+  // rule 355.13 (rule-id: ven-140-166 Shuriken Flip) — a skipped "up to one"
+  // slot is compacted out of the item's list ("…, then move a friendly unit"
+  // played for the move alone), so POSITION no longer names the slot: the picks
+  // that were made fill the MANDATORY slots in printed order.
+  if (bound.length < slots.length) {
+    const mandatory = slots.filter((s) => isSingleChoice(s as AnyEffect));
+    if (mandatory.length === bound.length) {
+      const k = mandatory.findIndex(matches);
+      return k >= 0 ? bound[k] : undefined;
+    }
+  }
+  const j = slots.findIndex(matches);
   return j >= 0 ? bound[j] : undefined;
 }
 
@@ -307,6 +320,66 @@ export function raisePlayTimeDestinationChoice(
   return false;
 }
 
+/**
+ * rule 355.4 / 355.15 (rule-id: ogn-262-298 Zenith Blade) — "Stun an enemy unit
+ * at a battlefield. You may move a friendly unit to THAT ENEMY UNIT'S
+ * BATTLEFIELD." The destination is not a free choice, but it IS a Move
+ * Destination of PLAYING the spell: "that enemy unit's battlefield" is read once,
+ * as the spell is played, and frozen (355.15). Re-deriving it at resolution lets
+ * the anchor chase a target that moved in response, which is the case judges get
+ * wrong — a response that relocates the stunned unit must not redirect the move.
+ *
+ * The reference is the object an EARLIER step of the same sequence chose, so the
+ * zone is resolved off the item's positional targets and stamped as `_dest`;
+ * `effects/move.ts` prefers that stamp over the zone the sequence threads as
+ * `sameZone`. A reference that is not at a battlefield when the spell is played
+ * stamps nothing — the instruction then has no destination to freeze and is
+ * simply ignored on resolution (359.3.e.6).
+ */
+export function lockTargetBattlefieldDestinations(item: ChainItemLike, ctx: EffectContext): void {
+  if (item.countered === true || item.effect === undefined) {
+    return;
+  }
+  const seq = item.effect as AnyEffect;
+  if (seq.type !== "sequence" || !Array.isArray(seq.effects)) {
+    return;
+  }
+  const steps = seq.effects as AnyEffect[];
+  const destIdx = steps.findIndex((step) => step?.to === "target-battlefield");
+  if (destIdx < 0 || steps[destIdx]?._dest !== undefined) {
+    return;
+  }
+  const slots = collectSequenceTargetSlots(seq as SpellEffectTargetShape);
+  const targets = (item.targets as readonly string[] | undefined) ?? [];
+  let anchor: string | undefined;
+  for (let i = 0; i < destIdx; i++) {
+    const descriptor = steps[i]?.target;
+    if (typeof descriptor !== "object" || descriptor === null) {
+      continue;
+    }
+    const j =
+      slots?.findIndex((s) => s === descriptor || isRestatementOf(s as { type: string }, descriptor as { type: string })) ??
+      -1;
+    const referent = j >= 0 ? targets[j] : undefined;
+    const zone = referent === undefined ? undefined : (ctx.zones.getCardZone(referent as CoreCardId) as string | undefined);
+    if (zone?.startsWith("battlefield-") === true) {
+      anchor = zone;
+    }
+  }
+  if (anchor === undefined) {
+    return;
+  }
+  // rule-id: ogn-259-298 — the stored effect is often the card definition's own
+  // frozen object; take a private copy before the first `_dest` write.
+  if (!Object.isExtensible(steps[destIdx] as object)) {
+    item.effect = JSON.parse(JSON.stringify(item.effect));
+    const copied = (item.effect as AnyEffect).effects as AnyEffect[];
+    (copied[destIdx] as AnyEffect)._dest = anchor;
+    return;
+  }
+  (steps[destIdx] as AnyEffect)._dest = anchor;
+}
+
 /** Every `swap-locations` instruction of `effect`, root or sequence step. */
 function collectSwapNodes(effect: unknown, out: AnyEffect[] = []): AnyEffect[] {
   if (!effect || typeof effect !== "object" || Array.isArray(effect)) {
@@ -377,6 +450,7 @@ export function raiseChainDestinationChoices(
       continue;
     }
     lockSwapDestinations(item, makeCtx(item));
+    lockTargetBattlefieldDestinations(item, makeCtx(item));
     if (collectDestinationNodes(item.effect).every((n) => n._dest !== undefined)) {
       continue;
     }

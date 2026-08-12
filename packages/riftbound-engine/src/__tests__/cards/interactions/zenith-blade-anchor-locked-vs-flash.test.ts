@@ -152,15 +152,13 @@ describe("Zenith Blade — the move destination is anchored at play time; the mo
     expect(game.violations()).toEqual([]);
   });
 
-  test.failing("(a) BUG: the move destination is re-derived from E's CURRENT battlefield at resolution — F follows E to bf2, but 355.4/355.15 froze 'that enemy unit's battlefield' as bf1 when Zenith Blade was played", async () => {
-    // Expected: the only destination offered is bf1 and F lands there. Actual: the engine offers
-    // battlefield-bf2 (E's new home) and F arrives at bf2 — the anchor chased the target.
+  test("(a) the anchor does NOT chase the target: E is Galed to bf2, but 'that enemy unit's battlefield' was frozen as bf1 when Zenith Blade was played (355.4 / 355.15), so bf1 is the only destination offered and F lands there", async () => {
     const game = await castZenithBlade();
     await game.p1.passPriority();
     await game.p2.cast("gale", { targets: "E" });
     await game.p2.pick("battlefield-bf2");
-    await game.p1.passPriority();
-    await game.p2.passPriority(); // Gale resolves: E is at bf2
+    await game.p2.passPriority();
+    await game.p1.passPriority(); // Gale resolves: E is at bf2
     expect(game.locationOf("E")).toBe("bf2");
     await game.p1.passPriority();
     await game.p2.passPriority(); // Zenith Blade resolves

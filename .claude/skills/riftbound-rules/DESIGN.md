@@ -109,6 +109,53 @@ Rule 383.3.d ("the controller selects the order to place simultaneous triggers o
   offering the order. The sidebar only keeps a compact hint ("Reorder N triggers in the chain popup…" + "Keep this
   order").
 
+## Choices and when they are made (2026-08-12; do not re-litigate)
+Every card that asks "is this choice made at finalization or at resolution?" gets the SAME answer, and it is not a
+per-card judgement call. **A specific Game Object that the item's own text tells its CONTROLLER to choose is chosen
+in the Make Relevant Choices step — step 2 of playing a card (355.5) or of finalizing an ability (402.2) — and
+locked there (355.15).** Resolution never re-chooses it.
+
+There is no separate "resolution-time choice" doctrine to weigh against that. Rule 355.10 is a CLOSED list of
+carve-outs, and a choice reaches resolution only by matching one of them:
+
+| carve-out | rule | what defers, and to whom |
+|---|---|---|
+| the object sits in a non-Public zone | 355.10.a / 355.10.a.1 | hand, deck, banishment. **Trashes, bases, battlefields, Legend/Champion/Facedown zones are PUBLIC**, so "recycle cards from trashes" and "a spell in a trash" are ordinary targets chosen at finalization. |
+| named only as a restriction on another choice | 355.10.b | "at a battlefield" in *"kill a unit at a battlefield"*. But *"kill ALL units at a battlefield"* targets the battlefield. |
+| part of a cost / trigger condition / replacement | 355.10.c, 355.10.c.1 | "[do X] to [do Y]" — X names nothing. Note costs are paid in step 4, AFTER the step-2 choices (357.2). |
+| programmatic — criteria, not selection | 355.10.d, 355.10.d.1 | "each unit here", "all gear". **355.10.d.2: being the only legal option is NOT programmatic** — see the section below. |
+| chosen wholly or partly by another player | 355.10.e | "each player kills a unit they control" — each player picks as it resolves. |
+| an instruction a player "must" complete | 355.10.f | "you MUST recycle one of your runes". Contrast "recycle a rune you control", which targets. |
+| a trigger the finalizing item generates | 355.5.b | delayed / reflexive triggers make their own choices when THAT ability is finalized, not now. |
+| the choice depends on what an earlier instruction of the SAME resolution produces | 355.16 | "discard a card; if it was a unit, …" — the branch is not knowable yet, so nothing inside it pre-locks. |
+
+Two things that look like deferrals and are not:
+- **"You may <verb> a <descriptor>" defers the DECISION, never the OBJECT.** Rule 355.12 is explicit: if a spell says
+  a player may perform a Game Action on some number of Game Objects, *all choices are considered targeted and chosen
+  independently of the decision to perform the Game Action.* So Relentless Pursuit's Equipment, Zenith Blade's
+  friendly mover and Moonfall's "up to one enemy unit" are all named as the card is played; only the yes/no waits
+  (383.3.a.3 / 204.3.b for the trigger form).
+- **Move destinations are choices of PLAYING** (355.4), one per Move the item will perform, valid = a location other
+  than the mover's current one (355.4.a). "That unit's battlefield" is resolved and frozen at that instant; it is
+  never re-derived at resolution.
+
+What genuinely IS left for resolution, and nothing else: how much of a split is dealt to each already-chosen target
+(355.14.e / 355.14.h), choosing a legal SUBSET of the original targets when a group restriction broke (355.11.b),
+and the "you may" decision itself. Everything the chosen set does then runs under 359.3.e — an illegal target is
+simply unaffected (359.3.e.5) and is **never replaced** (355.15); a newcomer can never be added.
+
+**Playability follows from the same rule, at the front.** 355.8 / 402.3: valid choices must exist for *all* targets
+before the item can go on the chain — so a card with no legal option for a REQUIRED choice is absent from the
+offered set, not offered-then-rejected. "Up to N" / "any number" may legally be answered with zero (355.13) and so
+never blocks a play. This is why Relentless Pursuit is unplayable with no friendly Equipment and Shuriken Flip is
+unplayable with no friendly unit. For a triggered item that has no legal choice, 402.4 removes it from the chain
+(and 402.4.a: that is not being countered).
+
+Engine shape: `play/make-choices.ts` is the single enumerator — it walks an item's effect tree once and returns the
+ordered `ChoicePlan`, each entry tagged `PLAY` / `FIN` / `RES` with the rule that put it there. Every raiser
+(`play-time-modes.ts`, `play-time-destinations.ts`, `abilities/target-slots.ts`) reads that plan rather than
+re-deriving its own answer, and the harness `Decision.timing` is the entry's tag.
+
 ## A sole legal option is still a choice (355.10.d.2)
 Rule 355.10.d.2: **being the only valid choice does NOT make a selection programmatic.** So the engine never
 short-circuits a choice down to "there is only one, take it" — a lone legal target/destination/mode/payer/recipient
@@ -240,3 +287,54 @@ Establish Control / Conquer → 466.7 Combat ends. Two questions keep coming bac
   Pending, draw stacked on top, LIFO); it is annotated `// RULING-CONFLICT` and NOT implemented, because reading the
   result while the damage-step chain is live contradicts 466.2 generally — the same window is what lets a Deathknell
   change who is standing here at 466.3 (`kogmaw-dk-spares-3d-recalled-attackers`).
+
+## Community rulings settled against the CR (2026-08-12; do not re-litigate)
+A rules-adjudication pass took the 17 parked ruling-vs-CR items out of the fix queue
+(`.claude/skills/engine-playtest-observer/CONFLICTS-ADJUDICATED-2026-08-12.md` has the full table). Ten were
+riftjudge answers the current Comprehensive Rules supersede; their facets are now PASSING tests that assert the
+engine, each carrying a `// RULING-CONFLICT` note and a "previously asserted the opposite, do not flip back" line.
+The recurring shape is the one already seen for `fiora-peerless` and the 466 pair: the community answer describes
+pre-Unleashed text, or it is contradicted by a *second* riftjudge answer, and the CR names the discriminator.
+- **[Legion] never fires off its own card.** 812.1.c: the Dependent Ability is Active only while "a card DIFFERENT
+  than the one with the Legion ability has been Finalized by you on the same turn" (812.1.b.1 "another card"). So
+  Sun Disc's own play never satisfies it, and with no other play the ability is not on the card at all — it cannot
+  be tapped "for no effect". `4bd896c444b3c607` says both of those things and is wrong on both.
+- **No kill ⇒ no draw.** "Kill a unit at a battlefield. Its controller draws 2" is the CR's *own* example twice
+  over: 355.10.d ("targets the unit, but not its controller") and the Hidden Blade example under 359.3.e.5 ("any
+  instructions related to that unit are ignored"), with 359.3.e.12 making "its controller" read null. Contrast
+  Void Seeker's "Draw 1", which names no referent back to the target and still happens. `719c8ada539c1401` is wrong.
+- **A card played mid-resolution is Pending, not inlined.** 354.3 stops its further steps until the current
+  resolution ends; 337.1/337.1.b then finalize the pending items in append order and 337.4 gives the next item's
+  controller Priority — so it *is* counterable, and a play trigger appended later is newer and resolves first
+  (340.1). `95688f6f6f4b0da4` denies both; riftjudge `22ed336a9af8edc9` agrees with the CR.
+- **Designations are stamped when the showdown BECOMES a Combat Showdown, not when it closes.** 323.14 converts the
+  running Non-Combat Showdown; 464.2 defines that conversion as combat opening; 464.2.c.3 stamps
+  Attacker/Defender "now"; 464.2.c.1.b explicitly contemplates combat opening into a showdown already running.
+  `33552d2333fd187b` is right that the showdown does not end early and wrong that nobody is designated yet.
+- **[Ambush] grants LOCATION validity separately from TIMING.** A card's own "you may play me to its battlefield"
+  clause is a location permission (822.3.a); the Reaction speed comes from Ambush and is conditional (813.4), so if
+  the play's additional cost empties the destination the condition fails at step 5 Check Legality and the play is
+  undone (813.4.b, 822.3). `7c7de024a0a95e9c` wants the Wolf in anyway; official ruling `57b3e2849ef0109a` and the
+  CR agree it cannot be.
+- **"Up to one X" is satisfied by zero** (355.13) — post-errata Salvage keeps the empty target set on the menu;
+  `eea5054e0caa29a0` describes the pre-errata "you may kill a gear" wording.
+- **Not every ruling clash is a clash.** Elder Dragon's three answers all hold at once: 142.4.c alters lethal damage
+  only "for enemy units that have damage marked BY YOU", so who marked the pre-existing damage decides it. A repro
+  that seeds damage with no attributor is testing neither case.
+
+## Open rules questions (need a human or an official ruling)
+The tree is self-consistent without answers to these — each is already implemented one way and pinned by tests. They
+are listed because an official answer would *change* something, and because re-deriving them has cost real cycles.
+1. **Hidden Blade's linked draw.** "Kill a unit at a battlefield. Its controller draws 2" — when the unit is saved,
+   is the draw an *independent* instruction (like Void Seeker's "Draw 1", so it still happens) or an instruction
+   *related to the illegal target* (so it is ignored)? Engine + 33 facets say ignored, on 359.3.e.5's own Hidden
+   Blade example; riftjudge `719c8ada539c1401` says it still draws. This is the single closest call in the set.
+2. **Deceiver's "another".** "Play a ready Reflection unit token there. It becomes a copy of ANOTHER unit there."
+   The copy source is a target chosen at finalization (§ Choices and when they are made), but "another" is relative
+   to a token that does not exist until resolution. Does that make the source choosable at finalization anyway
+   (engine's eventual model) or is it one of the 355.16 "depends on what an earlier instruction produced" cases?
+3. **A spell named at finalization, played at resolution.** Kai'Sa's "play a spell from your trash" targets that
+   spell as the trigger is finalized (355.10.a — the trash is Public). When it is then actually played during
+   resolution, does its own play get a normal Make-Relevant-Choices step and priority window, or does naming it at
+   finalization pre-bind everything? Eight facets in `drag-under-fizz-no-kaisa-six-points-yes` assume the former.
+   Sequencing, not naming, is the open half.
