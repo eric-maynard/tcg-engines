@@ -16,6 +16,7 @@ import { recalculateStaticEffects } from "../abilities/static-abilities";
 import { riftboundDefinition } from "../game-definition/definition";
 import { CardDefinitionRegistry, setGlobalCardRegistry, getGlobalCardRegistry } from "../operations/card-lookup";
 import { recordDepartedOwner } from "../operations/leave-board";
+import { createDefault2v2Teams } from "../operations/teams";
 import type { GamePhase, RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../types";
 import { basicRuneDef, domainsOf, FILLER_UNIT_DEF, loadDefaultCardPool, toLookupPayload } from "./card-pool";
 import type { HarnessEngine } from "./internal";
@@ -61,6 +62,11 @@ export interface ScenarioBattlefield {
 export interface ScenarioSpec {
   readonly seed: string;
   readonly players: readonly Seat[];
+  /**
+   * rule 489.8 — a four-seat game is Magma Chamber (2v2) unless the test asks
+   * for a free-for-all. `undefined` = no teams (every seat an opponent).
+   */
+  readonly teams?: Readonly<Record<string, number>>;
   readonly turn: number;
   readonly phase: GamePhase;
   readonly active: Seat;
@@ -238,6 +244,9 @@ export function buildScenarioEngine(spec: ScenarioSpec, pool: CardPool): BuiltSc
   st.status = "playing";
   st.setup = undefined;
   st.turn = { activePlayer: spec.active, number: spec.turn, phase: spec.phase };
+  if (spec.teams !== undefined) {
+    st.teams = spec.teams;
+  }
   if (spec.victoryScore !== undefined) {
     st.victoryScore = spec.victoryScore;
   }
@@ -390,6 +399,12 @@ export interface ScenarioOptions {
   readonly seed?: string;
   readonly pool?: CardPool;
   readonly players?: 2 | 3 | 4;
+  /**
+   * Team mapping (seat → team id). Defaults to the Magma Chamber 2v2 pairing
+   * for four seats (rule 489.8) and to no teams otherwise; pass `false` for an
+   * explicit four-player free-for-all.
+   */
+  readonly teams?: Readonly<Record<string, number>> | false;
 }
 
 export interface CardPlacement {
@@ -467,6 +482,11 @@ export class ScenarioBuilder {
       points: {},
       resources: {},
       seed: opts.seed ?? "harness",
+      // rule 489.8: four seats play Magma Chamber (2v2) by default.
+      teams:
+        opts.teams === false
+          ? undefined
+          : (opts.teams ?? (players.length === 4 ? createDefault2v2Teams(players) : undefined)),
       turn: 2,
       xp: {},
     };

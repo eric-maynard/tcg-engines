@@ -15,8 +15,8 @@ import { P1, P2, P3, P4, scenario } from "../../../harness";
 const CHARM = "ogn-043-298";
 
 /** Four seats: P4 holds bf2 with a body, P2 holds bf1 with the unit P1 wants to Charm. */
-function fourSeats() {
-  return scenario({ players: 4 })
+function fourSeats(opts: { teams?: false } = {}) {
+  return scenario({ players: 4, ...(opts.teams === false ? { teams: false as const } : {}) })
     .resources(P1, { energy: 1, power: { calm: 1 } })
     .battlefield("bf1", { controller: P2 })
     .battlefield("bf2", { controller: P4 })
@@ -34,8 +34,8 @@ describe("Ruling bcd85efd39649dcd — Charm cannot deliver an opponent's unit on
     expect(game.seat(P3).battlefields({ controlled: true })).toEqual([]);
   });
 
-  test("baseline in the FREE-FOR-ALL four-player game the harness builds (no team mapping): every seat is an opponent, so bf2 is an ordinary destination", async () => {
-    const game = await fourSeats().build();
+  test("baseline in a FREE-FOR-ALL four-player game (`teams: false`, no team mapping): every seat is an opponent, so bf2 is an ordinary destination", async () => {
+    const game = await fourSeats({ teams: false }).build();
     await game.p1.cast("charm", { targets: "victim" });
     const d = game.decision();
     expect(d).toMatchObject({ kind: "pick", seat: P1, semantics: "destination", timing: "FIN" });
@@ -51,12 +51,10 @@ describe("Ruling bcd85efd39649dcd — Charm cannot deliver an opponent's unit on
     expect(game.violations()).toEqual([]);
   });
 
-  // BUG: the ruling is about Magma Chamber (2v2), and the harness cannot build one — `scenario({players: 4})`
-  // leaves `gameState.teams` unset, so `areAllies` degrades to identity and every seat is an opponent. The
-  // engine's ally gate (operations/teams.ts areAllies, used by standard-move / move-destinations) therefore
-  // never engages and P4's occupied battlefield stays on Charm's destination list.
-  test.failing(
-    "BUG: ruling bcd85efd39649dcd — in a 2v2 the teammate's battlefield must not be offered; the harness seats four players with no teams, so it is",
+  // rule 489.8: `scenario({players: 4})` seats Magma Chamber (2v2), so `areAllies` engages and the ally gate
+  // (operations/teams.ts areAllies, used by standard-move / move-destinations) drops P4's battlefield.
+  test(
+    "ruling bcd85efd39649dcd — in a 2v2 the teammate's battlefield must not be offered",
     async () => {
       const game = await fourSeats().build();
       expect(game.gameState.teams).toEqual({ [P1]: 0, [P2]: 1, [P3]: 0, [P4]: 1 }); // Magma Chamber pairing
