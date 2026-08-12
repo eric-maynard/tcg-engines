@@ -380,14 +380,24 @@ function reevaluateCostPayment() {
     return;
   }
 
-  // Still can't afford — check if there are still rune moves available
-  const runeExhaustMoves = availableMoves.filter(m =>
-    m.moveId === "exhaustRune" || m.moveId === "recycleRune"
+  // Still can't afford — keep the prompt open only while some rune gesture can
+  // actually advance THIS cost. rule 414.1.b: an exhausted rune cannot be
+  // exhausted again; rule 164.2.b: recycling adds Power, never generic energy —
+  // so counting every rune move left the bar open on an unpayable cost whose only
+  // exit was Cancel, still telling the player to exhaust runes.
+  const outstanding = typeof costPaymentOutstanding === "function"
+    ? costPaymentOutstanding()
+    : { energyShortfall: Math.max(0, pendingCost - currentEnergy), unmetPips: [] };
+  const usefulRuneMoves = availableMoves.filter(m =>
+    (m.moveId === "exhaustRune" && outstanding.energyShortfall > 0) ||
+    (m.moveId === "recycleRune" && outstanding.unmetPips.length > 0)
   );
 
-  if (runeExhaustMoves.length === 0 && currentEnergy < pendingCost) {
-    // No more runes to exhaust and still can't afford
-    showToast(`Not enough energy (${currentEnergy}/${pendingCost}) — no more runes available`);
+  if (usefulRuneMoves.length === 0) {
+    // DESIGN.md §Paying costs: never take the prompt away without saying so.
+    showToast(outstanding.unmetPips.length > 0
+      ? `Can't pay ${outstanding.unmetPips.map(p => `[${p}]`).join("")} — no rune left to recycle`
+      : `Not enough energy (${currentEnergy}/${pendingCost}) — no more runes available`);
     resetInteractionSilent();
     render();
     return;

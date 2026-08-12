@@ -9,6 +9,9 @@ function render() {
   // Detect phase/turn transitions before rendering
   checkPhaseTransition();
 
+  // A hint toast names one card; drop it once this frame makes that card playable.
+  clearStaleCardToasts();
+
   // W8: if the newest log entry on the incoming frame is the rewind
   // sentinel, clear any in-progress UI interaction (target cursor, armed
   // hotkey mode) and flash the board. Runs before child renderers so they
@@ -159,13 +162,34 @@ function clearToasts() {
   document.querySelectorAll(".toast").forEach(t => t.remove());
 }
 
-/** Show a toast notification */
-function showToast(message) {
+/** Drop a card-scoped toast whose statement the current frame has falsified —
+ * a "can't pay X" hint is computed once at click time and never re-evaluated, so
+ * without this it keeps instructing the player after the very state change (a
+ * recycle, a rune tap) that made the card playable. */
+function clearStaleCardToasts() {
+  const stale = document.querySelectorAll(".toast[data-for-card]");
+  if (!stale.length) return;
+  const moves = typeof availableMoves !== "undefined" && Array.isArray(availableMoves) ? availableMoves : [];
+  for (const toast of stale) {
+    const cardId = toast.dataset.forCard;
+    const playable = moves.some(m =>
+      (m.moveId === "playUnit" || m.moveId === "playSpell" || m.moveId === "playGear" ||
+       m.moveId === "playFromChampionZone" || m.moveId === "hideCard") &&
+      m.params?.cardId === cardId
+    );
+    if (playable) toast.remove();
+  }
+}
+
+/** Show a toast notification. `opts.cardId` scopes it to one card, so the next
+ * frame that makes that card playable takes the message down (clearStaleCardToasts). */
+function showToast(message, opts = {}) {
   // Remove existing toast
   clearToasts();
   const toast = document.createElement("div");
   toast.className = "toast";
   toast.textContent = message;
+  if (opts && opts.cardId) toast.dataset.forCard = opts.cardId;
   document.body.appendChild(toast);
   setTimeout(() => { if (toast.parentNode) toast.remove(); }, 2500);
 }

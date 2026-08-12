@@ -1198,7 +1198,7 @@ function enterHandCardSelected(cardId) {
     // for a timing reason — never blame the energy pool for it.
     const stateReason = playTimingBlockReason(card);
     if (stateReason) {
-      showToast(stateReason);
+      showToast(stateReason, { cardId });
       selectedCard = cardId;
       render();
       return;
