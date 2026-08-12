@@ -83,7 +83,7 @@ describe("Swift Scout × Switcheroo — what the Hide control offers and what it
     expect(game.p1.energy()).toBe(0);
   });
 
-  test.failing("BUG: the Hide control quotes NO price — neither [1] nor [rainbow] appears on the option, so a client cannot show what it is about to spend (477.3.a / 357.1)", async () => {
+  test("the Hide control quotes NO price — neither [1] nor [rainbow] appears on the option, so a client cannot show what it is about to spend (477.3.a / 357.1)", async () => {
     const game = await board({ energy: 1 }).build();
     const opt = game.p1.option("hide", "sw");
     expect(opt).toBeDefined();

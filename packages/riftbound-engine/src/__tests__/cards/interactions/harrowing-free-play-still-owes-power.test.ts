@@ -95,7 +95,7 @@ describe("The Harrowing's free play still owes the Power cost — Sivir, Ambitio
   // name the [body][body][body] still owed, so a client dims the tile and prints the pay line.
   // Actual — the field carries neither `unaffordable` nor `needsAdd`: the entry looks exactly like a payable one,
   // and the player only discovers the truth when the spell resolves and quietly does nothing.
-  test.failing("BUG: the unpayable Sivir entry must be flagged with the pips it owes — `unaffordable` + `needsAdd {power:{body:3}}` on the targets field (357.1.a / 429.3 / 356.1.b.2)", async () => {
+  test("the unpayable Sivir entry must be flagged with the pips it owes — `unaffordable` + `needsAdd {power:{body:3}}` on the targets field (357.1.a / 429.3 / 356.1.b.2)", async () => {
     const game = await board(0).build();
     const field = targetsField(game, "har");
     const idx = (field?.options ?? []).findIndex((v) => (Array.isArray(v) ? v[0] : v) === "sivir");

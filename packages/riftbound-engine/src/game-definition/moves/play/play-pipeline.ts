@@ -1250,8 +1250,16 @@ const RESOURCE_OPTIONAL_IDS: readonly string[] = [
   ADDITIONAL_COST_IDS.pay,
 ];
 
-/** rule 356.1.a / 356.1.b / 356.5.a — the instruction's base-cost overrides for the model. */
-function instructionCost(spec: EffectPlaySpec): { extras: Partial<CostExtras>; free: boolean } {
+/**
+ * rule 356.1.a / 356.1.b / 356.5.a — the instruction's base-cost overrides for the model.
+ *
+ * Exported because anything that QUOTES what an instructed play will charge
+ * (a dimmed target tile, a pay line) has to price it with the same overrides
+ * the play itself uses — a parallel translation of the words drifts.
+ */
+export function instructionCost(
+  spec: Pick<EffectPlaySpec, "cardId" | "costMode">,
+): { extras: Partial<CostExtras>; free: boolean } {
   const mode = spec.costMode;
   switch (mode.kind) {
     case "ignore-any-and-all":

@@ -175,6 +175,36 @@ function canAffordHide(
   return total >= HIDE_POWER_COST;
 }
 
+/**
+ * rule 477.3.a / 357.1 — what a Hide will actually take out of the pool AS IT
+ * STANDS, so the control can quote the price it is about to charge instead of
+ * charging an invisible one. Mirrors `deductHideCost` exactly (Power first,
+ * the ogn-263-298 [1] Energy alternative only when no free Power is left,
+ * nothing at all under the ogn-264-298 licence) — never a second cost model.
+ */
+export function hideCostQuote(
+  state: RiftboundGameState,
+  playerId: string,
+  ctx?: HideScanContext,
+): { energy: number; power: number; free: boolean } {
+  if (hasFreeHideLicence(state, playerId)) {
+    return { energy: 0, free: true, power: 0 };
+  }
+  const hasPower = Object.values(spendablePowerPool(state, playerId, undefined)).some(
+    (v) => (v ?? 0) > 0,
+  );
+  if (hasPower) {
+    return { energy: 0, free: false, power: HIDE_POWER_COST };
+  }
+  if (
+    (state.runePools[playerId]?.energy ?? 0) >= HIDE_POWER_COST &&
+    hasEnergyHideAlternative(playerId, ctx)
+  ) {
+    return { energy: HIDE_POWER_COST, free: false, power: 0 };
+  }
+  return { energy: 0, free: false, power: HIDE_POWER_COST };
+}
+
 function deductHideCost(
   draft: RiftboundGameState,
   playerId: string,
