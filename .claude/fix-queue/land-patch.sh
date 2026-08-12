@@ -26,6 +26,21 @@ EF="$REPO/.claude/fix-queue/embargo-files.txt"; if [ -s "$EF" ]; then while IFS=
 out files "${#FILES[@]}"
 # priority lane: if .land.priority names label prefixes (one per line), other callers yield up to 20 min before contending for the lock
 PRIO="$REPO/.claude/fix-queue/.land.priority"; FASTQ="$REPO/.claude/fix-queue/.land.fast-waiting"
+# Sweep stale yield markers BEFORE anyone consults them. Reaping only inside the
+# yield loop cannot self-heal a fleet where nobody reaches the loop: eight
+# orphans left by a container restart made every ordinary land burn its whole
+# 15-minute yield before it even contended for the lock. Age is the sound test —
+# `kill -0` is namespace-local, so a marker written by another container can
+# never be verified alive from here; anything older than LAND_MARKER_TTL is
+# gone regardless, and a same-container marker whose PID is dead goes early.
+for _m in "$FASTQ".*; do
+  [ -e "$_m" ] || continue
+  _age=$(( $(date +%s) - $(stat -c %Y "$_m" 2>/dev/null || echo 0) ))
+  _pid=${_m##*.}
+  if [ "$_age" -gt "${LAND_MARKER_TTL:-1200}" ]; then rm -f "$_m" 2>/dev/null && out reaped_stale_marker "$(basename "$_m") age=${_age}s"
+  elif [ "$_pid" -eq "$_pid" ] 2>/dev/null && ! kill -0 "$_pid" 2>/dev/null; then rm -f "$_m" 2>/dev/null && out reaped_stale_marker "$(basename "$_m") pid-dead"
+  fi
+done
 case "$LABEL" in fast-*|coordinator*) touch "$FASTQ.$$";; esac  # announce a fast/coordinator land is waiting → others yield
 for _ in $(seq 1 60); do mine=1; case "$LABEL" in fast-*|coordinator*) mine=0;; esac; othersfast=""; for m in "$FASTQ".*; do [ -e "$m" ] || continue; mpid=${m##*.}; case "$m" in *".$$") continue;; esac; if kill -0 "$mpid" 2>/dev/null; then othersfast="$m"; break; else rm -f "$m" 2>/dev/null; fi; done; if [ $mine = 1 ] && [ -n "$othersfast" ]; then sleep 15; continue; fi; [ -s "$PRIO" ] || break; grep -q . "$PRIO" || break; y=1; while read -r pfx; do [ -n "$pfx" ] && case "$LABEL" in "$pfx"*) y=0;; esac; done < "$PRIO"; [ $y = 0 ] && break; sleep 20; done
 trap 'rm -f "$FASTQ.$$" 2>/dev/null' EXIT
@@ -121,10 +136,16 @@ NEW_SHA=$(git rev-parse HEAD); git -C "$WT" reset -q --hard "$NEW_SHA" >/dev/nul
 for f in "${FILES[@]}"; do
   [ -e "$REPO/$f" ] || continue
   cur=$(git -C "$REPO" hash-object "$REPO/$f" 2>/dev/null)
-  old=$(git -C "$REPO" rev-parse "$PREV_SHA:$f" 2>/dev/null)
   new=$(git -C "$REPO" rev-parse "$NEW_SHA:$f" 2>/dev/null)
-  if [ -n "$cur" ] && [ -n "$new" ] && [ "$cur" != "$new" ] && [ "$cur" = "$old" ]; then
+  uniq=$(git -C "$REPO" diff "$NEW_SHA" -- "$f" 2>/dev/null | grep -c '^+[^+]')
+  if [ -n "$cur" ] && [ -n "$new" ] && [ "$cur" != "$new" ] && [ "${uniq:-1}" = 0 ]; then
     git -C "$REPO" show "$NEW_SHA:$f" > "$REPO/$f" 2>/dev/null && out refreshed_shared "$f"
+  elif [ -n "$cur" ] && [ -n "$new" ] && [ "$cur" != "$new" ]; then
+    # Could not refresh: the shared copy carries edits of its own (or the file
+    # was deleted here). That is exactly when a stale copy is most dangerous —
+    # it shadows HEAD for every lane testing in the shared tree, and a later
+    # land listing this file reverts what was just committed.
+    out stale_shared_copy "$f — shared copy differs from the commit and has local edits; whoever owns it must rebase onto \`git show HEAD:$f\`"
   fi
 done
 RSLOG=$(mktemp)
@@ -137,7 +158,14 @@ if git -C "$WT" diff --name-only "$HEAD_SHA" "$NEW" | grep -qE "(^|/)package\.js
 # (a) never bounce while a browser pass holds /tmp/rb-browser-pass.lock (younger than 4h), and
 # (b) otherwise bounce at most once per 15 minutes. Files are already synced; the app picks them up on next bounce.
 BL=/tmp/rb-browser-pass.lock; LB=/tmp/rb-last-bounce
-if [ -e "$BL" ] && [ $(( $(date +%s) - $(stat -c %Y "$BL") )) -lt 14400 ]; then out app "deferred(browser-pass-active)";
-elif [ -e "$LB" ] && [ $(( $(date +%s) - $(stat -c %Y "$LB") )) -lt 900 ]; then out app "deferred(rate-limit)";
+# Static assets under public/ are read from disk on every request, so a
+# client-only patch is live the moment the rsync lands and can wait for the next
+# bounce. SERVER and ENGINE code only takes effect on restart — deferring that
+# leaves a fresh client talking to a stale server (a field or route it does not
+# have yet), so those patches are never rate-limited.
+NEEDS_RESTART=0
+printf '%s\n' "${FILES[@]}" | grep -qE '^packages/|^apps/riftbound-app/server/|^apps/riftbound-app/[^/]+\.ts$' && NEEDS_RESTART=1
+if [ -e "$BL" ] && [ $(( $(date +%s) - $(stat -c %Y "$BL") )) -lt 14400 ]; then out app "deferred(browser-pass-active)"; [ "$NEEDS_RESTART" = 1 ] && { touch /tmp/rb-bounce-owed; out bounce_owed "server/engine code changed but a browser pass holds the lock — the devbox is running OLD server code until someone bounces it"; }
+elif [ -e "$LB" ] && [ $(( $(date +%s) - $(stat -c %Y "$LB") )) -lt 900 ] && [ "$NEEDS_RESTART" = 0 ]; then out app "deferred(rate-limit, client-only patch — static assets are already live)";
 else touch "$LB"; out app "$(ssh -o ConnectTimeout=10 emaynard-tcg 'kill $(cat /tmp/app.pid) 2>/dev/null; sleep 3; curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/play' 2>/dev/null)"; fi
 bun "$REPO/.claude/fix-queue/fix-queue.ts" metrics 2>/dev/null | sed 's/^/metrics=/' || true
