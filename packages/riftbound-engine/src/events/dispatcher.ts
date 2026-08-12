@@ -41,7 +41,7 @@ import {
   type TriggerRunnerContext,
   fireTriggers,
 } from "../abilities/trigger-runner";
-import type { CleanupContext } from "../cleanup/state-based-checks";
+import type { CleanupContext, CleanupOptions } from "../cleanup/state-based-checks";
 import { performCleanup } from "../cleanup/state-based-checks";
 import {
   type LeaveBoardContext,
@@ -157,7 +157,10 @@ const MAX_MAINTENANCE_ITERATIONS = 16;
  *
  * @returns the total number of units reaped across all passes.
  */
-export function runStateMaintenance(ctx: DispatchContext): number {
+export function runStateMaintenance(
+  ctx: DispatchContext,
+  opts: CleanupOptions = {},
+): number {
   // `performCleanup` wants the `CleanupContext` shape (it reads
   // `counters.getCounter`/`clearCounter`/`setFlag`); every real dispatch
   // Context is a structural superset, so cast — the established pattern
@@ -178,7 +181,7 @@ export function runStateMaintenance(ctx: DispatchContext): number {
   let consecutiveNoKillPasses = 0;
   try {
     for (let i = 0; i < MAX_MAINTENANCE_ITERATIONS; i += 1) {
-      const result = performCleanup(cleanupCtx);
+      const result = performCleanup(cleanupCtx, opts);
       if (result.killed.length === 0) {
         consecutiveNoKillPasses += 1;
         if (consecutiveNoKillPasses >= 2) {

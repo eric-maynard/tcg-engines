@@ -27,6 +27,7 @@ import type {
 } from "@tcg/core";
 import type { DispatchContext } from "../events/dispatcher";
 import { runStateMaintenance } from "../events/dispatcher";
+import type { CleanupOptions } from "./state-based-checks";
 import type { RiftboundCardMeta } from "../types";
 
 /**
@@ -68,6 +69,7 @@ export interface PostMoveCleanupContext {
 export function cleanupAndFireDeaths<TState>(
   draft: TState,
   context: PostMoveCleanupContext,
+  opts: CleanupOptions = {},
 ): void {
   // Adapt the move/flow context slice to a `DispatchContext`. The structural
   // Shapes overlap (cards / counters / zones operation bags); cast bridges
@@ -80,7 +82,7 @@ export function cleanupAndFireDeaths<TState>(
     draft,
     zones: context.zones,
   } as unknown as DispatchContext;
-  runStateMaintenance(dispatchCtx);
+  runStateMaintenance(dispatchCtx, opts);
 }
 
 /**

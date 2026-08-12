@@ -93,7 +93,7 @@ describe("Swift Scout × Switcheroo — what the Hide control offers and what it
     expect(priceFields(opt)).not.toEqual([]);
   });
 
-  test.failing("BUG: with BOTH [1] Energy and [rainbow] available the player is given no election — one variant only, and the Power is spent while the Energy is kept (811.1.b + 'you MAY pay [1] … instead')", async () => {
+  test("with BOTH [1] Energy and [rainbow] available the player elects which price to pay, and only that one is spent (811.1.b + 'you MAY pay [1] … instead')", async () => {
     const game = await board({ energy: 1, power: { chaos: 1 } }).build();
     const opt = game.p1.option("hide", "sw");
 

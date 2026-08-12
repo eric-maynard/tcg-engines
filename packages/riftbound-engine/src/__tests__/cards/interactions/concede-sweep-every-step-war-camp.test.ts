@@ -251,19 +251,22 @@ describe("Concede sweep × Trifarian War Camp / Tianna / Void Seeker — accepte
     expect(game.violations()).toEqual([]);
   });
 
-  test.failing("BUG: the conceder's battlefield is NOT removed from the game — Trifarian War Camp stays in the battlefield row (652.2, 652.2.a)", async () => {
-    // Expected: bfCamp is removed and replaced by an abilityless token battlefield.
-    // Actual:   the War Camp card is still in `battlefieldRow` with its printed ability intact; only
-    //           its controller was cleared.
+  test("(b) three seats: the conceder's Trifarian War Camp is REPLACED by an abilityless token battlefield in the same slot (652.2, 652.2.a, 652.2.b)", async () => {
+    // rule 652.2.a with 652.2.b and ruling 91af2468caa0cf8c — "remove" here is a REPLACE, and the
+    // replacement takes the slot itself: the slot id survives (the units and hidden cards there do
+    // not move), the printed War Camp does not — what stands there is a token with no abilities.
     const game = await board(P2, 3).build();
+    expect(game.state("bfCamp").isToken).toBe(false);
     await game.p2.concede();
-    expect(game.cardsAt("battlefieldRow")).not.toContain("bfCamp");
+    expect(game.has("bfCamp")).toBe(true);
+    expect(game.state("bfCamp").isToken).toBe(true);
+    // "with no abilities" is what the token means: nothing here is +1 any more (652.2.c).
+    expect(game.state("wounded").staticMightBonus).toBe(0);
   });
 
-  test.failing("BUG: the removed battlefield's continuous +1 [Might] does not cease, so an already-lethally-damaged unit survives (652.2.c, 319.6/319.7)", async () => {
-    // Expected (the CR's own example): with the War Camp gone, Wounded drops to 2 Might with 2 damage
+  test("(b) three seats: the removed battlefield's continuous +1 [Might] ceases, so an already-lethally-damaged unit dies (652.2.c, 319.6/319.7)", async () => {
+    // The CR's own 652.2.c example: with the War Camp gone, Wounded drops to 2 Might with 2 damage
     // marked and dies in the cleanup that follows the board change.
-    // Actual:   state("wounded") = { might: 3, staticMightBonus: 1 }, still alive at bfCamp.
     const game = await board(P2, 3).build();
     await game.p2.concede();
     expect(game.state("wounded").staticMightBonus).toBe(0);

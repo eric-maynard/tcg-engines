@@ -8,6 +8,7 @@
 import type { PlayerId as CorePlayerId, GameMoveDefinitions } from "@tcg/core";
 import { fireTriggers } from "../../abilities/trigger-runner";
 import { createInteractionState, getTurnState } from "../../chain";
+import { cleanupAndFireDeaths, type PostMoveCleanupContext } from "../../cleanup/post-move-cleanup";
 import {
   getActivePlayers,
   isPlayerRemoved,
@@ -178,6 +179,17 @@ export const turnMoves: Partial<
         },
         playerId,
       );
+
+      // rule 652.2.c / 319.6 — the removed battlefield's continuous effects
+      // cease at once, which can leave a unit standing there with lethal damage
+      // already marked; the board change is followed by a cleanup, so the
+      // statics are recalculated and the state-based checks run here.
+      // rule 319.2 vs 323.6 — `skipControlStep`: 652.1/652.2 above already
+      // settled who controls what; re-reading control off the units standing
+      // there now would strip control the removal did not touch.
+      cleanupAndFireDeaths(draft, context as unknown as PostMoveCleanupContext, {
+        skipControlStep: true,
+      });
 
       const remaining = getActivePlayers(draft);
       if (remaining.length <= 1) {

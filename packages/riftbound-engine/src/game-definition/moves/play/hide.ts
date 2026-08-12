@@ -147,6 +147,37 @@ interface HideScanContext {
   };
 }
 
+/**
+ * rule 811.1.b + 350.2 — every price the seat could pay to Hide right now. The
+ * printed cost is [rainbow] ("power"); an alternative "you MAY pay [1] …
+ * instead" (ogn-263-298 Swift Scout) adds "energy". With both payable the
+ * player elects, and only the elected one is spent — so both are enumerated
+ * rather than one being picked for them.
+ */
+function hideCostRoutes(
+  state: RiftboundGameState,
+  playerId: string,
+  ctx?: HideScanContext,
+): ("energy" | "power")[] {
+  const routes: ("energy" | "power")[] = [];
+  if (
+    (state.runePools[playerId]?.energy ?? 0) >= HIDE_POWER_COST &&
+    hasEnergyHideAlternative(playerId, ctx)
+  ) {
+    routes.push("energy");
+  }
+  // rule 811.1.c.1 / 429.4 (sfd-189-221) — hiding is not playing, so Power
+  // earmarked "use only to play …" is not spendable here.
+  let total = 0;
+  for (const v of Object.values(spendablePowerPool(state, playerId, undefined))) {
+    total += typeof v === "number" && v > 0 ? v : 0;
+  }
+  if (total >= HIDE_POWER_COST) {
+    routes.push("power");
+  }
+  return routes;
+}
+
 function canAffordHide(
   state: RiftboundGameState,
   playerId: string,
@@ -186,9 +217,16 @@ export function hideCostQuote(
   state: RiftboundGameState,
   playerId: string,
   ctx?: HideScanContext,
+  election?: "energy" | "power",
 ): { energy: number; power: number; free: boolean } {
   if (hasFreeHideLicence(state, playerId)) {
     return { energy: 0, free: true, power: 0 };
+  }
+  // rule 811.1.b — an elected price is the one that will be charged.
+  if (election !== undefined && hideCostRoutes(state, playerId, ctx).includes(election)) {
+    return election === "energy"
+      ? { energy: HIDE_POWER_COST, free: false, power: 0 }
+      : { energy: 0, free: false, power: HIDE_POWER_COST };
   }
   const hasPower = Object.values(spendablePowerPool(state, playerId, undefined)).some(
     (v) => (v ?? 0) > 0,
@@ -209,6 +247,7 @@ function deductHideCost(
   draft: RiftboundGameState,
   playerId: string,
   ctx?: HideScanContext,
+  election?: "energy" | "power",
 ): void {
   // rule-id: ogn-264-298 — the licence waives the [rainbow] entirely.
   if (hasFreeHideLicence(draft, playerId)) {
@@ -216,6 +255,12 @@ function deductHideCost(
   }
   const pool = draft.runePools[playerId];
   if (!pool) {
+    return;
+  }
+  // rule 811.1.b — "you MAY pay [1] … INSTEAD": exactly one of the two prices
+  // is spent, and which one is the player's election when both are payable.
+  if (election === "energy" && hideCostRoutes(draft, playerId, ctx).includes("energy")) {
+    pool.energy -= HIDE_POWER_COST;
     return;
   }
   // Pay from whichever domain has the most Power left (mirrors [rainbow]
@@ -388,6 +433,16 @@ export const hideCard: Defs["hideCard"] = {
       return false;
     }
 
+    // rule 811.1.b — an elected price must be one the seat can actually pay.
+    const election = context.params.hideCostElection;
+    if (
+      election !== undefined &&
+      !hasFreeHideLicence(state, context.params.playerId) &&
+      !hideCostRoutes(state, context.params.playerId, context).includes(election)
+    ) {
+      return false;
+    }
+
     return true;
   },
   enumerator: (state, context) => {
@@ -422,7 +477,21 @@ export const hideCard: Defs["hideCard"] = {
     if (hiddenCards.length === 0) {
       return [];
     }
-    const results: { playerId: string; cardId: string; battlefieldId: string }[] = [];
+    // rule 811.1.b / 350.2 — one instance per payable price, so a seat holding
+    // both [1] Energy and [rainbow] is offered the election instead of having
+    // one of them spent for them.
+    const routes: (("energy" | "power") | undefined)[] = hasFreeHideLicence(
+      state,
+      context.playerId as string,
+    )
+      ? [undefined]
+      : hideCostRoutes(state, context.playerId as string, context);
+    const results: {
+      playerId: string;
+      cardId: string;
+      battlefieldId: string;
+      hideCostElection?: "energy" | "power";
+    }[] = [];
     for (const [bfId, bf] of Object.entries(state.battlefields)) {
       if (bf.controller !== (context.playerId as string)) {
         continue;
@@ -439,11 +508,14 @@ export const hideCard: Defs["hideCard"] = {
         continue;
       }
       for (const cid of hiddenCards) {
-        results.push({
-          battlefieldId: bfId,
-          cardId: cid as string,
-          playerId: context.playerId as string,
-        });
+        for (const route of routes) {
+          results.push({
+            battlefieldId: bfId,
+            cardId: cid as string,
+            ...(route === undefined ? {} : { hideCostElection: route }),
+            playerId: context.playerId as string,
+          });
+        }
       }
     }
     return results;
@@ -453,7 +525,7 @@ export const hideCard: Defs["hideCard"] = {
     const { zones, counters, cards } = context;
 
     // rule-id: ogn-121-298 — Rule 723.1.b: pay [C] (1 Power) to hide.
-    deductHideCost(_draft, context.params.playerId, context);
+    deductHideCost(_draft, context.params.playerId, context, context.params.hideCostElection);
 
     const facedownZoneId = getFacedownZoneId(battlefieldId);
 

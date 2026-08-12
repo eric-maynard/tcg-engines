@@ -306,7 +306,17 @@ export interface RiftboundMoves {
   };
 
   /** Place Hidden card facedown */
-  hideCard: { playerId: PlayerId; cardId: CardId; battlefieldId: CardId };
+  hideCard: {
+    playerId: PlayerId;
+    cardId: CardId;
+    battlefieldId: CardId;
+    /**
+     * rule 811.1.b / 350.2 — which price is being paid: the printed [rainbow]
+     * ("power") or an alternative "you may pay [1] … instead" a permanent
+     * grants ("energy"). Absent = let the engine pick an affordable route.
+     */
+    hideCostElection?: "energy" | "power";
+  };
 
   /** Reveal and play hidden card */
   revealHidden: {
