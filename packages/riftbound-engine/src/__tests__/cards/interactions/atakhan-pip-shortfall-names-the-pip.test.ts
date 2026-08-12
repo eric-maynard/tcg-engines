@@ -114,10 +114,12 @@ describe("Atakhan × Magma Wurm — a pip-only shortfall must be named as pips, 
     expect(line?.needsAdd.reason).toContain("recycle");
   });
 
-  test("the pay line prices the VARIANT that was offered, so a pip-only shortfall names only the pips (355.1.a, 356.6, 357.1)", async () => {
-    // The enumerated variant pays the kill, so what is owed is [2][order][order] − pool {6, 0} =
-    // exactly [order][order] and NO Energy. Pricing the printed 10/[order]x3 instead would quote the
-    // shortfall of a variant the enumerator never offered — the "not enough energy" misreport.
+  test("the pay line prices the ELECTED kill, so a pip-only shortfall names only the missing [order] pips (355.1.a, 356.6, 357.1)", async () => {
+    // Expected: the enumerated variant pays the kill, so what is owed is [2][order][order] − pool {6, 0}
+    //   = exactly [order][order] and NO Energy ("recycle a rune for [order][order] first").
+    // Actual:   needsAdd = { energy: 4, power: { order: 3 } }, reason "tap 4 runes and recycle a rune for
+    //   [order][order][order] first" — the card's printed 10/[order]×3 minus the pool, i.e. the shortfall
+    //   of a variant the enumerator never offered. That is the "not enough energy" misreport.
     const game = await shortOnPips().build();
     const line = payLine(game, "ata");
     expect(line?.needsAdd.energy).toBeUndefined();
@@ -168,10 +170,12 @@ describe("Atakhan × Magma Wurm — a pip-only shortfall must be named as pips, 
     expect(game.chain()).toEqual([]);
   });
 
-  test("the costPaid oracle reads the QUOTED cost, so the correctly-charged discounted play is no violation (356.4, 206)", async () => {
-    // Paying [2][order][order] after the declared kill is the whole cost (357.1), so no invariant
-    // fires: the oracle measures the pool against the QUOTE the play was offered at (which carries
-    // the optional additional cost's discount), not against the card's printed [10].
+  test("the costPaid oracle honours the discount from the elected additional cost — the legal play trips nothing (356.4, 206)", async () => {
+    // Expected: paying [2][order][order] after the declared kill is the whole cost (357.1), so no
+    // invariant fires. Actual: violations() carries
+    //   costPaid "playUnit Atakhan: energy cost 10 but pool 6→4"
+    // — the checker exempts costModifier / viaFlow / self-scaling statics but not the optional
+    // additional-cost discount, so every legal Atakhan play trips its own oracle.
     const game = await pipsPooled().build();
     await game.p1.play("ata", { payOptional: true, sacrifice: "wurm" });
     await game.settle();
