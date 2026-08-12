@@ -15,7 +15,32 @@
  */
 
 import type { CardId, PlayerId } from "@tcg/core";
-import { costElectionHalves } from "../game-definition/moves/play/cost";
+import { costElectionHalves, playCostShortfall } from "../game-definition/moves/play/cost";
+
+/** The play moves a hand card can be offered through (rule 419.1). */
+const PLAY_MOVE_IDS = ["playUnit", "playGear", "playSpell"] as const;
+
+/**
+ * rule 164.2.a/b — say a shortfall the way the player fixes it: Energy comes
+ * from tapping a rune, Power of a Domain from recycling one of that Domain.
+ */
+function describeShortfall(short: {
+  energy: number;
+  power: Record<string, number>;
+}): NonNullable<ActionField["needsAdd"]> {
+  const pips = Object.entries(short.power)
+    .flatMap(([d, n]) => Array.from({ length: n ?? 0 }, () => `[${d}]`))
+    .join("");
+  const parts = [
+    ...(short.energy > 0 ? [`tap ${short.energy === 1 ? "a rune" : `${short.energy} runes`}`] : []),
+    ...(pips ? [`recycle a rune for ${pips}`] : []),
+  ];
+  return {
+    ...(short.energy > 0 ? { energy: short.energy } : {}),
+    ...(Object.keys(short.power).length > 0 ? { power: short.power } : {}),
+    reason: `${parts.join(" and ")} first`,
+  };
+}
 import { modeOptionLabel, spellModeLabels } from "../game-definition/moves/play/play-time-modes";
 import {
   deflectSurchargeOf,
@@ -40,6 +65,7 @@ import type {
   ActionField,
   ActionFieldKind,
   ActionOption,
+  ReachablePlay,
   ActionVerb,
   Answer,
   AnswerShorthand,
@@ -98,6 +124,11 @@ export interface DecisionContext {
     /** Set only while `unaffordable`: the smallest top-up that unlocks it. */
     needsAdd?: ActionField["needsAdd"];
   }[];
+  /**
+   * rule 357.1.a / 429.3 — cards this seat could pay for after one Reaction
+   * [Add] but cannot pay for now. A UI dims these; the move stays refused.
+   */
+  reachablePlays?(seat: Seat): readonly ReachablePlay[];
   /** Whether procedures are auto-run (then they are hidden from menus). */
   readonly autoProcedures: boolean;
   readonly seq: number;
@@ -204,6 +235,74 @@ export function surchargedPlayTargetsOf(
     return out;
 }
 
+/**
+ * rule 357.1.a / 429.3 — the plays the seat could pay for after one Reaction
+ * [Add] but cannot pay for right now.
+ *
+ * The play enumerators credit what an Add could still put in the pool
+ * (`reachableRuneAdds`), so these ARE offered by the enumerator; it is the
+ * move's own `condition` that refuses them, because paying is manual and
+ * nothing may be auto-tapped. The difference between the two enumerations is
+ * therefore exactly "cards the player can reach but has not funded" — the set a
+ * client must render dimmed with a pay line instead of leaving inert.
+ */
+export function reachablePlaysOf(
+  engine: HarnessEngine,
+  seat: string,
+): readonly { moveId: string; card: string; needsAdd: NonNullable<ActionField["needsAdd"]> }[] {
+  const internal = getInternalState(engine);
+  const state = engine.getState();
+  const board = {
+    cards: {
+      getCardController: (id: CardId) => internal.cards[id as string]?.controller,
+      getCardMeta: (id: CardId) => internal.cardMetas[id as string],
+      getCardOwner: (id: CardId) => internal.cards[id as string]?.owner,
+      updateCardMeta: () => {},
+    },
+    zones: {
+      getCardsInZone: (zoneId: unknown, playerId?: unknown) =>
+        Object.entries(internal.cards)
+          .filter(
+            ([, c]) =>
+              c.zone === (zoneId as string) &&
+              (playerId === undefined || c.owner === (playerId as string)),
+          )
+          .map(([id]) => id as CardId),
+      getCardZone: (id: CardId) => internal.cards[id as string]?.zone,
+    },
+  };
+  const of = (validOnly: boolean) =>
+    engine.enumerateMoves(seat as PlayerId, { moveIds: [...PLAY_MOVE_IDS], validOnly });
+  const payable = new Set(
+    of(true).map((m) => `${m.moveId}|${String((m.params as { cardId?: unknown }).cardId ?? "")}`),
+  );
+  const out: { moveId: string; card: string; needsAdd: NonNullable<ActionField["needsAdd"]> }[] = [];
+  const seen = new Set<string>();
+  for (const m of of(false)) {
+    const cardId = (m.params as { cardId?: unknown }).cardId;
+    if (typeof cardId !== "string") {
+      continue;
+    }
+    const key = `${m.moveId}|${cardId}`;
+    if (payable.has(key) || seen.has(key)) {
+      continue;
+    }
+    const short = playCostShortfall(
+      state,
+      seat,
+      cardId,
+      { board } as Parameters<typeof playCostShortfall>[3],
+      (id: CardId) => internal.cardMetas[id as string],
+    );
+    if (!short) {
+      continue;
+    }
+    seen.add(key);
+    out.push({ card: cardId, moveId: m.moveId, needsAdd: describeShortfall(short) });
+  }
+  return out;
+}
+
 export function engineDecisionContext(
   engine: HarnessEngine,
   seq: number,
@@ -268,6 +367,12 @@ export function engineDecisionContext(
     // is exactly (raw enumeration − valid enumeration), and each member is
     // re-priced with `playTargetPayability` to see whether a Reaction [Add]
     // could still fund it. Nothing here re-derives targets or costs by hand.
+    reachablePlays: (seat) =>
+      reachablePlaysOf(engine, seat as string).map((r) => ({
+        card: r.card as ReachablePlay["card"],
+        moveId: r.moveId,
+        needsAdd: r.needsAdd,
+      })),
     surchargedPlayTargets: (seat, moveId, cardId) =>
       surchargedPlayTargetsOf(engine, seat as string, moveId, cardId),
     legal: (seat, moveIds) =>
@@ -750,6 +855,10 @@ export function deriveActionDecision(ctx: DecisionContext, seat: Seat, cursor: b
         : context === "main"
           ? "Main phase: take an action or end the turn"
           : "Free actions available";
+  // rule 357.1.a — the cards the seat is one Add away from playing. Only worth
+  // shipping while they are actually acting; a free-action menu is not where a
+  // player pays for a card.
+  const reachablePlays = context === "main" ? (ctx.reachablePlays?.(seat) ?? []) : [];
   return {
     context,
     endTurnKey,
@@ -758,6 +867,7 @@ export function deriveActionDecision(ctx: DecisionContext, seat: Seat, cursor: b
     options,
     passKey,
     prompt,
+    ...(reachablePlays.length > 0 ? { reachablePlays } : {}),
     seat,
     source: top ? { cardId: top.cardId, chainItemId: top.id } : undefined,
     timing: "ACT",

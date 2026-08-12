@@ -2378,6 +2378,18 @@
       background: #2a1a05; color: #fff4d8; font-size: 12px; font-weight: 600; cursor: pointer;
     }
     .prompt-pay-rune:hover { background: #3d2708; }
+    /* [rule:357.1.a/429.3] A hand card the player is ONE Reaction [Add] away
+       from playing — tap a rune, recycle one for its Domain, crack a Gold. It
+       is not `.playable` (the move is still refused: paying is manual), but it
+       must not read as inert either, or the player has to know to tap first
+       before the card is ever offered. Clicking it opens the Pay step. */
+    .card.needs-add {
+      outline: 1px dashed rgba(255, 214, 122, .5);
+      outline-offset: 1px;
+      opacity: .8;
+      cursor: pointer;
+    }
+    .card.needs-add:hover { opacity: 1; outline-color: rgba(255, 214, 122, .9); }
     /* [rule:809.1.d/429.3] The board twin of `.choice-modal-card--needs-add`: a
        play-time target whose [Deflect] surcharge is reachable but unpaid stays
        on the board, dimmed and dashed, instead of dropping out of the glow. It

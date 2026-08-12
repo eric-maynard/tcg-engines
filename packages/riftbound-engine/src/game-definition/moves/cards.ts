@@ -15,7 +15,7 @@ import { playGear } from "./play/play-gear";
 import { playSpell } from "./play/play-spell";
 import { playUnit } from "./play/play-unit";
 
-export { getPotentialRuneEnergy } from "./play/cost";
+export { reachableRuneAdds } from "./play/cost";
 export { spellEffectHasLegalTargets } from "./play/targeting";
 export type { SpellEffectTargetShape } from "./play/targeting";
 

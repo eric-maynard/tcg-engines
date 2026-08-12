@@ -36,6 +36,7 @@ import {
   reducePowerCost,
 } from "../../../operations/static-cost-reduction";
 import { getBattlefieldZoneId, isBattlefieldZone } from "../../../zones/zone-configs";
+import { reactionAddsOnBoard } from "../prompt-cost";
 
 /**
  * Check whether a card carries a static ability whose effect has the given
@@ -3216,17 +3217,154 @@ export function getRepeatPowerSurcharge(
 }
 
 /**
- * Rule 357.1.a permits activating rune Add-abilities during Pay Costs, but by
- * design the engine requires the player to exhaust runes explicitly first —
- * crediting ready runes here made the enumerator offer plays the reducer then
- * under-charged for. Returns 0; kept for existing callsites.
+ * rule 357.1.a / 429.3 — what a player could still ADD to their pool while a
+ * Pay step is open, in the currency each Add actually produces.
+ *
+ * This is the ENUMERATION credit: 357.1.a lets the payer crack Reaction [Add]
+ * abilities during Pay Costs, so a card they could pay for after tapping or
+ * recycling must be OFFERED — otherwise the hand looks inert and the player has
+ * to know to tap first (the Blade Dancer complaint, one step earlier). Paying
+ * stays manual: `condition` is deliberately NOT given this credit, so an actual
+ * attempt the pool cannot cover at that instant is still refused and no reducer
+ * ever under-charges.
+ *
+ *  - rule 164.2.a — a READY rune taps for 1 Energy.
+ *  - rule 164.2.b / 594 — ANY rune (ready or exhausted — recycling has no
+ *    readiness condition) recycles for 1 Power of its own Domain. A ready rune
+ *    therefore contributes to BOTH totals; they are independent.
+ *  - rule 429.3.a — a Gold-style "[Exhaust]: [Add] …" on a permanent is an Add
+ *    in the same window, priced by what it produces.
  */
-export function getPotentialRuneEnergy(
-  _zones: { getCardsInZone: (zone: CoreZoneId, player: CorePlayerId) => readonly CoreCardId[] },
-  _counters: { getFlag: (cardId: CoreCardId, flag: string) => boolean | undefined },
-  _playerId: string,
-): number {
-  return 0;
+export interface ReachableAdds {
+  readonly energy: number;
+  /** Power by Domain; "rainbow" is universal Power (135.2.e.5.b). */
+  readonly power: Readonly<Record<string, number>>;
+}
+
+export const NO_REACHABLE_ADDS: ReachableAdds = { energy: 0, power: {} };
+
+export function reachableRuneAdds(
+  state: RiftboundGameState,
+  playerId: string,
+  zones: { getCardsInZone: (zone: CoreZoneId, player: CorePlayerId) => readonly CoreCardId[] },
+  counters?: { getFlag: (cardId: CoreCardId, flag: string) => boolean | undefined },
+): ReachableAdds {
+  const registry = getGlobalCardRegistry();
+  let energy = 0;
+  const power: Record<string, number> = {};
+  let runes: readonly CoreCardId[] = [];
+  try {
+    runes = zones.getCardsInZone("runePool" as CoreZoneId, playerId as CorePlayerId);
+  } catch {
+    return NO_REACHABLE_ADDS;
+  }
+  for (const runeId of runes) {
+    if (counters?.getFlag(runeId, "exhausted") !== true) {
+      energy += 1;
+    }
+    const domain = registry.get(runeId as string)?.domain;
+    const d = (Array.isArray(domain) ? domain[0] : domain) as string | undefined;
+    if (d) {
+      power[d] = (power[d] ?? 0) + 1;
+    }
+  }
+  // rule 429.3.a — the non-rune Adds (a Gold token, a legend's "[Exhaust]: Add")
+  // are priced by the same reader the prompt window uses, so the two can never
+  // disagree about what the seat could still put in the pool.
+  const board = reactionAddsOnBoard(playerId, zones as never, {
+    ...(counters ? { getFlag: (id: never, name: string) => counters.getFlag(id as CoreCardId, name) } : {}),
+    state,
+  });
+  energy += board.energy;
+  for (const [d, n] of Object.entries(board.power)) {
+    power[d] = (power[d] ?? 0) + (n ?? 0);
+  }
+  return { energy, power };
+}
+
+/**
+ * rule 357.1.a — what a play still OWES after the pool is drained, or
+ * `undefined` when the pool already covers it. This is the pay line a client
+ * quotes on a card it is showing dimmed ("needs [chaos] — recycle a rune"):
+ * the same cost model the play will charge, minus what is pooled, so the two
+ * can never disagree.
+ */
+export function playCostShortfall(
+  state: RiftboundGameState,
+  playerId: string,
+  cardId: string,
+  extras: CostExtras,
+  getCardMeta?: (cardId: CoreCardId) => Partial<RiftboundCardMeta> | undefined,
+): { energy: number; power: Record<string, number> } | undefined {
+  const pool = state.runePools[playerId];
+  if (!pool) {
+    return undefined;
+  }
+  const cost = computePlayResourceCost(state, playerId, cardId, extras, getCardMeta, false);
+  if (cost.free) {
+    return undefined;
+  }
+  const owedEnergy = cost.ignoreEnergy
+    ? 0
+    : Math.max(
+        0,
+        cost.energy - Math.max(0, pool.energy - getLockedEnergy(state, playerId, cardId)),
+      );
+  const remaining: Record<string, number> = {};
+  for (const [d, n] of Object.entries(
+    spendablePowerPool(state, playerId, getGlobalCardRegistry().getCardType(cardId)),
+  )) {
+    remaining[d] = n ?? 0;
+  }
+  const owed: Record<string, number> = {};
+  const take = (domain: string, need: number): number => {
+    const from = Math.min(need, remaining[domain] ?? 0);
+    remaining[domain] = (remaining[domain] ?? 0) - from;
+    return need - from;
+  };
+  for (const [domain, need] of Object.entries(cost.named)) {
+    if (!need) {
+      continue;
+    }
+    // rule 135.2.e.5.b — pooled [rainbow] Power covers any Domain's shortfall.
+    const short = take("rainbow", take(domain, need));
+    if (short > 0) {
+      owed[domain] = (owed[domain] ?? 0) + short;
+    }
+  }
+  // rule 135.2.e.6.c — a hybrid pip takes either printed Domain; 135.2.e.5.b —
+  // an [A] pip takes any Domain at all. Both are paid after the named ones.
+  const hybridNeed = cost.hybrid?.n ?? 0;
+  let wildOwed = 0;
+  if (hybridNeed > 0) {
+    let left = hybridNeed;
+    for (const d of [...(cost.hybrid?.domains ?? []), "rainbow"]) {
+      left = take(d, left);
+    }
+    wildOwed += left;
+  }
+  if (cost.any > 0) {
+    let left = cost.any;
+    for (const d of Object.keys(remaining)) {
+      left = take(d, left);
+    }
+    wildOwed += left;
+  }
+  if (wildOwed > 0) {
+    owed.rainbow = (owed.rainbow ?? 0) + wildOwed;
+  }
+  if (owedEnergy === 0 && Object.keys(owed).length === 0) {
+    return undefined;
+  }
+  return { energy: owedEnergy, power: owed };
+}
+
+/** Normalise the enumeration credit: a bare number is Energy-only (legacy shape). */
+function asReachable(potential: number | ReachableAdds | undefined): ReachableAdds {
+  if (potential === undefined) {
+    return NO_REACHABLE_ADDS;
+  }
+  return typeof potential === "number" ? { energy: potential, power: {} } : potential;
 }
 
 /**
@@ -4118,7 +4256,13 @@ export function canPayResourceCost(
   playerId: string,
   cardId: string,
   cost: PlayResourceCost,
-  potentialEnergy = 0,
+  /**
+   * rule 357.1.a — the ENUMERATION credit: what Reaction [Add] abilities could
+   * still put in the pool. A bare number is the legacy Energy-only shape.
+   * Callers that decide whether an ATTEMPT may proceed pass nothing, so paying
+   * stays manual and nothing is ever under-charged.
+   */
+  potential: number | ReachableAdds = 0,
 ): boolean {
   const pool = state.runePools[playerId];
   if (!pool) {
@@ -4127,8 +4271,9 @@ export function canPayResourceCost(
   if (cost.free) {
     return true;
   }
+  const reach = asReachable(potential);
   const availableEnergy =
-    Math.max(0, pool.energy - getLockedEnergy(state, playerId, cardId)) + potentialEnergy;
+    Math.max(0, pool.energy - getLockedEnergy(state, playerId, cardId)) + reach.energy;
   if (!cost.ignoreEnergy && availableEnergy < cost.energy) {
     return false;
   }
@@ -4137,6 +4282,14 @@ export function canPayResourceCost(
   const remaining: Record<string, number> = {
     ...spendablePowerPool(state, playerId, getGlobalCardRegistry().getCardType(cardId)),
   };
+  // rule 164.2.b / 429.3.a — Power the seat could still ADD counts the same way
+  // for enumeration: a [chaos] pip is reachable while a chaos rune sits in the
+  // Rune Pool, ready or not (594 puts no readiness condition on recycling).
+  for (const [domain, n] of Object.entries(reach.power)) {
+    if ((n ?? 0) > 0) {
+      remaining[domain] = (remaining[domain] ?? 0) + (n ?? 0);
+    }
+  }
   for (const [domain, need] of Object.entries(cost.named)) {
     if (!need) {
       continue;
@@ -4310,13 +4463,14 @@ export function canAffordCard(
   cardId: string,
   extras: CostExtras,
   getCardMeta?: (cardId: CoreCardId) => Partial<RiftboundCardMeta> | undefined,
-  potentialEnergy = 0,
+  /** rule 357.1.a — see `canPayResourceCost`: enumeration credit, never a condition's. */
+  potential: number | ReachableAdds = 0,
 ): boolean {
   if (!state.runePools[playerId]) {
     return false;
   }
   const cost = computePlayResourceCost(state, playerId, cardId, extras, getCardMeta, false);
-  return canPayResourceCost(state, playerId, cardId, cost, potentialEnergy);
+  return canPayResourceCost(state, playerId, cardId, cost, potential);
 }
 
 /**

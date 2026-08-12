@@ -174,11 +174,22 @@ function renderCardElement(card, isFacedown = false, zone = "") {
   const isOwned = card.owner === viewingPlayer;
   const isPlayable = isOwned && hasMovesForCard(card.id, zone);
   if (isPlayable) classes.push("playable");
+  // rule 357.1.a / 429.3 — a card the engine says is ONE Reaction [Add] away
+  // (tap a rune, recycle one for its Domain, crack a Gold) is not playable YET
+  // but must not read as inert: mark it so it is visibly one step short, and
+  // clicking it opens the Pay step (see interactions.js reachablePlayFor).
+  const oneAddAway =
+    isOwned &&
+    !isPlayable &&
+    typeof reachablePlayFor === "function" &&
+    !!reachablePlayFor(card.id);
+  if (oneAddAway) classes.push("needs-add");
   if (isLegendZone && isPlayable) classes.push("legend-playable");
 
   // Legend cards with moves are interactive; an own legend with a printed
   // activated ability still takes the click when it has no move, so its action
   // bar can say WHY (exhausted / can't pay / not your turn) instead of nothing.
+  const addHint = oneAddAway && typeof reachablePlayHint === "function" ? reachablePlayHint(card.id) : "";
   const hasPrintedAbility = isLegendZone && isOwned && typeof activatedAbilitySegments === "function" && activatedAbilitySegments(card).length > 0;
   const pointerAttr = (isLegendZone && !isPlayable && !hasPrintedAbility)
     ? ""
@@ -239,6 +250,7 @@ function renderCardElement(card, isFacedown = false, zone = "") {
 
   return `
     <div class="${classes.join(" ")}"
+         ${addHint ? `title="${esc(addHint)}"` : ""}
          ${attachedToId ? `data-attached-to="${esc(attachedToId)}"` : ""}
          ${equippedWith.length ? `data-equipped-with="${esc(equippedWith.join(" "))}"` : ""}
          data-card-id="${esc(card.id)}"

@@ -612,11 +612,41 @@ export function addablePowerOf(
       return [];
     }
   };
-  let total = read("runePool").length;
-  if (!io?.state) {
-    return total;
+  const board = reactionAddsOnBoard(playerId, zones, io);
+  return (
+    read("runePool").length +
+    Object.values(board.power).reduce<number>((a, n) => a + (n ?? 0), 0)
+  );
+}
+
+/**
+ * rule 429.3.a — what the NON-RUNE Reaction [Add] abilities the seat controls
+ * could put in the pool, priced by Domain: a Gold's "Kill this, [Exhaust]:
+ * [Add] [rainbow]" (sfd-t03), a legend's "[Exhaust]: Add", a battlefield's Add
+ * line. Runes are counted by their own callers, which know their Domains.
+ *
+ * Nothing is assumed without `io.state` (there is no board to walk); without a
+ * flag reader an already-exhausted host is counted, which only ever keeps a
+ * candidate LISTED — the direction 809.1.d asks for.
+ */
+export function reactionAddsOnBoard(
+  playerId: string,
+  zones: RunePoolZones | undefined,
+  io?: AddSourceIo,
+): AddYield {
+  if (!zones?.getCardsInZone || !io?.state) {
+    return NO_YIELD;
   }
+  const read = (zone: string): readonly unknown[] => {
+    try {
+      return zones.getCardsInZone(zone as never, playerId as never);
+    } catch {
+      return [];
+    }
+  };
   const registry = getGlobalCardRegistry();
+  let energy = 0;
+  const power: Record<string, number> = {};
   for (const zone of boardZonesOf(io.state)) {
     for (const raw of read(zone)) {
       const cardId = raw as string;
@@ -630,10 +660,7 @@ export function addablePowerOf(
       }
       for (const ability of registry.getAbilities(cardId) ?? []) {
         const add = addYieldOfAbility(ability);
-        const power = add
-          ? Object.values(add.power).reduce<number>((a, n) => a + (n ?? 0), 0)
-          : 0;
-        if (power <= 0) {
+        if (!add) {
           continue;
         }
         // An "[Exhaust]:" line on an already-exhausted host is not activatable.
@@ -641,11 +668,14 @@ export function addablePowerOf(
         if (cost?.exhaust === true && io.getFlag?.(cardId as never, "exhausted") === true) {
           continue;
         }
-        total += power;
+        energy += add.energy;
+        for (const [d, n] of Object.entries(add.power)) {
+          power[d] = (power[d] ?? 0) + (n ?? 0);
+        }
       }
     }
   }
-  return total;
+  return { energy, power };
 }
 
 /** What a surcharged option costs and whether the seat can answer with it. */

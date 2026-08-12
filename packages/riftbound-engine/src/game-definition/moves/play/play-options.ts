@@ -70,6 +70,7 @@ import {
   battlefieldMatchesOccupiedPermission,
   battlefieldRedirectPowerFor,
   canPayResourceCost,
+  type ReachableAdds,
   canPlayToAttackedBattlefield,
   canPlayToEnemyOccupiedBattlefield,
   canPlayToOccupiedEnemyBattlefield,
@@ -194,6 +195,12 @@ interface Env {
   readonly model: PlayCostModel;
   readonly modelCtx: CostModelContext;
   readonly candidates: CostCandidates;
+  /**
+   * rule 357.1.a — the enumeration credit: what Reaction [Add] abilities could
+   * still put in the pool. Set only when LISTING what a player may play, never
+   * when deciding whether a submitted play may proceed — paying is manual.
+   */
+  readonly reach?: ReachableAdds;
 }
 
 interface CostCandidates {
@@ -358,6 +365,7 @@ function buildEnv(
   playerId: string,
   cardId: string,
   origin: UnitPlayOrigin,
+  reach?: ReachableAdds,
 ): Env {
   const registry = getGlobalCardRegistry();
   const type = registry.getCardType(cardId);
@@ -385,6 +393,7 @@ function buildEnv(
     now: { reaction: reactionWindowOpen(state, playerId), standard: standardTimingNow(state, playerId) },
     origin,
     playerId,
+    ...(reach ? { reach } : {}),
     state,
   };
 }
@@ -963,7 +972,15 @@ function evaluate(env: Env, dest: PlayDestination, rawSelection: PlayCostSelecti
   if (xp > 0 && (state.players[playerId]?.xp ?? 0) < xp) {
     return undefined;
   }
-  if (state.runePools[playerId] !== undefined && !canPayResourceCost(state, playerId, cardId, total.resources)) {
+  // rule 357.1.a / 429.3 — when LISTING, a cost the player could pay after one
+  // Add counts as payable: the unit path priced the pool alone, so a 2-cost body
+  // next to 1 pooled Energy and a ready rune was simply missing from the hand
+  // and the player had to know to tap first. `env.reach` is unset on the submit
+  // path, so an actual attempt is still refused (manual pay).
+  if (
+    state.runePools[playerId] !== undefined &&
+    !canPayResourceCost(state, playerId, cardId, total.resources, env.reach ?? 0)
+  ) {
     return undefined;
   }
   return {
@@ -1041,6 +1058,8 @@ export function computeUnitPlayOptions(
   playerId: string,
   cardId: string,
   origin: UnitPlayOrigin,
+  /** rule 357.1.a — see `Env.reach`: pass this only from an ENUMERATOR. */
+  reach?: ReachableAdds,
 ): UnitPlayOption[] {
   if (state.pendingChoice && origin.kind !== "effect") {
     return [];
@@ -1052,7 +1071,7 @@ export function computeUnitPlayOptions(
   if (destinations.length === 0) {
     return [];
   }
-  const env = buildEnv(state, io, playerId, cardId, origin);
+  const env = buildEnv(state, io, playerId, cardId, origin, reach);
   const selections = generateSelections(env);
   const out: UnitPlayOption[] = [];
   const seen = new Set<string>();

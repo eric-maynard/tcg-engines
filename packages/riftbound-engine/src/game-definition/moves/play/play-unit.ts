@@ -24,7 +24,7 @@ import {
   cleanupAndFireDeaths,
   type PostMoveCleanupContext,
 } from "../../../cleanup/post-move-cleanup";
-import { hasPlayFromTrashGrant } from "./cost";
+import { hasPlayFromTrashGrant, reachableRuneAdds } from "./cost";
 import { getSelfTrashPlayCost } from "./self-trash-play";
 import {
   type SubmittedUnitPlay,
@@ -122,6 +122,11 @@ export const playUnit: Defs["playUnit"] = {
     const io = { cards: context.cards, counters: context.counters, zones: context.zones };
     const hand = context.zones.getCardsInZone("hand" as CoreZoneId, playerId as CorePlayerId);
     const trash = context.zones.getCardsInZone("trash" as CoreZoneId, playerId as CorePlayerId);
+    // rule 357.1.a / 429.3 — list what the player could pay for after one Add
+    // (tap a ready rune, recycle any rune for its Domain, crack a Gold), not
+    // just what the pool covers this instant. `condition` gets no such credit,
+    // so paying stays manual and a premature attempt is still refused.
+    const reach = reachableRuneAdds(state, playerId, context.zones, context.counters);
     const results: RiftboundMoves["playUnit"][] = [];
     for (const raw of [...hand, ...trash]) {
       const cardId = raw as string;
@@ -132,7 +137,7 @@ export const playUnit: Defs["playUnit"] = {
       if (!origin) {
         continue;
       }
-      for (const option of computeUnitPlayOptions(state, io, playerId, cardId, origin)) {
+      for (const option of computeUnitPlayOptions(state, io, playerId, cardId, origin, reach)) {
         results.push({ cardId, playerId, ...unitPlayOptionParams(option) } as RiftboundMoves["playUnit"]);
       }
     }

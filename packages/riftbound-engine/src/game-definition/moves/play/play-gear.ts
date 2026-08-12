@@ -14,7 +14,7 @@ import { hasKeyword } from "../movement/helpers";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
 import {
   createMetaAccessor,
-  getPotentialRuneEnergy,
+  reachableRuneAdds,
   canAffordCard,
   deductCost,
   hasPlayFromTrashGrant,
@@ -181,7 +181,9 @@ export const playGear: Defs["playGear"] = {
           ignoreEnergyCost: condUseWaiver,
         },
         createMetaAccessor(context.cards),
-        getPotentialRuneEnergy(context.zones, context.counters, context.params.playerId),
+        // rule 357.1.a — no enumeration credit here: this decides whether an
+        // ATTEMPT may proceed, and paying is manual, so the pool as it stands
+        // is what counts (the enumerator below is the one that looks ahead).
       )
     ) {
       return false;
@@ -215,11 +217,15 @@ export const playGear: Defs["playGear"] = {
       return [];
     }
 
-    // Rule 357.1.a: credit ready runes as available energy for enumeration.
-    const potential = getPotentialRuneEnergy(
+    // rule 357.1.a / 429.3 — credit what the player could still ADD (tap a
+    // ready rune for Energy, recycle any rune for its Domain's Power, crack a
+    // Gold) so a gear they can pay for after one Add is OFFERED rather than
+    // sitting inert in hand. `condition` gets no such credit.
+    const potential = reachableRuneAdds(
+      state,
+      context.playerId as string,
       context.zones,
       context.counters,
-      context.playerId as string,
     );
 
     const handCards = context.zones.getCardsInZone(

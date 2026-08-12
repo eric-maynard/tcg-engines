@@ -39,7 +39,7 @@ import {
   getOptionalPlayCost,
   createMetaAccessor,
   getCardEffectiveMight,
-  getPotentialRuneEnergy,
+  reachableRuneAdds,
   canAffordCard,
   deductCost,
   getEffectiveSpellRepeatCost,
@@ -745,7 +745,9 @@ export const playSpell: Defs["playSpell"] = {
           xAmount: context.params.xAmount,
         },
         createMetaAccessor(context.cards),
-        getPotentialRuneEnergy(context.zones, context.counters, context.params.playerId),
+        // rule 357.1.a — the condition prices the pool as it STANDS: paying is
+        // manual, so an attempt the pool cannot cover is refused even though the
+        // enumerator (below) offers the play as reachable-after-an-Add.
       )
     ) {
       return false;
@@ -1350,11 +1352,14 @@ export const playSpell: Defs["playSpell"] = {
     if (!pool) {
       return [];
     }
-    // Rule 357.1.a: credit ready runes as available energy for enumeration.
-    const potential = getPotentialRuneEnergy(
+    // rule 357.1.a / 429.3 — credit what the player could still ADD, in the
+    // currency each Add makes, so a spell one tap or one recycle away is
+    // OFFERED instead of vanishing from the hand.
+    const potential = reachableRuneAdds(
+      state,
+      context.playerId as string,
       context.zones,
       context.counters,
-      context.playerId as string,
     );
     // rule-id: ven-055-166 — friendly "your spells cost less" statics must be
     // visible to the enumerator, so gate on canAffordCard with board access

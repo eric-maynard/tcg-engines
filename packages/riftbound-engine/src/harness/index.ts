@@ -77,6 +77,7 @@ export {
   engineDecisionContext,
   groupActions,
   narrowVariants,
+  reachablePlaysOf,
   resolvePendingAnswer,
   spellSupportsX,
   surchargedPlayTargetsOf,

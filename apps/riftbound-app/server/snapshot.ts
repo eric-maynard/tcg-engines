@@ -43,6 +43,24 @@ export function buildAvailableMoves(session: GameSession, playerId: string) {
  * legal moves, so they travel beside `moves` rather than inside it and the
  * client keeps refusing to dispatch them until an Add lands.
  */
+/**
+ * rule 357.1.a / 429.3 — the hand cards this seat could pay for after ONE
+ * Reaction [Add] but cannot pay for right now.
+ *
+ * The play enumerators credit what an Add could still put in the pool, so these
+ * are offered by the enumerator and refused by the move's own `condition`
+ * (paying is manual — nothing is auto-tapped). Shipping them is what stops the
+ * hand looking inert: the client dims the card and quotes the tap/recycle that
+ * unlocks it, instead of the player having to know to tap first.
+ */
+export function buildReachablePlays(session: GameSession, playerId: string) {
+  return Harness.reachablePlaysOf(session.engine, playerId).map((r) => ({
+    cardId: r.card,
+    moveId: r.moveId,
+    needsAdd: r.needsAdd,
+  }));
+}
+
 export function buildUnaffordableTargets(session: GameSession, playerId: string) {
   const cardIds = new Set<string>();
   for (const m of session.engine.enumerateMoves(playerId as PlayerId, { validOnly: false })) {
@@ -837,6 +855,11 @@ export function buildGameSnapshot(session: GameSession, viewingPlayer?: string) 
     // not payable yet. Rides on the snapshot (not on `moves`) precisely because
     // these are NOT legal moves: the client dims them and quotes what they need,
     // and dispatching one stays refused until a Reaction [Add] funds it.
+    // rule 357.1.a — cards one Add away from playable (see buildReachablePlays).
+    reachablePlays:
+      viewingPlayer === undefined || state.status !== "playing"
+        ? []
+        : buildReachablePlays(session, viewingPlayer),
     unaffordableTargets:
       viewingPlayer === undefined || state.status !== "playing"
         ? []

@@ -235,6 +235,28 @@ function unaffordableTargetsFor(cardId) {
   return (gameState?.unaffordableTargets || []).filter(t => !cardId || t.cardId === cardId);
 }
 
+/**
+ * rule 357.1.a / 429.3 — the entry for `cardId` among the hand cards the engine
+ * says are ONE Reaction [Add] away from playable, or null. The card is not in
+ * `availableMoves` (paying is manual, so the play stays refused), but it must
+ * not look inert either: clicking it opens the Pay step and the pay line says
+ * which tap or recycle unlocks it.
+ */
+function reachablePlayFor(cardId) {
+  return (gameState?.reachablePlays || []).find(r => r.cardId === cardId) || null;
+}
+
+/** "needs [chaos] — recycle a rune for [chaos] first" for a card one Add away. */
+function reachablePlayHint(cardId) {
+  const r = reachablePlayFor(cardId);
+  if (!r?.needsAdd) return "";
+  const pips = Object.entries(r.needsAdd.power || {})
+    .flatMap(([d, n]) => Array.from({ length: n || 0 }, () => `[${d}]`))
+    .join("");
+  const energy = r.needsAdd.energy ? `[${r.needsAdd.energy}]` : "";
+  return `needs ${[energy, pips].filter(Boolean).join("")} — ${r.needsAdd.reason}`;
+}
+
 /** The cheapest pay line across the dimmed targets, e.g. "needs [rainbow] — recycle a rune". */
 function unaffordableTargetHint(cardId) {
   const rows = unaffordableTargetsFor(cardId).filter(t => t.needsAdd);
@@ -1072,6 +1094,17 @@ function enterHandCardSelected(cardId) {
       showToast(stateReason);
       selectedCard = cardId;
       render();
+      return;
+    }
+
+    // rule 357.1.a — the engine says this card is one Reaction [Add] away: open
+    // the Pay step and quote exactly what it needs, instead of leaving the card
+    // inert (or blaming the energy pool for a Power pip it cannot see).
+    const reachable = reachablePlayFor(cardId);
+    if (card && reachable) {
+      const pool = gameState?.runePools?.[viewingPlayer];
+      enterCostPaymentMode(cardId, card, pool?.energy ?? 0);
+      showToast(reachablePlayHint(cardId));
       return;
     }
 

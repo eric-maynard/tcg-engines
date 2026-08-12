@@ -97,7 +97,6 @@ import {
   createMetaAccessor,
   getCardEffectiveMight,
   getDeflectSurcharge,
-  getPotentialRuneEnergy,
   lockedEnergyForPurpose,
   payResourceCost,
   spendablePowerPool,
@@ -879,18 +878,20 @@ function canPayOptInCost(
   // card: then the earmark that names that card type funds this payment.
   const purpose = optInPlayPurpose(sourceCardId, effect);
   const earmarked = lockedEnergyForPurpose(state, playerId, purpose);
-  // rule 444.2.c / 357.1.a: a Pay demanded while an ability resolves is still
-  // a Pay, so the payer may exhaust ready runes to fund it — credit their
-  // yield here (deductAbilityCost taps them when the cost is actually paid).
-  const runeEnergy =
-    context.zones && energyCost > 0
-      ? getPotentialRuneEnergy(
-          context.zones as unknown as Parameters<typeof getPotentialRuneEnergy>[0],
-          context.counters as unknown as Parameters<typeof getPotentialRuneEnergy>[1],
-          playerId,
-        )
-      : 0;
-  if (pool.energy - Math.min(earmarked, pool.energy) + runeEnergy < energyCost) {
+  // rule 444.2.c / 357.1.a + DESIGN.md §Paying costs — the pool AS IT STANDS is
+  // what decides here, and deliberately so. DO NOT credit runes the payer could
+  // still tap: 357.1.a is served one layer up, where a prompt whose cost an Add
+  // could fund is raised anyway and `prompt-cost.ts promptNeedsAdd` quotes the
+  // shortfall, so "yes" shows disabled-with-a-pay-line. This gate is what makes
+  // the answer REFUSABLE, so widening it does not reveal an option — it lets the
+  // trigger be taken unpaid. Measured: crediting reachable rune Energy here
+  // flips `core-rules/pay-a-trigger-cost-from-its-prompt.test.ts` and
+  // `hand-of-noxus-hard-bargain-pay-mid-resolve.test.ts` — "'yes' is refused
+  // while the pool is short" starts ACCEPTING with the cost unpaid, and the
+  // needsAdd pay line disappears because the prompt believes it is payable.
+  // (A `getPotentialRuneEnergy` stub used to sit here returning a hard 0; it was
+  // deleted rather than "fixed" for exactly this reason.)
+  if (pool.energy - Math.min(earmarked, pool.energy) < energyCost) {
     return false;
   }
   const powerCost = cost.power as string[] | undefined;

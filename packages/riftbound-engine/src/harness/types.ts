@@ -283,10 +283,34 @@ export interface ActionOption {
   readonly variants: readonly FlatMove[];
 }
 
+/**
+ * rule 357.1.a / 429.3 — a play the seat could pay for after one Reaction
+ * [Add], listed so a client can show the card dimmed with its pay line rather
+ * than inert. It is NOT in `options`: paying is manual (DESIGN.md §Paying
+ * costs), so the move itself stays refused until the pool actually covers it.
+ */
+export interface ReachablePlay {
+  readonly moveId: string;
+  readonly card: CardRef;
+  /** What is still owed, and how to say it ("recycle a rune for [chaos] first"). */
+  readonly needsAdd: {
+    readonly energy?: number;
+    readonly power?: Readonly<Record<string, number>>;
+    readonly reason: string;
+  };
+}
+
 export interface ActionDecision extends DecisionBase {
   readonly kind: "action";
   readonly context: ActionContext;
   readonly options: readonly ActionOption[];
+  /**
+   * rule 357.1.a — cards the seat cannot pay for THIS INSTANT but could after a
+   * tap/recycle/Gold. Present only when there are some; a UI dims these instead
+   * of leaving the hand looking inert, which is what forced players to know to
+   * tap first before a card was ever offered.
+   */
+  readonly reachablePlays?: readonly ReachablePlay[];
   readonly passKey?: OptionKey;
   readonly endTurnKey?: OptionKey;
 }
