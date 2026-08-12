@@ -5,10 +5,11 @@
  *   × Defy (OGN-045 → ogn-045-298) · [Reaction] "Counter a spell that costs no more than [4] and no more than [rainbow]."
  *
  * Q: A countered card doesn't count as played for Legion — and it doesn't for Viktor either, right?
- * A: Right, both. A countered card is never considered to have been played, so neither Legion's "you've played
- *    another card this turn" nor Viktor's "when you play a card" is satisfied by it.
- * Rules: 425.1.b (a countered card was not played), 812.1.b.1 (Legion), 419.4.a ("when you play a card"
- *        triggers fire after that card resolves).
+ * A: Half. Viktor's "when you play a card" TRIGGER does not fire (419.4.a.1) — but Legion is not a
+ *    triggered ability: 419.4.b makes 425.1.b apply only to play-TRIGGERS and has non-triggered checks
+ *    read Finalization, naming a Defy-countered spell + Legion in its own example. So Legion IS on.
+ * Rules: 419.4.a.1 + 425.1.b (a countered card fires no play-trigger), 419.4.b (non-triggered checks
+ *        read Finalization — countered cards still count), 812.1.c (Legion = "Finalized by you this turn").
  */
 import { describe, expect, test } from "bun:test";
 import type { Game } from "../../../harness";
@@ -44,7 +45,7 @@ async function defiedRay(): Promise<Game> {
   return game;
 }
 
-describe("Ruling 29c222d1d436fd40 (Legion half) — a countered card does not satisfy 'you've played another card this turn'", () => {
+describe("Ruling 29c222d1d436fd40 (Legion half) — a countered card was still Finalized, so it DOES satisfy Legion (419.4.b)", () => {
   test("control: an uncountered Hextech Ray counts, so the following Guillotine gets Legion and kills the Colossus NOW", async () => {
     const game = await legionBoard().build();
     await game.p1.cast("ray", { targets: "colossus" });
@@ -63,21 +64,22 @@ describe("Ruling 29c222d1d436fd40 (Legion half) — a countered card does not sa
     expect(game.violations()).toEqual([]);
   });
 
-  // Expected (425.1.b / 812.1.b.1): the countered Ray was never played, so Legion is unsatisfied and the
-  // Guillotine takes its "kill it the next time it takes damage" branch, leaving the Colossus alive.
-  // Actual: the engine tallies `cardsPlayedThisTurn` when a spell goes ON the chain, so the countered Ray
-  // still counts — Legion fires and the Colossus is killed on resolution.
-  test.failing(
-    "BUG: ruling 29c222d1d436fd40 — a countered card still counts as played, so Legion is wrongly satisfied and the Guillotine kills the Colossus at once",
-    async () => {
-      const game = await defiedRay();
-      expect(game.gameState.cardsPlayedThisTurn?.[P1] ?? 0).toBe(0);
-      await game.p1.cast("guillotine", { targets: "colossus" });
-      await game.settle();
-      expect(game.zoneOf("colossus")).toBe("battlefield-bf1"); // NOT killed now — the non-Legion branch
-      expect(game.zoneOf("guillotine")).toBe("trash");
-    },
-  );
+  // RULING-CONFLICT: riftjudge 29c222d1d436fd40 says the countered Ray also fails to satisfy Legion;
+  // CR 419.4.b says 425.1.b scopes ONLY to abilities that TRIGGER on cards being played, and that
+  // non-triggered checks read whether the card was FINALIZED — its first example is literally "A
+  // player plays a spell, which is countered by Defy. Any Legion abilities of game objects
+  // controlled by that same player will be active." 812.1.c repeats it for Legion ("Finalized by
+  // you on the same turn"). Engine follows CR: the Ray counts, Legion is on, the Colossus dies now.
+  // The ruling's OTHER half — Viktor's "when you play a card" TRIGGER does not fire — is CR-correct
+  // (419.4.a.1) and is the second describe block below.
+  test("the countered Ray was Finalized, so Legion IS satisfied and the Guillotine kills the Colossus at once (419.4.b / 812.1.c)", async () => {
+    const game = await defiedRay();
+    expect(game.gameState.cardsPlayedThisTurn?.[P1] ?? 0).toBe(1);
+    await game.p1.cast("guillotine", { targets: "colossus" });
+    await game.settle();
+    expect(game.zoneOf("colossus")).toBe("trash"); // Legion branch: killed on resolution
+    expect(game.zoneOf("guillotine")).toBe("trash");
+  });
 });
 
 // ── Viktor ──────────────────────────────────────────────────────────────────────────────────────

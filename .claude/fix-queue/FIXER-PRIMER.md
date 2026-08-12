@@ -31,15 +31,6 @@ Recipe: 1) dump enriched abilities. 2) JSON wrong → explicit `abilities` in th
 3) JSON right → jump to the effect/trigger/static/cost section below. 4) run only the card's test file while iterating.
 
 ## 2. Targets / filters
-- **A SOLE LEGAL OPTION IS STILL A CHOICE (rule 355.10.d.2)** — never re-introduce an `options.length === 1` (or
-  `>= 2`) short-circuit that binds the only candidate instead of asking. Being the only valid choice does NOT make a
-  selection programmatic: the object is still targeted ("when you choose me" 355.14.d / 359.2 fires, the [Deflect]
-  surcharge 809.1.c.1 is owed at pick time) and a declinable choice stays declinable. Raise the normal
-  `pendingChoice` with `soleOption: true` (targets, destinations, modes, cost payers, split recipients). A
-  PROGRAMMATIC selection (355.10.d — "each unit", "all units with 2 or less Might") is not a choice and must NOT be
-  prompted. Bots/tests do not click: `E/harness/engine-backend.ts confirmSoleOptions` answers a `soleOption` prompt
-  immediately (and `passivePolicy` does the same in `settle()`); `scenario().interactive()` surfaces it instead.
-  Spec: `E/__tests__/core-rules/sole-option-choices.test.ts`; design note: DESIGN.md "A sole legal option is still a choice".
 - `T/targeting/riftbound-target-dsl.ts` — `Target {type, controller, location, filter, quantity, excludeSelf, totalMight}`;
   `Location` = `base|battlefield|here|same|trash|hand|deck|anywhere|…`; `SimpleFilter` = `mighty buffed damaged stunned ready
   exhausted token equipped attacking defending in-combat alone facedown`; object filters `{tag} {excludeTag} {might:{lt,lte,gt,gte,eq}}
@@ -381,6 +372,13 @@ mutation site (wrap the move map with `withPostMoveCleanup`, or recalc at the en
   `moves/play/hide.ts` (`facedown-<bf>`, `meta.hidden/hiddenAt`); Ganking `movement/ganking-move.ts` (bf→bf); Legion =
   condition `{type:"legion"}` (`E/abilities/legion-conditions.ts`, `draft.cardsPlayedThisTurn`); Accelerate = optional cost
   kind `"accelerate"` → `paidAccelerate` → enters ready in `playUnit` reducer (`staticEnterReadyApplies` otherwise).
+- COUNTERED CARDS AND "PLAYED" — ONE model (rules 419.4.a.1 / 419.4.b / 425.1.b / 812.1.c), settled; do NOT re-litigate:
+  a countered card fires NO play-TRIGGER ("when you play a card", Abandoned Hall, Viktor — 419.4.a.1/425.1.b), but it WAS
+  Finalized, so every NON-triggered "cards played this turn" check still counts it (419.4.b's own examples name a
+  Defy-countered spell: Legion stays active, Battering Ram still costs the reduced 4; 812.1.c = "Finalized by you").
+  Engine matches: `draft.cardsPlayedThisTurn` is tallied at chain-add = Finalization and never decremented by a counter.
+  Rulings 2a574e6d83c828f8 / 29c222d1d436fd40 (count must be 0) are the pre-CR minority — rewrite the FACET with
+  `// RULING-CONFLICT: riftjudge <id> says X; CR 419.4.b/812.1.c says Y — engine follows CR`, never flip the tally.
 Recipe — keyword ignored in combat: CombatUnit build in `resolve-full-combat.ts` → `combat-resolver.ts` usage.
 Recipe — timing wrong: spell → card `rulesText`/`normalizeSpellTiming`; ability → `activate-ability.ts` timing block
 (both `condition` and `enumerator` copies); move → that move's `condition` turn-state check.
@@ -892,3 +890,6 @@ prompt — reuse the `opt-in` pattern (`die-replacement-batch.ts offerOptionalSh
 - **Multi-execution / multi-instance damage vs replacements (rulings 87d4521a, 501859c8, 3afdd260, 6482271b):** DAMAGE-time replacements and prevention (The Boss 'would be dealt lethal damage', Counter Strike/'next time … prevent', Shield-style) apply PER damage instance/execution as it happens. DEATH ('if this would die' — Zhonya's Hourglass, Guardian Angel, Soraka) is a Cleanup event: no death check runs between [Repeat] executions or between instances of one resolving spell; lethal-damaged units die (and would-die replacements are consulted ONCE) in the single Cleanup after the item leaves the chain. Costs paid mid-resolution that make a unit lethal likewise wait for that Cleanup — EXCEPT where a rule inserts a Cleanup (319.x). Don't 'fix' one ruling by breaking the other class.
 - **Land lock etiquette**: call `land-patch.sh` ONCE and let its own `flock -w 1800` wait; on `reason=lock_timeout` call it once more. Do NOT write polling loops / background scripts that repeatedly try the lock — they starve fair waiters. Package lands may be given priority via `.claude/fix-queue/.land.priority` (coordinator-managed); your call will simply wait a bit longer.
 - **Coordinator note — editing land-patch.sh**: never edit it in place while lands are queued (bash reads scripts incrementally by byte offset; a running instance that holds the lock can fall into newly inserted lines). Write to a temp file and `mv` it over (new inode) so running instances keep the old text.
+- **Same-file contention with another LIVE lane** (their uncommitted hunk in a shared file breaks your land, or vice versa): never edit/revert their hunk. Build YOUR version of that file (`git show HEAD:<path>` + only your hunk) under `do_not_commit/<you>-src/<same relative path>` and land with `LAND_SRC_DIR=$PWD/do_not_commit/<you>-src bash .claude/fix-queue/land-patch.sh …` — the gate takes that file from your override dir (`src_override=` in the output) and the rest from the shared tree. After your commit the shared file's diff vs HEAD is exactly the other lane's hunk.
+- **/tmp is a 32 GB tmpfs shared by everyone**: keep scratch under do_not_commit/ in the repo when it's big; browser traces go under /tmp/playtest-traces/<pass>/ (auto-pruned after a day); per-worker /tmp/w<N>i<N>* dirs are swept after 12h — don't rely on them persisting.
+- **Keep the shared tree PARSEABLE at all times.** Everyone runs `bun test` against the same working tree, so a half-written engine file (an unbalanced paren, an unterminated string) breaks EVERY lane, not just yours. After each edit to a file you are actively restructuring, run `bun -e 'import("./<path>")'` (fast, no tests) before doing anything else; if you must leave a file mid-refactor for more than a moment, leave it syntactically valid. If your own tests suddenly fail to parse in a file you did not touch, don't "fix" it — SendMessage the owner (or main) and keep working elsewhere.

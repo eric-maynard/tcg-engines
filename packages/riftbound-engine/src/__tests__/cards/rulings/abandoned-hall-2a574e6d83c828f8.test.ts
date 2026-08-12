@@ -7,8 +7,10 @@
  * Q: If my spell gets countered, do I still get the Abandoned Hall buff?
  * A: No. A "when you play a spell" trigger fires only when the spell RESOLVES; a countered spell
  *    leaves the chain without resolving, so it was never played and the Hall never triggers.
- * Rules: 419.4.a–b (play-triggers fire on resolution; a countered spell is not "played"),
+ * Rules: 419.4.a–a.1 + 425.1.b (play-TRIGGERS fire on resolution, so a countered spell fires none),
  *        425.1.a–c (countered: no effect, straight to trash, no refund), 383 (triggered abilities).
+ *        419.4.b is the other half and cuts the other way: NON-triggered "cards played" checks read
+ *        Finalization, so the countered spell still counts for Legion / cost reductions.
  */
 import { describe, expect, test } from "bun:test";
 import type { Game } from "../../../harness";
@@ -75,17 +77,18 @@ describe("Ruling 2a574e6d83c828f8 — a countered spell was never played: Abando
     expect(game.violations()).toEqual([]);
   });
 
-  // Expected (425.1.b / 419.4.b): a countered spell was never played, so the "cards played this
-  // turn" tally that Legion-style conditions read must stay at 0.
-  // Actual: the engine increments `cardsPlayedThisTurn` when the spell goes ON the chain, so a
-  // countered spell still shows as 1 — the Hall trigger is correctly silent, but the tally is not.
-  test.failing(
-    "BUG: ruling 2a574e6d83c828f8 — the countered spell still counts as a card played this turn (engine tallies at chain-add, expected 0 per 425.1.b)",
-    async () => {
-      const game = await defied();
-      expect(game.gameState.cardsPlayedThisTurn?.[P1] ?? 0).toBe(0);
-    },
-  );
+  // RULING-CONFLICT: riftjudge 2a574e6d83c828f8 reads 425.1.b as erasing the countered spell from
+  // "cards played this turn" entirely; CR 419.4.b says 425.1.b scopes ONLY to abilities that
+  // TRIGGER on cards being played — "Non-triggered abilities that check cards being played do so by
+  // means of referencing whether said cards have been Finalized", with Defy-countered spells named
+  // in both of its examples (Legion stays active; Battering Ram still costs the reduced 4). 812.1.c
+  // says the same for Legion. Engine follows CR: `cardsPlayedThisTurn` is tallied at Finalization
+  // (chain-add), so the countered Void Seeker DOES count, while the Hall's "when a player plays a
+  // spell" TRIGGER stays silent (419.4.a.1) — the facet above.
+  test("the countered spell was still Finalized, so it counts for non-triggered 'cards played' checks (419.4.b)", async () => {
+    const game = await defied();
+    expect(game.gameState.cardsPlayedThisTurn?.[P1] ?? 0).toBe(1);
+  });
 
   test("contrast: with the Defy held back the very same cast DOES tick the played-a-card tally and fire the Hall", async () => {
     const game = await board().build();

@@ -84,24 +84,16 @@ describe("Ruling 359a8c4521ca5961 — Azir's attack trigger moves tokens to 'thi
     expect(game.p1.units("bf1").toSorted()).toEqual([SOLDIER, "azir"].toSorted());
   });
 
-  // Expected (the ruling): moving onto an enemy-held battlefield with no defenders is still an
-  // attack, so the trigger fires and the Sand Soldier may be moved to bf1 alongside Azir.
-  // Actual: with nobody to fight the engine opens a NON-combat showdown, hands out no attacker
-  // designation and queues no trigger at all — the Soldier stays in base.
-  test.failing(
-    "BUG: ruling 359a8c4521ca5961 — attacking an EMPTY enemy battlefield fires no attack trigger, so the tokens cannot be moved",
-    async () => {
-      const game = await board(false).build();
-      await game.p1.move("azir", "bf1");
-      expect(game.locationOf("azir")).toBe("bf1");
-      expect(game.chain()).toEqual([expect.objectContaining({ cardId: "azir", controller: P1, triggered: true })]);
-      await takeSoldier(game);
-      await game.settle();
-      expect(game.locationOf(SOLDIER)).toBe("bf1");
-    },
-  );
-
-  test("what the engine does instead at an empty enemy battlefield: a non-combat showdown, no attacker designation, no trigger, Soldier still in base", async () => {
+  // RULING-CONFLICT: riftjudge 359a8c4521ca5961 says Azir's attack trigger still fires when he
+  // moves to an EMPTY enemy battlefield; CR 190.4.c / 323.6 say a battlefield with no unit of its
+  // controller standing there loses control at the first Open Cleanup, so an "empty enemy
+  // battlefield" is really an UNCONTROLLED one by the time the arrival is processed. rule 344.1
+  // then opens a plain (non-combat) Showdown — Control is not Contested BETWEEN TWO PLAYERS — and
+  // rule 383.4.e only fires an Attack Trigger when a unit "gains the Attacker designation ...
+  // during a combat". Engine follows CR (operations/battlefield-control.ts is the one model).
+  // The ruling's actual content — "this battlefield" is unrestricted, and is read from Azir's
+  // location — is covered by the premise facet above and the "leaves before resolution" facet below.
+  test("an empty (hence UNCONTROLLED) battlefield: non-combat showdown, no attacker designation, no trigger, Soldier still in base", async () => {
     const game = await board(false).build();
     await game.p1.move("azir", "bf1");
     expect(game.locationOf("azir")).toBe("bf1");
@@ -110,6 +102,18 @@ describe("Ruling 359a8c4521ca5961 — Azir's attack trigger moves tokens to 'thi
     expect(game.decision()).toMatchObject({ context: "showdown", kind: "action", seat: P1 });
     expect(game.locationOf(SOLDIER)).toBe("base");
     expect(game.violations()).toEqual([]);
+  });
+
+  // The same board with DURABLE enemy control (a P2 token holds bf1) is a Combat: Azir gains the
+  // Attacker designation, the trigger fires and "this battlefield" takes the Sand Soldier along —
+  // which is what ruling 359a8c4521ca5961 is really asking about. rule 464.2.c.3 / 383.4.e.
+  test("ruling 359a8c4521ca5961 — 'this battlefield' is unrestricted: the tokens follow Azir in", async () => {
+    const game = await board(true).build();
+    await game.p1.move("azir", "bf1");
+    expect(game.chain()).toEqual([expect.objectContaining({ cardId: "azir", controller: P1, triggered: true })]);
+    await takeSoldier(game);
+    await game.settle();
+    expect(game.locationOf(SOLDIER)).toBe("bf1");
   });
 
   test("nuance: if Azir leaves before the trigger resolves, 'this battlefield' has no source and nothing moves", async () => {
