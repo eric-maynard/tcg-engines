@@ -1,6 +1,7 @@
 // Effect handler: "attach"
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import { attachEquipment, splitEquipmentPair } from "./_attachment";
+import { legalBoundIds } from "../target-slots";
 import { type EffectHelpers, getTargetIds } from "./_helpers";
 
 export function handle_attach(effect: ExecutableEffect, ctx: EffectContext, _h: EffectHelpers): void {
@@ -55,12 +56,27 @@ export function handle_attach(effect: ExecutableEffect, ctx: EffectContext, _h: 
       return;
     }
     const { boundTargets: _holder, ...unbound } = ctx;
-    const candidates = getTargetIds(
-      {
-        ...effect,
-        target: { ...(effect.equipment as object), quantity: "all" },
-      } as unknown as ExecutableEffect,
+    // rule 355.5 / 355.12 / 355.15 (ruling 4283ca02526c0650) — when the spell
+    // NAMED this Equipment as it was played (`_bound`, stamped by
+    // `play/make-choices.ts bindNestedDescriptorSlots`), the object is locked:
+    // it is not re-chosen here, only re-CHECKED against the descriptor as it
+    // reads now (358.1 / 359.3.e.2 — an Equipment that changed hands or left
+    // the board is simply unaffected, and no replacement is offered, 355.15).
+    // The "you may" DECISION still belongs to resolution (383.3.a.3), so the
+    // locked pick is still offered as a declinable one-option prompt.
+    const locked = legalBoundIds(
+      { ...effect, target: effect.equipment } as ExecutableEffect,
       unbound as EffectContext,
+    );
+    const candidates = (
+      locked ??
+      getTargetIds(
+        {
+          ...effect,
+          target: { ...(effect.equipment as object), quantity: "all" },
+        } as unknown as ExecutableEffect,
+        unbound as EffectContext,
+      )
     ).filter((id) => id !== holderId);
     if (candidates.length === 0 || ctx.draft.pendingChoice) {
       return;

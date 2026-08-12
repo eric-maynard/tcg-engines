@@ -41,15 +41,19 @@ function neutralBoard() {
 describe("Ruling a80326d6674556fe — Relentless Pursuit does attach an Equipment to the unit it moves", () => {
   test("the play names the unit; the Equipment is the spell's other choice, offered (declinably) as it resolves", async () => {
     const game = await board().build();
-    // The play-time target list is the friendly unit only.
+    // rule 355.5 / 355.12 — the play-time list names BOTH objects: the friendly
+    // unit and the Equipment that may be attached to it.
     const targets = game.p1.option("cast", "rp")?.fields.find((f) => f.arg === "targets");
-    expect(targets?.options).toEqual([["ally"], ["holder"]]);
-    await game.p1.cast("rp", { targets: "ally" });
+    expect(targets?.options).toEqual([["ally", "blade"], ["holder", "blade"]]);
+    await game.p1.cast("rp", { targets: ["ally", "blade"] });
     await game.p1.passPriority();
     await game.p2.passPriority();
-    // RULING-CONFLICT: riftjudge a80326d6674556fe says both the unit AND the Equipment are chosen when the spell is
-    // CAST; the engine locks the unit at play (355.4/355.10) and asks for the Equipment — declinably, it is a "may" —
-    // while the spell resolves. The answer to the question asked ("can I attach one?") is the same either way.
+    // riftjudge a80326d6674556fe (now FOLLOWED, and it is what the CR says): both
+    // the unit AND the Equipment are chosen when the spell is CAST — 355.12, a
+    // "you may perform a Game Action on some Game Objects" makes every choice
+    // targeted and chosen independently of the decision to perform it. What is
+    // left here is only that DECISION (383.3.a.3), so the prompt offers exactly
+    // the Equipment already named and stays declinable.
     const d = game.decision();
     expect(d).toMatchObject({ allowDecline: true, kind: "pick", max: 1, min: 1, seat: P1, timing: "RES" });
     expect(d?.kind === "pick" ? d.options.map((o) => o.card) : []).toEqual(["blade"]);
@@ -57,7 +61,7 @@ describe("Ruling a80326d6674556fe — Relentless Pursuit does attach an Equipmen
 
   test("saying yes: the Equipment ends up attached to the unit, which has moved to bf1 (+2 [Might] from the Blade)", async () => {
     const game = await board().build();
-    await game.p1.cast("rp", { targets: "ally" });
+    await game.p1.cast("rp", { targets: ["ally", "blade"] });
     await game.p1.passPriority();
     await game.p2.passPriority();
     await game.p1.pick("blade");
@@ -72,7 +76,7 @@ describe("Ruling a80326d6674556fe — Relentless Pursuit does attach an Equipmen
 
   test("declining the attach still moves the unit — the Blade stays unattached in P1's base", async () => {
     const game = await board().build();
-    await game.p1.cast("rp", { targets: "ally" });
+    await game.p1.cast("rp", { targets: ["ally", "blade"] });
     await game.p1.passPriority();
     await game.p2.passPriority();
     await game.p1.decline();
@@ -85,7 +89,7 @@ describe("Ruling a80326d6674556fe — Relentless Pursuit does attach an Equipmen
 
   test("…and it still gains 'When I conquer, you may move me to my base' — conquering neutral bf1 asks P1 to move back", async () => {
     const game = await neutralBoard().build();
-    await game.p1.cast("rp", { targets: "ally" });
+    await game.p1.cast("rp", { targets: ["ally", "blade"] });
     await game.p1.passPriority();
     await game.p2.passPriority();
     await game.p1.decline(); // no attach — the grant is independent of it
@@ -100,7 +104,7 @@ describe("Ruling a80326d6674556fe — Relentless Pursuit does attach an Equipmen
 
   test("'with the same controller' — an opponent's Equipment is never on the menu", async () => {
     const game = await board().gear(P2, HEXDRINKER, "theirs").build();
-    await game.p1.cast("rp", { targets: "ally" });
+    await game.p1.cast("rp", { targets: ["ally", "blade"] });
     await game.p1.passPriority();
     await game.p2.passPriority();
     const d = game.decision();

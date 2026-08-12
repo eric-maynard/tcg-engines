@@ -70,7 +70,7 @@ const showdown = (game: Game) => game.gameState.interaction?.showdownStack?.at(-
 /** Cast Relentless Pursuit on the Sentry, naming its base as the destination, and let it resolve. */
 async function pursuedToBase(): Promise<Game> {
   const game = await atBattlefield().build();
-  await game.p1.cast("rp", { targets: "sentry" });
+  await game.p1.cast("rp", { targets: ["sentry", "sword"] });
   await game.p1.pick("base");
   await game.p1.passPriority();
   await game.p2.passPriority();
@@ -101,9 +101,11 @@ describe("Relentless Pursuit × Determined Sentry — an ignored move takes its 
 
   test("(a) the spell targets friendly units only, and BASE is offered as a move destination at finalization alongside bfC (355.4 / 355.4.a — the Sentry is allowed to be PRESENT in its base; the restriction bites on the move, not on presence)", async () => {
     const game = await atBattlefield().build();
-    const targets = (game.p1.option("cast", "rp")?.fields.find((f) => f.name === "targets")?.options ?? []).flat();
-    expect([...new Set(targets)]).toEqual(["sentry"]);
-    await game.p1.cast("rp", { targets: "sentry" });
+    // rule 355.5 / 355.12 — the option is the pair (unit, Equipment).
+    const tuples = (game.p1.option("cast", "rp")?.fields.find((f) => f.name === "targets")?.options ?? []) as string[][];
+    expect([...new Set(tuples.map((t) => t[0]))]).toEqual(["sentry"]);
+    expect([...new Set(tuples.map((t) => t[1]))]).toEqual(["sword"]);
+    await game.p1.cast("rp", { targets: ["sentry", "sword"] });
     const d = game.decision();
     expect(d).toMatchObject({ kind: "pick", seat: P1, timing: "FIN" });
     expect(d?.kind === "pick" ? d.options.map((o) => o.key).toSorted() : []).toEqual(["base", "battlefield-bfC"]);
@@ -111,7 +113,7 @@ describe("Relentless Pursuit × Determined Sentry — an ignored move takes its 
 
   test("(a) naming base is accepted and paid for: the spell goes on the chain with its costs spent and nothing has moved yet (355.4 — legality is re-checked on resolution)", async () => {
     const game = await atBattlefield().build();
-    await game.p1.cast("rp", { targets: "sentry" });
+    await game.p1.cast("rp", { targets: ["sentry", "sword"] });
     await game.p1.pick("base");
     expect(game.p1.resources()).toEqual({ energy: 0, power: { rainbow: 0 } });
     expect(game.chain()).toEqual([
@@ -151,7 +153,7 @@ describe("Relentless Pursuit × Determined Sentry — an ignored move takes its 
 
   test("(b) base → the empty bfB is a legal move: the Sentry arrives Contested by P1 and P1 is then offered the optional attach (355.13 / 434 — no Equip cost), which equips the Long Sword", async () => {
     const game = await inBase().build();
-    await game.p1.cast("rp", { targets: "sentry" });
+    await game.p1.cast("rp", { targets: ["sentry", "sword"] });
     await game.p1.passPriority();
     await game.p2.passPriority();
     expect(game.locationOf("sentry")).toBe("bfB");
@@ -165,7 +167,7 @@ describe("Relentless Pursuit × Determined Sentry — an ignored move takes its 
 
   test("(b) the third clause installs the turn-scoped grant on the moved unit (364.3), and declining the attach does not stop it", async () => {
     const game = await inBase().build();
-    await game.p1.cast("rp", { targets: "sentry" });
+    await game.p1.cast("rp", { targets: ["sentry", "sword"] });
     await game.p1.passPriority();
     await game.p2.passPriority();
     await game.p1.decline();
@@ -183,7 +185,7 @@ describe("Relentless Pursuit × Determined Sentry — an ignored move takes its 
 
   test("(b) the arrival stages a Non-Combat Showdown at bfB with P1 holding Focus; both pass → P1 establishes control = Conquer, +1 point (348.2.a / 469.1)", async () => {
     const game = await inBase().build();
-    await game.p1.cast("rp", { targets: "sentry" });
+    await game.p1.cast("rp", { targets: ["sentry", "sword"] });
     await game.p1.passPriority();
     await game.p2.passPriority();
     await game.p1.pick("sword");
@@ -197,7 +199,7 @@ describe("Relentless Pursuit × Determined Sentry — an ignored move takes its 
 
   test("(b) the conquer fires the granted trigger: P1 IS offered the move home even though the Sentry can never take it (358.3.a), and accepting simply ignores the move (054.1 / 359.3.e.6) — the Sentry stays at bfB, keeps the battlefield and the point", async () => {
     const game = await inBase().build();
-    await game.p1.cast("rp", { targets: "sentry" });
+    await game.p1.cast("rp", { targets: ["sentry", "sword"] });
     await game.p1.passPriority();
     await game.p2.passPriority();
     await game.p1.pick("sword");

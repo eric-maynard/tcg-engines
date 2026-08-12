@@ -29,6 +29,9 @@ import type { Decision, Game } from "../../../harness";
 import { P1, P2, scenario } from "../../../harness";
 
 const RELENTLESS_PURSUIT = "sfd-184-221";
+// rule 355.7 / 355.9 (riftjudge 4283ca02526c0650) — the Equipment is named as the
+// spell is played, so one must be in play for Relentless Pursuit to be castable.
+const RP_EQUIPMENT = "sfd-042-221";
 const TREASURE_HUNTER = "sfd-130-221";
 
 /**
@@ -44,6 +47,7 @@ function board() {
     .unit(P2, "bfX", { might: 5, name: "Faraway" }, "far")
     .unit(P1, "base", TREASURE_HUNTER, "hunter")
     .unit(P1, "base", { might: 2, name: "Vanilla W" }, "W")
+    .gear(P1, RP_EQUIPMENT, "rpEquip")
     .hand(P1, RELENTLESS_PURSUIT, "rp");
 }
 
@@ -67,7 +71,7 @@ async function until(game: Game, pred: (d: Decision | null) => boolean, max = 30
 /** Cast Relentless Pursuit on the Hunter and send it to bfC (the destination is asked as the spell is played). */
 async function pursued(): Promise<Game> {
   const game = await board().build();
-  await game.p1.cast("rp", { targets: "hunter" });
+  await game.p1.cast("rp", { targets: ["hunter", "rpEquip"] });
   expect(game.decision()).toMatchObject({ kind: "pick", seat: P1 });
   await game.p1.pick("battlefield-bfC");
   return game;
@@ -91,9 +95,12 @@ async function sentHome(): Promise<Game> {
 describe("Relentless Pursuit × Treasure Hunter onto an empty battlefield — showdown timing, hit-and-run, and no re-conquer (470)", () => {
   test("cast: friendly units only (Hunter, W); 2 energy + [rainbow] paid; the destination for the Hunter is chosen as the spell is played — bfC or bfX, not base (it is there)", async () => {
     const game = await board().build();
-    const offered = (game.p1.option("cast", "rp")?.fields.find((f) => f.name === "targets")?.options ?? []).flat();
-    expect([...offered].sort()).toEqual(["W", "hunter"]);
-    await game.p1.cast("rp", { targets: "hunter" });
+    // rule 355.5 / 355.12 — each option is the PAIR the spell names: the unit it
+    // moves and the Equipment it may attach (ruling 4283ca02526c0650).
+    const tuples = (game.p1.option("cast", "rp")?.fields.find((f) => f.name === "targets")?.options ?? []) as string[][];
+    expect([...new Set(tuples.map((t) => t[0]))].sort()).toEqual(["W", "hunter"]);
+    expect([...new Set(tuples.map((t) => t[1]))]).toEqual(["rpEquip"]);
+    await game.p1.cast("rp", { targets: ["hunter", "rpEquip"] });
     expect(game.p1.resources()).toEqual({ energy: 0, power: { rainbow: 0 } });
     const d = game.decision();
     expect(d).toMatchObject({ kind: "pick", seat: P1 });
@@ -104,10 +111,11 @@ describe("Relentless Pursuit × Treasure Hunter onto an empty battlefield — sh
     expect(isChainPriority(game.decision())).toBe(true);
   });
 
-  test("RP resolves (P1 pass, P2 pass): the Hunter is at bfC, P1 applied Contested (450), no attach prompt (no Equipment), and 'When I move' is on the chain — the showdown has NOT begun yet (Closed state, 323.12)", async () => {
+  test("RP resolves (P1 pass, P2 pass): the Hunter is at bfC, P1 applied Contested (450), the named Equipment attach is declined, and 'When I move' is on the chain — the showdown has NOT begun yet (Closed state, 323.12)", async () => {
     const game = await pursued();
     await game.p1.passPriority();
     await game.p2.passPriority();
+    await game.p1.decline(); // rule 355.13 — the attach itself stays optional
     expect(game.zoneOf("rp")).toBe("trash");
     expect(game.locationOf("hunter")).toBe("bfC");
     expect(game.gameState.battlefields.bfC).toMatchObject({ contested: true, controller: null });

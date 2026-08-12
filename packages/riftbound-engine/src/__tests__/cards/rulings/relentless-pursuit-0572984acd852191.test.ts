@@ -13,6 +13,9 @@ import type { Game } from "../../../harness";
 import { P1, P2, scenario } from "../../../harness";
 
 const RELENTLESS_PURSUIT = "sfd-184-221";
+// rule 355.7 / 355.9 (riftjudge 4283ca02526c0650) — the Equipment is named as the
+// spell is played, so Relentless Pursuit needs one in play to be castable at all.
+const RP_EQUIPMENT = "sfd-042-221";
 
 /** P1's turn. Two EMPTY uncontrolled battlefields; P1's ready Runner (4) in base; Relentless Pursuit + [2] + 1 rainbow. */
 function board() {
@@ -22,6 +25,7 @@ function board() {
     .battlefield("bf2", { controller: null })
     .unit(P1, "base", { might: 4, name: "Runner" }, "runner")
     .unit(P2, "base", { might: 2, name: "Bystander" }, "bystander")
+    .gear(P1, RP_EQUIPMENT, "rpEquip")
     .hand(P1, RELENTLESS_PURSUIT, "pursuit");
 }
 
@@ -61,7 +65,7 @@ async function driveToConquerOffer(game: Game, dest?: string): Promise<boolean> 
 describe("Ruling 0572984acd852191 — Relentless Pursuit's granted conquer trigger lasts the whole turn (fires on every conquer)", () => {
   test("first conquer: Pursuit moves the Runner onto empty bf1 → P1 conquers (1 point) → the granted 'you may move me to my base' is offered; yes → Runner back in base", async () => {
     const game = await board().build();
-    await game.p1.cast("pursuit", { targets: "runner" });
+    await game.p1.cast("pursuit", { targets: ["runner", "rpEquip"] });
     expect(await driveToConquerOffer(game, "battlefield-bf1")).toBe(true);
     expect(game.gameState.battlefields.bf1?.controller).toBe(P1);
     expect(game.p1.points()).toBe(1);
@@ -74,7 +78,7 @@ describe("Ruling 0572984acd852191 — Relentless Pursuit's granted conquer trigg
 
   test("SAME TURN, second conquer: the Runner then standard-moves onto empty bf2 → conquers again (2 points) → the granted trigger is offered AGAIN; yes → back to base once more", async () => {
     const game = await board().build();
-    await game.p1.cast("pursuit", { targets: "runner" });
+    await game.p1.cast("pursuit", { targets: ["runner", "rpEquip"] });
     expect(await driveToConquerOffer(game, "battlefield-bf1")).toBe(true);
     await game.p1.yes();
     await game.settle();
@@ -93,7 +97,7 @@ describe("Ruling 0572984acd852191 — Relentless Pursuit's granted conquer trigg
 
   test("'this turn' only: on P1's NEXT turn the Runner conquering bf1 again gets no such offer and stays on the battlefield", async () => {
     const game = await board().build();
-    await game.p1.cast("pursuit", { targets: "runner" });
+    await game.p1.cast("pursuit", { targets: ["runner", "rpEquip"] });
     expect(await driveToConquerOffer(game, "battlefield-bf1")).toBe(true);
     await game.p1.yes();
     await game.settle();

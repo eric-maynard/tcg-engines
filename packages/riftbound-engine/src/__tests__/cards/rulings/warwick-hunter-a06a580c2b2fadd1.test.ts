@@ -17,6 +17,9 @@ import { P1, P2, scenario } from "../../../harness";
 
 const WARWICK = "ogn-159-298";
 const RELENTLESS_PURSUIT = "sfd-184-221";
+// rule 355.7 / 355.9 (riftjudge 4283ca02526c0650) — the Equipment is named as the
+// spell is played, so Relentless Pursuit needs one in play to be castable at all.
+const RP_EQUIPMENT = "sfd-042-221";
 const FLURRY_OF_BLADES = "ogn-133-298";
 
 const showdown = (game: Game) => (game.gameState.interaction?.showdownStack ?? []).find((s) => s.active);
@@ -33,6 +36,7 @@ function board() {
     .unit(P2, "bfA", { might: 3, name: "Guard A" }, "ga")
     .unit(P2, "bfB", { might: 6, name: "Guard B" }, "gb")
     .unit(P1, "base", WARWICK, "ww")
+    .gear(P1, RP_EQUIPMENT, "rpEquip")
     .hand(P1, FLURRY_OF_BLADES, "flurry")
     .hand(P1, RELENTLESS_PURSUIT, "pursuit");
 }
@@ -45,13 +49,15 @@ async function combatAtA(): Promise<Game> {
   expect(game.state("ga").damage).toBe(1);
   expect(game.state("gb").damage).toBe(1);
   expect(game.state("ww").damage).toBe(0); // in base — not "at a battlefield"
-  await game.p1.cast("pursuit", { targets: "ww" });
+  await game.p1.cast("pursuit", { targets: ["ww", "rpEquip"] });
   expect(game.decision()).toMatchObject({ kind: "pick", seat: P1 }); // where to move Warwick
   await game.p1.pick("battlefield-bfA");
   // Pursuit resolves → Warwick arrives at bfA → combat A starts → his ATTACK trigger goes on the chain.
-  while (game.chain().some((c) => c.cardId === "pursuit") && game.decision()?.kind === "action") {
-    await game.acting().passPriority();
-  }
+  await game.p1.passPriority();
+  await game.p2.passPriority();
+  // rule 355.13 — the Equipment is named as the spell is played, but attaching it
+  // is still only OFFERED as the spell resolves; Warwick attaches nothing here.
+  await game.p1.decline();
   expect(game.locationOf("ww")).toBe("bfA");
   expect(showdown(game)).toMatchObject({ attackingPlayer: P1, battlefieldId: "bfA", isCombatShowdown: true });
   expect(game.chain()).toEqual([expect.objectContaining({ cardId: "ww", controller: P1, triggered: true })]);

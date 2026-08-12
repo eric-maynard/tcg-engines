@@ -16,6 +16,9 @@ import type { Game, OrderDecision } from "../../../harness";
 import { P1, P2, scenario } from "../../../harness";
 
 const RELENTLESS_PURSUIT = "sfd-184-221";
+// rule 355.7 / 355.9 (riftjudge 4283ca02526c0650) — the Equipment is named as the
+// spell is played, so Relentless Pursuit needs one in play to be castable at all.
+const RP_EQUIPMENT = "sfd-042-221";
 const LUCIAN_MERCILESS = "sfd-113-221";
 
 /** P1's turn. Lucian is EXHAUSTED in base (so "ready me" is observable). P2 holds bf1 with Weak (1); bf2 open. Pursuit + [2][rainbow]. */
@@ -26,6 +29,7 @@ function board() {
     .battlefield("bf2", { controller: null })
     .unit(P2, "bf1", { might: 1, name: "Weak" }, "weak")
     .unit(P1, "base", LUCIAN_MERCILESS, "lucian", { exhausted: true })
+    .gear(P1, RP_EQUIPMENT, "rpEquip")
     .hand(P1, RELENTLESS_PURSUIT, "pursuit");
 }
 
@@ -35,11 +39,12 @@ function board() {
  */
 async function lucianConquersViaPursuit(): Promise<Game> {
   const game = await board().build();
-  await game.p1.cast("pursuit", { targets: "lucian" });
+  await game.p1.cast("pursuit", { targets: ["lucian", "rpEquip"] });
   expect(game.decision()).toMatchObject({ kind: "pick", seat: P1, semantics: "destination" });
   await game.p1.pick("battlefield-bf1");
   await game.p1.passPriority();
   await game.p2.passPriority(); // Pursuit resolves: Lucian arrives (still exhausted — an effect move)
+  await game.p1.decline(); // the attach is optional (355.13) — the Equipment is named, not forced on
   expect(game.locationOf("lucian")).toBe("bf1");
   expect(game.state("lucian").isExhausted).toBe(true);
   await game.p1.passFocus();

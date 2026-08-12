@@ -47,7 +47,7 @@ function board() {
 
 /** Cast on `unit`, resolve, and send it to `dest` ("base" | "battlefield-bfN"). Leaves any follow-up prompt pending. */
 async function pursue(game: Game, unit: string, dest: string): Promise<void> {
-  await game.p1.cast("rp", { targets: unit });
+  await game.p1.cast("rp", { targets: [unit, "sword"] });
   await game.settle();
   expect(game.decision()).toMatchObject({ kind: "pick", seat: P1 });
   await game.p1.pick(dest);
@@ -94,7 +94,7 @@ describe("Relentless Pursuit (sfd-184-221)", () => {
 
   test("cost: 2 energy + 1 [rainbow]; the spell resolves to the trash; missing either resource → not castable", async () => {
     const game = await board().build();
-    await game.p1.cast("rp", { targets: "runner" });
+    await game.p1.cast("rp", { targets: ["runner", "sword"] });
     expect(game.p1.resources()).toEqual({ energy: 0, power: { rainbow: 0 } });
     expect(game.zoneOf("rp")).toBe("chain");
     await game.settle();
@@ -109,8 +109,10 @@ describe("Relentless Pursuit (sfd-184-221)", () => {
     const game = await board().build();
     const targets = game.p1.option("cast", "rp")?.fields.find((f) => f.arg === "targets")?.options;
     expect(targets).toHaveLength(2);
-    expect(targets).toEqual(expect.arrayContaining([["runner"], ["bystander"]]));
-    const bad = await game.p1.try((p) => p.cast("rp", { targets: "guard" }));
+    // rule 355.5 / 355.12 — each option is (unit, Equipment); the Equipment is
+    // named as the spell is cast even though attaching it is a "may".
+    expect(targets).toEqual(expect.arrayContaining([["runner", "sword"], ["bystander", "sword"]]));
+    const bad = await game.p1.try((p) => p.cast("rp", { targets: ["guard", "sword"] }));
     expect(!bad.ok && bad.error.code).toBe("ILLEGAL_ARGS");
     const none = await scenario().resources(P1, COST).unit(P2, "base", { might: 1 }, "foe").hand(P1, CARD, "x").build();
     expect(none.p1.can("cast", "x")).toBe(false);
@@ -133,9 +135,10 @@ describe("Relentless Pursuit (sfd-184-221)", () => {
       .battlefield("bf1", { controller: P1 })
       .battlefield("bf2", { controller: null })
       .unit(P1, "bf1", { might: 3, name: "Runner" }, "runner")
+      .gear(P1, BF_SWORD, "sword")
       .hand(P1, CARD, "rp")
       .build();
-    await game.p1.cast("rp", { targets: "runner" });
+    await game.p1.cast("rp", { targets: ["runner", "sword"] });
     await game.settle();
     const d = game.decision();
     const keys = d?.kind === "pick" ? d.options.map((o) => o.key) : [];
@@ -207,7 +210,11 @@ describe("Relentless Pursuit (sfd-184-221)", () => {
     expect(game.state("runner").might).toBe(3);
   });
 
-  test("clause 2 — with NO Equipment under P1's control there is nothing to attach: move resolves straight through, no prompt", async () => {
+  // rule 355.7 / 355.9 (riftjudge 4283ca02526c0650) — the Equipment is one of the
+  // objects the spell names as it is PLAYED; "you may" defers the decision to
+  // attach, never the naming. With no Equipment under P1's control there is
+  // nothing to name, so the spell cannot be played at all (355.8).
+  test("clause 2 — with NO Equipment under P1's control the spell is unplayable: there is no Equipment to name (355.7/355.9, 355.8)", async () => {
     const game = await scenario()
       .resources(P1, COST)
       .battlefield("bf1", { controller: P2 })
@@ -217,20 +224,8 @@ describe("Relentless Pursuit (sfd-184-221)", () => {
       .gear(P2, BF_SWORD, "theirs")
       .hand(P1, CARD, "rp")
       .build();
-    await pursue(game, "runner", "battlefield-bf2");
-    // No equipment pick may appear; taking the empty bf2 is a conquer (469.1) so
-    // the granted "you may move me home" offer legitimately does — decline it.
-    const first = await game.settle();
-    const second = first.reason === "open" && game.decision()?.kind === "action" && (game.decision() as ActionDecision).context !== "main" ? await game.settle() : first;
-    if (game.decision()?.kind === "yes-no") {
-      await game.p1.no();
-    } else {
-      expect(second.reason).toBe("open");
-    }
-    await game.settle();
-    expect(game.decision()).toMatchObject({ context: "main", kind: "action", seat: P1 });
-    expect(game.locationOf("runner")).toBe("bf2");
-    expect(game.state("theirs").attachedTo).toBeUndefined();
+    expect(game.p1.can("cast", "rp")).toBe(false); // only the OPPONENT owns an Equipment
+    expect(game.locationOf("runner")).toBe("base");
   });
 
   test("clause 3 — 'This turn, that unit has \"When I conquer, you may move me to my base\"': after Runner conquers bf1 P1 is asked and may send it home (point kept, bf1 left empty)", async () => {
@@ -311,13 +306,14 @@ describe("Relentless Pursuit (sfd-184-221)", () => {
       .unit(P1, "bf1", { might: 2, name: "Sentry" }, "sentry")
       .unit(P1, "base", { might: 3, name: "Runner" }, "runner")
       .unit(P2, "base", { might: 4, name: "Reserve" }, "reserve")
+      .gear(P1, BF_SWORD, "sword")
       .hand(P1, CARD, "rp")
       .build();
     await game.p2.move("reserve", "bf1");
     expect((game.decision() as ActionDecision).context).toBe("showdown");
     await game.p2.passFocus();
     expect(game.p1.can("cast", "rp")).toBe(true);
-    await game.p1.cast("rp", { targets: "runner" });
+    await game.p1.cast("rp", { targets: ["runner", "sword"] });
     await game.settle();
     if (game.decision()?.kind === "pick") {
       await game.p1.pick("battlefield-bf1");

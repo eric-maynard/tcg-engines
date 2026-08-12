@@ -40,7 +40,7 @@ function board() {
 
 /** Cast Relentless Pursuit on the Runner bound for bf2 (the destination is named with the play, 355.4). */
 async function castPursuit(game: Game): Promise<void> {
-  await game.p1.cast("rp", { targets: "runner" });
+  await game.p1.cast("rp", { targets: ["runner", "sword"] });
   const d = game.decision();
   if (d?.kind === "pick" && d.seat === P1) {
     expect(d.options.map((o) => o.key)).toContain("battlefield-bf2");

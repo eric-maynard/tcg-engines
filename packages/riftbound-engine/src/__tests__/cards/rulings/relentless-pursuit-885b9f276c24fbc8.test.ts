@@ -39,7 +39,7 @@ function board() {
 async function pursue(): Promise<Game> {
   const game = await board().build();
   expect(game.state("runner").attachments).toEqual([]);
-  await game.p1.cast("rp", { targets: "runner" });
+  await game.p1.cast("rp", { targets: ["runner", "myEye"] });
   await game.p1.passPriority();
   await game.p2.passPriority(); // resolves: the Runner moves (bf1 is its only destination, so it is bound unasked)
   expect(game.locationOf("runner")).toBe("bf1");

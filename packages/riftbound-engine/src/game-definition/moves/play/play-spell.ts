@@ -34,6 +34,11 @@ import { hasBuffCounter, removeOneBuffCounter } from "../../../operations/buff-c
 import { removeFromBoard } from "../../../operations/leave-board";
 import { executeEffect } from "../../../abilities/effect-executor";
 import { collectChoiceNodes, raisePlayTimeModeChoice } from "./play-time-modes";
+import {
+  bindNestedDescriptorSlots,
+  collectNestedDescriptorSlots,
+  type NestedDescriptorSlot,
+} from "./make-choices";
 import type { CostExtras } from "./cost";
 import {
   getOptionalPlayCost,
@@ -520,6 +525,71 @@ function modeSingleSlot(effect: unknown): Record<string, unknown> | undefined {
   return tgt as Record<string, unknown>;
 }
 
+/** A single caster-chosen board object (355.5): one, and not a player/battlefield. */
+function isSinglePickDescriptor(d: { type: string; quantity?: unknown } | undefined): boolean {
+  return (
+    d !== undefined &&
+    d.type !== "player" &&
+    d.type !== "battlefield" &&
+    (d.quantity === undefined || d.quantity === 1)
+  );
+}
+
+/** rule 355.13 — an "up to one" slot: one object, or none at all. */
+function isOptionalSinglePickDescriptor(d: { type: string; quantity?: unknown } | undefined): boolean {
+  const q = d?.quantity as { atLeast?: number; upTo?: number } | undefined;
+  return (
+    d !== undefined &&
+    d.type !== "player" &&
+    d.type !== "battlefield" &&
+    typeof q === "object" &&
+    q !== null &&
+    q.upTo === 1 &&
+    q.atLeast === undefined
+  );
+}
+
+/**
+ * rule 355.5 / 355.12 (rule-id: sfd-184-221 Relentless Pursuit, ruling
+ * 4283ca02526c0650) — the caster-chosen objects a spell names in a FOLLOW-UP
+ * clause: "Move a friendly unit. You may attach an Equipment with the same
+ * controller TO IT." Both objects are chosen as the spell is PLAYED — 355.12 is
+ * explicit that "a player may perform a Game Action on some number of Game
+ * Objects" makes every choice targeted and chosen INDEPENDENTLY of the decision
+ * to perform it — so they ride on `targets` after the lead pick and gate the
+ * play under 355.8. The list is empty for every spell that names nothing in a
+ * follow-up, which is the overwhelming majority.
+ */
+function nestedPlaySlots(
+  effect: unknown,
+  ctx: Parameters<typeof resolveTarget>[1],
+): { slot: NestedDescriptorSlot; pool: string[] }[] {
+  const slots = collectNestedDescriptorSlots(effect);
+  if (slots.length === 0) {
+    return [];
+  }
+  return slots.map((slot) => ({
+    pool: resolveTarget(
+      { ...(slot.descriptor as { type: string }), quantity: "all" } as Parameters<typeof resolveTarget>[0],
+      ctx,
+    ) as string[],
+    slot,
+  }));
+}
+
+/**
+ * rule 355.8 / 358.5 — true when a REQUIRED follow-up object has no legal
+ * candidate, i.e. the spell may not be played at all: it is absent from the
+ * offered set, never offered and then refused. An "up to N" follow-up may be
+ * answered with nothing (355.13), so it never gates.
+ */
+function nestedPlaySlotsUnsatisfiable(
+  effect: unknown,
+  ctx: Parameters<typeof resolveTarget>[1],
+): boolean {
+  return nestedPlaySlots(effect, ctx).some(({ pool, slot }) => slot.gating && pool.length === 0);
+}
+
 export const playSpell: Defs["playSpell"] = {
   condition: (state, rawContext) => {
     // rule 355.1 — a `costs` selection is the canonical cost param; expand it
@@ -873,6 +943,12 @@ export const playSpell: Defs["playSpell"] = {
         conditionResolverCtx,
       )
     ) {
+      return false;
+    }
+    // rule 355.8 (ruling 4283ca02526c0650) — an object the spell names in a
+    // FOLLOW-UP clause is chosen as it is played too, so with no candidate for
+    // it there is no legal play at all.
+    if (nestedPlaySlotsUnsatisfiable(spellAbility?.effect, conditionResolverCtx)) {
       return false;
     }
     // rule 820.2.a / 355.5 — one mode per [Repeat] execution: each execution's
@@ -1540,6 +1616,15 @@ export const playSpell: Defs["playSpell"] = {
       };
       const secondOptional =
         seqSlots?.length === 2 && isSinglePick(seqSlots[0]) && isOptionalSinglePick(seqSlots[1]);
+      // rule 355.13 / 355.5 (rule-id: ven-140-166 Shuriken Flip) — "Deal 2 to up
+      // to one enemy unit at a battlefield, then move a friendly unit": here the
+      // OPTIONAL slot is the LEAD and the mandatory one is second, the mirror of
+      // `secondOptional`. Both objects are still named as the spell is played,
+      // so the pair has to be enumerated together — and with no friendly unit
+      // the mandatory slot has no answer, which is what makes the spell
+      // unplayable (355.8, ruling b6531d2345e9ef12).
+      const leadOptional =
+        seqSlots?.length === 2 && isOptionalSinglePick(seqSlots[0]) && isSinglePick(seqSlots[1]);
       // rule-id: sfd-107-221 (rule 355.8 / 355.14.a) — "…It deals damage equal
       // to its Might to an enemy unit": the damaged unit is a second
       // caster-chosen target alongside the Might reference, so pair them.
@@ -1547,8 +1632,8 @@ export const playSpell: Defs["playSpell"] = {
         refTgt !== undefined && findSplitDamageEffect(spellEffect) === undefined
           ? findAmountReferenceDamageTarget(spellEffect)
           : seqSlots?.length === 2 &&
-              isSinglePick(seqSlots[0]) &&
-              (isSinglePick(seqSlots[1]) || secondOptional)
+              ((isSinglePick(seqSlots[0]) && (isSinglePick(seqSlots[1]) || secondOptional)) ||
+                leadOptional)
             ? seqSlots[1]
             : undefined;
       const tgt =
@@ -1928,6 +2013,34 @@ export const playSpell: Defs["playSpell"] = {
                 continue;
               }
             }
+            // rule 355.5 (ven-140-166) — an "up to N" LEAD slot followed by a
+            // MANDATORY second one: every subset (including the empty one) is
+            // crossed with that slot's legal candidates, so both objects are
+            // named at play. A candidate the move could not send anywhere is not
+            // a legal choice (355.4.a), and with none at all no variant exists —
+            // the spell is simply not offered (355.8).
+            if (leadOptional && secondTgt !== undefined) {
+              const seconds = (
+                resolveTarget(
+                  { ...secondTgt, quantity: "all" } as Parameters<typeof resolveTarget>[0],
+                  resolverCtx,
+                ) as string[]
+              ).filter((id) => {
+                if (subset.includes(id)) {
+                  return false;
+                }
+                const dests = chosenMoveDestinations(spellEffect, id, resolverCtx);
+                return dests === undefined || dests.length > 0;
+              });
+              for (const secId of seconds) {
+                baseVariants.push({
+                  cardId: cardId as string,
+                  playerId: context.playerId as string,
+                  targets: [...subset, secId],
+                });
+              }
+              continue;
+            }
             baseVariants.push({
               cardId: cardId as string,
               playerId: context.playerId as string,
@@ -2123,6 +2236,33 @@ export const playSpell: Defs["playSpell"] = {
           baseVariants.length = 0;
           baseVariants.push(...expanded);
         }
+      }
+      // rule 355.5 / 355.12 (ruling 4283ca02526c0650) — a caster-chosen object
+      // the spell names in a FOLLOW-UP clause ("…You may attach an Equipment
+      // with the same controller to it") is chosen as the spell is played too:
+      // cross every planned variant with that slot's candidates so the pair is
+      // named on the chain item. Its object is distinct from the lead pick (an
+      // Equipment is never the unit it attaches to).
+      const nestedSlots = nestedPlaySlots(spellEffect, resolverCtx);
+      if (nestedSlots.length > 0 && baseVariants.length > 0 && baseVariants.length <= 64) {
+        let expanded = baseVariants.slice();
+        for (const { pool, slot } of nestedSlots) {
+          const next: typeof baseVariants = [];
+          for (const variant of expanded) {
+            const lead = variant.targets ?? [];
+            const legal = pool.filter((id) => !lead.includes(id));
+            for (const id of legal) {
+              next.push({ ...variant, targets: [...lead, id] });
+            }
+            // rule 355.13 — an "up to N" follow-up may be answered with nothing.
+            if (legal.length === 0 || slot.optional) {
+              next.push(variant);
+            }
+          }
+          expanded = next;
+        }
+        baseVariants.length = 0;
+        baseVariants.push(...expanded);
       }
       // rule 355.3 — the named mode rides on every variant planned from it.
       if (mode !== undefined) {
@@ -2558,6 +2698,53 @@ export const playSpell: Defs["playSpell"] = {
       // names its victim as it is PLAYED, exactly like the same card cast from
       // hand: one variant per legal chain item.
       const flowCounterSpec = counterChainTarget(spellEffect);
+      // rule 355.5 / 355.13 (rule-id: ven-140-166 Shuriken Flip) — a [Flow] play
+      // names exactly the same objects as one from hand, so a sequence whose
+      // OPTIONAL lead slot is followed by a MANDATORY one is paired here too.
+      // `findSequenceLeadTarget` only ever lifts ONE descriptor, so without this
+      // the Flow play would enumerate the damage victim and silently drop the
+      // mover (or, with no friendly unit, be offered when it is unplayable).
+      const flowSlots = collectSequenceTargetSlots(spellEffect);
+      const flowLeadOptional =
+        flowSlots?.length === 2 &&
+        isOptionalSinglePickDescriptor(flowSlots[0]) &&
+        isSinglePickDescriptor(flowSlots[1]);
+      if (flowCounterSpec === undefined && flowLeadOptional && flowSlots) {
+        const leadPool = resolveTarget(
+          { ...flowSlots[0], quantity: "all" } as Parameters<typeof resolveTarget>[0],
+          resolverCtx,
+        ) as string[];
+        const movers = (
+          resolveTarget(
+            { ...flowSlots[1], quantity: "all" } as Parameters<typeof resolveTarget>[0],
+            resolverCtx,
+          ) as string[]
+        ).filter((id) => {
+          const dests = chosenMoveDestinations(spellEffect, id, resolverCtx);
+          return dests === undefined || dests.length > 0;
+        });
+        for (const secId of movers) {
+          // rule 355.13 — the optional lead may be answered with nothing.
+          results.push({
+            cardId: cardId as string,
+            playerId: context.playerId as string,
+            targets: [secId],
+            viaFlow: true,
+          });
+          for (const leadId of leadPool) {
+            if (leadId === secId) {
+              continue;
+            }
+            results.push({
+              cardId: cardId as string,
+              playerId: context.playerId as string,
+              targets: [leadId, secId],
+              viaFlow: true,
+            });
+          }
+        }
+        continue;
+      }
       // rule-id: sfd-017-221 (rule 355.8) — lift a sequence's lead target.
       // rule-id: ogn-254-298 — lift a "next time it…" replacement's chosen unit.
       const tgt =
@@ -3121,6 +3308,43 @@ export const playSpell: Defs["playSpell"] = {
     // ("when you play a card from anywhere other than your hand") and rule
     // 811.1's "if you played this from your hand" gate reads the same field.
     const playOriginZone = context.zones.getCardZone(cardId as CoreCardId) as string | undefined;
+    // rule 355.5 / 355.12 / 355.15 (ruling 4283ca02526c0650) — the object the
+    // spell named in a FOLLOW-UP clause was collected as the LAST entry of
+    // `targets`. Record it the way every other finalization-bound set is
+    // recorded (`abilities/target-slots.ts`): `_bound` on its own effect node so
+    // the handler reads exactly its own pick, and a `targetSlots` entry so
+    // `stripSlotIds` keeps it out of the positional `boundTargets` list and
+    // `legalBoundIds` re-checks it as the spell resolves (358.1 / 359.3.e.2).
+    const nestedSlotDefs = collectNestedDescriptorSlots(effectToStore);
+    let nestedTargetSlots: { ids: string[]; max: number; min: number; semantics: "upTo"; slot: string }[] = [];
+    if (nestedSlotDefs.length === 1 && (targets?.length ?? 0) >= 2) {
+      const slot = nestedSlotDefs[0] as NestedDescriptorSlot;
+      const picked = (targets as readonly string[])[(targets as readonly string[]).length - 1] as string;
+      const pool = resolveTarget(
+        { ...(slot.descriptor as { type: string }), quantity: "all" } as Parameters<typeof resolveTarget>[0],
+        {
+          cards: {
+            getCardController: (c: CoreCardId) => context.cards.getCardController?.(c),
+            getCardMeta: (c: CoreCardId) => context.cards.getCardMeta?.(c),
+            getCardOwner: (c: CoreCardId) => context.cards.getCardOwner(c),
+          },
+          choosing: true,
+          draft,
+          playerId,
+          sourceCardId: cardId as string,
+          zones: {
+            getCardZone: (c: CoreCardId) => zones.getCardZone(c),
+            getCardsInZone: (z: CoreZoneId, pl?: CorePlayerId) => zones.getCardsInZone(z, pl),
+          },
+        } as Parameters<typeof resolveTarget>[1],
+      ) as string[];
+      if (pool.includes(picked)) {
+        effectToStore = bindNestedDescriptorSlots(effectToStore, [picked]);
+        nestedTargetSlots = [
+          { ids: [picked], max: 1, min: slot.optional ? 0 : 1, semantics: "upTo", slot: slot.path },
+        ];
+      }
+    }
     draft.interaction = addToChain(
       interaction,
       {
@@ -3131,6 +3355,7 @@ export const playSpell: Defs["playSpell"] = {
         // banished instead of returning to the trash.
         resolveTo: viaFlow ? "banishment" : "trash",
         targets,
+        ...(nestedTargetSlots.length > 0 ? { targetSlots: nestedTargetSlots } : {}),
         type: "spell",
         // rule-id: ven-015-166 — carry "This can't be countered." onto the chain item.
         // rule 425 (rule-id: ven-069-166) — a board static ("your spells can't be

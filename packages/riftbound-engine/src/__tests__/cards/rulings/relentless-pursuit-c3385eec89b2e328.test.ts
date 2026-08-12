@@ -13,6 +13,9 @@ import type { Game } from "../../../harness";
 import { P1, P2, scenario } from "../../../harness";
 
 const RELENTLESS_PURSUIT = "sfd-184-221";
+// rule 355.7 / 355.9 (riftjudge 4283ca02526c0650) — the Equipment is named as the
+// spell is played, so Relentless Pursuit needs one in play to be castable at all.
+const RP_EQUIPMENT = "sfd-042-221";
 const EMPERORS_DIVIDE = "sfd-043-221";
 
 /** P1's turn. P1 holds bf1 with two READY units (A 3, B 2) and has a ready Runner (3) in base; bf2 is uncontrolled/empty.
@@ -26,6 +29,7 @@ function board() {
     .unit(P1, "bf1", { might: 2, name: "Unit B" }, "b")
     .unit(P1, "base", { might: 3, name: "Runner" }, "runner")
     .unit(P2, "base", { might: 2, name: "Bystander" }, "bystander")
+    .gear(P1, RP_EQUIPMENT, "rpEquip")
     .hand(P1, RELENTLESS_PURSUIT, "pursuit")
     .hand(P1, EMPERORS_DIVIDE, "divide");
 }
@@ -62,7 +66,7 @@ describe("Ruling c3385eec89b2e328 — effect-moves (Relentless Pursuit, Emperor'
 
   test("Relentless Pursuit on the ready Runner (base → bf1): it is moved by the spell and is STILL READY on arrival", async () => {
     const game = await board().build();
-    await game.p1.cast("pursuit", { targets: "runner" });
+    await game.p1.cast("pursuit", { targets: ["runner", "rpEquip"] });
     expect(game.p1.resources()).toEqual({ energy: 2, power: { rainbow: 0 } });
     await resolveWith(game, "pursuit", "battlefield-bf1");
     await game.settle();
@@ -93,9 +97,10 @@ describe("Ruling c3385eec89b2e328 — effect-moves (Relentless Pursuit, Emperor'
       .battlefield("bf1", { controller: P1 })
       .unit(P1, "bf1", { might: 3, name: "Holder" }, "holder")
       .unit(P1, "base", { might: 3, name: "Tired" }, "tired", { exhausted: true })
+      .gear(P1, RP_EQUIPMENT, "rpEquip")
       .hand(P1, RELENTLESS_PURSUIT, "pursuit")
       .build();
-    await game.p1.cast("pursuit", { targets: "tired" });
+    await game.p1.cast("pursuit", { targets: ["tired", "rpEquip"] });
     await resolveWith(game, "pursuit", "battlefield-bf1");
     await game.settle();
     expect(game.locationOf("tired")).toBe("bf1");

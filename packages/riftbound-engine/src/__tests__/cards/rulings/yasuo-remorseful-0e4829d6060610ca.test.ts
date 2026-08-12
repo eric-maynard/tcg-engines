@@ -19,6 +19,9 @@ import { P1, P2, scenario } from "../../../harness";
 const YASUO_REMORSEFUL = "ogn-076-298";
 const UNFORGIVEN = "ogn-259-298";
 const RELENTLESS_PURSUIT = "sfd-184-221";
+// rule 355.7 / 355.9 (riftjudge 4283ca02526c0650) — the Equipment is named as the
+// spell is played, so Relentless Pursuit needs one in play to be castable at all.
+const RP_EQUIPMENT = "sfd-042-221";
 
 /** P1's turn 3 with [2] for the legend. P2 holds bf1 with Guard (3). Yasuo (6) in P1's base. */
 function enemyHeld() {
@@ -79,6 +82,7 @@ describe("Ruling 0e4829d6060610ca — Yasuo's 'When I attack' fires however he a
       .legend(P1, UNFORGIVEN, "unforgiven")
       .battlefield("bf1", { controller: null })
       .unit(P2, "base", { might: 3, name: "Guard" }, "guard")
+      .gear(P2, RP_EQUIPMENT, "rpEquip")
       .hand(P2, RELENTLESS_PURSUIT, "pursuit")
       .unit(P1, "base", YASUO_REMORSEFUL, "yasuo")
       .build();
@@ -92,11 +96,13 @@ describe("Ruling 0e4829d6060610ca — Yasuo's 'When I attack' fires however he a
     expect(game.decision()).toMatchObject({ context: "showdown", kind: "action", seat: P2 });
     expect(game.p2.can("cast", "pursuit")).toBe(true);
     game.script(P2, [(d) => (d.kind === "pick" && d.semantics === "destination" ? "battlefield-bf1" : undefined)]);
-    await game.p2.cast("pursuit", { targets: "guard" });
+    await game.p2.cast("pursuit", { targets: ["guard", "rpEquip"] });
     await game.p2.passPriority();
     await game.p1.passPriority(); // Pursuit resolves: Guard arrives at bf1
-    if (game.decision()?.kind === "yes-no" && game.decision()?.seat === P2) {
-      await game.p2.no(); // Pursuit's optional Equipment attach, if offered
+    const attach = game.decision();
+    if (attach?.seat === P2 && (attach.kind === "yes-no" || attach.kind === "pick")) {
+      // Pursuit's Equipment is named at play time but attaching stays optional (355.13).
+      await (attach.kind === "yes-no" ? game.p2.no() : game.p2.decline());
     }
     expect(game.locationOf("guard")).toBe("bf1");
     expect(game.state("yasuo").combatRole).toBe("attacker"); // P1 applied Contested first
