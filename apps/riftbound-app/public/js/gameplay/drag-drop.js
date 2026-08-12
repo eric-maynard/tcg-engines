@@ -235,6 +235,9 @@ document.addEventListener("pointermove", (e) => {
 
   // Haven't crossed the drag threshold yet
   if (!dragState.isDragging) {
+    // A drag that already decided it cannot start stays parked so pointerup can
+    // still treat the gesture as a click (see the noDrag branch below).
+    if (dragState.noDrag) return;
     if (dist < DRAG_THRESHOLD) return;
 
     // Check if this card can be dragged
@@ -245,8 +248,18 @@ document.addEventListener("pointermove", (e) => {
 
     const ctx = getDragContext(dragState.cardId, dragState.zone);
     if (!ctx.action) {
-      // No moves available — abort drag, will fall through to click
-      dragState = null;
+      // No moves available — never start the drag, but keep dragState alive so
+      // pointerup falls through to onCardClick(). Nulling it here made pointerup
+      // return at `if (!dragState)`, so the gesture ended with NO feedback at
+      // all (no ghost, no toast, no cost-payment mode). DESIGN.md §Paying costs
+      // requires the shortfall be surfaced, and the click path is what surfaces it.
+      dragState.noDrag = true;
+      // The gesture still travels across the board, and the hover panel re-raises
+      // itself once the pointer moves >5px off the pointerdown latch — blanketing
+      // the phase track / opposite battlefield. Gate it for the whole gesture; the
+      // pointerup / pointercancel handlers release it.
+      if (typeof setPreviewDragActive === "function") setPreviewDragActive(true);
+      else hidePreview();
       return;
     }
 
@@ -286,7 +299,10 @@ document.addEventListener("pointermove", (e) => {
         if (bfEl) bfEl.classList.add("valid-target");
       }
     }
-    hidePreview();
+    // Gate the hover panel for the whole gesture: the surface under a drag IS the
+    // drop zone, so a re-raised preview blankets the board you are aiming at.
+    if (typeof setPreviewDragActive === "function") setPreviewDragActive(true);
+    else hidePreview();
   }
 
   // Update ghost position (centered on cursor)
@@ -340,10 +356,16 @@ document.addEventListener("pointerup", (e) => {
 
   const wasDragging = dragState.isDragging;
   const cardId = dragState.cardId;
+  // Lift the drag gate, latched at the drop point so the panel does not pop up over
+  // the board while the cursor rests on the card it was just dropped onto.
+  if (typeof setPreviewDragActive === "function") setPreviewDragActive(false, e.clientX, e.clientY);
   // Set when the drop resolves to per-target variants; targeting mode is entered
   // after drag cleanup so its highlights survive clearValidTargetHighlights().
   let targetingMoves = null;
   let hideOnlyAfterDrop = null; // rule 723: hide needs an explicit confirm (see below)
+  // A drop that hands off to a modal / targeting mode is NOT a dead end, so it must
+  // not draw the "nothing happened" toast below.
+  let deferredToUi = false;
 
   if (wasDragging) {
     // Check for drop on a valid zone first, then fall back to unit-drop for equipment.
@@ -366,6 +388,7 @@ document.addEventListener("pointerup", (e) => {
         const there = dragState.matchingMoves.filter(m => String(m.params?.location ?? "base") === location);
         if (there.length > 1 && typeof openPlayCostModal === "function") {
           openPlayCostModal(cardId);  // base vs paid variants for this destination
+          deferredToUi = true;
           move = null;
         } else {
           move = there[0] ?? null;
@@ -380,6 +403,7 @@ document.addEventListener("pointerup", (e) => {
           // Multiple play variants (Accelerate / sacrifice) → open the choice
           // modal instead of silently picking the first.
           openPlayCostModal(cardId);
+          deferredToUi = true;
           move = null;
         } else {
           move = baseMoves[0] ?? null;
@@ -391,6 +415,7 @@ document.addEventListener("pointerup", (e) => {
           m.params?.location === `battlefield-${dropZone}` || (m.moveId === "hideCard" && m.params?.battlefieldId === dropZone));
         if (there.length > 1 && typeof openPlayCostModal === "function") {
           openPlayCostModal(cardId);
+          deferredToUi = true;
           move = null;
         } else if (there.length === 1 && there[0].moveId === "hideCard") {
           // Dropping on a battlefield where the ONLY option is Hide: confirm it
@@ -411,6 +436,11 @@ document.addEventListener("pointerup", (e) => {
         animateCardFly(dragState.sourceEl, destEl, () => {
           executeMove(move.moveId, move.params, move.playerId);
         });
+      } else if (!deferredToUi && !targetingMoves && !hideOnlyAfterDrop && typeof showToast === "function") {
+        // Dead-end drop: the zone was highlighted-legal for the action but no move
+        // matched this destination. Never end a gesture in silence — DESIGN.md
+        // §Paying costs wants the shortfall said out loud.
+        showToast(dropZone === "player-base" ? "Can't play that there right now" : "No legal move to that zone");
       }
     } else if (unitDrop && dragState.action === "equip") {
       // rule 476.1: board Equipment dropped on a unit → [Equip] it there.
@@ -469,6 +499,12 @@ document.addEventListener("pointerup", (e) => {
   }
 
   dragState = null;
+});
+
+// A cancelled pointer (browser gesture, window focus loss) never reaches pointerup:
+// release the preview gate so hovering keeps working.
+document.addEventListener("pointercancel", (e) => {
+  if (typeof setPreviewDragActive === "function") setPreviewDragActive(false, e.clientX, e.clientY);
 });
 
 // Prevent native drag on card images
