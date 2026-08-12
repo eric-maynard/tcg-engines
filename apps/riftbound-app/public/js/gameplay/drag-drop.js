@@ -470,7 +470,14 @@ document.addEventListener("pointerup", (e) => {
         } else if (typeof showToast === "function") {
           showToast("Tap runes to pay the cost first");
         }
+      } else if (typeof showToast === "function") {
+        showToast("Can't play that on a unit");
       }
+    } else if (dropZone && typeof showToast === "function") {
+      // DESIGN.md §Paying costs: never end a gesture in silence. The pointer was
+      // released over a real zone this card has no legal move into (an unheld
+      // battlefield, the opponent's base, …) — say so instead of doing nothing.
+      showToast("No legal move to that zone");
     }
 
     // Clean up drag state
