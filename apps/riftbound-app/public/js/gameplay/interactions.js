@@ -1050,7 +1050,7 @@ function enterChampionSelected(cardId) {
       const pool = gameState?.runePools?.[viewingPlayer];
       const totalEnergy = pool?.energy ?? 0;
       if (totalEnergy < needed) {
-        showToast(`Not enough energy (${totalEnergy}/${needed}) — exhaust runes first`);
+        showToast(`Not enough energy (${totalEnergy}/${needed}) — exhaust runes first`, { cardId });
       }
     }
     selectedCard = cardId;
@@ -1237,7 +1237,8 @@ function enterHandCardSelected(cardId) {
         }
         showToast(unmet.length > 0
           ? `Can't pay ${unmet.map(p => `[${p}]`).join("")} — not enough runes to recycle`
-          : `Not enough energy (${totalEnergy}/${needed}) — not enough ready runes to pay it`);
+          : `Not enough energy (${totalEnergy}/${needed}) — not enough ready runes to pay it`,
+          { cardId });
       }
     }
     // No playable moves for this card, just select it for info

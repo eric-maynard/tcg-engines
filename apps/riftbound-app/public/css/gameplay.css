@@ -446,6 +446,8 @@
     }
     .card .card-fallback .fallback-name { font-size: 11px; font-weight: 600; line-height: 1.2; word-break: break-word; }
     .card .card-fallback .fallback-type { font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; color: #8a82a6; }
+    /* rule 302.2 — printed keywords on an art-less card (tokens) must still read off the face. */
+    .card .card-fallback .fallback-keywords { font-size: 9px; font-weight: 600; line-height: 1.2; color: #b8a8e8; word-break: break-word; }
 
     .card-name {
       /* Card image is authoritative — do not superimpose text on it. Kept as
@@ -1226,6 +1228,12 @@
     }
     .chain-resolve-btn:hover { background: #3a6050; }
 
+    .chain-hint {
+      font-size: 11px;
+      color: #4a4268;
+      margin-top: 8px;
+    }
+
     /* Escape hatch for the seat without priority — a chain overlay with an
        empty action body reads as a hang, and Escape is refused there. */
     .chain-resync-btn {
@@ -1248,12 +1256,6 @@
     }
     .actions-empty-title { color: #d8d4e8; font-weight: 600; margin-bottom: 4px; }
     .actions-empty-body { margin-bottom: 8px; }
-
-    .chain-hint {
-      font-size: 11px;
-      color: #4a4268;
-      margin-top: 8px;
-    }
 
     /* Showdown-specific */
     .showdown-battlefield {
@@ -2282,6 +2284,37 @@
       pointer-events: none;
     }
 
+    /* Cost payment mode: a rune whose Domain pays an unmet pip (rule 164.2.b) —
+       the gesture is recycle, not tap, so it gets its own colour and badge. */
+    @keyframes rune-recyclable-pulse {
+      0%, 100% { box-shadow: 0 0 6px 1px rgba(180,120,255,0.3); }
+      50%      { box-shadow: 0 0 14px 4px rgba(180,120,255,0.6); }
+    }
+    .card.rune-recyclable {
+      animation: rune-recyclable-pulse 1.5s ease-in-out infinite;
+      cursor: pointer;
+    }
+    .card.rune-recyclable:hover {
+      box-shadow: 0 0 18px 5px rgba(180,120,255,0.7);
+      animation: none;
+    }
+    .card.rune-recyclable::after {
+      content: "recycle";
+      position: absolute;
+      bottom: 2px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 8px;
+      font-weight: 700;
+      color: #d8b0ff;
+      background: #1a183088;
+      padding: 1px 6px;
+      border-radius: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      pointer-events: none;
+    }
+
     /* Cost payment progress bar in action bar */
     .cost-payment-progress {
       display: flex;
@@ -2628,15 +2661,16 @@
       animation: ping-pulse 0.8s ease-out 3;
     }
 
-    /* Right-click hint on hover */
-    .card::after,
-    .battlefield::after,
-    .deck-stack::after {
-      content: '';
-      position: absolute;
-      inset: 0;
-      pointer-events: none;
-    }
+    /* NOTE: there used to be an empty `.card::after, .battlefield::after,
+       .deck-stack::after { content:''; inset:0 }` stub here ("right-click hint
+       on hover") that painted nothing. Being same-specificity but ~2200 lines
+       LATER than `.card--exhausted::after` / `.card--summoning-sick::after`
+       (see "Unified state indicators" above) and `.bf-spread-tile
+       .card.exhausted::after`, its `inset: 0` overrode their centering
+       `top/left: 50%` and its `content: ''` blanked the 'EXH' chip — the lock
+       icon rendered as a clipped white box in the card corner. Any state icon
+       drawn on `::after` must keep this file free of a blanket `.card::after`
+       rule; add new overlays as a class-scoped selector instead. */
 
     /* ============================================
        Top Header (shared with deck builder)
