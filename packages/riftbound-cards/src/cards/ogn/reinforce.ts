@@ -10,6 +10,11 @@ const abilities: Ability[] = [
   {
     effect: {
       amount: 5,
+      // rule 356.4 / 359.3.e.6 (riftjudge 1bf52a7cfc76b405) — "you may BANISH a
+      // unit from among them, THEN play it": the banish is its own instruction
+      // and lands on selection, so a unit whose play cannot be performed or
+      // afforded right now is still a legal pick — it simply stays banished.
+      banishBeforePlay: true,
       filter: {
         excludeCardTypes: ["spell", "gear", "equipment", "legend", "battlefield", "rune"],
       },
