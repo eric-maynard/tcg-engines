@@ -50,14 +50,23 @@ describe("Ruling e526facd7f5bc821 — Invert Timelines with two empty decks kill
     expect(game.violations()).toEqual([]);
   });
 
-  // The ruling's sequence has the CASTER discard-and-draw first; the engine ends the game with P1's hand still
-  // in hand, i.e. P1's half of "each player discards their hand" never ran. Outcome (P2 wins) is right; the
-  // intermediate discard is not.
-  test.failing("BUG: ruling e526facd7f5bc821 — the caster's own hand should be discarded before the fatal draw (engine leaves it in hand)", async () => {
+  // RULING-CONFLICT (adjudicated 2026-08-12 — this facet PREVIOUSLY asserted `zoneOf("p1filler") === "trash"`
+  // as a `test.failing` bug marker, reading "P1's card is in hand at the end" as "P1's discard never ran").
+  // The ruling only settles WHO WINS, and the engine matches it. The caster's half of "each player discards
+  // their hand" DOES run first — but the very next instruction is a draw from an empty Main Deck, which Burns
+  // Out (431.2.a: shuffle that player's trash back into their Main Deck, an opponent gains 1 point) and
+  // "a Burn Out INTERRUPTS the draw, it does not cancel it" (431.2.d) — so the card just discarded is shuffled
+  // into the deck and drawn straight back. P1's Main Deck started EMPTY, so a card in P1's hand at the end can
+  // only have arrived through that recycle: its presence is the proof the discard happened, not evidence against it.
+  test("RULING-CONFLICT e526facd7f5bc821 — the caster's hand IS discarded first; Burn Out (431.2) recycles it and the fatal draw takes it back", async () => {
     const game = await board().build();
     await game.p1.cast("invert");
     await game.settle();
-    expect(game.zoneOf("p1filler")).toBe("trash");
+    // rule 431.2.a: the Burn Out that ended the game could only recycle a trash the discard had filled.
+    expect(game.p2.points()).toBeGreaterThan(7);
+    expect(game.p1.deck()).toEqual([]);
+    expect(game.zoneOf("p1filler")).toBe("hand");
+    expect(game.zoneOf("p2filler")).toBe("trash"); // P2 discarded and never drew
   });
 
   test("control: with a stocked deck the same play is harmless — each player ends on 4 cards", async () => {
