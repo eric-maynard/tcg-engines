@@ -1113,14 +1113,16 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
     // Keeping control never lost — the defender came back mid-combat, or simply
     // held — is nothing. Nobody remaining ⇒ Uncontrolled (466.5.b, Vendetta:
     // no Hold on an emptied battlefield). 466.5.a clears Contested either way.
-    // rule 466.7.a / 807.1.d.1 — the designations are PARKED here, not ended:
-    // rulings 211635a4cca0ac5a, 8bf06d3d8b09e32c, c1edab45ab8d7f0f (CR-corrected)
-    // and f04d5265ef4cdef8 all read the [Assault] bonus as still live when the
-    // Conquer's own triggers are evaluated and reacted to, so `combatRole`
-    // survives until `flushPendingCombatDesignations` sees an empty chain.
-    // (Ruling 42b466db3f308240 says the opposite — "removed … immediately before
-    // the Conquer step". It is outvoted 4-to-1 here, and its test stays
-    // `test.failing` rather than breaking the four that agree.)
+    // rule 466.7.a / 807.1.d.1 — the designations are PARKED here, not ended.
+    // 466.5.d Conquers at step 5 and only 466.7.a removes the Attacker/Defender
+    // designation at step 7, so [Assault] is still applying while the Conquer's
+    // own triggers are evaluated and reacted to: `combatRole` survives until
+    // `flushPendingCombatDesignations` sees an empty chain. Adjudicated
+    // 2026-08-12 (DESIGN.md § Combat Resolution Step): riftfaq 8bf06d3d8b09e32c
+    // (citing 466.5.d vs 466.7.a), f04d5265ef4cdef8 and 211635a4cca0ac5a agree;
+    // the riftjudge answers that strip the designation before the Conquer
+    // (42b466db3f308240, c1e05840717871da, c1edab45ab8d7f0f) describe the
+    // pre-Unleashed rules and are annotated RULING-CONFLICT in their tests.
     logCleanup("466.1.3e:end-designations");
     const controllerBeforeSettle = battlefield.controller ?? null;
     settleControlByRemainingUnits({ cards, counters, draft, zones }, battlefieldId, "combat", {

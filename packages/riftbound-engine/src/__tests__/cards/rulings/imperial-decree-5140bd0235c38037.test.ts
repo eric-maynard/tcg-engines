@@ -6,11 +6,23 @@
  *
  * Q: Imperial Decree is out and a 1-Might token runs into a lone enemy unit. Does the Decree kill the
  *    defender before its controller gets the "you won the combat" draw?
- * A: No — the draw comes first. Combat damage is dealt, the Decree's kill becomes a PENDING item, and
- *    the winner is then determined with the units that survived the damage still on the board. The
- *    win-combat trigger stacks on top of the Decree trigger, so (LIFO) the draw resolves, then the kill.
- * Rules: 466.3.a (win-combat triggers fire from the combat result), 320 (a pending item waits for the
- *        current game effect to finish), 339 (LIFO).
+ * A (this ruling): No — it claims the winner is determined while the Decree's kill is still an unresolved
+ *    Pending item, so the defender wins the combat, its draw goes on the chain ABOVE the kill, and (LIFO)
+ *    the draw resolves first.
+ * A (CR, adjudicated 2026-08-12): the kill resolves FIRST and nobody wins. Imperial Decree is a delayed
+ *    TRIGGER (390.2 — "when any unit takes damage this turn", a triggered ability with a time restriction,
+ *    not a Delayed Replacement under 390.3: the damage is dealt and marked, the kill is a separate later
+ *    event), so it is a chain item produced by dealing combat damage. Rule 465.3 ends the Combat Damage
+ *    Step by SKIPPING the FEPR process, so that chain item is still unresolved when the Resolution Step
+ *    starts; 466.1 performs the Combat Cleanup, and 466.2 then says in terms: "Resolve any items on the
+ *    chain from dealing combat damage and the Combat Cleanup and associated FEPR before performing this
+ *    step" — the step being 466.3 Determine Combat Result. So 466.3 reads occupancy AFTER the Decree's
+ *    kill: both units are gone, 466.3.d gives No Result, no "when you win a combat" trigger ever fires,
+ *    and 466.5.b leaves the battlefield Uncontrolled. See the RULING-CONFLICT facet at the bottom.
+ * Rules: 390.2 vs 390.3 (delayed trigger, not a delayed replacement), 320 / 320.1 (a Pending item may be
+ *        ADDED during a Cleanup but cannot resolve inside it — it does not survive PAST the 466.2 window),
+ *        465.3 (the damage step skips FEPR), 466.2 (drain that chain BEFORE the result step), 466.3.a /
+ *        466.3.d (who won / No Result), 466.5.b (Uncontrolled), 339/340 (LIFO, once the chain does run).
  */
 import { describe, expect, test } from "bun:test";
 import { P1, P2, scenario } from "../../../harness";
@@ -29,7 +41,7 @@ function board() {
     .deckTop(P2, { cardType: "spell", energyCost: 8, name: "Fresh" }, "fresh");
 }
 
-describe("Ruling 5140bd0235c38037 — the combat result (and its draw) comes before Imperial Decree's kill", () => {
+describe("Ruling 5140bd0235c38037 (RULING-CONFLICT) — CR 465.3/466.2: Imperial Decree's kill resolves BEFORE the combat result is read", () => {
   test("control: without Imperial Decree the defending Nidalee survives, wins the combat and draws", async () => {
     const game = await scenario()
       .battlefield("bf1", { controller: P2 })
@@ -46,7 +58,7 @@ describe("Ruling 5140bd0235c38037 — the combat result (and its draw) comes bef
     expect(game.gameState.battlefields.bf1?.controller).toBe(P2);
   });
 
-  test("intermediate fact: after combat damage the Decree's kill is only a pending Chain item — the defender is still on the board", async () => {
+  test("466.2 window: after combat damage the Decree's kill is a Chain item produced BY dealing combat damage — the defender is still on the board until it resolves", async () => {
     const game = await board().build();
     await game.p1.cast("decree");
     await game.settle();
@@ -65,39 +77,39 @@ describe("Ruling 5140bd0235c38037 — the combat result (and its draw) comes bef
     expect(game.p2.hand()).toEqual([]); // nothing drawn yet either
   });
 
-  // Engine: the Resolution Step is parked while the Decree triggers are on the Chain, so by the time the
-  // winner is worked out Nidalee is already dead — no unit is left on either side, the combat is scored a
-  // tie, and no "when I win a combat" trigger ever fires. The ruling says the win is determined first.
-  test.failing(
-    "BUG: ruling 5140bd0235c38037 — the defender's win-combat draw should resolve BEFORE the Decree kill; the engine determines the winner after the kill, so nobody wins and nothing is drawn",
-    async () => {
-      const game = await board().build();
-      await game.p1.cast("decree");
-      await game.settle();
-      await game.p1.move("recruit", "bf1");
-      await game.p1.passFocus();
-      await game.p2.passFocus();
-
-      // The win-combat trigger belongs on the Chain ON TOP of the Decree's kill …
-      expect(game.chain().at(-1)).toMatchObject({ cardId: "nid", controller: P2, triggered: true });
-
-      await game.settle();
-      expect(game.p2.hand()).toEqual(["fresh"]); // … so the draw happens …
-      expect(game.zoneOf("nid")).toBe("trash"); // … and only then does the Decree kill it.
-    },
-  );
-
-  test("what the engine does today: the Decree kills the defender and the combat ends with nobody drawing", async () => {
+  // RULING-CONFLICT (adjudicated 2026-08-12 — this facet PREVIOUSLY asserted the other way, as a
+  // `test.failing` "the win-combat draw should resolve BEFORE the Decree kill" bug marker).
+  // riftjudge 5140bd0235c38037 has the game "determine the winner of combat by checking the battlefield
+  // state" while the Decree's kill is still an unresolved Pending item, so the defender wins, its draw
+  // goes on top of the kill and (LIFO) resolves first. That sequence has no home in the CR:
+  //   * Imperial Decree is a delayed TRIGGER (390.2), not a delayed replacement (390.3) — the damage is
+  //     dealt and marked, and the kill is a separate later event that uses the Chain. So it IS "an item on
+  //     the chain from dealing combat damage".
+  //   * 465.3 closes the Combat Damage Step by skipping FEPR, so that item is carried, unresolved, into
+  //     the Resolution Step. 320/320.1 explain why it could not resolve during the Combat Cleanup (a
+  //     Pending item may be ADDED during a Cleanup but nothing is Finalized or Resolved inside one) — they
+  //     do NOT let it survive past the window that comes next.
+  //   * 466.2 is that window, and it is explicit about what it gates: "Resolve any items on the chain from
+  //     dealing combat damage and the Combat Cleanup and associated FEPR BEFORE performing this step" —
+  //     the step being 466.3 Determine Combat Result. 466.3.a/b then read who "has units remaining at this
+  //     battlefield DURING THIS STEP", i.e. after the kill has already happened.
+  // So the kill resolves first, neither player has a unit here at 466.3 → No Result (466.3.d), no player
+  // "won a combat", nothing draws, and 466.5.b makes the battlefield Uncontrolled.
+  // This is the same 466.2 ordering the whole Resolution Step is built on (see
+  // kogmaw-dk-spares-3d-recalled-attackers: a Deathknell that resolves in the 466.2 window changes who is
+  // standing here at 466.3). Reading the result earlier — while the damage-step chain is still live —
+  // would contradict 466.2 in general, not just here; the ruling is therefore not implementable.
+  test("RULING-CONFLICT 5140bd0235c38037 — CR 465.3/466.2: the Decree's kill resolves in the 466.2 window, so 466.3 finds nobody here — No Result, no win-combat draw, battlefield Uncontrolled", async () => {
     const game = await board().build();
     await game.p1.cast("decree");
     await game.settle();
     await game.p1.move("recruit", "bf1");
     await game.settle();
 
-    expect(game.zoneOf("nid")).toBe("trash");
-    expect(game.zoneOf("recruit")).toBe("trash");
-    expect(game.p2.hand()).toEqual([]);
-    expect(game.gameState.battlefields.bf1?.controller).toBeNull();
+    expect(game.zoneOf("nid")).toBe("trash"); // killed by the Decree, in the 466.2 window
+    expect(game.zoneOf("recruit")).toBe("trash"); // killed by combat damage
+    expect(game.p2.hand()).toEqual([]); // 466.3.d: No Result — nobody won, so Nidalee never draws
+    expect(game.gameState.battlefields.bf1?.controller).toBeNull(); // 466.5.b
     expect(game.violations()).toEqual([]);
   });
 });

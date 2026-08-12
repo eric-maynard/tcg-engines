@@ -4,13 +4,18 @@
  *
  * Q: A 4-Might unit with [Assault] walks onto the Temple with no defenders. Does the +1 from Assault make
  *    it [Mighty] and trigger the Temple?
- * A: No. [Assault] is only live while the unit has the Attacker designation, and you only become an
- *    Attacker in a COMBAT showdown — moving onto an unoccupied battlefield is a non-combat showdown, so no
- *    designation and no bonus: the unit conquers at 4 Might and is not Mighty. Even in a real combat the
- *    designations (and with them Assault) are stripped in the Combat Cleanup before the Conquer step, so
- *    the Temple never sees an Assault-inflated Might.
- * Rules: 727 / 807.1.c ([Assault] applies only while an Attacker), 464.2 (designations are granted when a
- *        combat is staged), 466.1/466.5 (designations end in Combat Cleanup, before Conquer), 730 ([Mighty] = 5+).
+ * A: No — but only for the reason the QUESTION asks about. [Assault] is live only while the unit holds the
+ *    Attacker designation (807.1.c–d), and a unit only gains that designation when a COMBAT opens
+ *    (464.2.c.3); walking onto an unoccupied battlefield opens a non-combat showdown, so there is no
+ *    designation and no bonus and the unit conquers at 4 Might.
+ * ADJUDICATED (2026-08-12): the ruling's closing paragraph — "even in a real combat the Assault bonus and
+ *    Attacker designation are removed during the Combat Cleanup, immediately before the Conquer step" — is
+ *    WRONG under the current (Unleashed) CR and is not followed. See the RULING-CONFLICT facet at the
+ *    bottom of this file: 466.5.d Conquers at Resolution-Step 5 while 466.7.a only removes the designation
+ *    at step 7, so [Assault] is still live when the Conquer's triggers are evaluated.
+ * Rules: 807.1.c / 807.1.d.1 ([Assault] applies, and remains, only while an Attacker), 464.2.c.3
+ *        (designations granted when the combat opens), 466.5.d (Conquer) vs 466.7.a (designations removed),
+ *        708 / 710 ([Mighty] = 5+).
  */
 import { describe, expect, test } from "bun:test";
 import { P1, P2, scenario } from "../../../harness";
@@ -65,30 +70,42 @@ describe("Ruling 42b466db3f308240 — [Assault] never makes the conqueror [Might
     expect(game.p1.hand()).toHaveLength(hand + 1);
   });
 
-  // This ruling's LAST paragraph ("the Assault bonus and Attacker designation are removed during the Combat
-  // Cleanup phase, immediately before the Conquer step") is contradicted by four other rulings the engine
-  // already implements: 211635a4cca0ac5a (Assault lasts until Combat Cleanup, AFTER all chain interactions),
-  // 8bf06d3d8b09e32c and f04d5265ef4cdef8 (Sunken Temple DOES see an Assault-only-Mighty conqueror) and
-  // c1edab45ab8d7f0f (explicitly CR-corrected to the same answer). The engine follows the four; making this
-  // one pass breaks all of them, so it stays marked failing until a judge settles the conflict. The rest of
-  // the ruling — no Attacker designation, and therefore no Assault, on a walk-in — is covered above and green.
-  test.failing("CONFLICT: ruling 42b466db3f308240 — after a real combat the engine still reads the Assault bonus (5) at the Conquer and offers Sunken Temple's draw", async () => {
+  // RULING-CONFLICT (adjudicated 2026-08-12 — this facet PREVIOUSLY asserted the other way, as a
+  // `test.failing` "the engine still reads the Assault bonus at the Conquer" bug marker).
+  // Ruling 42b466db3f308240's closing paragraph says the Attacker designation, and with it [Assault], is
+  // "removed during the Combat Cleanup phase, immediately before the Conquer step". The CR says the
+  // opposite, and the Resolution Step's own numbering is decisive: the Combat Cleanup is step 466.1,
+  // Establish Control / Conquer is step 466.5 (466.5.d), and only step 466.7.a — two steps LATER — says
+  // "Remove Attacker and Defender Designation from all Units and Players". Rule 807.1.d.1 keeps [Assault]
+  // in effect "as long as the Unit maintains the Attacker designation", so at 466.5.d the bonus is still
+  // being applied and the conqueror is [Mighty] (708/710).
+  // The four rulings that agree: 8bf06d3d8b09e32c (riftfaq, citing exactly 466.5.d vs 466.7.a),
+  // f04d5265ef4cdef8 ("under the Unleashed rules update … PREVIOUSLY Assault would have deactivated before
+  // conquer effects resolved" — which is what 42b466db and c1edab45a describe), 211635a4cca0ac5a and
+  // c1edab45ab8d7f0f. 42b466db3f308240 and c1edab45ab8d7f0f are pre-Unleashed answers; the engine follows
+  // the CR. The rest of this ruling (no designation, no [Assault] on a walk-in) is correct and green above.
+  test("RULING-CONFLICT 42b466db3f308240 — CR 466.5.d/466.7.a: [Assault] is STILL live at the Conquer, so the 5-Might attacker is Mighty and the Temple offers its paid draw", async () => {
     const game = await scenario()
       .resources(P1, { energy: 1 })
       .battlefield("temple", { controller: P2, def: SUNKEN_TEMPLE, inert: false, owner: P2 })
       .unit(P2, "temple", { might: 2, name: "Temple Guard" }, "guard")
       .unit(P1, "base", ASSAULTER(4), "lucian")
+      .deck(P1, ["ogn-175-298"], ["d1"])
       .build();
-    const hand = game.p1.hand().length;
     await game.p1.move("lucian", "temple");
     expect(game.state("lucian")).toMatchObject({ combatRole: "attacker", might: 5 }); // Mighty WHILE attacking …
     await game.settle();
     expect(game.zoneOf("guard")).toBe("trash");
     expect(game.gameState.battlefields.temple?.controller).toBe(P1);
     expect(game.p1.points()).toBe(1);
-    expect(game.state("lucian").might).toBe(4); // … but not any more when the conquer is scored
-    expect(game.decision()).toMatchObject({ context: "main", kind: "action", seat: P1 });
-    expect(game.p1.hand()).toHaveLength(hand);
+    // … and still Mighty at 466.5.d, so the Temple's conquer ability sees a [Mighty] unit and asks.
+    expect(game.decision()).toMatchObject({ kind: "yes-no", seat: P1 });
+    await game.p1.yes();
+    await game.settle();
+    expect(game.p1.energy()).toBe(0);
+    expect(game.p1.hand()).toEqual(["d1"]);
+    // 466.7.a — the designation (and with it [Assault]) ends only once the combat itself ends.
+    expect(game.state("lucian")).toMatchObject({ combatRole: null, might: 4 });
     expect(game.violations()).toEqual([]);
   });
 });

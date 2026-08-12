@@ -213,3 +213,30 @@ FIXER-PRIMER § BATTLEFIELD CONTROL TIMING). Two deliberate points:
 - Community rulings that predate the "1.1"/Unleashed control rules (control lost mid-combat, or mid-chain for Baited
   Hook / Cruel Patron / Arcane Shift, or "hidden card lost before a lone Deathknell resolves") are NOT followed; their
   test facets carry `// RULING-CONFLICT` and assert the CR behaviour.
+
+## Combat Resolution Step (466) — two settled adjudications (2026-08-12; do not re-litigate)
+The Resolution Step is an ORDERED sequence and the engine follows its numbering literally: 466.1 Combat Cleanup
+(which inserts only "3c. Heal all Units" and "3d. Recall Attackers …", 466.1.a.1-2) → 466.2 resolve the chain from
+the damage step and the Cleanup → 466.3 Determine Combat Result → 466.4 resolve the result's own triggers → 466.5
+Establish Control / Conquer → 466.7 Combat ends. Two questions keep coming back; both are closed:
+- **Designations (and [Assault]) are STILL LIVE at the Conquer.** 466.5.d Conquers at step 5; only 466.7.a — two
+  steps later — removes the Attacker/Defender designation, and 807.1.d.1 keeps [Assault] in effect for exactly as
+  long as the designation lasts. So a unit that is [Mighty] (708/710) only via [Assault] does satisfy a conquer
+  ability such as Sunken Temple's. Nothing in 466.1 strips designations. FOUR riftjudge answers say otherwise —
+  `42b466db3f308240`, `c1e05840717871da`, `c1edab45ab8d7f0f` and `7412ece9e8248139` (none of them cites a rule; the
+  middle two are the same FAQ-list claim); they describe the PRE-Unleashed rules, where combat Might was modulated
+  for the damage step only (2025-06-02 CR 625.1.b / 627). riftfaq `8bf06d3d8b09e32c` cites 466.5.d vs 466.7.a and
+  `f04d5265ef4cdef8` states the change ("previously, Assault would have deactivated before conquer effects
+  resolved"); `211635a4cca0ac5a` agrees. All three stripping tests carry `// RULING-CONFLICT` and assert the CR.
+  (Unchanged and correct: a unit walking onto an EMPTY battlefield never gains the designation at all — 464.2.c.3 —
+  so it gets no [Assault] bonus there. That half of `42b466db3f308240` is right.)
+- **A delayed "kill it" resolves BEFORE the combat result is read.** Imperial Decree ("when any unit takes damage
+  this turn, kill it") is a delayed TRIGGER (390.2), not a delayed replacement (390.3): the damage is dealt and the
+  kill is a separate chain item produced by dealing combat damage. 465.3 ends the damage step by skipping FEPR, so
+  that item rides into the Resolution Step; 320/320.1 only say it cannot resolve *inside* a Cleanup; 466.2 then
+  requires exactly those items to resolve before 466.3, whose text reads occupancy "during this step". So the kill
+  lands first and a defender that the Decree removes never wins the combat (466.3.d No Result → 466.5.b
+  Uncontrolled) — nobody draws. riftjudge `5140bd0235c38037` says the opposite (result read while the kill is still
+  Pending, draw stacked on top, LIFO); it is annotated `// RULING-CONFLICT` and NOT implemented, because reading the
+  result while the damage-step chain is live contradicts 466.2 generally — the same window is what lets a Deathknell
+  change who is standing here at 466.3 (`kogmaw-dk-spares-3d-recalled-attackers`).
