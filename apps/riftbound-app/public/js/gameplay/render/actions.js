@@ -912,7 +912,18 @@ function renderActions() {
   }
   // end reads as a dead end rather than as a freeze.
   if (!html.trim()) {
-    const onlyConcede = availableMoves.length > 0 &&
+    // rule 312.1 / 312.1.b: lacking priority (or Focus) means you may not take
+    // Discretionary Actions — it is not a dead game. Since concede (650) is
+    // always legal, a concede-only move set on a seat that is merely waiting is
+    // the normal off-priority state, not "no plays left".
+    const inter = (typeof gameState !== "undefined" ? gameState : null)?.interaction;
+    const chain = inter?.chain;
+    const showdown = inter?.showdown;
+    const holder = (chain?.active && chain.activePlayer)
+      || (showdown?.active && showdown.focusPlayer)
+      || gameState?.turn?.activePlayer;
+    const waitingOnOpponent = !!holder && holder !== viewingPlayer;
+    const onlyConcede = availableMoves.length > 0 && !waitingOnOpponent &&
       availableMoves.every(m => m.moveId === "concede");
     html = `
       <div class="actions-empty">
