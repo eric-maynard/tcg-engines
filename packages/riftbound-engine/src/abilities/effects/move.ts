@@ -26,6 +26,7 @@ import {
   singleLocationOptions,
 } from "../move-destinations";
 import { attachedUnitOf, detachEquipment } from "./_attachment";
+import { isLocation } from "../../zones/zone-configs";
 
 /**
  * rule 190.3.a / 450 — pure-data Contested mark for callers that only hold the
@@ -219,6 +220,13 @@ function handleSwapLocations(effect: ExecutableEffect, ctx: EffectContext): void
   if (!selfZone) {
     return;
   }
+  // rule 359.3.e / 355.15 (ruling 335406b156c17770) — "my original location" is read
+  // when the trigger RESOLVES. If I am no longer at a location (Gusted to hand, killed,
+  // banished) there is no location to trade, so the whole exchange fizzles: the chosen
+  // partner stays exactly where it is and I do not come back.
+  if (!isLocation(selfZone)) {
+    return;
+  }
   const partnerDescriptor = ((effect as unknown as { partner?: TargetDescriptor }).partner ?? {
     controller: "friendly",
     type: "unit",
@@ -252,7 +260,8 @@ function handleSwapLocations(effect: ExecutableEffect, ctx: EffectContext): void
   }
 
   const partnerZone = ctx.zones.getCardZone(partner as CoreCardId) as string | undefined;
-  if (!partnerZone || partnerZone === selfZone) {
+  // Same for the partner: one that left a location before resolution takes no part.
+  if (!partnerZone || !isLocation(partnerZone) || partnerZone === selfZone) {
     return;
   }
   // rule 423 / 054.1 (ruling b449100f59889211) — a unit under a blanket "they can't

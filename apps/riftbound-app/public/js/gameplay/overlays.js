@@ -32,6 +32,7 @@ let _previewMaxTimer = null;  // hard backstop: nothing keeps the panel up longe
 let _previewPointer = { x: -1, y: -1 }; // last known pointer position (client coords)
 let _previewCheckQueued = false;
 let _previewSuppressAt = null; // after a click: no re-show until the pointer really moves (a re-render under a still cursor re-fires mouseover)
+let _previewDragActive = false; // a card drag is in flight: never raise the panel over the board
 const PREVIEW_HIDE_DELAY_MS = 60; // bridge the gap between two adjacent cards without a flash
 const PREVIEW_MAX_VISIBLE_MS = 8000;
 
@@ -91,6 +92,10 @@ function _previewStateText(card, el) {
 function showPreview(eventOrEl, maybeEl) {
   const el = maybeEl || (eventOrEl && eventOrEl.nodeType === 1 ? eventOrEl : null);
   if (!el) return;
+  // A drag is in flight: the panel is opaque and sits beside the hovered surface,
+  // which during a drag IS the drop zone — it would blanket the board exactly where
+  // the player is aiming. No preview until the gesture ends (see setPreviewDragActive).
+  if (_previewDragActive) return;
   // Inline onmouseenter callers: honour the after-click latch too.
   if (eventOrEl && typeof eventOrEl.clientX === "number" && _previewSuppressAt
       && Math.abs(eventOrEl.clientX - _previewSuppressAt.x) < 5 && Math.abs(eventOrEl.clientY - _previewSuppressAt.y) < 5) return;
@@ -252,6 +257,19 @@ function hidePreview(immediate) {
   };
   if (immediate === true || typeof immediate === "undefined") { doHide(); return; }
   _previewHideTimer = setTimeout(doHide, PREVIEW_HIDE_DELAY_MS);
+}
+
+/**
+ * Drag gate. While a card is being dragged the panel stays down; when the drag
+ * ends it stays down until the pointer really travels — the gesture finishes with
+ * the cursor resting ON the drop target, so the delegated mouseover would re-raise
+ * an opaque 420px panel centred on the board with no mouseout ever coming.
+ * Same latch the click path uses (_previewSuppressAt).
+ */
+function setPreviewDragActive(on, x, y) {
+  _previewDragActive = !!on;
+  if (!on && typeof x === "number" && typeof y === "number") _previewSuppressAt = { x, y };
+  hidePreview(true);
 }
 
 function previewVisible() {

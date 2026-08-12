@@ -99,6 +99,15 @@ const readState = () => p.evaluate(() => {
       resourceBar: document.getElementById('resourceBar')?.textContent?.replace(/\s+/g, ' ').trim(),
       actionButtons: [...document.querySelectorAll('#actionsList .action-btn')].map(e => e.textContent?.trim()).slice(0, 20),
       overlays: [...document.querySelectorAll('.visible[id$="Overlay"], .visible[id$="Dialog"]')].map(e => e.id),
+      // #cardPreview is an opaque, fixed, z-index:10050 panel that matches neither
+      // selector above, so a board-blanketing hover preview used to be invisible to
+      // every invariant. Tracked separately: it is NOT a modal (it never satisfies
+      // "the prompt is on screen"), it is an obstruction.
+      previewVisible: !!document.querySelector('#cardPreview.visible'),
+      previewRect: (() => {
+        const r = document.querySelector('#cardPreview.visible')?.getBoundingClientRect();
+        return r ? { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) } : null;
+      })(),
       chainVisible: !!document.querySelector('.chain-overlay.visible, #chainOverlay.visible'),
       pendingChoiceVisible: !!document.querySelector('#choiceOverlay.visible[data-mode="pending"], .pending-choice.visible, [data-pending-choice].visible'),
     },
@@ -206,6 +215,14 @@ function checkInvariants(step: number, prev: any, cur: any, action: string, targ
         || cur.handIds.length !== prev.handIds.length;
       if (!consequence) push("move-trigger-fired", `${c.name} moved ("${c.rulesText?.slice(0, 40)}…") but no chain/prompt/zone change`);
     }
+  }
+  // I8b. The hover preview must never survive a click or a drop. Both gestures start
+  // with a pointerdown that hides + latches it, and the cursor comes to rest ON the
+  // surface it acted upon, so a panel still up here is one no mouseout will ever
+  // clear — an opaque box parked over the board (drop zones, phase strip).
+  if (cur.dom.previewVisible && /^(click|drag|intent)/.test(action)) {
+    const r = cur.dom.previewRect;
+    push("preview-not-stuck", `#cardPreview still visible after ${action}${r ? ` at ${r.x},${r.y} ${r.w}x${r.h}` : ""}`);
   }
   // I8. If the engine exhausts a board card, the DOM must show it tapped.
   const engineTapped = Object.values<any>(cur.boardById).filter(c => c.exhausted).length;
