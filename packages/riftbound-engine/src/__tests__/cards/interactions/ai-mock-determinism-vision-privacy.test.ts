@@ -193,7 +193,8 @@ describe("RB_AI_MOCK × [Vision] on a Secret Main Deck", () => {
     expect(describeForSeat(session, P1)).not.toContain(MYSTIC_PORO);
   });
 
-  test("(b) 128.3 — the human's redacted snapshot never carries the identity of a card in the Claude seat's Main Deck", async () => {
+  // The look reaches the looker through the [Vision] prompt, never through a zone listing.
+  test("(b) 128.3 / 108.4.d — the Main Deck is Secret to its OWNER too: neither seat's snapshot carries the looked-at card", async () => {
     const game = await board().build();
     const ai = mockOpponent();
     const { session } = sessionOf(game, ai); // an opponent is seated ⇒ per-seat redaction is on
@@ -202,8 +203,10 @@ describe("RB_AI_MOCK × [Vision] on a Secret Main Deck", () => {
     const humanSnapshot = buildGameSnapshot(session, P1) as { zones: Record<string, unknown> };
     expect(JSON.stringify(humanSnapshot.zones)).not.toContain(MYSTIC_PORO);
     expect(JSON.stringify(humanSnapshot.zones.mainDeck ?? [])).not.toContain("Mystic Poro");
-    // The Claude seat's own snapshot does carry it — the asymmetry is the point.
-    expect(JSON.stringify(buildGameSnapshot(session, P2))).toContain("Mystic Poro");
+    // rule 128.3 / 108.4.d — deck order is Secret to its OWNER too, so the Claude seat's own
+    // frame is equally opaque; the look reaches it through the [Vision] prompt (above), never
+    // through the zone listing.
+    expect(JSON.stringify((buildGameSnapshot(session, P2) as { zones: Record<string, unknown> }).zones.mainDeck ?? [])).not.toContain("Mystic Poro");
   });
 
   test("the 🤖 log line for a private [Vision] look names the ability, not the card, and the broadcast log stays redacted (128.3 / 424.1.a)", async () => {

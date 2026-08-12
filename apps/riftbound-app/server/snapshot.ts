@@ -697,8 +697,11 @@ export function buildGameSnapshot(session: GameSession, viewingPlayer?: string) 
       (g) => g.viewer === viewer && g.owner === owner && g.zones.includes(kind),
     );
   };
+  // rule 128.3 / 108.4.d — deck order is SECRET: no player may look, not even the
+  // deck's own owner, so a seat-scoped frame redacts its own Main/Rune Deck too.
+  const isSecretZone = (zoneId: string) => zoneId === "mainDeck" || zoneId === "runeDeck" || zoneId === "setAside";
   const isPrivateZone = (zoneId: string) =>
-    zoneId === "hand" || zoneId === "mainDeck" || zoneId === "runeDeck" || zoneId.startsWith("facedown-");
+    zoneId === "hand" || isSecretZone(zoneId) || zoneId.startsWith("facedown-");
 
   const costCtx = buildCostReductionContext(internal, state.battlefields);
   // rule 356 — only hand cards are ever priced by the UI's pay bar, and the
@@ -717,7 +720,11 @@ export function buildGameSnapshot(session: GameSession, viewingPlayer?: string) 
       const cardInstance = internal.cards[cardId];
       const meta = internal.cardMetas[cardId];
       const owner = cardInstance?.owner ?? "";
-      if (redactFor && isPrivateZone(zoneId) && owner !== redactFor && !hasGrant(redactFor, owner, zoneId)) {
+      if (
+        redactFor &&
+        isPrivateZone(zoneId) &&
+        (isSecretZone(zoneId) || (owner !== redactFor && !hasGrant(redactFor, owner, zoneId)))
+      ) {
         return {
           cardType: "unknown",
           controller: cardInstance?.controller ?? "",

@@ -9,7 +9,7 @@ import { getGlobalCardRegistry } from "../operations/card-lookup";
 import type { CombatRole, RiftboundCardMeta } from "../types/game-state";
 import { domainsOf } from "./card-pool";
 import type { HarnessEngine, InternalView } from "./internal";
-import { getInternalState } from "./internal";
+import { getInternalState, peekCurrentState } from "./internal";
 import type { CardDefLike, CardPool, CardRef, CardState, GrantedKeywordView, LocationRef, ZoneKey } from "./types";
 import { HarnessError } from "./types";
 
@@ -66,6 +66,8 @@ export function buildCardState(engine: HarnessEngine, id: CardRef, pool?: CardPo
   const meta = readMeta(internal, id);
   const metaAccessor = (cid: CoreCardId) => internal.cardMetas[cid as string] as Partial<RiftboundCardMeta> | undefined;
 
+  const gameOver = peekCurrentState(engine)?.status === "finished";
+
   const baseMight = def?.might ?? poolDef?.might ?? 0;
   const isBuffed = flag(meta, "buffed");
   // getCardEffectiveMight reads meta.buffed; feed it the merged flag.
@@ -113,7 +115,9 @@ export function buildCardState(engine: HarnessEngine, id: CardRef, pool?: CardPo
     isBuffed,
     isEmpowered: meta?.empowered === true,
     isExhausted,
-    isHidden: meta?.hidden === true || inst.zone.startsWith("facedown-"),
+    // rule 421.4 — a facedown card stays where it is when the game ends, but its
+    // owner reveals it to all players, so nothing is hidden once play is over.
+    isHidden: gameOver ? false : meta?.hidden === true || inst.zone.startsWith("facedown-"),
     isReady: !isExhausted,
     isStunned: flag(meta, "stunned"),
     isTapped: isExhausted,

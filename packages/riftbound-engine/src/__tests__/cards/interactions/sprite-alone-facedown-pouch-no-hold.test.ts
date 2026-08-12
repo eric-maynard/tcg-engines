@@ -170,7 +170,9 @@ describe("Temporary Sprite alone at A × facedown Block × Mushroom Pouch — no
     expect(game.p1.units("bfA")).toEqual(["buddy"]);
     expect(game.gameState.battlefields.bfA?.controller).toBe(P1);
     expect(game.zoneOf("block")).toBe("facedown-bfA");
-    expect(game.state("block").isHidden).toBe(true);
+    // rule 421.4 — the Hold here takes P1 to 8 and ends the game in the same Cleanup, so Block
+    // keeps its Facedown Zone (no zone change) but is no longer hidden: its owner reveals it.
+    expect(game.state("block").isHidden).toBe(!game.isOver());
   });
 
   test("(d) …then the Scoring Step HOLDS A for the 8th point — Hold is not subject to the Final-Point restriction (469.2, 471.1.a.1) — and P1 wins at the following Cleanup, still in the Beginning Phase (472/323.1)", async () => {
