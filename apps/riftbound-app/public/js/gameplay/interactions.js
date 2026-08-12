@@ -107,8 +107,16 @@ function onCardClick(cardId) {
       showToast(`Payment for ${pendingName} cancelled`);
       return;
     }
-    // Clicking any other card cancels costPayment and selects the new card
-    cancelInteraction();
+    // Clicking any other card cancels costPayment and selects the new card.
+    // rule 357.1.a — the pool being accumulated is not reserved by the engine, so
+    // walking away mid-payment silently would hide that the pending play is gone
+    // and its energy is now spendable elsewhere. Always say so.
+    {
+      const pendingName = String(findCard(interaction.pendingCardId)?.name ?? interaction.pendingCardId)
+        .replace(/^player-[12]-/, "");
+      cancelInteraction();
+      showToast(`Payment for ${pendingName} cancelled`);
+    }
     // Fall through to normal selection below
   }
 
