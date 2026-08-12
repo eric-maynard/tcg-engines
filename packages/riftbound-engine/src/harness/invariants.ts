@@ -151,7 +151,7 @@ export const pendingChoiceGatesMoves: Invariant = {
         // may also crack NON-rune Reaction [Add] abilities (a legend's "[E]:
         // Add") to fund it. `chain/activate-ability.ts isPaymentPromptFor`
         // enumerates exactly those, so this is not a gating violation.
-        if (m.moveId === "activateAbility" && pid === chooser && isPaymentPromptFor(pc, pid)) {
+        if (m.moveId === "activateAbility" && pid === chooser && isPaymentPromptFor(cur.state, pid, pc)) {
           continue;
         }
         if (m.moveId !== "resolvePendingChoice") {

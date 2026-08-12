@@ -15,6 +15,7 @@
  */
 
 import type { RiftboundGameState } from "../../types";
+import { getGlobalCardRegistry } from "../../operations/card-lookup";
 
 /** The resource part of what accepting an open prompt would charge. */
 export interface PromptResourceCost {
@@ -182,6 +183,159 @@ export function isPayPromptFor(state: RiftboundGameState, playerId: string): boo
   return promptPayableCost(state)?.payerId === playerId;
 }
 
+/** Could one unit of `produced` Power of Domain `domain` pay the pip `pip`? */
+function domainPays(domain: string, pip: string): boolean {
+  // rule 135.2.e.5.b — universal ([rainbow]) Power pays any pip, and a
+  // [rainbow] pip is paid by Power of any Domain. rule 135.2.e.6.c — a hybrid
+  // pip takes either of its printed Domains, never a third.
+  return domain === "rainbow" || pip === "rainbow" || pip === domain || pip.split("|").includes(domain);
+}
+
+// ---------------------------------------------------------------------------
+// What a Reaction [Add] actually PRODUCES (rule 429.3.a / 605.2)
+// ---------------------------------------------------------------------------
+
+/** The pool entry one activation of a Reaction [Add] ability would create. */
+export interface AddYield {
+  readonly energy: number;
+  /** Power by Domain; "rainbow" is universal Power (135.2.e.5.b). */
+  readonly power: Readonly<Record<string, number>>;
+}
+
+const NO_YIELD: AddYield = { energy: 0, power: {} };
+
+function mergeYield(a: AddYield, b: AddYield): AddYield {
+  const power: Record<string, number> = { ...a.power };
+  for (const [d, n] of Object.entries(b.power)) {
+    power[d] = (power[d] ?? 0) + (n ?? 0);
+  }
+  return { energy: a.energy + b.energy, power };
+}
+
+function isEmptyYield(y: AddYield): boolean {
+  return y.energy <= 0 && Object.values(y.power).every((n) => (n ?? 0) <= 0);
+}
+
+/**
+ * rule 605.2 / 429.3.a — what an ability's effect would put in the pool, or
+ * `undefined` when it is not an immediate [Add] (only those resolve off the
+ * chain, so only those can fund a payment that is already being made).
+ *
+ * The shapes an [Add] can wear, all priced by what they actually produce so
+ * this can never drift from `isImmediateAddEffect`, which decides the same
+ * question for legality:
+ *  - `add-resource` / `add`  the printed pips, `amount` times (rule 429.1).
+ *  - `conditional`           "[Add] 1. If [Empowered], [Add] 2 instead"
+ *                            (ven-075-166) — priced at the BEST branch, since
+ *                            reachability asks what COULD still be added.
+ *  - `sequence`              a wrapper the parser emits around a single Add.
+ */
+export function addYieldOfEffect(effect: unknown): AddYield | undefined {
+  const e = effect as
+    | (Bag & { type?: string; then?: unknown; else?: unknown; effects?: unknown })
+    | undefined;
+  const type = e?.type;
+  if (type === "add-resource" || type === "add") {
+    // rule 429.4 (ogn-247-298 Daughter of the Void, "Use only to play spells")
+    // — an EARMARKED Add makes Power that most costs cannot spend. Activating it
+    // stays legal (429.3), but it must never be counted as reachable funding for
+    // a prompt, or "yes" would be advertised on Power that can never pay it.
+    if (e?.restriction !== undefined) {
+      return undefined;
+    }
+    // rule 429.1 — a variable `amount` ("[Add] that much [rainbow]") promises
+    // no fixed size; count the printed pips once.
+    const times = typeof e?.amount === "number" ? Math.max(0, e.amount) : 1;
+    const power: Record<string, number> = {};
+    for (const domain of pips(e?.power)) {
+      power[domain] = (power[domain] ?? 0) + times;
+    }
+    return { energy: num(e?.energy) * times, power };
+  }
+  if (type === "conditional") {
+    const branches = [e?.then, e?.else]
+      .filter((b) => b !== undefined)
+      .map((b) => addYieldOfEffect(b));
+    if (branches.length === 0 || branches.some((b) => b === undefined)) {
+      return undefined;
+    }
+    let best = NO_YIELD;
+    for (const b of branches as AddYield[]) {
+      const total = (y: AddYield) =>
+        y.energy + Object.values(y.power).reduce<number>((a, n) => a + (n ?? 0), 0);
+      if (total(b) > total(best)) {
+        best = b;
+      }
+    }
+    return best;
+  }
+  if (type === "sequence" && Array.isArray(e?.effects)) {
+    let total = NO_YIELD;
+    for (const sub of e.effects as unknown[]) {
+      const y = addYieldOfEffect(sub);
+      if (!y) {
+        return undefined;
+      }
+      total = mergeYield(total, y);
+    }
+    return total;
+  }
+  return undefined;
+}
+
+/**
+ * rule 605.2 / 429.3.a — the immediate-[Add] test the activation enumerator
+ * uses. Kept here beside the pricing so legality and reachability can never
+ * disagree about what counts as an Add.
+ */
+export function isImmediateAddEffect(effect: unknown): boolean {
+  const type = (effect as { type?: string } | undefined)?.type;
+  if (type === "add-resource" || type === "add") {
+    return true;
+  }
+  if (type === "conditional") {
+    const branch = effect as { then?: unknown; else?: unknown };
+    if (!branch.then || !isImmediateAddEffect(branch.then)) {
+      return false;
+    }
+    return branch.else === undefined || isImmediateAddEffect(branch.else);
+  }
+  return false;
+}
+
+/** An activated ability as the registry stores it. */
+interface AbilityLike {
+  readonly type?: string;
+  readonly effect?: unknown;
+}
+
+/** rule 429.3.a — what activating this ability would ADD, if it is an Add at all. */
+export function addYieldOfAbility(ability: unknown): AddYield | undefined {
+  const a = ability as AbilityLike | undefined;
+  if (a?.type !== "activated") {
+    return undefined;
+  }
+  const y = addYieldOfEffect(a.effect);
+  return y && !isEmptyYield(y) ? y : undefined;
+}
+
+/**
+ * rule 429.3.a — what an offered `activateAbility` would put in the pool. The
+ * ability is looked up the way the enumerator names it (`sourceCardId` for a
+ * copied/inherited line, else `cardId`), so an Add that the enumerator offers
+ * is an Add this prices.
+ */
+function addFromActivation(
+  params: Readonly<Record<string, unknown>> | undefined,
+): AddYield | undefined {
+  const cardId = params?.sourceCardId ?? params?.cardId;
+  const index = params?.abilityIndex;
+  if (typeof cardId !== "string" || typeof index !== "number") {
+    return undefined;
+  }
+  return addYieldOfAbility((getGlobalCardRegistry().getAbilities(cardId) ?? [])[index]);
+}
+
 /** A move as the harness/enumerators shape it. */
 interface MoveLike {
   readonly moveId: string;
@@ -189,10 +343,13 @@ interface MoveLike {
 }
 
 /**
- * rule 164.2.a/b / 594 — what the seat's Reaction [Add] abilities could still
- * put in the pool, read straight off the legal moves so the answer can never
- * drift from what the enumerators actually allow. Each `exhaustRune` is +1
- * Energy; each `recycleRune` variant is +1 Power of that variant's Domain.
+ * rule 164.2.a/b / 594 / 429.3.a — what the seat's Reaction [Add] abilities
+ * could still put in the pool, read straight off the legal moves so the answer
+ * can never drift from what the enumerators actually allow. Each `exhaustRune`
+ * is +1 Energy; each `recycleRune` variant is +1 Power of that variant's
+ * Domain; each offered `activateAbility` whose effect is an immediate [Add]
+ * (a Gold's "Kill this, [Exhaust]: [Add] [rainbow]", a legend's "[Exhaust]:
+ * Add", a battlefield's Add line) counts for exactly what it produces.
  * A rune may be tapped AND then recycled (594 puts no readiness condition on
  * recycling), so the two totals are independent.
  */
@@ -203,9 +360,30 @@ export function potentialAddsFromMoves(moves: readonly MoveLike[]): {
   let energy = 0;
   const power: Record<string, number> = {};
   const seenRecycle = new Set<string>();
+  const seenActivation = new Set<string>();
   for (const m of moves) {
     if (m.moveId === "exhaustRune") {
       energy += 1;
+      continue;
+    }
+    // rule 429.3.a (sfd-t03 Gold) — a rune is not the only Reaction [Add]: a
+    // card's "[Exhaust]: [Add] …" is an Add in the same window, so its offer
+    // counts toward what the seat could still put in the pool. One card's one
+    // ability is one Add however many variants (kill/discard picks) it fans out to.
+    if (m.moveId === "activateAbility") {
+      const add = addFromActivation(m.params);
+      if (!add) {
+        continue;
+      }
+      const key = `${String(m.params?.cardId ?? "")}#${String(m.params?.abilityIndex ?? "")}`;
+      if (seenActivation.has(key)) {
+        continue;
+      }
+      seenActivation.add(key);
+      energy += add.energy;
+      for (const [domain, n] of Object.entries(add.power)) {
+        power[domain] = (power[domain] ?? 0) + (n ?? 0);
+      }
       continue;
     }
     if (m.moveId === "recycleRune") {
@@ -313,27 +491,35 @@ export function promptNeedsAdd(
   }
   const adds = potentialAddsFromMoves(legalMoves);
   // Could the Adds still on the table close the gap? Energy comes only from
-  // tapping; a named-Domain pip only from recycling a rune of that Domain (or
-  // any rune, for a [rainbow] pip).
+  // tapping; a named-Domain pip only from an Add that produces that Domain (a
+  // recycle of a rune of that Domain, or a Gold-style "[Add] [rainbow]").
   if (short.energy > adds.energy) {
     return undefined;
   }
-  const totalRecyclable = Object.values(adds.power).reduce<number>((a, b) => a + (b ?? 0), 0);
-  let wildOwed = 0;
-  for (const [pip, n] of Object.entries(short.power)) {
-    if (pip === "rainbow") {
-      wildOwed += n;
-      continue;
-    }
-    const usable = pip.includes("|")
-      ? pip.split("|").reduce<number>((a, d) => a + (adds.power[d] ?? 0), 0)
-      : (adds.power[pip] ?? 0);
-    if (usable < n) {
-      return undefined;
-    }
-    wildOwed += n;
-  }
-  if (wildOwed > totalRecyclable) {
+  // rule 429.3 / DESIGN §Paying costs — the prompt is "genuinely unpayable", and
+  // so hidden, only when NOTHING the seat can still do puts a usable resource
+  // toward it. Anything left in the pool after `shortfall` has drained it is by
+  // construction unable to pay what is owed (calm Power against a [fury] pip,
+  // ven-009-166), so the only question is whether a REACTION [Add] could:
+  //  - an Add of a Domain that pays one of the owed pips keeps "yes" alive even
+  //    when it covers only part of the bill — a seat one Gold short of four
+  //    pips is short, not locked out, and 429.3 lets them find the rest
+  //    (rule-id sfd-214-221 × sfd-t03);
+  //  - no such Add at all, and the prompt is genuinely only declinable
+  //    (383.3.b.1 / 404.2), so it is hidden rather than dangled.
+  const totalAddable = Object.entries(adds.power)
+    .filter(([domain, n]) => (n ?? 0) > 0 && Object.keys(short.power).some((pip) => domainPays(domain, pip)))
+    .reduce<number>((a, [, n]) => a + (n ?? 0), 0);
+  // …or the pool has already covered part of the bill. Whatever is LEFT in the
+  // pool after `shortfall` has drained it could not pay what is owed (calm Power
+  // against a [fury] pip), so the test is what the pool has already absorbed:
+  // a seat three pips into a four-pip payment with its last Add spent is short,
+  // not locked out (rule-id sfd-214-221 × sfd-t03).
+  // Energy already in hand does not count here: a full Energy pool next to a
+  // [fury] pip nothing can make is still "genuinely unpayable" (404.2).
+  const owedPips = Object.values(short.power).reduce<number>((a, n) => a + (n ?? 0), 0);
+  const pipsPaidFromPool = cost.power.length - owedPips;
+  if (owedPips > 0 && totalAddable === 0 && pipsPaidFromPool === 0) {
     return undefined;
   }
   const parts = [
@@ -377,23 +563,89 @@ export interface RunePoolZones {
 }
 
 /**
- * rule 429.3 / 594 — how much more Power the seat could still ADD while a
- * prompt is open: one per rune in their Rune Pool. Recycling has no readiness
- * condition (594), and a surcharge takes Power of ANY Domain (721.1.c), so the
- * rune count alone is the ceiling. Without a zone reader nothing is assumed.
+ * The extra board readers `addablePowerOf` needs to see Reaction [Add]
+ * abilities that are NOT runes. All optional: without `state` the answer stays
+ * the rune-only one, and without `getFlag` an already-exhausted host is counted
+ * (over-counting only keeps a candidate LISTED, which is the direction 809.1.d
+ * asks for — a candidate is dropped only when nothing could fund it).
+ */
+export interface AddSourceIo {
+  readonly state?: RiftboundGameState;
+  readonly getFlag?: (cardId: never, flag: string) => unknown;
+  readonly getCardController?: (cardId: never) => unknown;
+}
+
+/** The board zones a Reaction [Add] ability can be activated from (rule 343.1/174.8). */
+function boardZonesOf(state: RiftboundGameState | undefined): string[] {
+  const zones = ["base", "legendZone", "battlefieldRow"];
+  for (const bfId of Object.keys(state?.battlefields ?? {})) {
+    zones.push(`battlefield-${bfId}`);
+  }
+  return zones;
+}
+
+/**
+ * rule 429.3 / 429.3.a / 594 — how much more Power the seat could still ADD
+ * while a prompt is open. Two sources, both priced by what they produce:
+ *  - every rune in their Rune Pool — one Power each. Recycling has no readiness
+ *    condition (594) and a surcharge takes Power of ANY Domain (721.1.c), so
+ *    the rune count alone is that half's ceiling.
+ *  - every OTHER Reaction [Add] on a permanent they control — a Gold's "Kill
+ *    this, [Exhaust]: [Add] [rainbow]" (sfd-t03), a legend's or battlefield's
+ *    Add line. 429.3.a admits these in exactly the same window as a rune, so
+ *    counting only runes made a Gold-only seat's option "unfundable".
+ * Only the Power half counts here: a surcharge is Power, never Energy (164.2.a).
+ * Without a zone reader nothing is assumed.
  */
 export function addablePowerOf(
   playerId: string,
   zones: RunePoolZones | undefined,
+  io?: AddSourceIo,
 ): number {
   if (!zones?.getCardsInZone) {
     return 0;
   }
-  try {
-    return zones.getCardsInZone("runePool" as never, playerId as never).length;
-  } catch {
-    return 0;
+  const read = (zone: string): readonly unknown[] => {
+    try {
+      return zones.getCardsInZone(zone as never, playerId as never);
+    } catch {
+      return [];
+    }
+  };
+  let total = read("runePool").length;
+  if (!io?.state) {
+    return total;
   }
+  const registry = getGlobalCardRegistry();
+  for (const zone of boardZonesOf(io.state)) {
+    for (const raw of read(zone)) {
+      const cardId = raw as string;
+      if (typeof cardId !== "string") {
+        continue;
+      }
+      // rule 477.1.a — a possessed permanent is activated by its CONTROLLER.
+      const controller = io.getCardController?.(cardId as never);
+      if (typeof controller === "string" && controller !== playerId) {
+        continue;
+      }
+      for (const ability of registry.getAbilities(cardId) ?? []) {
+        const add = addYieldOfAbility(ability);
+        const power = add
+          ? Object.values(add.power).reduce<number>((a, n) => a + (n ?? 0), 0)
+          : 0;
+        if (power <= 0) {
+          continue;
+        }
+        // An "[Exhaust]:" line on an already-exhausted host is not activatable.
+        const cost = (ability as { cost?: { exhaust?: unknown } } | undefined)?.cost;
+        if (cost?.exhaust === true && io.getFlag?.(cardId as never, "exhausted") === true) {
+          continue;
+        }
+        total += power;
+      }
+    }
+  }
+  return total;
 }
 
 /** What a surcharged option costs and whether the seat can answer with it. */
@@ -453,6 +705,7 @@ export function surchargedOptions<T extends string>(
   ids: readonly T[],
   surchargeOf: (id: T) => number,
   zones: RunePoolZones | undefined,
+  io?: Omit<AddSourceIo, "state">,
 ): {
   options: T[];
   /** The subset the pool covers RIGHT NOW — the only ones that may be AUTO-bound (402.2). */
@@ -460,7 +713,9 @@ export function surchargedOptions<T extends string>(
   deflectTax: boolean;
   deflectPerOption: Record<string, number>;
 } {
-  const addable = addablePowerOf(playerId, zones);
+  // rule 429.3.a — every Reaction [Add] the seat still has counts toward
+  // "could this surcharge be funded", not just their runes.
+  const addable = addablePowerOf(playerId, zones, { ...io, state });
   const options: T[] = [];
   const payableNow: T[] = [];
   const deflectPerOption: Record<string, number> = {};

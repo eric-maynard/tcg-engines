@@ -53,6 +53,12 @@ import { canPerformEffectPlay } from "../play/play-pipeline";
 import { costModeOfPlayEffect } from "../../../abilities/effects/play";
 import { buildEffectContext, canAffordPower } from "./effect-context";
 import { raisePlayTimeModeChoice } from "../play/play-time-modes";
+import { isImmediateAddEffect, promptPayableCost } from "../prompt-cost";
+
+// rule 605.2 / 429.3.a — the immediate-[Add] test now lives beside the pricing
+// of what an Add produces (`prompt-cost.ts`) so legality and reachability can
+// never disagree; re-exported here for the callers that already import it.
+export { isImmediateAddEffect };
 
 type Defs = GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>;
 
@@ -277,7 +283,20 @@ function eligibleDiscardCards(hand: readonly unknown[], spec: { cardType?: strin
  * "unless its controller pays [N]" ransom (sfd-136-221 Hard Bargain) are such
  * a payment, so the payer may crack Reaction [Add] abilities during either.
  */
-export function isPaymentPromptFor(pendingChoice: unknown, playerId: string): boolean {
+export function isPaymentPromptFor(
+  state: RiftboundGameState,
+  playerId: string,
+  pendingChoice: unknown = state.pendingChoice,
+): boolean {
+  // rule 429.3 / 357.1.a — ANY prompt whose acceptance charges resources is a
+  // Pay step, and `promptPayableCost` is the single source of truth for which
+  // ones those are (it already governs the rune [Add] window in
+  // `moves/resources.ts`). A card's Reaction [Add] — a Gold's "Kill this,
+  // [Exhaust]: [Add] [rainbow]", a legend's "[Exhaust]: Add" — is legal in
+  // exactly the same window, so the two must never disagree.
+  if (promptPayableCost(state, pendingChoice)?.payerId === playerId) {
+    return true;
+  }
   const pc = pendingChoice as
     | { type?: string; playerId?: string; counterRansom?: unknown; payChoice?: unknown }
     | undefined;
@@ -310,21 +329,6 @@ export function isPaymentPromptFor(pendingChoice: unknown, playerId: string): bo
     }
   }
   return pc.type === "pay-x";
-}
-
-export function isImmediateAddEffect(effect: unknown): boolean {
-  const type = (effect as { type?: string } | undefined)?.type;
-  if (type === "add-resource" || type === "add") {
-    return true;
-  }
-  if (type === "conditional") {
-    const branch = effect as { then?: unknown; else?: unknown };
-    if (!branch.then || !isImmediateAddEffect(branch.then)) {
-      return false;
-    }
-    return branch.else === undefined || isImmediateAddEffect(branch.else);
-  }
-  return false;
 }
 
 /**
@@ -1443,7 +1447,7 @@ export const activateAbility: Defs["activateAbility"] = {
     // paying player may still activate Reaction [Add] abilities (they resolve
     // immediately and never use the chain). Every other pending choice, and
     // every other ability, stays locked out until the choice is answered.
-    const payXPrompt = isPaymentPromptFor(state.pendingChoice, playerId);
+    const payXPrompt = isPaymentPromptFor(state, playerId);
     if (state.pendingChoice && !payXPrompt) {
       return false;
     }
@@ -1956,7 +1960,7 @@ export const activateAbility: Defs["activateAbility"] = {
     const playerId = context.playerId as string;
     // rule 429.3 / 444.2.c: mid-payment, only the paying player's Reaction
     // [Add] abilities are offered (the per-entry filter below keeps them).
-    const payXPrompt = isPaymentPromptFor(state.pendingChoice, playerId);
+    const payXPrompt = isPaymentPromptFor(state, playerId);
     if (state.pendingChoice && !payXPrompt) {
       return [];
     }

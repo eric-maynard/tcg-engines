@@ -56,7 +56,7 @@ async function resolveDravenTrigger(game: Game): Promise<void> {
 }
 
 describe("Ruling b254023655ed65c5 — a Gold token is not itself payment for Draven's [fury], but its [Add] Power is", () => {
-  test("not directly: with an empty pool and the Gold left alone, Draven's 'you may pay [fury]' can never be accepted — the token is never offered/consumed as payment, Draven stays 4 and loses to the Guard", async () => {
+  test("not directly: with an empty pool and the Gold left alone, Draven's 'you may pay [fury]' can never be ACCEPTED — the token is never offered or consumed as payment (only its [Add] is, and nothing auto-cracks it), Draven stays 4 and loses to the Guard", async () => {
     const game = await attack();
     // Walk the whole trigger + showdown by passing; wherever P1 is asked to pay, "yes" must be impossible.
     for (let i = 0; i < 12; i++) {
@@ -65,8 +65,13 @@ describe("Ruling b254023655ed65c5 — a Gold token is not itself payment for Dra
         break;
       }
       if (d.kind === "yes-no" && d.seat === P1) {
-        expect(d.canAccept).toBe(false);
+        // rule 429.3 / 429.3.a — the ready Gold is a Reaction [Add] the payer could still crack, so
+        // the offer is advertised as reachable-after-an-Add (`needsAdd`) rather than hidden. What it
+        // is NOT is payable: the token itself is no payment, and paying is manual (DESIGN.md
+        // §Paying costs), so with the pool empty "yes" is refused all the same.
+        expect(d.needsAdd).toMatchObject({ power: { fury: 1 } });
         expect((await game.p1.try((p) => p.yes())).ok).toBe(false);
+        expect(game.state("gold").isExhausted).toBe(false); // never auto-cracked
         await game.p1.no();
       } else if (d.kind === "pick") {
         expect(d.options.map((o) => o.card ?? o.key)).not.toContain("gold"); // a token is never a payment option

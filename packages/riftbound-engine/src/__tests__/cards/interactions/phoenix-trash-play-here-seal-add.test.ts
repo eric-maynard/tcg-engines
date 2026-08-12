@@ -192,21 +192,20 @@ describe("Immortal Phoenix from the trash off a hidden Fox-Fire double kill (+ S
     expect(game.locationOf("phoenix")).toBe("base");
   });
 
-  // DESIGN (DESIGN.md "Known deviations" — manual rune payment; FIXER-PRIMER: the play-time [Add]
-  // sub-step of 357.1.a is not implemented): rules 357.1.a / 429.3 would let P1 crack the Seal while
-  // the payment is being demanded. The engine credits nothing but the pool, so the prompt stands
-  // with canAccept:false and offers no [Add] action beside it.
-  test("(d) empty pool + ready Seal of Rage: the opt-in is asked at FINALIZATION but is not acceptable, and yes() is rejected", async () => {
+  // rule 357.1.a / 429.3 — P1 may crack the Seal while the payment is being demanded, so the Seal's
+  // [Reaction] [Add] rides on the prompt. Paying is manual (DESIGN.md §Paying costs): nothing is
+  // auto-cracked, so with the pool still empty "yes" itself stays refused.
+  test("(d) empty pool + ready Seal of Rage: the opt-in is asked at FINALIZATION, the Seal's [Add] is offered beside it, and yes() is rejected until it is actually cracked", async () => {
     const game = await defending({}).build();
     await attackIsOn(game);
     await game.p1.reveal("fox", { targets: ["a", "b"] });
     await game.settle();
 
     const d = game.decision();
-    expect(d).toMatchObject({ canAccept: false, kind: "yes-no", seat: P1, timing: "FIN" });
+    expect(d).toMatchObject({ kind: "yes-no", seat: P1, timing: "FIN" });
     expect(d?.source?.cardId).toBe("phoenix");
-    // 357.1.a / 429.3.a would offer the Seal's [Reaction] [Add] here; the engine offers no such action.
-    expect(((d as { actions?: readonly { verb: string }[] }).actions ?? []).map((a) => a.verb)).not.toContain("activate");
+    // 357.1.a / 429.3.a — the Seal's [Reaction] [Add] is offered here.
+    expect(((d as { actions?: readonly { verb: string }[] }).actions ?? []).map((a) => a.verb)).toContain("activate");
 
     const rejected = await game.p1.try((p) => p.yes());
     expect(rejected.ok).toBe(false);

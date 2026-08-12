@@ -680,9 +680,26 @@ function makeDeflectAffordable(
     runePools?: Record<string, { power?: Partial<Record<string, number>> } | undefined>;
   };
   const pool = playerId ? state.runePools?.[playerId] : undefined;
+  // rule 429.3.a (sfd-t03 Gold) — the [Add]s that could still fund a surcharge
+  // are not only runes: any Reaction [Add] on a permanent the chooser controls
+  // counts, so a Gold-only seat's candidate stays a legal choice under 809.1.d.
+  const meta = ctx.cards.getCardMeta;
   let budget =
     Object.values(pool?.power ?? {}).reduce((a: number, b) => a + (b ?? 0), 0) +
-    addablePowerOf(playerId ?? "", ctx.zones as never);
+    addablePowerOf(playerId ?? "", ctx.zones as never, {
+      getCardController: ctx.cards.getCardController as never,
+      ...(meta
+        ? {
+            getFlag: (cardId: never, name: string) => {
+              const m = meta(cardId) as
+                | { __flags?: Record<string, unknown>; [k: string]: unknown }
+                | undefined;
+              return m?.__flags?.[name] === true || m?.[name] === true;
+            },
+          }
+        : {}),
+      state: ctx.draft,
+    });
   const source = ctx.sourceCardId as string | undefined;
   if (source && playerId) {
     const inHand = ctx.zones

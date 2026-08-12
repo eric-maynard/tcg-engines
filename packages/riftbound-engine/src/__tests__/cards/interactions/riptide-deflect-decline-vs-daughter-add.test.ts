@@ -141,15 +141,15 @@ describe("Riptide Rex's Deflect surcharge × Daughter of the Void — a spell-on
     expect(game.violations()).toEqual([]);
   });
 
-  test("Daughter is not offered as an Add source while the trigger's pay prompt is open — an ability's surcharge is outside her 'use only to play spells' earmark (429.4, 404.1)", async () => {
+  test("Daughter's Add is OFFERED while the trigger's pay prompt is open (429.3 — any Reaction [Add] may be activated whenever a cost must be paid) but never counts as funding for it: her [rainbow] is earmarked 'use only to play spells' (429.4, 404.1)", async () => {
     const game = await rexBoard({ rainbow: 1 }).build();
     await game.p1.play("rex");
     expect(game.decision()).toMatchObject({ kind: "yes-no", seat: P1 });
-    expect(game.p1.can("activate", "kaisa")).toBe(false);
-    // DESIGN (DESIGN.md "Paying costs"): the rules would keep the prompt open across OTHER,
-    // unrestricted Reaction Adds (357.1.a / 429.3); the engine's mid-payment Add sub-step is
-    // deliberately unimplemented, so NO activation at all is legal here.
-    expect(game.p1.legal().map((o) => o.key)).toEqual(["concede:-"]);
+    // 429.3 — the activation itself is a legal Reaction [Add] in this window …
+    expect(game.p1.can("activate", "kaisa")).toBe(true);
+    // … but 429.4 keeps her Power out of the reachability maths, so the prompt never advertises
+    // "yes" as fundable from her: the shortfall is quoted only off Adds that could actually pay it.
+    expect((game.decision() as { needsAdd?: unknown }).needsAdd).toBeUndefined();
   });
 
   // Expected (429.4 / 404.1): the [rainbow] Daughter adds may pay only to PLAY A SPELL. Riptide
