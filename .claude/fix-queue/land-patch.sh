@@ -105,11 +105,28 @@ MISSING=""; for f in "${FILES[@]}"; do
 done
 if [ -n "$MISSING" ]; then git -C "$WT" reset -q --hard "$HEAD_SHA"; out committed false; out reason commit_incomplete; out missing "$(echo $MISSING | tr ' ' ',')"; exit 0; fi
 git -C "$REPO" update-ref "refs/heads/$BR" "$NEW" "$HEAD_SHA" || { out committed false; out reason ref_update_failed; exit 0; }
+PREV_SHA=$(git -C "$REPO" rev-parse HEAD~1 2>/dev/null)
 git -C "$REPO" reset -q -- "${FILES[@]}" >/dev/null 2>&1   # index ← new HEAD for these paths; working tree untouched
 out committed true; out sha "$(git -C "$REPO" rev-parse --short HEAD)"
 GIT_TERMINAL_PROMPT=0 git -C "$REPO" push origin "$BR" 2>&1 | tail -1 | sed 's/^/push=/'
 # sync + bounce from the VERIFIED worktree at the new HEAD (never the dirty main tree → no mixed snapshots on the devbox)
 NEW_SHA=$(git rev-parse HEAD); git -C "$WT" reset -q --hard "$NEW_SHA" >/dev/null 2>&1
+
+# Post-land refresh of the SHARED tree. Landing from a side dir (LAND_SRC_DIR)
+# leaves the shared working copy of every landed file sitting at its pre-land
+# content, silently shadowing HEAD; two commits later that stale copy is missing
+# symbols HEAD exports and NOTHING under packages/ can even be imported. Refresh
+# only files whose shared copy still matches the PRE-land blob — i.e. nobody has
+# local edits in them — so live work is never touched.
+for f in "${FILES[@]}"; do
+  [ -e "$REPO/$f" ] || continue
+  cur=$(git -C "$REPO" hash-object "$REPO/$f" 2>/dev/null)
+  old=$(git -C "$REPO" rev-parse "$PREV_SHA:$f" 2>/dev/null)
+  new=$(git -C "$REPO" rev-parse "$NEW_SHA:$f" 2>/dev/null)
+  if [ -n "$cur" ] && [ -n "$new" ] && [ "$cur" != "$new" ] && [ "$cur" = "$old" ]; then
+    git -C "$REPO" show "$NEW_SHA:$f" > "$REPO/$f" 2>/dev/null && out refreshed_shared "$f"
+  fi
+done
 RSLOG=$(mktemp)
 rsync -a --delete "$WT/packages/" emaynard-tcg:/root/tcg/tcg-engines/packages/ --exclude node_modules >>"$RSLOG" 2>&1; rc1=$?
 rsync -a "$WT/apps/riftbound-app/" emaynard-tcg:/root/tcg/tcg-engines/apps/riftbound-app/ --exclude data --exclude node_modules --exclude downloads >>"$RSLOG" 2>&1; rc2=$?
