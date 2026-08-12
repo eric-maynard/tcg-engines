@@ -309,10 +309,18 @@ function collectPileCandidates(
   // by now but is not a candidate — targets are locked (355.5) before the
   // additional cost is paid (357).
   const mandatoryKill = getOptionalPlayCost(ctx.sourceCardId);
-  const killedForCost =
-    pile === "trash" && mandatoryKill?.kind === "kill" && mandatoryKill.mandatory === true
-      ? ctx.draft.lastKilledUnitId
-      : undefined;
+  const readsKilledUnit =
+    pile === "trash" && mandatoryKill?.kind === "kill" && mandatoryKill.mandatory === true;
+  const killedForCost = readsKilledUnit ? ctx.draft.lastKilledUnitId : undefined;
+  // rule 357.2.a / 359.3.e.12 (rule-id: unl-142-219) — a cost-kill a die
+  // replacement saved (Zhonya's Hourglass, Unlicensed Armory) still PAYS the
+  // cost, but nothing died: "the killed unit" is then NULL information, so
+  // neither the Energy nor the Power comparison can be satisfied and no card in
+  // the trash is eligible — not even a free one. Reading no cap at all would
+  // resurrect the whole trash.
+  if (readsKilledUnit && killedForCost === undefined) {
+    return { candidates: [], cards: [], template: specTemplate(eff, ctx, ctx.playerId) };
+  }
   const killedCaps =
     killedForCost === undefined
       ? undefined

@@ -868,6 +868,18 @@ export function continueKillBatch(
   const results = result.dying.map((id) =>
     leaveBoard(ctx, id, kill.to as LeaveDestination, kill.cause, { lki: snaps.get(id), replacements: "skip" }),
   );
+  // rule 359.3.e.14.b / 359.3.f — the same last-killed record `effects/kill.ts`
+  // writes for a batch that finished in one go: a batch that had to PARK a
+  // prompt (an optional costed shield — Unlicensed Armory) still killed these
+  // units once the answer came back, so a linked "the killed unit" / "if you do"
+  // must see them. Only a genuinely replaced death leaves the record null.
+  for (const r of results) {
+    if (r.left) {
+      ctx.draft.lastKilledUnitMight = snaps.get(r.cardId)?.might;
+      ctx.draft.lastKilledUnitId = r.cardId;
+      ctx.draft.lastKilledUnitController = snaps.get(r.cardId)?.controller;
+    }
+  }
   emitLeaveEvents(ctx, results, fire);
   return result;
 }
