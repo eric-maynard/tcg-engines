@@ -9,9 +9,9 @@
  * RULING-CONFLICT-ish: this answer describes the pre-errata wording ("You may kill a gear"). The card now
  * reads "up to one gear", and rule 355.13 makes zero a legal answer to an "up to N" choice — so the engine
  * offers the empty set at PLAY time and asks nothing at resolution (see the sibling ruling 1e9829e7a54e08f7,
- * which states this outcome as correct). The two facets where this answer and the engine disagree are kept as
- * failing assertions below; the rest of the answer (a chosen gear can be spared, and you always draw 1) is
- * asserted normally.
+ * which states this outcome as correct). The two facets where this answer and the errata'd card disagree are
+ * asserted in the CR direction below, each carrying a RULING-CONFLICT note; the rest of the answer (a chosen
+ * gear can be spared, and you always draw 1) is asserted normally.
  * Rules: 355.8 (a play needs a legal choice), 355.13 ("up to N" is satisfied by zero), 419 (draw).
  */
 import { describe, expect, test } from "bun:test";
@@ -32,15 +32,19 @@ describe("Ruling eea5054e0caa29a0 — Salvage's gear choice", () => {
     expect(game.p2.gear()).toEqual([]);
   });
 
-  test.failing("BUG: ruling eea5054e0caa29a0 — Salvage should be unplayable with no gear in play; the engine allows it (post-errata 'up to one')", async () => {
+  // RULING-CONFLICT: riftjudge eea5054e0caa29a0 says a gear must be targeted (so Salvage is unplayable
+  // with no gear); the errata'd text "up to one gear" + rule 355.13 say zero is a legal choice — engine
+  // follows the CR. Sibling ruling 1e9829e7a54e08f7 states this same outcome as correct.
+  test("ruling eea5054e0caa29a0 (post-errata) — with no gear in play Salvage is still playable: 'up to one' is satisfied by zero", async () => {
     const game = await board().build();
-    expect(game.p1.can("cast", "salvage")).toBe(false);
+    expect(game.p1.can("cast", "salvage")).toBe(true);
   });
 
-  test.failing("BUG: ruling eea5054e0caa29a0 — with a gear on the board a gear should HAVE to be targeted; the engine also offers the empty target set", async () => {
+  // RULING-CONFLICT: as above — rule 355.13 keeps the empty set on the menu even with a gear available.
+  test("ruling eea5054e0caa29a0 (post-errata) — with a gear on the board both the empty set and the gear are offered", async () => {
     const game = await board().gear(P2, PACK_OF_WONDERS, "pack").build();
     const field = game.p1.option("cast", "salvage")?.fields.find((f) => f.arg === "targets");
-    expect(field?.options).toEqual([["pack"]]);
+    expect(field?.options).toEqual([[], ["pack"]]);
   });
 
   test("agreed: a targeted gear can be spared and Salvage still draws 1", async () => {

@@ -48,9 +48,9 @@ describe("Ruling ebefe65f61801c9c — while the move trigger is on the chain you
     expect(game.gameState.interaction?.showdownStack?.some((s) => s.active)).toBeFalsy();
   });
 
-  // The engine treats the contested battlefield as already "one you're attacking" while the arrival trigger is
-  // still on the chain, so it offers bf1 as a destination for Rengar.
-  test.failing("BUG: ruling ebefe65f61801c9c — Rengar should NOT be playable to the contested bf1 while the move trigger is on the chain (no attacker designation yet); the engine offers it", async () => {
+  // rule 464.2.c.1: no attacker designation exists while the arrival trigger is still on the chain, so
+  // "a battlefield you're attacking" names nothing and bf1 is not a legal destination for Rengar.
+  test("ruling ebefe65f61801c9c — Rengar is NOT playable to the contested bf1 while the move trigger is on the chain (no attacker designation yet)", async () => {
     const game = await board().build();
     await game.p1.move("merchant", "bf1");
     expect(destinations(game)).not.toContain("battlefield-bf1");

@@ -1154,6 +1154,12 @@ export function battlefieldHasEnemyUnits(
 /**
  * rule 464.2.a — a player is attacking a battlefield for as long as their
  * Standard Move contests it (the showdown/combat is still open).
+ *
+ * rule 464.2.c.1 (ruling ebefe65f61801c9c) — Contested is a STATUS put on the
+ * battlefield on arrival (344.2); the Attacker designation is only handed out
+ * when the showdown actually BEGINS, which cannot happen while the arrival's
+ * own triggers are still on the chain (320/336 need an Open State). So a
+ * merely-staged showdown is not yet a battlefield you're attacking.
  */
 export function battlefieldIsAttackedBy(
   state: RiftboundGameState,
@@ -1161,7 +1167,18 @@ export function battlefieldIsAttackedBy(
   playerId: string,
 ): boolean {
   const bf = state.battlefields?.[bfId];
-  return bf?.contested === true && bf.contestedBy === playerId;
+  if (bf?.contested !== true || bf.contestedBy !== playerId) {
+    return false;
+  }
+  // The designations are live once the showdown has actually BEGUN, and stay live through the
+  // combat and its 466.2 window (`showdownComplete`). A showdown merely STAGED by the arrival —
+  // the arrival's own triggers are still on the chain — has handed out no designation yet.
+  if (bf.showdownComplete === true) {
+    return true;
+  }
+  return (state.interaction?.showdownStack ?? []).some(
+    (sd) => sd.active === true && sd.battlefieldId === bfId,
+  );
 }
 
 /**
