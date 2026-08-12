@@ -2855,6 +2855,15 @@ export const activateAbility: Defs["activateAbility"] = {
         },
         { cards: context.cards, counters: context.counters, draft, zones: context.zones },
       );
+      // rule 364.3 / 465.2 — an immediate [Add] never reaches the chain, so this
+      // is the only recalc it gets: costs paid to activate it (a Gold killing
+      // itself) change "for each gear you control" statics right now, not when
+      // some later chain item resolves.
+      recalculateStaticEffects({
+        cards: context.cards,
+        draft,
+        zones: context.zones,
+      } as unknown as Parameters<typeof recalculateStaticEffects>[0]);
       return;
     }
 

@@ -270,12 +270,30 @@ export function zoneCards(engine: HarnessEngine, zone: string, owner?: Seat): st
   // while still being owned by its original player. Hidden/owned zones (hand,
   // deck, trash, banishment) stay owner-split.
   if (isBoardZone(zone)) {
-    return z.cardIds.filter((id) => {
-      const inst = internal.cards[id];
-      return (inst?.controller ?? inst?.owner) === owner;
-    });
+    return z.cardIds.filter((id) => boardSideOf(internal, id) === owner);
   }
   return z.cardIds.filter((id) => internal.cards[id]?.owner === owner);
+}
+
+/**
+ * Which player's side of a board zone a card sits on.
+ *
+ * rule 434.4 / 718.5.c: an attached card is located wherever its top-most card
+ * is, and control of the two may differ (718.5.f) — so an Equipment follows its
+ * host's side even while its own controller is the opponent.
+ */
+function boardSideOf(
+  internal: ReturnType<typeof getInternalState>,
+  cardId: string,
+  seen: Set<string> = new Set(),
+): string | undefined {
+  const inst = internal.cards[cardId];
+  const host = (internal.cardMetas?.[cardId] as { attachedTo?: string } | undefined)?.attachedTo;
+  if (typeof host === "string" && internal.cards[host] && !seen.has(cardId)) {
+    seen.add(cardId);
+    return boardSideOf(internal, host, seen);
+  }
+  return inst?.controller ?? inst?.owner;
 }
 
 function isBoardZone(zone: string): boolean {

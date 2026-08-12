@@ -917,7 +917,12 @@ export class SeatHandle {
       const t = this.game.state(id).cardType;
       return t === "gear" || t === "equipment";
     };
-    const out = this.base().filter(isGear);
+    // rule 718.5.f: "your gear" follows CONTROL, while an attached card's
+    // LOCATION follows its host (434.4 / 718.5.c) — so this reads controller
+    // directly instead of the location-split `base()`.
+    const out = this.game
+      .cardsAt("base")
+      .filter((id) => isGear(id) && this.game.state(id).controller === this.seat);
     // rule 811.1.d.1 (sfd-139-221) — a gear played from [Hidden] enters AT the
     // battlefield it was hidden at and stays there until a Cleanup recalls it
     // (rule 518), so loose gear at a battlefield is this seat's gear too.
