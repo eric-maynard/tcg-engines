@@ -2423,6 +2423,13 @@
       cursor: pointer;
     }
     .card.needs-add:hover { opacity: 1; outline-color: rgba(255, 214, 122, .9); }
+    /* A refusal carries its cause: a card the STATE forbids (wrong timing, a
+       "can't play spells this turn" rider, a static that forbids the play) is
+       marked so it reads as blocked rather than broken. The engine's own reason
+       — naming the blocking object and its rule — is the card's tooltip, and
+       clicking it says the same thing in the toast. */
+    .card.blocked-play { outline: 1px dotted rgba(255, 138, 138, .45); outline-offset: 1px; opacity: .72; }
+    .card.blocked-play:hover { opacity: .95; outline-color: rgba(255, 138, 138, .8); }
     /* [rule:809.1.d/429.3] The board twin of `.choice-modal-card--needs-add`: a
        play-time target whose [Deflect] surcharge is reachable but unpaid stays
        on the board, dimmed and dashed, instead of dropping out of the glow. It

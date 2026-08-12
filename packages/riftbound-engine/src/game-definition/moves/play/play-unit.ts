@@ -32,6 +32,7 @@ import {
   computeUnitPlayOptions,
   payUnitPlayCosts,
   resolveSubmittedUnitPlay,
+  unitPlayDestinationRefusal,
   unitPlayOptionParams,
 } from "./play-options";
 
@@ -103,15 +104,30 @@ export const playUnit: Defs["playUnit"] = {
     if (!origin) {
       return false;
     }
-    return (
+    const io = { cards: context.cards, counters: context.counters, zones: context.zones };
+    if (
       resolveSubmittedUnitPlay(
         state,
-        { cards: context.cards, counters: context.counters, zones: context.zones },
+        io,
         playerId,
         cardId,
         origin,
         context.params as SubmittedUnitPlay,
       ) !== undefined
+    ) {
+      return true;
+    }
+    // A refusal must carry its cause: when the submitted destination is one a
+    // board static forbids, say WHICH permanent forbids it rather than letting
+    // the missing option read as a claim about the battlefield.
+    return (
+      unitPlayDestinationRefusal(
+        state,
+        io,
+        playerId,
+        cardId,
+        (context.params as SubmittedUnitPlay).location as string | undefined,
+      ) ?? false
     );
   },
   enumerator: (state, context) => {

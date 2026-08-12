@@ -8,6 +8,7 @@
 
 import type { PlayerId } from "@tcg/core";
 import { getGlobalCardRegistry } from "../operations/card-lookup";
+import { refusalOf } from "../game-definition/refusal";
 import { getDepartedOwner } from "../operations/leave-board";
 import { readTurnTrace } from "../game-definition/flow/expiration-step";
 import type { TurnTrace } from "../game-definition/flow/expiration-step";
@@ -1102,11 +1103,17 @@ export class SeatHandle {
         return new HarnessError({ code: "CARD_NOT_FOUND", detail: { card }, message: `${why}: no card "${card}"` });
       }
       const rows = this.game.engine.enumerateMoves(this.seat as PlayerId, { moveIds: [moveId], validOnly: false });
-      const row = rows.find((m) => {
+      const mineFor = rows.filter((m) => {
         const p = (m.params ?? {}) as Record<string, unknown>;
         return (p.cardId ?? p.runeId ?? p.unitId) === card && !m.isValid;
       });
-      if (row?.validationError) {
+      // A refusal must carry its cause: prefer the row that NAMES the blocking
+      // object and its rule over a generic "condition not met" row.
+      const row = mineFor.find((m) => refusalOf(m.validationError) !== undefined) ?? mineFor[0];
+      const refusal = refusalOf(row?.validationError);
+      if (refusal) {
+        reason = ` — ${refusal.message}`;
+      } else if (row?.validationError) {
         reason = ` — engine: ${row.validationError.errorCode}: ${row.validationError.reason}`;
       } else {
         const s = this.game.state(card);

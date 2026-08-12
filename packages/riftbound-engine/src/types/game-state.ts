@@ -1917,6 +1917,14 @@ export interface RiftboundGameState {
   cannotPlaySpellsThisTurn?: Record<string, number>;
 
   /**
+   * rule 054.1 — per restricted player, the card that imposed the
+   * `cannotPlaySpellsThisTurn` rider, so the refusal can NAME it instead of
+   * failing with a bare "condition not met". Advisory only: the restriction
+   * itself is `cannotPlaySpellsThisTurn`.
+   */
+  cannotPlaySpellsSource?: Record<string, string>;
+
+  /**
    * Keys of `"next"`-duration replacements that have already fired this turn.
    *
    * Replacement abilities with `duration: "next"` (e.g., Tactical Retreat,

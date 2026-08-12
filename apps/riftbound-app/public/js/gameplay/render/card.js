@@ -189,7 +189,15 @@ function renderCardElement(card, isFacedown = false, zone = "") {
   // Legend cards with moves are interactive; an own legend with a printed
   // activated ability still takes the click when it has no move, so its action
   // bar can say WHY (exhausted / can't pay / not your turn) instead of nothing.
-  const addHint = oneAddAway && typeof reachablePlayHint === "function" ? reachablePlayHint(card.id) : "";
+  // A refusal carries its cause: when the engine withholds this card for a
+  // STATE reason (timing, a rider, a forbidding static) it ships the reason on
+  // the snapshot, so an un-playable card explains itself on hover instead of
+  // reading as inert (see interactions.js engineBlockReason).
+  const blockedWhy =
+    isOwned && !isPlayable && typeof engineBlockReason === "function" ? engineBlockReason(card.id) : "";
+  const addHint =
+    (oneAddAway && typeof reachablePlayHint === "function" ? reachablePlayHint(card.id) : "") || blockedWhy;
+  if (blockedWhy) classes.push("blocked-play");
   const hasPrintedAbility = isLegendZone && isOwned && typeof activatedAbilitySegments === "function" && activatedAbilitySegments(card).length > 0;
   const pointerAttr = (isLegendZone && !isPlayable && !hasPrintedAbility)
     ? ""

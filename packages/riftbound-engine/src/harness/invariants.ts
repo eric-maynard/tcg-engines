@@ -297,6 +297,36 @@ export const costPaid: Invariant = {
       if (!cardId) {
         continue;
       }
+      const before0 = prev.state.runePools[ex.seat];
+      const after0 = cur.state.runePools[ex.seat];
+      // rule 356.4 — a QUOTED price must be the price that is charged. When the
+      // play carries the quote the enumerator showed (`play-options.ts`), that
+      // quote IS the oracle: it already contains the variant's additional costs,
+      // discounts and [Deflect] instalment. Reading the card's PRINTED cost
+      // instead flagged every correctly-charged discounted play as a violation.
+      const quote = ex.params.quote as
+        | { energy?: number; any?: number; power?: Record<string, number>; free?: boolean }
+        | undefined;
+      if (quote && typeof quote.energy === "number" && before0 && after0 && step.executed.length === 1) {
+        const name = registry.get(cardId)?.name ?? cardId;
+        const spentEnergy = before0.energy - after0.energy;
+        if (spentEnergy !== quote.energy) {
+          out.push(
+            `${ex.moveId} ${name}: quoted energy ${quote.energy} but pool ${before0.energy}→${after0.energy}`,
+          );
+        }
+        const totalPower = (pool: typeof before0): number =>
+          Object.values(pool.power ?? {}).reduce<number>((a, n) => a + (n ?? 0), 0);
+        const quotedPower =
+          (quote.any ?? 0) + Object.values(quote.power ?? {}).reduce<number>((a, n) => a + (n ?? 0), 0);
+        const spentPower = totalPower(before0) - totalPower(after0);
+        if (spentPower !== quotedPower) {
+          out.push(
+            `${ex.moveId} ${name}: quoted power ${quotedPower} but pool ${totalPower(before0)}→${totalPower(after0)}`,
+          );
+        }
+        continue;
+      }
       const meta = prev.metas[cardId] as { costModifier?: number } | undefined;
       if (meta?.costModifier) {
         continue;

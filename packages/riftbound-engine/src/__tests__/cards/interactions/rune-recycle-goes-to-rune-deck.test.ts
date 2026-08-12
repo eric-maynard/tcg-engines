@@ -165,11 +165,10 @@ describe("Sigil of the Storm × Karma × Battle Mistress — a rune recycles to 
     expect(game.violations()).toEqual([]);
   });
 
-  test.failing("BUG: the recycle prompt never names the destination deck — a rune recycle must read 'bottom of your Rune Deck' (416.1/416.1.b), not a blanket 'recycle'", async () => {
-    // Expected: the prompt the player answers states where the card is going, and the two cases
-    // read differently — "Rune Deck" for a rune (416.1.b), "Main Deck" for a Main Deck card
-    // (416.1.a) — so nobody reads the rune recycle as a card recycle Karma would see.
-    // Actual: both prompts are the same generic "Pick a revealed card to recycle" with no deck named.
+  test("the recycle prompt names the destination deck — a rune recycle reads 'bottom of your Rune Deck' (416.1/416.1.b), not a blanket 'recycle'", async () => {
+    // The prompt the player answers states where the card is going, and the two cases read
+    // differently — "Rune Deck" for a rune (416.1.b), "Main Deck" for a Main Deck card (416.1.a) —
+    // so nobody reads the rune recycle as a card recycle Karma would see.
     const runeGame = await sigilBoard().build();
     await runeGame.p1.move("walker", "bf1");
     await runeGame.settle();

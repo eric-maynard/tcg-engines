@@ -153,12 +153,12 @@ describe("Mageseeker Warden × Here to Help / Deadbloom Predator", () => {
     expect(absent.locationOf("pred")).toBe("bfB");
   });
 
-  test.failing("BUG: the refusal names no cause — a client cannot tell the player the Mageseeker Warden is why bfB vanished (358.3.a)", async () => {
+  test("the refusal names its cause — the client can tell the player the Mageseeker Warden is why bfB is unavailable (358.3.a)", async () => {
     const game = await board("bfB").build();
     const attempt = await game.p1.try((p) => p.play("pred", { to: "bfB" }));
     expect(attempt.ok).toBe(false);
-    // Expected: a reason naming the Warden (never the occupied-battlefield rule, which Predator
-    // is printed to beat). Actual: "no legal variant matches to=\"bfB\"" — cause-free.
+    // The reason names the Warden (never the occupied-battlefield rule, which Predator is printed
+    // to beat): the play's own condition produces it, and the harness carries it onto the error.
     expect((attempt as { error: { message: string } }).error.message).toContain("Mageseeker Warden");
   });
 

@@ -15,7 +15,9 @@
  */
 
 import type { CardId, PlayerId } from "@tcg/core";
-import { costElectionHalves, playCostShortfall } from "../game-definition/moves/play/cost";
+import { costElectionHalves, playCostShortfall, resourceCostShortfall } from "../game-definition/moves/play/cost";
+import type { Refusal } from "../game-definition/refusal";
+import { refusalOf } from "../game-definition/refusal";
 
 /** The play moves a hand card can be offered through (rule 419.1). */
 const PLAY_MOVE_IDS = ["playUnit", "playGear", "playSpell"] as const;
@@ -98,6 +100,15 @@ export interface DecisionContext {
   label(card: CardRef): string;
   /** Optional legality probe for non-enumerated knobs (X). */
   canExecute?(seat: Seat, moveId: string, params: Record<string, unknown>): boolean;
+  /**
+   * A refusal must carry its cause. Why a candidate no enumerator offered would
+   * be refused — asked of the move's own `condition`, so the answer comes from
+   * the site that made the decision (see `game-definition/refusal.ts`). Used
+   * when a caller names a destination/group the enumeration does not contain:
+   * without it the harness could only say "no legal variant matches", which
+   * reads as a claim about the argument rather than about the blocker.
+   */
+  explain?(seat: Seat, moveId: string, params: Record<string, unknown>): Refusal | undefined;
   /** A seat's hand (owner-scoped). Only needed for the pregame mulligan prompt (rule 117). */
   handOf?(seat: Seat): readonly CardRef[];
   /** A seat's registered battlefields still awaiting its pick (rule 113 / 486.5). */
@@ -332,6 +343,38 @@ export function effectPlayShortfallsOf(
 }
 
 /**
+ * rule 356.4 — the shortfall of the price a play was QUOTED, when the enumerated
+ * variant carries one.
+ *
+ * `PlayCostQuote` is what `play-options.ts` computed and what `payUnitPlayCosts`
+ * will charge, so measuring it against the pool is the only way the pay line and
+ * the charge cannot disagree — pricing the card's PRINTED cost instead reported
+ * a pip-only shortfall on a discounted play as "4 missing Energy", the shortfall
+ * of a variant nobody was offered. `undefined` when the variant carries no quote
+ * (spells price through `playCostShortfall`) or when the pool covers it.
+ */
+function shortfallOfQuote(
+  state: RiftboundGameState,
+  seat: string,
+  cardId: string,
+  quote: unknown,
+): { energy: number; power: Record<string, number> } | undefined {
+  const q = quote as
+    | { energy?: number; any?: number; power?: Record<string, number>; free?: boolean }
+    | undefined;
+  if (!q || typeof q.energy !== "number") {
+    return undefined;
+  }
+  return resourceCostShortfall(state, seat, cardId, {
+    any: q.any ?? 0,
+    energy: q.energy,
+    free: q.free === true,
+    ignoreEnergy: false,
+    named: { ...(q.power ?? {}) },
+  });
+}
+
+/**
  * rule 357.1.a / 429.3 — the plays the seat could pay for after one Reaction
  * [Add] but cannot pay for right now.
  *
@@ -378,7 +421,7 @@ export function reachablePlaysOf(
   /** key → what that listed variant owes, to keep the cheapest pay line. */
   const owedBy = new Map<string, number>();
   for (const m of of(false)) {
-    const params = (m.params ?? {}) as { cardId?: unknown; targets?: unknown };
+    const params = (m.params ?? {}) as { cardId?: unknown; targets?: unknown; quote?: unknown };
     const cardId = params.cardId;
     if (typeof cardId !== "string") {
       continue;
@@ -396,15 +439,21 @@ export function reachablePlaysOf(
     const targets = Array.isArray(params.targets)
       ? params.targets.filter((t): t is string => typeof t === "string")
       : [];
-    const short = playCostShortfall(
-      state,
-      seat,
-      cardId,
-      { board, ...(targets.length > 0 ? { targets } : {}) } as Parameters<
-        typeof playCostShortfall
-      >[3],
-      (id: CardId) => internal.cardMetas[id as string],
-    );
+    // rule 356.4 — the quoted price must be the price that WILL be charged. The
+    // enumerated variant carries the total the reducer will pay (`quote`, from
+    // the one cost model in `play-options.ts`), which already has the variant's
+    // optional additional cost and its discount in it.
+    const short =
+      shortfallOfQuote(state, seat, cardId, params.quote) ??
+      playCostShortfall(
+        state,
+        seat,
+        cardId,
+        { board, ...(targets.length > 0 ? { targets } : {}) } as Parameters<
+          typeof playCostShortfall
+        >[3],
+        (id: CardId) => internal.cardMetas[id as string],
+      );
     if (!short) {
       continue;
     }
@@ -468,6 +517,8 @@ export function engineDecisionContext(
     autoProcedures,
     canExecute: (seat, moveId, params) =>
       engine.canExecuteMove(moveId, { params, playerId: seat as PlayerId }),
+    explain: (seat, moveId, params) =>
+      refusalOf(engine.explainMove(moveId, { params, playerId: seat as PlayerId })),
     // rule 356.4.b — the board statics that carry an "[N] or [rainbow] less"
     // discount live in the engine's zones, so read them the same way the play
     // itself does (a read-only view; `updateCardMeta` is never called here).
@@ -1328,7 +1379,7 @@ export function deriveFromPendingChoice(ctx: DecisionContext, pc: PendingChoice)
         meta: { onPicked: pc.onPicked, onRest: pc.onRest, remaining: pc.remaining, revealer: pc.revealer },
         min: allowDecline ? 0 : 1,
         options,
-        prompt: `Pick ${pc.remaining && pc.remaining > 1 ? `${pc.remaining} revealed cards` : "a revealed card"} to ${pc.onPicked}${allowDecline ? " (or decline)" : ""}`,
+        prompt: `Pick ${pc.remaining && pc.remaining > 1 ? `${pc.remaining} revealed cards` : "a revealed card"} to ${pc.onPicked}${recycleDestinationNote(pc.onPicked, options)}${allowDecline ? " (or decline)" : ""}`,
         semantics: "from-revealed",
       };
       return d;
@@ -2182,7 +2233,13 @@ function sameOrdered(a: readonly unknown[], b: readonly unknown[]): boolean {
   return a.length === b.length && a.every((x, i) => String(x) === String(b[i]));
 }
 
-type Constraint = { param: string; test: (v: unknown, params: Readonly<Record<string, unknown>>) => boolean; describe: unknown };
+type Constraint = {
+  param: string;
+  test: (v: unknown, params: Readonly<Record<string, unknown>>) => boolean;
+  describe: unknown;
+  /** Engine-shaped value for this param, so a refused candidate can be PROBED (see `explainRefusal`). */
+  probe?: unknown;
+};
 
 function constraintsFrom(option: ActionOption, args: PlayArgs): Constraint[] {
   const cs: Constraint[] = [];
@@ -2248,7 +2305,14 @@ function constraintsFrom(option: ActionOption, args: PlayArgs): Constraint[] {
           : option.moveId === "hideCard"
             ? "battlefieldId"
             : "location";
-    cs.push({ describe: args.to, param: locParam, test: (v) => normLoc(v) === want });
+    cs.push({
+      describe: args.to,
+      param: locParam,
+      // `location` is a ZONE id ("battlefield-bfB"); the other three name the
+      // battlefield bare. Both shapes are needed to probe a refused destination.
+      probe: locParam === "location" ? (want === "base" ? "base" : `battlefield-${want}`) : want,
+      test: (v) => normLoc(v) === want,
+    });
   }
   if (args.costs !== undefined) {
     const want = args.costs;
@@ -2352,6 +2416,54 @@ function choiceFor(ctx: DecisionContext, field: string, value: unknown, card?: C
   return { key: typeof value === "string" ? value : canonicalJson(value), label: String(value), value };
 }
 
+/**
+ * rule 416.1.a / 416.1.b (424.4.a) — a recycle goes to the bottom of the
+ * CORRESPONDING deck, and which deck that is changes what the answer means: a
+ * rune returns to the Rune Deck, a Main Deck card to the Main Deck. Both read
+ * as a bare "recycle" otherwise — the same prompt for two different things.
+ */
+function recycleDestinationNote(onPicked: string | undefined, options: readonly PickOption[]): string {
+  if (onPicked !== "recycle" || options.length === 0) {
+    return "";
+  }
+  const registry = getGlobalCardRegistry();
+  const runes = options.filter((o) => registry.getCardType(o.card as string) === "rune").length;
+  if (runes === options.length) {
+    return " (to the bottom of your Rune Deck)";
+  }
+  if (runes === 0) {
+    return " (to the bottom of your Main Deck)";
+  }
+  return " (to the bottom of its own deck — a rune to your Rune Deck, a card to your Main Deck)";
+}
+
+/**
+ * Why the engine refuses the candidate the caller named, when no enumerated
+ * variant matches it. The candidate is rebuilt in ENGINE shape (a representative
+ * variant's params, overridden by what the caller asked for) and handed to the
+ * move's own `condition` — the one site that decides legality — so the reason
+ * names the blocking object and its rule instead of the argument.
+ */
+function explainRefusal(
+  ctx: DecisionContext,
+  option: ActionOption,
+  constraints: readonly Constraint[],
+): Refusal | undefined {
+  const sample = option.variants[0];
+  if (!sample || !ctx.explain) {
+    return undefined;
+  }
+  const params: Record<string, unknown> = { ...sample.params };
+  for (const c of constraints) {
+    params[c.param] = c.probe ?? c.describe;
+  }
+  try {
+    return ctx.explain(sample.playerId, option.moveId, params);
+  } catch {
+    return undefined;
+  }
+}
+
 export function narrowVariants(ctx: DecisionContext, option: ActionOption, args: PlayArgs): NarrowResult {
   // rule 820.2.a — `modes` (one per [Repeat] execution) is never enumerated:
   // it rides straight onto the chosen variant together with its `targets`.
@@ -2377,6 +2489,11 @@ export function narrowVariants(ctx: DecisionContext, option: ActionOption, args:
   const constraints = constraintsFrom(option, args);
   let variants = option.variants.filter((v) => constraints.every((c) => c.test(v.params[c.param], v.params)));
   if (variants.length === 0) {
+    // A refusal must carry its cause: ask the move's own `condition` about the
+    // exact candidate the caller named. "no legal variant matches to=\"bfB\""
+    // reads as a claim about bfB; the engine knows it is the Mageseeker Warden,
+    // or the unit in the group that has no [Ganking].
+    const refusal = explainRefusal(ctx, option, constraints);
     return {
       error: {
         code: "ILLEGAL_ARGS",
@@ -2384,8 +2501,11 @@ export function narrowVariants(ctx: DecisionContext, option: ActionOption, args:
           fields: option.fields.map((f) => ({ arg: f.arg, name: f.name, options: f.options })),
           given: constraints.map((c) => ({ [c.param]: c.describe })),
           option: option.key,
+          ...(refusal ? { refusal } : {}),
         },
-        message: `${option.label}: no legal variant matches ${constraints.map((c) => `${PARAM_ARG[c.param]?.arg ?? c.param}=${canonicalJson(c.describe)}`).join(", ")}`,
+        message: refusal
+          ? `${option.label}: ${refusal.message}`
+          : `${option.label}: no legal variant matches ${constraints.map((c) => `${PARAM_ARG[c.param]?.arg ?? c.param}=${canonicalJson(c.describe)}`).join(", ")}`,
       },
       type: "none",
     };

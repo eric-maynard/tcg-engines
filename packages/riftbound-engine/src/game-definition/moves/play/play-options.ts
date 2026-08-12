@@ -39,6 +39,7 @@
 
 import type {
   CardId as CoreCardId,
+  ConditionFailure,
   PlayerId as CorePlayerId,
   ZoneId as CoreZoneId,
 } from "@tcg/core";
@@ -48,6 +49,7 @@ import { fireTriggers } from "../../../abilities/trigger-runner";
 import { executeEffect } from "../../../abilities/effect-executor";
 import { resolveTarget } from "../../../abilities/target-resolver";
 import { playIsForbidden, selfPlayIsForbidden } from "../../../abilities/play-restrictions";
+import { nameOf, refuse } from "../../refusal";
 import { createInteractionState, getActiveShowdown, getTurnState } from "../../../chain";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
 import { isGrantedAdditionalCostId } from "../../../operations/additional-costs-paid";
@@ -81,6 +83,7 @@ import {
   getOccupiedBattlefieldPermission,
   hasPlayFromTrashGrant,
   opponentsRestrictedToBase,
+  opponentsRestrictedToBaseSource,
   payResourceCost,
   playOnlyToConqueredBattlefield,
   recordPowerSpent,
@@ -462,6 +465,54 @@ function costCandidates(
  * restriction forbids (054.1 Mageseeker Warden, "units can't be played here",
  * "play me only to a battlefield you conquered this turn").
  */
+/**
+ * A refusal must carry its cause: WHY a destination this play cannot use is
+ * missing from `unitPlayDestinations`. Decided here, beside the omission, so
+ * the two can never drift — a play refused for a destination the board forbids
+ * reports the forbidding permanent by name instead of "no legal variant".
+ * `undefined` = the destination is not forbidden by a static (it is refused for
+ * some other reason: cost, origin, timing).
+ */
+export function unitPlayDestinationRefusal(
+  state: RiftboundGameState,
+  io: PlayOptionIO,
+  playerId: string,
+  cardId: string,
+  location: string | undefined,
+): ConditionFailure | undefined {
+  const registry = getGlobalCardRegistry();
+  const type = registry.getCardType(cardId);
+  if (type === "gear" || type === "equipment" || !location || location === "base") {
+    return undefined;
+  }
+  const bfId = isBattlefieldZone(location) ? (extractBattlefieldId(location) ?? location) : location;
+  // rule 358.3.a / 355.2 — "opponents can only play units to their base".
+  const zones = io.zones;
+  if (typeof zones?.getCardsInZone === "function") {
+    const warden = opponentsRestrictedToBaseSource(state, zones, playerId);
+    if (warden) {
+      return refuse({
+        code: "PLAY_RESTRICTED_TO_BASE",
+        object: warden,
+        rule: "358.3.a",
+        subject: cardId,
+        text: `while it is at a battlefield you can only play units to your base, so ${nameOf(cardId)} can't be played at ${bfId}`,
+      });
+    }
+  }
+  // rule 358.3.a — a battlefield that forbids unit plays outright.
+  if (battlefieldForbidsUnitPlay(bfId)) {
+    return refuse({
+      code: "PLAY_FORBIDDEN_BY_STATIC",
+      object: bfId,
+      rule: "358.3.a",
+      subject: cardId,
+      text: `no units can be played here, so ${nameOf(cardId)} can't be played at ${bfId}`,
+    });
+  }
+  return undefined;
+}
+
 export function unitPlayDestinations(
   state: RiftboundGameState,
   io: PlayOptionIO,

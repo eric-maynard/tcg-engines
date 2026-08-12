@@ -83,6 +83,10 @@ export {
   surchargedPlayTargetsOf,
 } from "./decision";
 export type { DecisionContext, NarrowResult } from "./decision";
+// A refusal must carry its cause: the shared refusal vocabulary every surface
+// reads (engine condition → enumeration → harness error → app snapshot → UI).
+export { nameOf, refuse, refusalOf } from "../game-definition/refusal";
+export type { Refusal, RefusalCode } from "../game-definition/refusal";
 export { applyMove, endTurn, nextPlayerAfter, PROCEDURE_MOVES, runProcedures } from "./turn-driver";
 export type { ApplyMoveOptions, ApplyMoveResult, EndTurnResult, ProcedureRun } from "./turn-driver";
 export { observe, listZoneSummaries, isPrivateZone, isSecretZone, canSee } from "./observation";

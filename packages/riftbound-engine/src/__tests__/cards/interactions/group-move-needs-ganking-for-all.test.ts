@@ -112,13 +112,12 @@ describe("group Standard Move — [Ganking] is needed by EVERY unit in the group
     expect(game.locationOf("guardian")).toBe("base");
   });
 
-  test.failing("BUG: the refusal blames nothing — it must name Sunlit Guardian and the missing [Ganking], not the destination (144.4.c.1 / 810)", async () => {
+  test("the refusal names Sunlit Guardian and the missing [Ganking], not the destination (144.4.c.1 / 810)", async () => {
     const game = await board("bfA").build();
     const group = await game.p1.try((p) => p.move(["ledros", "guardian"], "bfB"));
     expect(group.ok).toBe(false);
-    // Expected: "Sunlit Guardian has no [Ganking], so it can't move battlefield-to-battlefield."
-    // Actual: `no legal variant matches units=["ledros","guardian"], to="bfB"` — which reads as a
-    // claim about bfB, the one thing that is fine.
+    // "Sunlit Guardian: it has no [Ganking], so it can't move battlefield-to-battlefield" — the
+    // unit that cannot take the leg, not bfB, which is the one thing that is fine.
     const message = (group as { error: { message: string } }).error.message;
     expect(message).toContain("Sunlit Guardian");
     expect(message).toContain("Ganking");

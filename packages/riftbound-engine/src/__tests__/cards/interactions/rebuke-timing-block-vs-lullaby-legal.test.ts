@@ -98,12 +98,10 @@ describe("Rebuke [Action] is blocked while Lilting Lullaby [Reaction] is legal, 
     expect(game.p1.legal().map((o) => o.verb)).toContain("passPriority");
   });
 
-  // Expected (331.1.a / 338.1.a.2 / 159.2.a.1): a refused click must carry the reason that refused
-  // it — "[Action]: only on your turn or in a showdown" — so the client can render it on the card.
-  // Actual: the engine emits NO row at all for Rebuke, valid or invalid, so there is nothing to
-  // render: `enumerateMoves(validOnly:false)` returns only the Lullaby row and the harness falls
-  // back to "rebuke is in hand". A dead click.
-  test.failing("BUG: the refusal names no reason — an illegally-timed [Action] is not even enumerated as an invalid move (331.1.a, 338.1.a.2, 159.2.a.1)", async () => {
+  // 331.1.a / 338.1.a.2 / 159.2.a.1 — a refused click carries the reason that refused it, so the
+  // client can render it on the card. The enumerator emits the blocked card as an INVALID row
+  // (`enumerateMoves(validOnly:false)`) and `playSpell.condition` names the timing on it.
+  test("REFUSAL 1b — an illegally-timed [Action] is enumerated as an INVALID move whose reason names the timing (331.1.a, 338.1.a.2, 159.2.a.1)", async () => {
     const game = await opponentSpellPending();
     const rows = game.engine.enumerateMoves(P1 as PlayerId, { moveIds: ["playSpell"], validOnly: false });
     const rebukeRow = rows.find((m) => (m.params as { cardId?: string }).cardId === game.card("rebuke"));
@@ -186,10 +184,9 @@ describe("Rebuke [Action] is blocked while Lilting Lullaby [Reaction] is legal, 
     expect(d.endTurnKey ?? d.passKey).toBeDefined();
   });
 
-  // Expected (054.1): the refusal that the rider causes must name the rider — the player has to be
-  // told WHY their spell will not go. Actual: a bare "CONDITION_FAILED: Move 'playSpell' condition
-  // not met", identical to every other unmet play condition.
-  test.failing("BUG: the rider's refusal does not name the restriction (054.1)", async () => {
+  // 054.1 — the refusal the rider causes names the rider itself, so the player is told WHY their
+  // spell will not go rather than getting a bare "condition not met".
+  test("REFUSAL 3b — the rider's refusal names the restriction (054.1)", async () => {
     const game = await opponentSpellPending();
     await game.p1.cast("lullaby", { targets: "bolt" });
     await game.settle();

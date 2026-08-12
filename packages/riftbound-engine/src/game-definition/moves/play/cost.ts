@@ -839,6 +839,19 @@ export function opponentsRestrictedToBase(
   zones: { getCardsInZone: (zone: CoreZoneId, player: CorePlayerId) => readonly CoreCardId[] },
   playerId: string,
 ): boolean {
+  return opponentsRestrictedToBaseSource(state, zones, playerId) !== undefined;
+}
+
+/**
+ * The same scan, returning the card id that imposes the restriction — a refusal
+ * must be able to NAME the Warden rather than reporting a missing destination.
+ * `opponentsRestrictedToBase` is the boolean face of this one decision.
+ */
+export function opponentsRestrictedToBaseSource(
+  state: RiftboundGameState,
+  zones: { getCardsInZone: (zone: CoreZoneId, player: CorePlayerId) => readonly CoreCardId[] },
+  playerId: string,
+): string | undefined {
   const registry = getGlobalCardRegistry();
   for (const bfId of Object.keys(state.battlefields ?? {})) {
     const zoneId = getBattlefieldZoneId(bfId) as CoreZoneId;
@@ -859,13 +872,13 @@ export function opponentsRestrictedToBase(
             effect.appliesTo === "opponents" &&
             effect.allowedLocation === "their base"
           ) {
-            return true;
+            return cardId as string;
           }
         }
       }
     }
   }
-  return false;
+  return undefined;
 }
 
 /**
@@ -3296,11 +3309,32 @@ export function playCostShortfall(
   extras: CostExtras,
   getCardMeta?: (cardId: CoreCardId) => Partial<RiftboundCardMeta> | undefined,
 ): { energy: number; power: Record<string, number> } | undefined {
+  return resourceCostShortfall(
+    state,
+    playerId,
+    cardId,
+    computePlayResourceCost(state, playerId, cardId, extras, getCardMeta, false),
+  );
+}
+
+/**
+ * The pool half of `playCostShortfall`: what is still owed once THIS cost meets
+ * the pool. Split out because the quoted price of a play is not always the
+ * printed one — an enumerated variant that pays an optional additional cost
+ * carries its own `PlayResourceCost`, and quoting the printed cost instead is
+ * how a pip-only shortfall came to be reported as missing Energy. Both callers
+ * therefore price the SAME cost object the play will charge (rule 356.4).
+ */
+export function resourceCostShortfall(
+  state: RiftboundGameState,
+  playerId: string,
+  cardId: string,
+  cost: PlayResourceCost,
+): { energy: number; power: Record<string, number> } | undefined {
   const pool = state.runePools[playerId];
   if (!pool) {
     return undefined;
   }
-  const cost = computePlayResourceCost(state, playerId, cardId, extras, getCardMeta, false);
   if (cost.free) {
     return undefined;
   }

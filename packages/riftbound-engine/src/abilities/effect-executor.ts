@@ -325,6 +325,7 @@ function applyLinkedSpellPlayRestriction(effect: ExecutableEffect, ctx: EffectCo
   }
   const draft = ctx.draft as unknown as {
     cannotPlaySpellsThisTurn?: Record<string, number>;
+    cannotPlaySpellsSource?: Record<string, string>;
     lastCounterTargetId?: string;
     turn: { number: number };
   };
@@ -345,4 +346,8 @@ function applyLinkedSpellPlayRestriction(effect: ExecutableEffect, ctx: EffectCo
   }
   draft.cannotPlaySpellsThisTurn ??= {};
   draft.cannotPlaySpellsThisTurn[victim] = draft.turn.number;
+  // rule 054.1 — remember WHICH card forbade it, so the refusal can name it
+  // instead of failing with a bare "condition not met".
+  draft.cannotPlaySpellsSource ??= {};
+  draft.cannotPlaySpellsSource[victim] = ctx.sourceCardId as string;
 }

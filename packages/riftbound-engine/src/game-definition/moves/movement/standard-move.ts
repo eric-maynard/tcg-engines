@@ -14,6 +14,7 @@ import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../.
 import type { PlayerId } from "../../../types/game-state";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
 import { areAllies } from "../../../operations/teams";
+import { refuse } from "../../refusal";
 import { fireTriggers } from "../../../abilities/trigger-runner";
 import {
   battlefieldAcceptsMoveFromAnywhere,
@@ -102,7 +103,12 @@ export const standardMove: Defs["standardMove"] = {
           (id: CoreCardId) => context.cards.getCardMeta(id) as Partial<RiftboundCardMeta> | undefined,
         )
       ) {
-        return false;
+        return refuse({
+          code: "MOVE_FORBIDDEN",
+          object: unitId as string,
+          rule: "350.1",
+          text: "it can't move this turn",
+        });
       }
       // Rule 144.4.b: base → battlefield, or battlefield → base.
       if (toBase) {
@@ -119,27 +125,40 @@ export const standardMove: Defs["standardMove"] = {
             (id: CoreCardId) => context.cards.getCardMeta(id) as Partial<RiftboundCardMeta> | undefined,
           )
         ) {
-          return false;
+          return refuse({
+            code: "MOVE_FORBIDDEN",
+            object: unitId as string,
+            rule: "144.4.b",
+            text: "it can't move to base",
+          });
         }
       } else if (zone !== "base") {
         // rule 144.3.a/b + 810.1.b — one Standard Move may gather units from
         // DIFFERENT Origins as long as they share a Destination; a
         // battlefield→battlefield leg is only open to a unit with Ganking.
-        if (
-          zone === undefined ||
-          !zone.startsWith("battlefield-") ||
-          zone === `battlefield-${destination}` ||
-          // rule 187.9 / unl-t01 — a destination with "Units can move here from
-          // anywhere" opens the battlefield→battlefield leg without Ganking.
-          (!battlefieldAcceptsMoveFromAnywhere(destination) &&
-            !hasKeyword(
-              unitId,
-              "Ganking",
-              (id: CoreCardId) =>
-                context.cards.getCardMeta(id) as Partial<RiftboundCardMeta> | undefined,
-            ))
-        ) {
+        if (zone === undefined || !zone.startsWith("battlefield-") || zone === `battlefield-${destination}`) {
           return false;
+        }
+        // rule 187.9 / unl-t01 — a destination with "Units can move here from
+        // anywhere" opens the battlefield→battlefield leg without Ganking.
+        if (
+          !battlefieldAcceptsMoveFromAnywhere(destination) &&
+          !hasKeyword(
+            unitId,
+            "Ganking",
+            (id: CoreCardId) =>
+              context.cards.getCardMeta(id) as Partial<RiftboundCardMeta> | undefined,
+          )
+        ) {
+          // A refusal must carry its cause: name the UNIT that cannot take the
+          // leg. Blaming the destination reads as a claim about the one thing
+          // that is fine (144.4.c.1 / 810.1.b).
+          return refuse({
+            code: "MOVE_NEEDS_GANKING",
+            object: unitId as string,
+            rule: "810.1.b",
+            text: `it has no [Ganking], so it can't move battlefield-to-battlefield (to ${destination})`,
+          });
         }
       }
 

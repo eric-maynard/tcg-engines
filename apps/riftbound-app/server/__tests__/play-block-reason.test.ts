@@ -18,6 +18,7 @@ import path from "node:path";
 interface Card { rulesText?: string }
 interface Api {
   playTimingBlockReason(card: Card | null): string | null;
+  engineBlockReason(cardId: string | null): string | null;
   cardPlaySpeed(card: Card | null): string;
 }
 
@@ -105,5 +106,92 @@ describe("playTimingBlockReason", () => {
   test("no card: no claim", () => {
     setState(openMain);
     expect(API.playTimingBlockReason(null)).toBeNull();
+  });
+});
+
+/**
+ * A refusal must carry its cause — end to end.
+ *
+ * `playTimingBlockReason` above is a HEURISTIC: it reads the turn state, so it
+ * can only ever describe timing and can never name the card that did it. The
+ * engine now decides the refusal where legality is decided and ships it on the
+ * snapshot (`buildBlockedPlays` → `blockedPlays`); the client prefers that over
+ * its own guess.
+ */
+describe("engineBlockReason — the ENGINE's reason wins over the client's guess", () => {
+  test("a blocked card's reason comes from the snapshot, naming the object and its rule", () => {
+    setState({
+      turn: { activePlayer: "player2", phase: "main" },
+      interaction: {},
+      blockedPlays: [
+        {
+          cardId: "c1",
+          moveId: "playSpell",
+          code: "SPELLS_FORBIDDEN_THIS_TURN",
+          rule: "054.1",
+          reason: "Lilting Lullaby: you can't play spells this turn (rule 054.1)",
+          objectId: "lullaby",
+          objectName: "Lilting Lullaby",
+        },
+      ],
+    });
+    expect(API.engineBlockReason("c1")).toBe("Lilting Lullaby: you can't play spells this turn (rule 054.1)");
+    // …and it is strictly better than the heuristic, which knows only the turn.
+    expect(API.playTimingBlockReason(standard)).toContain("Not your turn");
+  });
+
+  test("no row for the card, or no rows at all: no claim (the heuristic still gets its turn)", () => {
+    setState({ turn: { activePlayer: "player1", phase: "main" }, interaction: {}, blockedPlays: [] });
+    expect(API.engineBlockReason("c1")).toBeNull();
+    setState(openMain);
+    expect(API.engineBlockReason("c1")).toBeNull();
+    expect(API.engineBlockReason(null)).toBeNull();
+  });
+});
+
+describe("buildBlockedPlays — the server ships the engine's refusals to that client", () => {
+  test("an [Action] held while the opponent's chain is loaded rides on the snapshot with its cause", async () => {
+    const { P1, P2, scenario } = await import("@tcg/riftbound/harness");
+    const { buildBlockedPlays } = await import("../snapshot");
+    const REBUKE = "ogn-172-298"; // [Action]
+    const BOLT = {
+      abilities: [{ effect: { amount: 1, target: { type: "unit" }, type: "damage" }, timing: "action", type: "spell" }],
+      cardType: "spell",
+      domain: "fury",
+      energyCost: 1,
+      name: "Test Bolt",
+      timing: "action",
+    } as const;
+
+    const game = await scenario()
+      .active(P2)
+      .battlefield("bf1", { controller: P1 })
+      .unit(P1, "bf1", { might: 3, name: "Mine" }, "mine")
+      .unit(P2, "bf1", { might: 3, name: "Theirs" }, "theirs")
+      .resources(P1, { energy: 4, power: { chaos: 2, rainbow: 2 } })
+      .resources(P2, { energy: 3 })
+      .hand(P1, REBUKE, "rebuke")
+      .hand(P2, BOLT, "bolt")
+      .build();
+    await game.p2.cast("bolt", { targets: "mine" });
+    await game.p2.passPriority();
+
+    const session = {
+      clients: new Map(),
+      engine: game.engine,
+      log: [],
+      playerNames: { [P1]: "Dev", [P2]: "Opp" },
+      players: [P1, P2],
+      sandbox: true,
+      seq: 0,
+    } as unknown as Parameters<typeof buildBlockedPlays>[0];
+
+    const row = buildBlockedPlays(session, P1).find((r) => r.cardId === game.card("rebuke"));
+    expect(row).toBeDefined();
+    expect(row?.code).toBe("TIMING_ILLEGAL");
+    expect(row?.rule).toBe("338.1.a.2");
+    expect(row?.reason).toMatch(/\[Action\]/);
+    // The legally-timed card in the same hand is NOT reported as blocked.
+    expect(buildBlockedPlays(session, P1).map((r) => r.cardId)).not.toContain(game.card("bolt"));
   });
 });

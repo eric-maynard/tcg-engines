@@ -902,6 +902,19 @@ function cardPlaySpeed(card) {
   return "standard";
 }
 
+/**
+ * A refusal carries its cause: the ENGINE's own reason for withholding this
+ * card, shipped on the snapshot (`blockedPlays`), naming the object and rule
+ * that blocked it ("Mageseeker Warden: … (rule 358.3.a)"). Prefer it over the
+ * timing heuristic below, which can only ever describe the turn state and never
+ * names the card that did it.
+ */
+function engineBlockReason(cardId) {
+  if (!cardId) return null;
+  const row = (gameState?.blockedPlays || []).find(r => r.cardId === cardId);
+  return row?.reason || null;
+}
+
 function playTimingBlockReason(card) {
   if (!card) return null;
   const speed = cardPlaySpeed(card);
@@ -929,7 +942,7 @@ function playTimingBlockReason(card) {
 
 // Exported for the play-block-reason unit test (browser: `module` is undefined).
 if (typeof module !== "undefined" && module && module.exports) {
-  module.exports = { playTimingBlockReason, cardPlaySpeed, payablePowerCost, unpaidPowerPips, costPaymentCostState };
+  module.exports = { engineBlockReason, playTimingBlockReason, cardPlaySpeed, payablePowerCost, unpaidPowerPips, costPaymentCostState };
 }
 
 /**
@@ -1059,7 +1072,7 @@ function enterHideOnlySelected(cardId, hideMoves) {
   const label = document.getElementById("actionBarLabel");
   const btns = document.getElementById("actionBarBtns");
   const name = String(card?.name || cardId).replace(/^player-[12]-/, "");
-  const why = typeof playTimingBlockReason === "function" ? playTimingBlockReason(card) : "";
+  const why = engineBlockReason(cardId) || (typeof playTimingBlockReason === "function" ? playTimingBlockReason(card) : "");
   label.textContent = `${name} — can't be played right now${why ? ` (${why})` : ""}; it has [Hidden], so you may hide it face-down:`;
   btns.innerHTML = hideMoves.map((m, i) =>
     `<button class="action-bar-btn" data-hide-at="${esc(String(m.params?.battlefieldId ?? ""))}" onclick='executeHideVariant(${i})' title="rule 723: pay the Hide cost and put this card face-down here; reveal it from your next turn">${esc(`Hide at ${getBattlefieldName(String(m.params?.battlefieldId ?? ""))}`)}</button>`
@@ -1146,7 +1159,7 @@ function enterHandCardSelected(cardId) {
     // rule 507-510: when the state is closed to this card (chain open and it is
     // not a Reaction, not our turn, wrong phase) the engine withholds the play
     // for a timing reason — never blame the energy pool for it.
-    const stateReason = playTimingBlockReason(card);
+    const stateReason = engineBlockReason(cardId) || playTimingBlockReason(card);
     if (stateReason) {
       showToast(stateReason);
       selectedCard = cardId;

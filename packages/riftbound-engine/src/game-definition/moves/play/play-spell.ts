@@ -16,6 +16,7 @@ import {
   resolveTarget,
 } from "../../../abilities/target-resolver";
 import { playIsForbidden } from "../../../abilities/play-restrictions";
+import { refuse } from "../../refusal";
 import { recalculateStaticEffects } from "../../../abilities/static-abilities";
 import { fireTriggers } from "../../../abilities/trigger-runner";
 import {
@@ -590,6 +591,108 @@ function nestedPlaySlotsUnsatisfiable(
   return nestedPlaySlots(effect, ctx).some(({ pool, slot }) => slot.gating && pool.length === 0);
 }
 
+/**
+ * A refusal must carry its cause (see `game-definition/refusal.ts`).
+ *
+ * The STATE-level reasons a play of `cardId` is refused — the ones a player can
+ * see on the board and can act on (wrong timing, someone else's Priority, a
+ * "can't play spells this turn" rider, a static that forbids the card). They
+ * are computed here, ONCE, so the condition and the enumerator cannot disagree:
+ * the condition returns this as its `ConditionFailure`, and the enumerator uses
+ * it to decide which cards to emit as INVALID rows (a card that is blocked for
+ * one of these reasons is still clickable, so it must be explained rather than
+ * vanish).
+ */
+function spellPlayStateRefusal(
+  state: RiftboundGameState,
+  io: { cards: unknown; zones: unknown },
+  playerId: string,
+  cardId: string,
+): ReturnType<typeof refuse> | undefined {
+  // rule-id: ogn-026-298 — "opponents can't play cards this turn".
+  if (state.cannotPlayCardsThisTurn?.[playerId]) {
+    return refuse({
+      code: "CARDS_FORBIDDEN_THIS_TURN",
+      rule: "054.1",
+      subject: cardId,
+      text: "you can't play cards this turn",
+    });
+  }
+  // rule-id: unl-190-219 — "its controller can't play spells this turn".
+  if (state.cannotPlaySpellsThisTurn?.[playerId] === state.turn.number) {
+    return refuse({
+      code: "SPELLS_FORBIDDEN_THIS_TURN",
+      object: state.cannotPlaySpellsSource?.[playerId],
+      rule: "054.1",
+      subject: cardId,
+      text: "you can't play spells this turn",
+    });
+  }
+  // rule 419.1 — a board static may forbid PLAYING this card (ven-132-166).
+  if (
+    playIsForbidden(
+      { cards: io.cards as never, draft: state, zones: io.zones as never },
+      playerId,
+      cardId,
+    )
+  ) {
+    return refuse({
+      code: "PLAY_FORBIDDEN_BY_STATIC",
+      rule: "419.1",
+      subject: cardId,
+      text: "a permanent on the board forbids playing this card",
+    });
+  }
+
+  const interaction = state.interaction ?? createInteractionState();
+  const turnState = getTurnState(interaction);
+  const timing = (getGlobalCardRegistry().getSpellTiming(cardId) ?? "action") as TimingClass;
+  if (!isLegalTiming(timing, turnState)) {
+    // rule 331.1.a / 338.1.a.2 — a loaded Chain is a Closed State: only
+    // [Reaction] is legally timed there. rule 159.2.a.1 — [Action] extends
+    // play into showdown Open States, never into a plain opponent's turn.
+    return refuse({
+      code: "TIMING_ILLEGAL",
+      rule: timing === "reaction" ? "159.2.b.2" : timing === "action" ? "338.1.a.2" : "159.1.a",
+      subject: cardId,
+      text:
+        timing === "action"
+          ? "an [Action] can only be played on your turn or in a showdown, never while the chain is loaded — only a [Reaction] is legally timed here"
+          : timing === "standard"
+            ? "a standard-speed spell can only be played in your own open main phase"
+            : "this spell's timing is not legal in the current state",
+    });
+  }
+  // rule 316.5.b — in a Neutral Open State only the Turn Player may play spells.
+  if (turnState === "neutral-open" && state.turn.activePlayer !== playerId) {
+    return refuse({
+      code: "NOT_YOUR_OPEN_STATE",
+      rule: "316.5.b",
+      subject: cardId,
+      text: "it is the opponent's open main phase — only the turn player may play a spell there",
+    });
+  }
+  // rule 312.2.c-d / 338.1.b.1 — in a Closed State only the Priority holder acts.
+  if (!hasChainPriorityPermission(interaction, playerId)) {
+    return refuse({
+      code: "NO_CHAIN_PRIORITY",
+      rule: "338.1.b.1",
+      subject: cardId,
+      text: "another player holds chain Priority — you may only add to the chain while you hold it",
+    });
+  }
+  // rule 313.1 / 347 — in a Showdown Open State only the Focus holder plays.
+  if (turnState === "showdown-open" && !hasShowdownPermission(interaction, playerId)) {
+    return refuse({
+      code: "NO_SHOWDOWN_FOCUS",
+      rule: "313.1",
+      subject: cardId,
+      text: "another player holds Focus in this showdown — wait for Focus to pass",
+    });
+  }
+  return undefined;
+}
+
 export const playSpell: Defs["playSpell"] = {
   condition: (state, rawContext) => {
     // rule 355.1 — a `costs` selection is the canonical cost param; expand it
@@ -603,26 +706,19 @@ export const playSpell: Defs["playSpell"] = {
     if (state.pendingChoice) {
       return false;
     }
-    // rule-id: ogn-026-298 — "opponents can't play cards this turn".
-    if (state.cannotPlayCardsThisTurn?.[context.params.playerId as string]) {
-      return false;
-    }
-    // rule-id: unl-190-219 — "its controller can't play spells this turn".
-    if (
-      state.cannotPlaySpellsThisTurn?.[context.params.playerId as string] ===
-      state.turn.number
-    ) {
-      return false;
-    }
-    // rule 419.1 — a board static may forbid PLAYING this card (ven-132-166).
-    if (
-      playIsForbidden(
-        { cards: context.cards, draft: state, zones: context.zones },
-        context.params.playerId as string,
-        context.params.cardId as string,
-      )
-    ) {
-      return false;
+    // A refusal must carry its cause: every STATE-level reason this play is
+    // illegal (rider, forbidding static, timing, Priority, Focus) is decided in
+    // ONE place and returned as a named `Refusal`, not a bare `false`. It runs
+    // before the resource/target gates so the player is told the reason they
+    // can actually act on.
+    const stateRefusal = spellPlayStateRefusal(
+      state,
+      { cards: context.cards, zones: context.zones },
+      context.params.playerId as string,
+      context.params.cardId as string,
+    );
+    if (stateRefusal) {
+      return stateRefusal;
     }
 
     const zone = context.zones.getCardZone(context.params.cardId as CoreCardId);
@@ -823,33 +919,12 @@ export const playSpell: Defs["playSpell"] = {
       return false;
     }
 
+    // Timing, Priority and Focus were decided by `spellPlayStateRefusal` at the
+    // top of this condition — one decision site, one reason.
     const interaction = state.interaction ?? createInteractionState();
     const turnState = getTurnState(interaction);
     const registry = getGlobalCardRegistry();
     const timing = (registry.getSpellTiming(context.params.cardId) ?? "action") as TimingClass;
-
-    if (!isLegalTiming(timing, turnState)) {
-      return false;
-    }
-
-    // rule 316.5.b: in a Neutral Open State only the Turn Player may play
-    // spells — [Reaction] (813.1.c) only adds Closed States, not this one.
-    if (turnState === "neutral-open" && state.turn.activePlayer !== context.params.playerId) {
-      return false;
-    }
-
-    // rule 312.2.c-d / 338.1.b.1: in a Closed State only the Priority holder
-    // may add to the chain — [Reaction] timing is no permission to act out of
-    // turn with Priority elsewhere.
-    if (!hasChainPriorityPermission(interaction, context.params.playerId)) {
-      return false;
-    }
-
-    // rule 313.1 / 347: in a Showdown Open State only the Focus holder may
-    // play cards; everyone else waits for Focus to pass.
-    if (turnState === "showdown-open" && !hasShowdownPermission(interaction, context.params.playerId)) {
-      return false;
-    }
 
     // Rule 355.8 / 419.2.a: gate on caster-chosen targets (including modal options).
     const abilities = registry.getAbilities(context.params.cardId) ?? [];
@@ -1412,17 +1487,47 @@ export const playSpell: Defs["playSpell"] = {
     const registry = getGlobalCardRegistry();
     const interaction = state.interaction ?? createInteractionState();
     const turnState = getTurnState(interaction);
+    /**
+     * A refusal must carry its cause. A card the state forbids (wrong timing,
+     * another seat's Priority, a "can't play spells" rider) is still in the
+     * hand and still clickable, so it is emitted as a bare row: the condition
+     * refuses it with a NAMED reason and `enumerateMoves(validOnly:false)`
+     * carries that reason to the client. Without this the card produced no row
+     * at all and a click said nothing.
+     */
+    const blockedRows = (): { playerId: string; cardId: string }[] => {
+      const rows: { playerId: string; cardId: string }[] = [];
+      for (const cardId of context.zones.getCardsInZone(
+        "hand" as CoreZoneId,
+        context.playerId as CorePlayerId,
+      )) {
+        if (registry.get(cardId as string)?.cardType !== "spell") {
+          continue;
+        }
+        if (
+          spellPlayStateRefusal(
+            state,
+            { cards: context.cards, zones: context.zones },
+            context.playerId as string,
+            cardId as string,
+          )
+        ) {
+          rows.push({ cardId: cardId as string, playerId: context.playerId as string });
+        }
+      }
+      return rows;
+    };
     // rule 316.5.b: Neutral Open State → only the Turn Player plays spells.
     if (turnState === "neutral-open" && state.turn.activePlayer !== (context.playerId as string)) {
-      return [];
+      return blockedRows();
     }
     // rule 312.2.c-d: Closed State → only the Priority holder may add an item.
     if (!hasChainPriorityPermission(interaction, context.playerId as string)) {
-      return [];
+      return blockedRows();
     }
     // rule 313.1 / 347: Showdown Open State → only the Focus holder acts.
     if (turnState === "showdown-open" && !hasShowdownPermission(interaction, context.playerId as string)) {
-      return [];
+      return blockedRows();
     }
     const pool = state.runePools[context.playerId as string];
     if (!pool) {
@@ -2923,7 +3028,11 @@ export const playSpell: Defs["playSpell"] = {
         }
       }
     }
-    return results.map((r) => withCostsParam(r));
+    const priced = results.map((r) => withCostsParam(r));
+    // A card the state forbids produced no variant above (the timing gate skips
+    // it). Emit it as an invalid row so its refusal reaches the client.
+    const offered = new Set(priced.map((r) => r.cardId));
+    return [...priced, ...blockedRows().filter((r) => !offered.has(r.cardId))];
   },
   reducer: (draft, rawContext) => {
     const context = rawContext.params.costs

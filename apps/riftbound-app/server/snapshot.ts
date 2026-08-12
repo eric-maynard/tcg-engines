@@ -61,6 +61,57 @@ export function buildReachablePlays(session: GameSession, playerId: string) {
   }));
 }
 
+/**
+ * A refusal must carry its cause.
+ *
+ * The engine now enumerates a card the STATE forbids as an INVALID move whose
+ * `validationError` names the blocking object and its rule (see
+ * `game-definition/refusal.ts`). Those rows ride on the snapshot so a click that
+ * produces nothing can say WHY — "Lilting Lullaby: you can't play spells this
+ * turn (rule 054.1)" — instead of the client guessing from the turn state, which
+ * could only ever describe timing and never named the card that did it.
+ *
+ * By construction these are NOT legal moves: they travel beside `moves` and the
+ * client keeps refusing to dispatch them.
+ */
+export function buildBlockedPlays(session: GameSession, playerId: string) {
+  const out: {
+    cardId: string;
+    moveId: string;
+    code: string;
+    rule: string;
+    reason: string;
+    objectId?: string;
+    objectName?: string;
+  }[] = [];
+  const seen = new Set<string>();
+  for (const m of session.engine.enumerateMoves(playerId as PlayerId, { validOnly: false })) {
+    if (m.isValid) {
+      continue;
+    }
+    const cardId = (m.params as { cardId?: unknown }).cardId;
+    const refusal = Harness.refusalOf(m.validationError);
+    if (!refusal || typeof cardId !== "string") {
+      continue;
+    }
+    const key = `${m.moveId}|${cardId}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    out.push({
+      cardId,
+      code: refusal.code,
+      moveId: m.moveId,
+      ...(refusal.objectId ? { objectId: refusal.objectId } : {}),
+      ...(refusal.objectName ? { objectName: refusal.objectName } : {}),
+      reason: refusal.message,
+      rule: refusal.rule,
+    });
+  }
+  return out;
+}
+
 export function buildUnaffordableTargets(session: GameSession, playerId: string) {
   const cardIds = new Set<string>();
   for (const m of session.engine.enumerateMoves(playerId as PlayerId, { validOnly: false })) {
@@ -930,6 +981,12 @@ export function buildGameSnapshot(session: GameSession, viewingPlayer?: string) 
       viewingPlayer === undefined || state.status !== "playing"
         ? []
         : buildUnaffordableTargets(session, viewingPlayer),
+    // A refusal must carry its cause: cards the state forbids, each with the
+    // object and rule that forbid them (see buildBlockedPlays).
+    blockedPlays:
+      viewingPlayer === undefined || state.status !== "playing"
+        ? []
+        : buildBlockedPlays(session, viewingPlayer),
     victoryScore: state.victoryScore,
     // rule 194.3.a — battlefields like Aspirant's Climb raise the threshold
     // without touching victoryScoreModifier, so the raw victoryScore alone is

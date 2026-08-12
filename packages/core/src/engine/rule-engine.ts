@@ -941,6 +941,35 @@ export class RuleEngine<
    * @param context - Move context with typed params
    * @returns True if move can be executed, false otherwise
    */
+  /**
+   * Why a move would be refused, without executing it.
+   *
+   * `canExecuteMove` collapses every cause into `false`, and enumeration can
+   * only explain parameter combinations an enumerator actually emitted — so a
+   * candidate a player can name but no enumerator offers (a destination a
+   * static forbids, a group whose members are not all eligible) had no channel
+   * at all. This asks the move's own `condition` about that exact candidate and
+   * returns its `ConditionFailure`; `undefined` means the move is legal.
+   */
+  explainMove(
+    moveId: string,
+    contextInput: MoveContextInput<any>,
+  ): { reason: string; errorCode: string; context?: Record<string, unknown> } | undefined {
+    if (!this.gameDefinition.moves[moveId as keyof TMoves]) {
+      return { errorCode: "UNKNOWN_MOVE", reason: `Unknown move '${moveId}'` };
+    }
+    const result = this.checkMoveCondition(moveId, contextInput);
+    if (result.success) {
+      return undefined;
+    }
+    const failure = result as { error: string; errorCode: string; errorContext?: Record<string, unknown> };
+    return {
+      ...(failure.errorContext ? { context: failure.errorContext } : {}),
+      errorCode: failure.errorCode,
+      reason: failure.error,
+    };
+  }
+
   canExecuteMove(moveId: string, contextInput: MoveContextInput<any>): boolean {
     const moveDef = this.gameDefinition.moves[moveId as keyof TMoves];
     if (!moveDef) {
