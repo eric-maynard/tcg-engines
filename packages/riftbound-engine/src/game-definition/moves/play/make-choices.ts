@@ -28,10 +28,20 @@
  * first; the CR numbers list the contents of the step, they do not sequence
  * choices that depend on one another.
  *
+ * When an entry grows affordability state, reuse the fleet's ONE vocabulary
+ * rather than inventing a second: `needsAdd {energy?, power?, reason}` imported
+ * from `harness/types.ts` (the shape `PickOption`, `ActionField` and
+ * `ActionDecision.reachablePlays` already carry), `reason` built with
+ * `harness/decision.ts describeShortfall`, reachability only from
+ * `play/cost.ts reachableRuneAdds` — never a second cost model. Keep
+ * `payableNow` distinct from `reachable`: a 402.2 auto-bind of a sole option may
+ * use only `payableNow`, or it commits a payment behind the player's back.
+ *
  * Leaf module: must not import move definitions.
  */
 
 import { collectMultiPickSlots } from "../../../abilities/target-slots";
+import { isRestatementOf } from "./targeting";
 import { collectDestinationNodes } from "./play-time-destinations";
 import { collectChoiceNodes } from "./play-time-modes";
 
@@ -180,8 +190,14 @@ function deferralRule(node: AnyEffect, descriptor: AnyEffect): string | undefine
   if (node.chooseAtResolution === true || descriptor.chooseAtResolution === true) {
     return "355.10.f";
   }
-  // rule 355.10.e — a set chosen wholly or partly by other players.
+  // rule 355.10.e — a set chosen wholly or partly by other players. `chosenBy`
+  // names the chooser outright (unl-101-219 Call to Battle "Then, choose an
+  // opponent. THEY move a unit they control"); `player` names whose objects a
+  // per-player instruction sweeps.
   if (node.player === "each" || node.player === "each-other" || node.player === "opponent") {
+    return "355.10.e";
+  }
+  if (typeof node.chosenBy === "string" && node.chosenBy !== "self" && node.chosenBy !== "controller") {
     return "355.10.e";
   }
   // rule 355.10.a — the object sits in a zone whose information status is not
@@ -458,44 +474,85 @@ export interface NestedDescriptorSlot {
  */
 export function collectNestedDescriptorSlots(effect: unknown): NestedDescriptorSlot[] {
   const out: NestedDescriptorSlot[] = [];
-  const walk = (node: unknown, path: string, underThen: boolean): void => {
+  const walk = (node: unknown, path: string, underThen: boolean, named: AnyEffect[]): void => {
     if (!node || typeof node !== "object" || Array.isArray(node)) {
       return;
     }
     if (underThen) {
       for (const entry of collectDescriptorEntries(node, path)) {
-        if (entry.timing === "FIN" && entry.descriptor !== undefined) {
-          out.push({
-            descriptor: entry.descriptor,
-            gating: entry.gating,
-            optional: entry.optional,
-            path: entry.path,
-            role: entry.role,
-          });
+        if (entry.timing !== "FIN" || entry.descriptor === undefined) {
+          continue;
         }
+        // rule 355.5 (ogn-008-298 Get Excited!) — "Discard 1. Deal its Energy
+        // cost as damage to A UNIT AT A BATTLEFIELD": the follow-up RESTATES the
+        // object the enclosing instruction already named ("it"), so it claims no
+        // second slot. Only a follow-up naming something NEW is an extra choice.
+        if (named.some((prior) => isRestatementOf(prior as never, entry.descriptor as never))) {
+          continue;
+        }
+        out.push({
+          descriptor: entry.descriptor,
+          gating: entry.gating,
+          optional: entry.optional,
+          path: entry.path,
+          role: entry.role,
+        });
       }
       return;
     }
     const n = node as AnyEffect;
+    const own = DESCRIPTOR_ROLES.map((role) => n[role]).filter((d): d is AnyEffect => isDescriptor(d));
+    const seen = [...named, ...own];
     if (n.type === "sequence" && Array.isArray(n.effects)) {
-      n.effects.forEach((sub: unknown, i: number) => walk(sub, join(path, `effects.${i}`), false));
+      n.effects.forEach((sub: unknown, i: number) => walk(sub, join(path, `effects.${i}`), false, seen));
       return;
     }
     // A conditional's `then` is a BRANCH, not a follow-up clause — descend into
     // both branches looking for their own follow-ups instead.
     if (n.type === "conditional") {
-      walk(n.then, join(path, "then"), false);
-      walk(n.else, join(path, "else"), false);
+      walk(n.then, join(path, "then"), false, seen);
+      walk(n.else, join(path, "else"), false, seen);
       return;
     }
     if (n.type === "optional") {
-      walk(n.effect, join(path, "effect"), false);
+      walk(n.effect, join(path, "effect"), false, seen);
       return;
     }
     if (n.then !== undefined && !readsTheDestination(n.then)) {
-      walk(n.then, join(path, "then"), true);
+      walk(n.then, join(path, "then"), true, seen);
     }
   };
-  walk(effect, "", false);
+  walk(effect, "", false, []);
   return out;
+}
+
+/**
+ * A private copy of `effect` with each nested descriptor slot's chosen object
+ * stamped on its node as `_bound` (positional with `collectNestedDescriptorSlots`,
+ * i.e. with the ids the play move collected after the lead target).
+ *
+ * rule 355.15 — the object is locked here; what the instruction DOES with it
+ * (the "you may" decision, 355.12) still waits for resolution, and the handler
+ * re-checks legality then (358.1 / 359.3.e.2).
+ */
+export function bindNestedDescriptorSlots<T>(effect: T, ids: readonly string[]): T {
+  const slots = collectNestedDescriptorSlots(effect);
+  if (slots.length === 0 || ids.length === 0) {
+    return effect;
+  }
+  const copy = JSON.parse(JSON.stringify(effect)) as AnyEffect;
+  slots.forEach((slot, index) => {
+    const id = ids[index];
+    if (id === undefined) {
+      return;
+    }
+    let node: unknown = copy;
+    for (const key of slot.path === "" ? [] : slot.path.split(".")) {
+      node = node && typeof node === "object" ? (node as AnyEffect)[key] : undefined;
+    }
+    if (node && typeof node === "object") {
+      (node as AnyEffect)._bound = [id];
+    }
+  });
+  return copy as T;
 }

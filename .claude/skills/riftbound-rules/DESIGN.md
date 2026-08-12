@@ -154,7 +154,28 @@ unplayable with no friendly unit. For a triggered item that has no legal choice,
 Engine shape: `play/make-choices.ts` is the single enumerator — it walks an item's effect tree once and returns the
 ordered `ChoicePlan`, each entry tagged `PLAY` / `FIN` / `RES` with the rule that put it there. Every raiser
 (`play-time-modes.ts`, `play-time-destinations.ts`, `abilities/target-slots.ts`) reads that plan rather than
-re-deriving its own answer, and the harness `Decision.timing` is the entry's tag.
+re-deriving its own answer, and the harness `Decision.timing` is the entry's tag. When a plan entry grows
+affordability state it reuses the fleet vocabulary rather than a second one — `needsAdd {energy?, power?, reason}`
+from `harness/types.ts`, `reason` built with `decision.ts describeShortfall`, reachability only from
+`cost.ts reachableRuneAdds` — and keeps `payableNow` distinct from `reachable`, because a 402.2 auto-bind of a sole
+option may only use `payableNow` (auto-binding a merely *reachable* option would commit a payment behind the
+player's back).
+
+### The verdicts, so these ten cards are not re-argued (settled 2026-08-12)
+Every row below follows from the table above; the "why" column names the carve-out that does or does not apply.
+
+| card | verdict | why |
+|---|---|---|
+| Zenith Blade ogn-262-298 — "You may move a friendly unit to that enemy unit's battlefield" | mover FIN (355.12); anchor FROZEN at play (355.4 / 355.15) — **implemented**, `lockTargetBattlefieldDestinations` | the anchor answers WHERE, never WHETHER: with the linked stun ignored the move is still ignored (359.3.e.14.a) |
+| Relentless Pursuit sfd-184-221 — "You may attach an Equipment … to it" | unit AND Equipment both FIN; **no friendly Equipment ⇒ unplayable** (355.8) | 355.12 — "you may" defers the decision, not the object; ruling 4283ca02526c0650 agrees |
+| Shuriken Flip — friendly mover + destination | both locked at play; **no friendly unit ⇒ unplayable** | same 355.12 + 355.4 pair; ruling b6531d2345e9ef12 |
+| Moonfall unl-198-219 — "Choose a battlefield … up to one enemy unit … enemy units there −2" | anchor FIN and gating; mover FIN, non-gating (355.13); the −2 is programmatic and prompts nothing | 355.10.b names the battlefield a target; 355.10.d silences the −2 |
+| Forge of the Future ogn-212-298 — "Recycle up to 4 cards from trashes" | set FIN, before the kill-cost is paid (357.2) — the Forge can never be its own target | **trashes are Public (355.10.a.1)**, so 355.10.a does not apply. riftjudge `2f2fb3a61bb3446a` says resolution and is NOT followed |
+| Drag Under sfd-164-221 played by a conquer trigger | the trash spell is a TARGET of the trigger, named at finalization | 355.10.a.1 again |
+| Deceiver — "It becomes a copy of another unit there" | copy source FIN on the trigger | a chosen board object; no carve-out applies |
+| Reflection ruling 40ecc1be71f6fc76 | the token is minted FIRST, then the reflexive "becomes a copy" item makes its OWN choice | 355.5.b — a trigger the item GENERATES never makes its choices during the parent's finalization. Not a contradiction of the Deceiver row: different card shapes |
+| Angle Shot sfd-011-221 — "attach … or detach …" | a mode (355.3), so it must be MADE — a cast naming none is asked, never silently resolved as a detach | 355.10.d.2 — one legal half is still a choice |
+| Dragon's Rage ogn-258-298 — "Then choose another enemy unit at its destination" | the follow-up AND the destination stay `RES` | the only follow-up shape that legitimately defers: its candidates are whoever stands there at resolution (ruling 25b00b80ac336276) |
 
 ## A sole legal option is still a choice (355.10.d.2)
 Rule 355.10.d.2: **being the only valid choice does NOT make a selection programmatic.** So the engine never
