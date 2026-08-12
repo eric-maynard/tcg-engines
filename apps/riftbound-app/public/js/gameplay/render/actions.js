@@ -436,7 +436,12 @@ const COST_OBJECT_PARAM_VERBS = {
 function costObjectSuffix(params) {
   if (!params) return "";
   const parts = [];
-  for (const [key, verb] of Object.entries(COST_OBJECT_PARAM_VERBS)) {
+  // rule-id: sfd-044-221 — the enumerator fills the legacy `sacrificeId` for a
+  // "return to hand" additional cost too, so read the cost KIND off
+  // `costs.paid` before calling it a sacrifice.
+  const bounced = params.costs?.paid?.["return-to-hand"];
+  for (const [key, rawVerb] of Object.entries(COST_OBJECT_PARAM_VERBS)) {
+    const verb = bounced && (key === "sacrificeId" || key === "sacrificeIds") ? "return" : rawVerb;
     const value = params[key];
     if (value == null || (Array.isArray(value) && value.length === 0)) continue;
     const names = Array.isArray(value)
@@ -775,10 +780,18 @@ function renderActions() {
         const domainEntries = Object.entries(byDomain).sort(
           ([a], [b]) => Number(a.endsWith("|ready")) - Number(b.endsWith("|ready")),
         );
-        if (domainEntries.length === 1 && domainEntries[0][1].length === 1) {
-          // Only one rune — render as single button
-          const m = domainEntries[0][1][0];
-          const paramStr = formatMoveDescription(moveId, m.params) || formatParamsFallback(m.params);
+        if (domainEntries.length === 1) {
+          // [rule:ui-rune-group-single-option] One distinct OPTION (not one move):
+          // N interchangeable runes of the same domain+state collapse to a single
+          // direct-execute button. Gating on move count instead left two identical
+          // runes rendering a header that only toggled an submenu with one child,
+          // so the first click looked dead.
+          const domMoves = domainEntries[0][1];
+          const m = domMoves[0];
+          const paramStr =
+            domMoves.length > 1
+              ? `${domMoves.length} available`
+              : formatMoveDescription(moveId, m.params) || formatParamsFallback(m.params);
           html += `
             <button class="action-btn ${isHighlighted ? "highlighted" : ""}"
                     onclick='${runeClick(m)}'>
@@ -889,5 +902,5 @@ function toggleMoveGroup(moveId) {
 
 // Node/bun test harness only — the browser loads this as a classic script.
 if (typeof module !== "undefined" && module && module.exports) {
-  module.exports = { chainWhatText, expandedMoveGroups: _expandedMoveGroups, findEffectReference, humanizeEffect, splitChainTargets, targetNoun, toggleMoveGroup };
+  module.exports = { chainWhatText, expandedMoveGroups: _expandedMoveGroups, findEffectReference, humanizeEffect, renderActions, splitChainTargets, targetNoun, toggleMoveGroup };
 }
