@@ -1,0 +1,4 @@
+coordinator,makechoices,anyadd	riftbound-engine/src/game-definition/moves/chain/resolve\.ts$|riftbound-engine/src/game-definition/moves/pending-choice\.ts$
+anyadd	riftbound-engine/src/game-definition/moves/prompt-cost\.ts$|riftbound-engine/src/game-definition/moves/play/targeting\.ts$|riftbound-engine/src/game-definition/moves/play/play-spell\.ts$|riftbound-engine/src/harness/decision\.ts$
+cleanup466	riftbound-engine/src/game-definition/moves/combat/resolve-full-combat\.ts$
+identity	riftbound-engine/src/operations/object-identity\.ts$
