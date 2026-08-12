@@ -6,7 +6,15 @@ set -uo pipefail
 REPO=/root/src/tcg/tcg-engines; cd "$REPO"
 LABEL="$(printf '%s' "${1:-pX}" | tr -cd 'A-Za-z0-9_-' | cut -c1-24)"; MSG="${2:-fix(queue $LABEL)}"; shift 2 || true
 out() { printf '%s=%s\n' "$1" "$2"; }
-FILES=(); for f in "$@"; do f="${f#$REPO/}"; case "$f" in *do_not_commit*|apps/riftbound-app/data/*|"") ;; *) [ -e "$f" ] || git ls-files --error-unmatch "$f" >/dev/null 2>&1 && FILES+=("$f");; esac; done
+FILES=(); DROPPED=()
+# A file supplied only via LAND_SRC_DIR (a brand-new file the shared tree has
+# never seen) used to fail every existence check here and vanish from the land
+# WITHOUT a word — that is how a feature once shipped without its test. Accept
+# it from the override dir, and say so loudly when a path matches nothing.
+for f in "$@"; do f="${f#$REPO/}"; case "$f" in *do_not_commit*|apps/riftbound-app/data/*|"") continue;; esac
+  if [ -e "$f" ] || { [ -n "${LAND_SRC_DIR:-}" ] && [ -e "$LAND_SRC_DIR/$f" ]; } || git ls-files --error-unmatch "$f" >/dev/null 2>&1; then FILES+=("$f"); else DROPPED+=("$f"); fi
+done
+[ ${#DROPPED[@]} -gt 0 ] && out dropped_files "${DROPPED[*]} — absent from the working tree, from LAND_SRC_DIR and from git; check the path, a typo here lands a change missing one of its files"
 # file-level embargo: .claude/fix-queue/embargo-files.txt lines "owner<TAB>regex" — patches touching matching files are refused unless LABEL starts with owner
 EF="$REPO/.claude/fix-queue/embargo-files.txt"
 # A pattern that matches no tracked file protects nothing while looking like a
@@ -102,7 +110,11 @@ out committed true; out sha "$(git -C "$REPO" rev-parse --short HEAD)"
 GIT_TERMINAL_PROMPT=0 git -C "$REPO" push origin "$BR" 2>&1 | tail -1 | sed 's/^/push=/'
 # sync + bounce from the VERIFIED worktree at the new HEAD (never the dirty main tree → no mixed snapshots on the devbox)
 NEW_SHA=$(git rev-parse HEAD); git -C "$WT" reset -q --hard "$NEW_SHA" >/dev/null 2>&1
-rsync -a --delete "$WT/packages/" emaynard-tcg:/root/tcg/tcg-engines/packages/ --exclude node_modules >/dev/null 2>&1 && rsync -a "$WT/apps/riftbound-app/" emaynard-tcg:/root/tcg/tcg-engines/apps/riftbound-app/ --exclude data --exclude node_modules --exclude downloads >/dev/null 2>&1 && out synced "$NEW_SHA"
+RSLOG=$(mktemp)
+rsync -a --delete "$WT/packages/" emaynard-tcg:/root/tcg/tcg-engines/packages/ --exclude node_modules >>"$RSLOG" 2>&1; rc1=$?
+rsync -a "$WT/apps/riftbound-app/" emaynard-tcg:/root/tcg/tcg-engines/apps/riftbound-app/ --exclude data --exclude node_modules --exclude downloads >>"$RSLOG" 2>&1; rc2=$?
+if [ $rc1 = 0 ] && [ $rc2 = 0 ]; then out synced "$NEW_SHA"; else out sync_failed "packages_rc=$rc1 apps_rc=$rc2 — THE DEVBOX IS STALE, it is still serving older files; re-run the rsync manually: $(tail -2 "$RSLOG" | tr '\n' ' ')"; fi
+rm -f "$RSLOG"
 if git -C "$WT" diff --name-only "$HEAD_SHA" "$NEW" | grep -qE "(^|/)package\.json$|bun\.lockb?$"; then ssh -o ConnectTimeout=8 emaynard-tcg "cd /root/tcg/tcg-engines && ~/.bun/bin/bun install >/dev/null 2>&1" && out devbox_bun_install ok || out devbox_bun_install failed; fi
 # Bounce policy: restarting the app drops in-memory sandbox games and breaks multi-turn browser tests, so
 # (a) never bounce while a browser pass holds /tmp/rb-browser-pass.lock (younger than 4h), and
