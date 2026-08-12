@@ -574,6 +574,25 @@ function replaySelfSpell(effect: ExecutableEffect, ctx: EffectContext): void {
     if (!legal) {
       return;
     }
+    // rule 354.3 / 359.3.f (ruling 7e8f48caf62ab8c4) — the enclosing resolution
+    // is carried through before any further step of the new play, and a spell
+    // that finished resolving is in its owner's trash: settle the card there
+    // now so the "you may play this from your trash" offer is made with the
+    // card actually in the trash (the accepted branch pulls it back onto the
+    // chain).
+    if (zone === "chain" && fromZone === "trash") {
+      ctx.zones.moveCard({ cardId: cardId as CoreCardId, targetZoneId: "trash" as CoreZoneId });
+      // rule 419.4.a — the first cast WAS completed by this resolution, so its
+      // "when you play a spell" triggers stay owed; the card itself is settled
+      // already, so only those triggers are parked for the flush.
+      ctx.draft.deferredSpellSettle = {
+        cardId,
+        controller: ctx.playerId,
+        playTriggersOnly: true,
+        playTriggersPending: true,
+        resolveTo: "trash",
+      };
+    }
     ctx.draft.pendingChoice = {
       playerId: replayPlayer,
       resolved: {
@@ -605,8 +624,15 @@ function replaySelfSpell(effect: ExecutableEffect, ctx: EffectContext): void {
   // rule 354.3 / 359.3.d — the card is being played again, so the parked
   // "place it in the trash" step of the resolution it is leaving no longer
   // applies; dropping it keeps the replayed card on the chain.
-  if (ctx.draft.deferredSpellSettle?.cardId === cardId) {
-    ctx.draft.deferredSpellSettle = undefined;
+  // rule 350.1 / 419.4.a — but that first cast WAS a completed play: its "when
+  // you play a spell" triggers are still owed, so keep the parked entry alive
+  // for them alone rather than dropping it wholesale.
+  const parkedSettle = ctx.draft.deferredSpellSettle;
+  if (parkedSettle?.cardId === cardId) {
+    ctx.draft.deferredSpellSettle =
+      parkedSettle.playTriggersPending === true
+        ? { ...parkedSettle, playTriggersOnly: true }
+        : undefined;
   }
   // rule 715.1 / 317.2.c (rule-id: unl-020-219) — "this deals 1 additional
   // Bonus Damage for each time this spell has dealt damage this turn": one
@@ -846,6 +872,10 @@ export function castSpellFromTrash(
   putPlayedSpellOnChain(bag as unknown as PlayIO, {
     cardId,
     playerId,
+    // rule 419.1 / 811.1 — a spell an effect plays out of the trash is not a
+    // play from hand, and its `play-card` event carries that origin.
+    playedFrom: "trash",
+    playedFromHand: false,
     resolveTo: recycleAfter ? "mainDeck" : "trash",
     via: "effect",
   });

@@ -249,7 +249,7 @@ describe("Death from Below × Helm of Suppression × Daughter of the Void — re
   // ── (e) spells-played bookkeeping ────────────────────────────────────────────────────────────
   // 350.1 / 419.4.a: the hand cast and the replay are two complete plays of a spell, so Ravenbloom
   // Student triggers twice (+2) — the first cast's trigger must not be lost when the replay is accepted.
-  test.failing("BUG: (e) each resolved cast is a separate spell played — Ravenbloom Student gets +1 for the hand cast AND +1 for the replay (350.1 / 419.4.a)", async () => {
+  test("(e) each resolved cast is a separate spell played — Ravenbloom Student gets +1 for the hand cast AND +1 for the replay (350.1 / 419.4.a)", async () => {
     const game = await board({ energy: 4, rainbow: 3, helm: false, student: true }).build();
     expect(game.state("student").might).toBe(2);
     await castAtX(game);

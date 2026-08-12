@@ -32,6 +32,9 @@ function board() {
     .resources(P2, { energy: 1 })
     .battlefield("bf1", { controller: P2 })
     .unit(P2, "bf1", { might: 2, name: "Runt" }, "runt")
+    // rule 355.8 — the replay is itself a "Kill a unit at a battlefield" spell,
+    // so it can only be offered while some unit is still standing at one.
+    .unit(P2, "bf1", { might: 5, name: "Bystander" }, "bystander")
     .hand(P1, DEATH_FROM_BELOW, "dfb")
     .hand(P2, SNIPE, "snipe");
 }
@@ -49,7 +52,7 @@ describe("Ruling 7e8f48caf62ab8c4 — a Death from Below whose target dies first
   // The ruling's contrast case. Expected: the target survives to resolution, is killed by Death from Below and had
   // 2 [Might], so the "you may play this from your trash for [rainbow]" rider IS offered.
   // Actual: the engine never offers the replay — the conditional second clause is not executed at all.
-  test.failing("BUG: ruling 7e8f48caf62ab8c4 (contrast) — killing a 2-Might unit should offer the [rainbow] replay from the trash; the engine offers nothing", async () => {
+  test("ruling 7e8f48caf62ab8c4 (contrast) — killing a 2-Might unit offers the [rainbow] replay from the trash", async () => {
     const game = await board().build();
     await game.p1.cast("dfb", { targets: "runt" });
     await game.p1.passPriority();

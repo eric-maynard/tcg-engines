@@ -62,9 +62,11 @@ describe("Ruling 82a050f4eea3e6ac — a unitless deck means no unit found, no Bu
     expect(game.isOver()).toBe(false);
   });
 
-  test.failing("BUG: the clause continues 'Play it, ignoring its cost' — the banished unit should arrive on the board, but the engine leaves it in banishment", async () => {
+  test("the clause continues 'Play it, ignoring its cost' — the banished unit arrives on the board", async () => {
     const game = await board([SPELL, SPELL, UNIT]).build();
     await game.advanceTurn();
+    // rule 355.4 — the play names its own location, so its controller picks one.
+    await game.p1.pick("battlefield-bf1");
     const skulker = game.find({ name: "Shipyard Skulker", owner: P1 });
     expect(game.p1.banishment()).toEqual([]);
     expect(["base", "bf1"]).toContain(game.locationOf(skulker));
