@@ -10,4 +10,6 @@ export const recruitDe: UnitCard = {
   name: "Recruit (DE)",
   rarity: "common",
   setId: "OGN",
+  // rule 187.1: the 1 [Might] Recruit token carries the Recruit tag (185.2.c).
+  tags: ["Recruit"],
 };
