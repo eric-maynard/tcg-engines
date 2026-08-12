@@ -1700,9 +1700,15 @@
       transition: background 0.15s, border-color 0.15s;
     }
 
-    .action-btn:hover {
+    .action-btn:hover:not(:disabled) {
       background: #2a2548;
       border-color: #5a4f8a;
+    }
+
+    .action-btn:disabled {
+      opacity: 0.4;
+      cursor: default;
+      color: #6a6288;
     }
 
     .action-btn.primary {
@@ -1711,7 +1717,7 @@
       color: #a0c8f0;
     }
 
-    .action-btn.primary:hover {
+    .action-btn.primary:hover:not(:disabled) {
       background: #305080;
     }
 
