@@ -28,6 +28,15 @@ function equipBoard(trash: number) {
   return s;
 }
 
+/** The `equipment->unit` pairs [Equip] currently offers P1 (same reader as sfd-161-221's test). */
+const equipPairs = (game: {
+  p1: { legal(): readonly { moveId: string; variants: readonly { params: Readonly<Record<string, unknown>> }[] }[] };
+}): string[] =>
+  game.p1
+    .legal()
+    .filter((o) => o.moveId === "equipCard")
+    .flatMap((o) => o.variants.map((v) => `${String(v.params.equipmentId)}->${String(v.params.unitId)}`));
+
 /** A Bearer already wearing Last Rites, with a 2-cost Recruit waiting in the trash; bf1 is open. */
 function wearingBoard() {
   return scenario()
@@ -67,12 +76,21 @@ describe("Ruling f7687c1fe9eabfb6 — Last Rites: equipping needs two cards in t
     expect(game.p1.resources()).toEqual({ energy: 3, power: { chaos: 1 } }); // nothing paid
   });
 
-  // Expected: paying [chaos] + recycling two trash cards ATTACHES Last Rites to a unit you control (+2 Might).
-  // Actual: [3] Energy is charged instead, the two cards stay in the trash and nothing is attached.
-  test.failing("BUG: ruling f7687c1fe9eabfb6 — equipping Last Rites neither recycles the two cards nor attaches it", async () => {
+  // rule 818.1 / 476.1 — two separate payments, exactly as B.F. Sword (sfd-161-221): the printed [3]
+  // Energy PLAYS the Equipment (it lands in base, detached and doing nothing), and [Equip] is a
+  // separate activated ability — here [chaos] plus recycling two cards out of the trash
+  // (821.1.c.5). Paying it attaches Last Rites, so the wearer's 3 Might becomes 5.
+  test("ruling f7687c1fe9eabfb6 — [Equip] pays [chaos], recycles the two trash cards and attaches for +2 Might", async () => {
     const game = await equipBoard(2).build();
-    expect(game.p1.can("equip", "rites")).toBe(true);
     await game.p1.playGear("rites");
+    await game.settle();
+    expect(game.zoneOf("rites")).toBe("base");
+    expect(game.state("rites").attachedTo).toBeUndefined(); // playing it attaches nothing (818.1)
+    expect(equipPairs(game)).toEqual(["rites->bearer"]);
+    await game.p1.do("equipCard", { equipmentId: "rites", unitId: "bearer" });
+    // rule 416.6 — the payer names which two cards leave the trash.
+    await game.p1.pick("fodder1");
+    await game.p1.pick("fodder2");
     await game.settle();
     expect(game.p1.power("chaos")).toBe(0);
     expect(game.p1.trash()).toEqual([]); // both fodder cards were recycled
@@ -81,6 +99,17 @@ describe("Ruling f7687c1fe9eabfb6 — Last Rites: equipping needs two cards in t
     expect(game.state("rites").attachedTo).toBe("bearer");
     expect(game.state("bearer").might).toBe(5); // 3 + the equipment's +2
     expect(game.violations()).toEqual([]);
+  });
+
+  // rule 404.2 — a cost you cannot pay in full makes the ability unavailable: one card in the trash
+  // cannot fund "Recycle 2", so [Equip] is never offered. Playing the gear itself is still legal —
+  // the Recycle is part of the [Equip] ability's cost, not of the card's [3] Energy play cost.
+  test("rule 404.2 — with one card in the trash [Equip] is not offered at all", async () => {
+    const game = await equipBoard(1).build();
+    await game.p1.playGear("rites");
+    await game.settle();
+    expect(game.zoneOf("rites")).toBe("base");
+    expect(equipPairs(game)).toEqual([]);
   });
 
   test("ruling: the wearer conquering offers 'you may play a unit from your trash' — a declinable yes/no for P1", async () => {
