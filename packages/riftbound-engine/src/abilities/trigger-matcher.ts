@@ -1121,8 +1121,17 @@ function triggerMatchesEvent(
       if (to === undefined || !to.startsWith("battlefield-")) {
         return false;
       }
-      if (desc.location === "other-battlefield" && to === card.zone) {
-        return false;
+      if (desc.location === "other-battlefield") {
+        // rule 144.4 (ruling 30b2fb1d5002156d) — "other than mine" needs a
+        // battlefield of mine to be other THAN: a card sitting in base (or any
+        // non-battlefield zone) occupies no battlefield, so the trigger cannot
+        // fire at all.
+        if (typeof card.zone !== "string" || !card.zone.startsWith("battlefield-")) {
+          return false;
+        }
+        if (to === card.zone) {
+          return false;
+        }
       }
     }
     // cardType/type/tag/filter require registry lookups on the subject card;

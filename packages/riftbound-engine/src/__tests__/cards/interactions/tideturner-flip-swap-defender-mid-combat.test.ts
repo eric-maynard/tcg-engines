@@ -178,14 +178,16 @@ describe("Tideturner flipped mid-combat swaps an exhausted base Guardian into th
     expect(game.actingSeat()).toBe(P2);
   });
 
-  test("(c) both relocations are MOVES (446.1): an enemy Volibear, Imposing ('When an opponent moves to a battlefield other than mine, draw 1') in P2's base sees the Guardian move base→bf1 and draws", async () => {
-    const game = await board().unit(P2, "base", VOLIBEAR_IMPOSING, "voli").build();
+  // rule 144.4 (ruling 30b2fb1d5002156d) — Volibear must stand AT a battlefield for "other than
+  // mine" to name anything, so the probe sits at P2's bf2, not in base.
+  test("(c) both relocations are MOVES (446.1): an enemy Volibear, Imposing ('When an opponent moves to a battlefield other than mine, draw 1') at P2's bf2 sees the Guardian move base→bf1 and draws", async () => {
+    const game = await board().unit(P2, "bf2", VOLIBEAR_IMPOSING, "voli").build();
     await openCombatAndPassToP1(game);
     const p2Hand = game.p2.hand().length;
     await flipAndSwap(game);
     await game.settle({ maxSteps: 10, policy: (d) => (d.kind === "action" && d.context === "chain" && d.passKey ? { key: d.passKey, kind: "action" } : undefined) });
     expect(game.locationOf("sg")).toBe("bf1");
-    // Guardian moved TO a battlefield (Volibear is in base, so bf1 is "other than mine") → exactly one draw;
+    // Guardian moved TO a battlefield (Volibear is at bf2, so bf1 is "other than mine") → exactly one draw;
     // Tideturner moved to BASE, which is not a battlefield (144.4) → no second draw.
     expect(game.p2.hand().length).toBe(p2Hand + 1);
   });

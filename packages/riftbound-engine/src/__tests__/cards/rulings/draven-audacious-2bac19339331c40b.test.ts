@@ -82,17 +82,17 @@ describe("Ruling 2bac19339331c40b — a stunned attacker still loses the combat 
     expect(game.violations()).toEqual([]);
   });
 
-  // Expected (461.3.a + Draven's own text): P1 is the winner of that combat, so "The first time I
-  // win a combat each turn, you score 1 point" fires and P1 goes to 1 point.
-  // Actual: no win-combat event is emitted for a defender who simply survives, so Draven's trigger
-  // never reaches the chain and P1 stays on 0.
-  test.failing(
-    "BUG: ruling 2bac19339331c40b — Draven wins the combat but his 'first time I win a combat' point never fires (P1 stays on 0)",
-    async () => {
-      const game = await stunnedAttacker();
-      await game.settle();
-      expect(game.zoneOf("draven")).toBe("battlefield-bf1");
-      expect(game.p1.points()).toBe(1);
-    },
-  );
+  // RULING-CONFLICT: riftjudge 2bac19339331c40b says the surviving defender WINS this combat (so
+  // Draven's "first time I win a combat" point fires); CR 466.3.d says there is "No Result" if units
+  // were recalled during step 3d of the Combat Cleanup — and the stunned attacker, alive through the
+  // damage step, is exactly such a recall (466.1.a.2). 466.3.a only makes the defender the winner when
+  // it is the ONLY player with units at the battlefield during that task, which needs the attackers
+  // dead, not recalled (see the green facet in core-rules/combat-flow-and-resolution.test.ts).
+  // The engine follows the CR: No Result, so nobody wins the combat and Draven scores nothing.
+  test("ruling 2bac19339331c40b — the recalled (not killed) attacker makes it a No Result, so Draven's win-combat point does not fire", async () => {
+    const game = await stunnedAttacker();
+    await game.settle();
+    expect(game.zoneOf("draven")).toBe("battlefield-bf1");
+    expect(game.p1.points()).toBe(0);
+  });
 });

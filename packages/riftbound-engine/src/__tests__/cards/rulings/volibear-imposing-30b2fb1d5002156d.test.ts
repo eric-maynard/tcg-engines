@@ -61,23 +61,12 @@ describe("Ruling 30b2fb1d5002156d — Volibear draws once per movement action, n
   });
 
   // The nuance of the ruling: "Volibear must be at a battlefield to trigger this ability. If he's in base,
-  // there is no 'battlefield other than his' so the ability doesn't trigger." The engine fires it anyway
-  // (the trigger's location filter only checks the DESTINATION, not where Volibear stands).
-  test.failing(
-    "BUG: ruling 30b2fb1d5002156d — Volibear in BASE should not trigger at all (the engine still queues the trigger and P1 draws)",
-    async () => {
-      const game = await board("base").build();
-      await game.p2.move(["m1", "m2", "m3", "m4"], "bf2");
-      expect(game.chain().filter((c) => c.cardId === "voli" && c.triggered)).toHaveLength(0);
-      await game.settle();
-      expect(game.p1.hand()).toEqual([]);
-    },
-  );
-
-  test("in that same in-base position the engine draws exactly one card — still once per move action, never once per unit", async () => {
+  // there is no 'battlefield other than his' so the ability doesn't trigger."
+  test("ruling 30b2fb1d5002156d — Volibear in BASE does not trigger at all", async () => {
     const game = await board("base").build();
     await game.p2.move(["m1", "m2", "m3", "m4"], "bf2");
+    expect(game.chain().filter((c) => c.cardId === "voli" && c.triggered)).toHaveLength(0);
     await game.settle();
-    expect(game.p1.hand()).toEqual(["d1"]);
+    expect(game.p1.hand()).toEqual([]);
   });
 });
