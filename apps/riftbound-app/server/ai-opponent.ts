@@ -523,6 +523,45 @@ function targetKey(moveId: string, cardId: string, targets: unknown): string | u
   return list.length === 0 ? undefined : `${moveId}|${cardId}|${canon([...list].sort())}`;
 }
 
+type DecisionOption = NonNullable<ReturnType<typeof deriveActionDecision>>["options"][number];
+
+/**
+ * rule 809.1.c.1 / 356.2 — the [Deflect] tax is owed for the TARGET, not the
+ * card, so the engine quotes it per target tuple on the `targets` field. Keyed
+ * by target tuple; entries exist only where something is actually owed.
+ */
+function optionSurcharges(option: DecisionOption): Map<string, number> {
+  const owed = new Map<string, number>();
+  const field = option.fields?.find((f) => f.name === "targets");
+  if (!PLAY_MOVES.has(option.moveId) || !field?.surcharge) {
+    return owed;
+  }
+  for (const cardId of new Set(option.variants.map((v) => String(v.params.cardId)))) {
+    field.options?.forEach((o, i) => {
+      const key = targetKey(option.moveId, cardId, o);
+      const n = field.surcharge?.[i] ?? 0;
+      if (key !== undefined && n > 0) {
+        owed.set(key, n);
+      }
+    });
+  }
+  return owed;
+}
+
+/** The surcharge one flat play move owes for the targets it names. */
+function moveSurcharge(owed: Map<string, number>, m: FlatMove): number {
+  if (!PLAY_MOVES.has(m.moveId)) {
+    return 0;
+  }
+  const key = targetKey(m.moveId, String(m.params.cardId), m.params.targets);
+  return (key === undefined ? undefined : owed.get(key)) ?? 0;
+}
+
+/** How a taxed targeting line reads next to its printed cost (356.2 — part of the TOTAL cost). */
+function surchargeText(n: number): string {
+  return n > 0 ? ` + ${n} [rainbow] ([Deflect] surcharge)` : "";
+}
+
 /**
  * Plays the seat COULD make if it tapped runes: enumerate the play moves under
  * a temporarily flush pool (engine.applyPatches records no history), then
@@ -553,18 +592,8 @@ function probeAffordablePlays(session: GameSession, seat: string): { moves: Flat
       .map((m) => ({ moveId: m.moveId, params: (m.params ?? {}) as Record<string, unknown>, playerId: (m.playerId as string) ?? seat }));
     const richDecision = deriveActionDecision(engineDecisionContext(engine, session.seq, true), seat, true);
     for (const option of richDecision?.options ?? []) {
-      const field = option.fields?.find((f) => f.name === "targets");
-      if (!PLAY_MOVES.has(option.moveId) || !field?.surcharge) {
-        continue;
-      }
-      for (const cardId of new Set(option.variants.map((v) => String(v.params.cardId)))) {
-        field.options?.forEach((o, i) => {
-          const key = targetKey(option.moveId, cardId, o);
-          const owed = field.surcharge?.[i] ?? 0;
-          if (key !== undefined && owed > 0) {
-            surcharge.set(key, owed);
-          }
-        });
+      for (const [key, owed] of optionSurcharges(option)) {
+        surcharge.set(key, owed);
       }
     }
   } catch {
@@ -586,9 +615,17 @@ export function buildSeatMenu(session: GameSession, seat: string): { items: Menu
     if (option.moveId === "concede" || option.moveId === "resolvePendingChoice") {
       continue;
     }
+    // rule 809.1.c.1 / 356.2 — quote each targeting line at what the ENGINE will
+    // charge: printed cost plus whatever [Deflect] tax that TARGET incurs.
+    const owed = optionSurcharges(option);
     for (const v of pickVariants(option)) {
       raw.push({
-        item: { kind: "move", label: labelMove(session, v), moves: [v], sig: sigOf(v) },
+        item: {
+          kind: "move",
+          label: `${labelMove(session, v)}${surchargeText(moveSurcharge(owed, v))}`,
+          moves: [v],
+          sig: sigOf(v),
+        },
         label: "",
         order: MENU_ORDER[v.moveId] ?? 4,
       });
@@ -670,7 +707,7 @@ export function buildSeatMenu(session: GameSession, seat: string): { items: Menu
         raw.push({
           item: {
             kind: "payplay",
-            label: `Pay & ${labelMove(session, v)}${surcharge > 0 ? ` (+${surcharge} [rainbow] [Deflect] surcharge)` : ""} (auto: ${tapText}, then play)`,
+            label: `Pay & ${labelMove(session, v)}${surchargeText(surcharge)} (auto: ${tapText}, then play)`,
             moves: taps,
             play: v,
             sig: `payplay:${s}`,

@@ -145,7 +145,7 @@ describe("vs-Claude driver × [Deflect]: quoting, planning and offering the surc
     expect((field?.surcharge ?? [])[flat.indexOf(game.card("poro"))]).toBe(1);
   });
 
-  test.failing("BUG: buildSeatMenu quotes both targeting lines at the PRINTED cost — the [Deflect] surcharge is missing from the taxed line (809.1.c.1, 356.2.a.2)", async () => {
+  test("buildSeatMenu quotes each targeting line at what the engine charges — the taxed line carries the [Deflect] surcharge (809.1.c.1, 356.2.a.2)", async () => {
     // Expected: "→ Loyal Poro" is quoted at printed + [rainbow]; "→ Plain Guard" at the printed cost.
     // Actual: `labelMove` prices from `handPlayCost`, which prices the CARD, so both read
     // "— 2 energy + [fury]" and the model cannot see that one target costs a pip more.
@@ -169,14 +169,28 @@ describe("vs-Claude driver × [Deflect]: quoting, planning and offering the surc
     expect(game.p2.can("cast", "splitter")).toBe(false); // nothing in the pool yet
   });
 
-  test.failing("BUG: 'Pay & play' is offered for the DEFLECTED target with taps that cover only the base cost — the play cannot land (356.2, 809.1.c.1)", async () => {
-    // Expected: no "Pay & play" entry at all for a target whose surcharge the plan does not fund.
-    // Actual: one is synthesized ("auto: exhaust 2 runes, recycle [fury], then play"), so the model
-    // is offered a line the engine will refuse after the runes are already spent.
-    const game = await deflectedOnly().resources(P2, { energy: 0 }).runes(P2, "fury", 4).build();
+  test("'Pay & play' is NOT offered for the DEFLECTED target when the runes cover only the base cost — the play could not land (356.2, 809.1.c.1)", async () => {
+    // The energy is already banked and a single [fury] rune covers the printed Power pip exactly;
+    // nothing is left to fund the [Deflect] pip, so the entry must be absent rather than synthesized
+    // and then refused after the taps are spent.
+    const game = await deflectedOnly().resources(P2, { energy: 2 }).runes(P2, "fury", 1).build();
     const items = buildSeatMenu(sessionOf(game.engine), P2).items;
     const payplay = items.find((it) => it.kind === "payplay" && /Sky Splitter/.test(it.label));
     expect(payplay).toBeUndefined();
+
+    // Contrast: the very same purse DOES fund an untaxed target, so the absence above is the
+    // surcharge and not a missing plan.
+    const plain = await scenario()
+      .active(P2)
+      .battlefield("bf2", { controller: P1 })
+      .unit(P1, "bf2", { might: 2, name: "Plain Guard" }, "guard")
+      .unit(P2, "base", { might: 6, name: "Big Body" }, "big")
+      .hand(P2, SKY_SPLITTER, "splitter")
+      .resources(P2, { energy: 2 })
+      .runes(P2, "fury", 1)
+      .build();
+    const plainItems = buildSeatMenu(sessionOf(plain.engine), P2).items;
+    expect(plainItems.some((it) => it.kind === "payplay" && /Sky Splitter/.test(it.label))).toBe(true);
   });
 
   test("taking that entry funds the surcharge too, so the play lands — the pool must be untouched whenever it does not (358.5)", async () => {
