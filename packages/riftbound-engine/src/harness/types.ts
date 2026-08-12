@@ -277,6 +277,25 @@ export interface PickOption {
   readonly value?: unknown;
   /** rule 809.1.c — the [Deflect] surcharge (Power of any Domain) picking this option incurs. */
   readonly deflect?: number;
+  /**
+   * rule 809.1.c.1 — the total Power surcharge picking this option incurs (a
+   * [Deflect] tax, or a keyword surcharge a static imposes). Omitted when free.
+   */
+  readonly surcharge?: number;
+  /**
+   * rule 429.3 / 357.1.a (DESIGN.md §Paying costs) — set when this option's
+   * `surcharge` is NOT payable from the pool as it stands but WOULD be after
+   * the seat activates Reaction [Add] abilities. The option stays in the list
+   * (the prompt is open while runes are tapped/recycled, and every Add
+   * re-derives this), but the ANSWER is refused until the pool covers it — so a
+   * UI dims the tile with `reason` instead of hiding it, and an automatic
+   * policy that will not pay treats it as not choosable.
+   */
+  readonly needsAdd?: {
+    readonly energy?: number;
+    readonly power?: Readonly<Record<string, number>>;
+    readonly reason: string;
+  };
   /** rule 751.1 — in a `newChoices` slot: the value the item currently holds (naming it again keeps it). */
   readonly current?: boolean;
   /** rule 754 / 755 — in a `newChoices` slot: the [Deflect] surcharge newly choosing this object incurs and that is IGNORED. */

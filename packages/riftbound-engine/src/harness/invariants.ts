@@ -7,6 +7,7 @@
 
 import type { PlayerId } from "@tcg/core";
 import { isPaymentPromptFor } from "../game-definition/moves/chain/activate-ability";
+import { promptPayableCost } from "../game-definition/moves/prompt-cost";
 import { getGlobalCardRegistry } from "../operations/card-lookup";
 import { getActingSeat, getPendingChoiceChooser } from "../views/acting-seat";
 import { isTokenInstance } from "./card-state";
@@ -134,15 +135,15 @@ export const pendingChoiceGatesMoves: Invariant = {
         if (m.moveId === "concede") {
           continue;
         }
-        // rule 444.2.c / 429.3 — the Pay window an `opt-in` prompt opens for
-        // its own player keeps that player's rune Add abilities usable
-        // (`resources.ts runeAddAllowedDuringChoice`); not a gating violation.
-        // rule 419.2.a — the same holds for a `reveal-and-pick` that PLAYS the
-        // picked card: accepting it pays that card's remaining cost.
-        const payWindow =
-          pc.type === "opt-in" ||
-          (pc.type === "reveal-and-pick" && (pc as { onPicked?: string }).onPicked === "play");
-        if ((m.moveId === "exhaustRune" || m.moveId === "recycleRune") && payWindow && pid === chooser) {
+        // rule 444.2.c / 429.3 — a prompt that CHARGES its answer opens a Pay
+        // window for the seat being asked, and their rune Add abilities stay
+        // usable inside it (`resources.ts runeAddAllowedDuringChoice`); not a
+        // gating violation. `promptPayableCost` is the single source of truth
+        // for which prompts those are — a cost-bearing `opt-in`, a
+        // `reveal-and-pick` that PLAYS the pick (419.2.a), the [X] pay, and a
+        // surcharged target pick whose pick-time price is the payment (809.1.c.1).
+        const payWindow = promptPayableCost(cur.state, pc)?.payerId === pid;
+        if ((m.moveId === "exhaustRune" || m.moveId === "recycleRune") && payWindow) {
           continue;
         }
         // rule 444.2.c / 429.3.a — a payment prompt (the [X] pay, or a resolving

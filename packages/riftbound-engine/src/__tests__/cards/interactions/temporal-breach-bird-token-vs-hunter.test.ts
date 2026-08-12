@@ -125,17 +125,30 @@ describe("(a) P2 flips the hidden Breach at the Bird", () => {
     expect(offered).toEqual([bird, "centaur", "hunter", "sentry"].sort());
   });
 
-  // Expected (809.1.c/d): Deflect is a MANDATORY additional cost for an opponent choosing the Bird — with an empty
-  // power pool P2 simply cannot choose it (the free Hidden cost changes nothing; the surcharge is on top of [0]).
-  // Actual: the hidden-reveal target prompt offers the Bird and accepts the pick with 0 Power.
-  test("with an EMPTY power pool the Bird is not a choosable target for P2's Breach (Deflect surcharge owed even on a [0] flip — 809.1.d)", async () => {
+  // 809.1.c/d with 429.3: Deflect is a MANDATORY additional cost for an opponent choosing the Bird — with an empty
+  // power pool P2 cannot choose it (the free Hidden cost changes nothing; the surcharge is on top of [0]). But P2
+  // still holds a fury rune, and the prompt IS the Pay step: the Bird stays listed with what it needs, the pick is
+  // refused until the pool covers it, and recycling mid-prompt makes the very same pick land.
+  test("with an EMPTY power pool the Bird is listed but not choosable for P2's Breach — recycling mid-prompt funds it (809.1.d / 429.3)", async () => {
     const { game, bird } = await breachFlipped({ power: false });
     expect(game.p2.resources().power.fury ?? 0).toBe(0);
     const d = game.decision();
     const offered = d?.kind === "pick" ? d.options.map((o) => o.card ?? o.key) : [];
     expect(offered).toContain("hunter"); // the untaxed units are there
-    expect(offered).not.toContain(bird);
-    expect((await game.p2.try((p) => p.pick(bird))).ok).toBe(false);
+    expect(offered).toContain(bird); // …and so is the taxed one, flagged rather than hidden
+    const taxed = d?.kind === "pick" ? d.options.find((o) => (o.card ?? o.key) === bird) : undefined;
+    expect(taxed?.surcharge).toBe(1);
+    expect(taxed?.needsAdd?.reason).toContain("recycle");
+    expect((await game.p2.try((p) => p.pick(bird))).ok).toBe(false); // refused, board untouched
+    expect(game.chain()[0]?.targets ?? []).toEqual([]);
+
+    // rule 429.3 / 594 — the Add is legal with the prompt open, and re-derives the option.
+    await game.p2.recycleRune(undefined, "fury");
+    const after = game.decision();
+    expect(after?.kind === "pick" ? after.options.find((o) => (o.card ?? o.key) === bird)?.needsAdd : "x").toBeUndefined();
+    await game.p2.pick(bird);
+    expect(game.chain()[0]?.targets).toEqual([bird]);
+    expect(game.p2.resources()).toEqual({ energy: 0, power: { fury: 0 } });
   });
 
   // Expected: choosing the Bird with 1 fury floating spends it (any domain pays Deflect, 809.1.c.1) → pool 0.

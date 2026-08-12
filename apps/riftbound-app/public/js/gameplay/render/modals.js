@@ -123,7 +123,50 @@ function describeOptInCost(cost) {
    ============================================================ */
 
 /** The Energy/Power an open prompt would charge on Yes, or null when it is free. */
+/**
+ * rule 809.1.c / 429.3 — what each option of a SURCHARGED pick costs to choose,
+ * by option id. Written onto the prompt when it was raised (`deflectPerOption`)
+ * for `choose-target`, carried per option for `pick-many`; empty for a prompt
+ * whose picks are free.
+ */
+function promptSurcharges(pending) {
+  if (!pending) return {};
+  if (pending.type === "pick-many") {
+    const out = {};
+    for (const o of pending.options || []) {
+      const n = Number(o?.deflect) || 0;
+      if (n > 0) out[String(o.cardId ?? o.key)] = n;
+    }
+    return out;
+  }
+  return pending.deflectPerOption && typeof pending.deflectPerOption === "object" ? pending.deflectPerOption : {};
+}
+
+/** The viewer's pooled Power of any Domain — what a surcharge draws on (721.1.c). */
+function pooledPower() {
+  const pool = gameState?.runePools?.[viewingPlayer]?.power || {};
+  return Object.values(pool).reduce((a, b) => a + (Number(b) || 0), 0);
+}
+
+/** What choosing `cardId` still needs before the answer is legal, or 0. */
+function surchargeShortfallFor(pending, cardId) {
+  const n = Number(promptSurcharges(pending)[String(cardId)]) || 0;
+  return Math.max(0, n - pooledPower());
+}
+
 function promptResourceCost(pending) {
+  // rule 809.1.c.1 / 429.3 — a surcharged target pick is a Pay step too: the
+  // surcharge is owed as the target is CHOSEN. Which option is named decides the
+  // amount, so the pay line quotes the CHEAPEST option the pool cannot cover yet
+  // — that is the next thing a rune Add would unlock.
+  if (pending && (pending.type === "choose-target" || pending.type === "pick-many")) {
+    const have = pooledPower();
+    const unpayable = Object.values(promptSurcharges(pending)).filter(n => n > have);
+    // The FULL surcharge is the cost; `promptCostShortfall` subtracts the pool.
+    return unpayable.length
+      ? { energy: 0, power: Array.from({ length: Math.min(...unpayable) }, () => "rainbow") }
+      : null;
+  }
   if (!pending || pending.type !== "opt-in") return null;
   const src = pending.resolved?.optInCost ?? pending.acceleratePlay?.cost;
   const energy = Number(src?.energy) || 0;
@@ -500,10 +543,18 @@ function renderPendingChoiceModal() {
   // dimmed and inert next to the pickable ones.
   const revealedIds = (Array.isArray(pending.revealed) ? pending.revealed : []).map(String);
   const pickIdxOf = new Map(cardPicks.map((m, i) => [String(m.params.pickedCardId), i]));
+  // rule 809.1.c.1 / 429.3 — a [Deflect]-taxed candidate the pool cannot cover
+  // YET is still a legal choice: the engine keeps it in `pending.options` and
+  // only refuses the answer. Show it dimmed with what it needs (never hidden) —
+  // it goes live by itself once a rune Add funds it, since this whole modal
+  // re-renders on every Add.
+  const surchargeIds = Object.keys(promptSurcharges(pending)).filter(
+    id => !pickIdxOf.has(id) && surchargeShortfallFor(pending, id) > 0);
   const shownIds = [
     ...revealedIds,
     ...cardPicks.map(m => String(m.params.pickedCardId)).filter(id => !revealedIds.includes(id)),
     ...contextIds.filter(id => !revealedIds.includes(id) && !pickIdxOf.has(id)),
+    ...surchargeIds.filter(id => !revealedIds.includes(id) && !contextIds.includes(id)),
   ];
 
   if (shownIds.length) {
@@ -513,8 +564,11 @@ function renderPendingChoiceModal() {
       const imgId = (card?.definitionId ?? cid).replace(/^player-[12]-(?:main|rune)-\d+-/, "");
       const idx = pickIdxOf.get(cid);
       const isContext = contextIds.includes(cid) && idx == null;
+      // rule 429.3 — "needs [rainbow] — recycle a rune": listed, dimmed, and live
+      // the moment the pool covers it.
+      const owedHere = idx == null ? surchargeShortfallFor(pending, cid) : 0;
       const attrs = idx == null
-        ? `class="choice-modal-card choice-modal-card-ineligible${isContext ? " choice-modal-card-context" : ""}" data-card-id="${esc(cid)}" style="opacity:${isContext ? ".85" : ".4"};cursor:default"`
+        ? `class="choice-modal-card choice-modal-card-ineligible${isContext ? " choice-modal-card-context" : ""}${owedHere ? " choice-modal-card--needs-add" : ""}" data-card-id="${esc(cid)}" style="opacity:${owedHere ? ".55" : isContext ? ".85" : ".4"};cursor:default"`
         : `class="choice-modal-card" data-pick-idx="${idx}" data-card-id="${esc(cid)}" role="button" tabindex="0" aria-label="${esc(card?.name ?? cid)}"`;
       // Tokens (definitionId `token-def-<slug>`) usually have no art on disk or
       // in the CDN map, so the bare <img> 404s into a broken-image icon. Mirror
@@ -526,7 +580,9 @@ function renderPendingChoiceModal() {
         <div class="fallback-cost">${card?.energyCost != null ? esc(card.energyCost) : "&mdash;"}</div>
         <div class="fallback-name">${label}</div>
         <div class="fallback-type">${esc(card?.cardType ?? "")}</div>
-      </div></div>`;
+      </div>${owedHere ? `<div class="choice-modal-card-needs">${promptTitleHtml(
+        // rule 164.2.b — a surcharge is POWER: only recycling adds it.
+        `needs ${"[rainbow]".repeat(owedHere)} — recycle a rune`)}</div>` : ""}</div>`;
     }
     html += `</div>`;
   }

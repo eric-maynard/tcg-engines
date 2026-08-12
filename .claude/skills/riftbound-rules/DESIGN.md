@@ -47,8 +47,8 @@ sub-step is intentionally not implemented; see `moves/play/cost-model.ts`).
 - The engine only OFFERS a play, an activation or a taxed move (Mageseeker-style applied cost) when the
   CURRENT pool covers its total cost. Ready runes, an uncracked Gold, a Seal etc. are never credited and never
   auto-exhausted — even when they could obviously cover the shortfall. The player taps / recycles / cracks first,
-  then plays. Consequence: the set of legal targets is pool-only too (a [Deflect] unit is not offered until the
-  extra [A] is actually in the pool).
+  then plays. Consequence: the set of legal targets is pool-only too — except that a [Deflect] unit whose surcharge
+  a rune Add could still fund IS offered (dimmed, unselectable until paid: see the surcharged-pick bullet below).
 - The single convenience is the app's right-click Recycle: recycling an untapped rune auto-taps it for +1 Energy
   first. That resource lands in the pool BEFORE any play starts, so it is ordinary pool affordability.
 - What a menu OFFERS for a permanent (hand, Champion Zone, facedown flip) is exactly what the engine ACCEPTS and what it
@@ -71,10 +71,16 @@ sub-step is intentionally not implemented; see `moves/play/cost-model.ts`).
   before the ability is offered. Accepting is still refused until the pool actually covers it; `canAccept:false`
   now means genuinely unpayable. Automatic policies (`settle`, the harness `first` policy) treat `needsAdd` as
   "decline" — they never pay on the player's behalf.
-- Still pool-only, and NOT covered by the above: [Deflect]-taxed target picks (`choose-target` / `pick-many` with
-  `deflectTax`). Each producer filters candidates against the pool when the prompt is raised and never re-derives
-  the list, so a rune added mid-prompt cannot make a filtered-out target reappear; widening those budgets needs a
-  pick-time payability gate to replace the filter.
+- SURCHARGED target picks (`choose-target` / `pick-many` with `deflectTax` — a [Deflect] tax, 809.1.c.1, or a
+  keyword surcharge a static imposes) work the same way, gated at PICK time rather than filtered at raise time.
+  Every candidate whose surcharge is reachable stays in the option list carrying `surcharge` and, while the pool is
+  short, `needsAdd {energy, power, reason}`; the ANSWER is what gets refused (state untouched) until the pool covers
+  it. `promptPayableCost` counts these prompts as Pay steps, so rune Adds stay legal with the prompt open and every
+  Add re-derives each option's payable state (`moves/prompt-cost.ts surchargedOptions` / `surchargePayability`, used
+  by all six producers). A multi-target set is priced as a whole, so a second pick can be unaffordable where the
+  first was fine (355.14.d). Still pool-only in the one way that matters: a surcharge NOTHING could fund is not a
+  legal choice at all (809.1.d) and that candidate is dropped, exactly as an unfundable "yes" is only declinable.
+  The app shows an unaffordable target dimmed with "needs [A] — recycle a rune", never hidden.
 - Trigger optional/cost timing follows ONE model (`E/abilities/optional-kind.ts`, core-rules test
   `optional-instructions-timing.test.ts`): "you may [cost] TO Y" = base cost decided+paid at FINALIZATION (383.3.a/b,
   204.3.a); "you may Y" / "you may X. If you do, Y" = decided at FINALIZATION, X/Y performed at RESOLUTION (205, 444.2,

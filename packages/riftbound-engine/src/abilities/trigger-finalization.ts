@@ -57,6 +57,7 @@ import {
   type SpellEffectTargetShape,
 } from "../game-definition/moves/play/targeting";
 import { getDeflectSurcharge } from "../game-definition/moves/play/cost";
+import { surchargedOptions } from "../game-definition/moves/prompt-cost";
 import { getGlobalCardRegistry } from "../operations/card-lookup";
 import { type LeaveBoardContext, type LKISnapshot, snapshotLKI } from "../operations/leave-board";
 import type { RiftboundGameState } from "../types";
@@ -853,14 +854,6 @@ function itemPlanningContext(
   } as EffectContext;
 }
 
-/** Pooled Power of any Domain (rule 809.1.c.1 — a Deflect surcharge takes any). */
-function pooledPower(draft: RiftboundGameState, playerId: string): number {
-  return Object.values((draft.runePools?.[playerId]?.power ?? {}) as Partial<Record<string, number>>).reduce(
-    (a: number, b) => a + (b ?? 0),
-    0,
-  );
-}
-
 /**
  * rule 164.2.b / 429.3.a — runes this player could recycle for [rainbow] while a
  * Pay window is open. Recycling has no ready requirement (rule 594), so every
@@ -931,9 +924,16 @@ function finalizeTargetSlots(
   const effCtx = itemPlanningContext(draft, item, context);
   const surchargeOf = (ids: readonly string[]): number =>
     getDeflectSurcharge(draft, item.controller, [...ids], ctx.cards as never, item.cardId, ctx.zones as never);
-  const budget = pooledPower(draft, item.controller);
-  // rule 809.1.d — an object whose own surcharge is out of reach can never be chosen.
-  const candidates = slotCandidates(found, effCtx).filter((id) => surchargeOf([id]) <= budget);
+  // rule 809.1.d / 429.3 — an object whose own surcharge NOTHING could fund can
+  // never be chosen; one the pool cannot cover yet but a rune Add still could
+  // stays listed (the whole set is re-priced at pick time, rule 355.14.d).
+  const candidates = surchargedOptions(
+    draft,
+    item.controller,
+    slotCandidates(found, effCtx),
+    (id) => surchargeOf([id]),
+    ctx.zones as never,
+  ).options;
   let max = candidates.length;
   if (found.cap !== undefined) {
     max = Math.min(max, found.cap);

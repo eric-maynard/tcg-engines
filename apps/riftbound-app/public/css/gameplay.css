@@ -2380,6 +2380,19 @@
     .prompt-pay-rune:hover { background: #3d2708; }
     .choice-modal-btn--needs-add { opacity: .5; cursor: not-allowed; border-style: dashed; }
     .choice-modal-btn--needs-add:hover { background: #2a2545; border-color: #3a3560; }
+    /* [rule:809.1.c.1/429.3] A [Deflect]-taxed candidate the pool cannot cover
+       YET stays listed, dimmed, with what it needs — hiding it would force the
+       player to guess and pre-recycle before the prompt ever showed the target.
+       The modal re-renders on every rune Add, so the tile goes live by itself. */
+    .choice-modal-card--needs-add { border-style: dashed; position: relative; }
+    .choice-modal-card-needs {
+      margin-top: 3px;
+      font-size: 10px;
+      line-height: 1.2;
+      text-align: center;
+      color: #d8b45a;
+      white-space: nowrap;
+    }
     /* [rule:chain-overlay-targeting-clickthrough] Client-side targeting (a
        reaction spell played off the chain, body.targeting-mode) picks cards on
        the board — including base units that sit under the centred #chainBox.

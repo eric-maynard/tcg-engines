@@ -12,7 +12,8 @@ import {
 } from "../../../abilities/effects/choice";
 import type { EffectContext, ExecutableEffect } from "../../../abilities/effect-executor";
 import { resolveTarget } from "../../../abilities/target-resolver";
-import { getDeflectSurcharge, payDeflectSurcharge } from "./cost";
+import { getDeflectSurcharge } from "./cost";
+import { surchargeFields, surchargedOptions } from "../prompt-cost";
 
 type AnyEffect = Record<string, unknown>;
 
@@ -149,21 +150,23 @@ export function raisePlayTimeModeChoice(
         const item = found ? found.items[found.index] : undefined;
         if (found && item && item.targets === undefined) {
           // rule 809.1.b / 356.2.a.2 — the spell itself is already paid for, so
-          // an opposing [Deflect] object is only a legal choice if the pool
-          // still covers its surcharge; choosing it then pays that surcharge.
+          // an opposing [Deflect] object is a legal choice only if its surcharge
+          // is reachable; choosing it then pays that surcharge. rule 429.3 — one
+          // the pool does not cover YET but a rune Add still could stays listed
+          // (with `deflectPerOption`) and is refused only at pick time.
           const state = ctx.draft as Parameters<typeof getDeflectSurcharge>[0];
           const cardsForCost = ctx.cards as Parameters<typeof getDeflectSurcharge>[3];
-          const pooled = Object.values(
-            (state.runePools?.[playerId]?.power ?? {}) as Partial<Record<string, number>>,
-          ).reduce((a: number, b) => a + (b ?? 0), 0);
           // rule 809.1 — [Deflect] taxes opposing SPELLS only; an activated
           // ability choosing the same object owes nothing.
           const isSpell = item.type === "spell";
-          const surchargeOf = (id: string): number =>
-            isSpell ? getDeflectSurcharge(state, playerId, [id], cardsForCost) : 0;
-          const options = modeTargetOptions(next, next._chosenIndex as number, ctx).filter(
-            (id) => surchargeOf(id) <= pooled,
+          const taxed = surchargedOptions(
+            state,
+            playerId,
+            modeTargetOptions(next, next._chosenIndex as number, ctx),
+            (id) => (isSpell ? getDeflectSurcharge(state, playerId, [id], cardsForCost) : 0),
+            ctx.zones as never,
           );
+          const options = taxed.options;
           // rule 355.10.d.2 — the mode's target is chosen even when only one
           // is legal (the [Deflect] surcharge and "when you choose me" are then
           // paid/fired off the ANSWER, in `pending-choice.ts`).
@@ -176,7 +179,7 @@ export function raisePlayTimeModeChoice(
               sourceCardId,
               type: "choose-target",
               ...(options.length === 1 ? { soleOption: true as const } : {}),
-              ...(options.some((id) => surchargeOf(id) > 0) ? { deflectTax: true } : {}),
+              ...surchargeFields(taxed),
             };
             return true;
           }

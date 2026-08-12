@@ -18,7 +18,12 @@ import type { CardId, PlayerId } from "@tcg/core";
 import { costElectionHalves } from "../game-definition/moves/play/cost";
 import { modeOptionLabel, spellModeLabels } from "../game-definition/moves/play/play-time-modes";
 import { pairEffectRoles } from "../game-definition/moves/play/targeting";
-import { promptNeedsAdd } from "../game-definition/moves/prompt-cost";
+import {
+  potentialAddsFromMoves,
+  promptIsSurcharged,
+  promptNeedsAdd,
+  surchargePayability,
+} from "../game-definition/moves/prompt-cost";
 import { getGlobalCardRegistry } from "../operations/card-lookup";
 import type { PendingChoice, RiftboundGameState } from "../types/game-state";
 import { getActingSeat, getPendingChoiceChooser } from "../views/acting-seat";
@@ -449,6 +454,37 @@ function buildFields(ctx: DecisionContext, moveId: string, variants: FlatMove[],
   return fields;
 }
 
+/**
+ * rule 809.1.c.1 / 429.3 — the per-option payability annotation of a SURCHARGED
+ * pick (a [Deflect]-taxed target, a keyword surcharge a static imposes).
+ *
+ * Every legal candidate stays in the option list; what changes with the pool is
+ * whether it may be ANSWERED with. `needsAdd` marks the ones the pool cannot
+ * cover yet but a rune Add still could — the prompt is open across those Adds
+ * (DESIGN.md §Paying costs), and because this is re-derived on every decision
+ * each tap/recycle flips the affected options live. Returns a per-option
+ * annotator so the seat's Add capacity is read once per decision.
+ */
+function surchargeAnnotator(
+  ctx: DecisionContext,
+  seat: Seat,
+): (surcharge: number) => { surcharge?: number; needsAdd?: PickOption["needsAdd"] } {
+  let addable: number | undefined;
+  return (surcharge) => {
+    if (!(surcharge > 0)) {
+      return {};
+    }
+    if (addable === undefined) {
+      const adds = potentialAddsFromMoves(
+        ctx.legal(seat).filter((m) => m.moveId !== "resolvePendingChoice"),
+      );
+      addable = Object.values(adds.power).reduce<number>((a, b) => a + (b ?? 0), 0);
+    }
+    const pay = surchargePayability(ctx.state, seat as string, surcharge, addable);
+    return { surcharge, ...(pay.needsAdd ? { needsAdd: pay.needsAdd } : {}) };
+  };
+}
+
 export function groupActions(
   ctx: DecisionContext,
   flat: readonly FlatMove[],
@@ -664,8 +700,16 @@ export function deriveFromPendingChoice(ctx: DecisionContext, pc: PendingChoice)
     // rule 355.13 / 373 / 355.11.b — generic min..max multi-pick in ONE answer.
     case "pick-many": {
       const slotSemantics = (pc as { slotSemantics?: "split" | "upTo" }).slotSemantics;
+      // rule 809.1.c.1 / 429.3 — a surcharged set prices each option and keeps
+      // the unaffordable ones listed with `needsAdd`; the seat's rune Adds ride
+      // along so a UI can fund the pick without closing the prompt.
+      const pmSurcharge = surchargeAnnotator(ctx, seat);
+      const pmActions = promptIsSurcharged(pc)
+        ? groupActions(ctx, ctx.legal(seat).filter((m) => m.moveId !== "resolvePendingChoice")).options
+        : [];
       const d: PickDecision = {
         ...base,
+        ...(pmActions.length > 0 ? { actions: pmActions } : {}),
         allowDecline: pc.min === 0,
         id: decisionId(ctx.seq, seat, "pick"),
         kind: "pick",
@@ -674,6 +718,7 @@ export function deriveFromPendingChoice(ctx: DecisionContext, pc: PendingChoice)
         options: pc.options.map((o) => ({
           ...(o.cardId ? { card: o.cardId } : {}),
           ...(typeof (o as { deflect?: number }).deflect === "number" ? { deflect: (o as { deflect: number }).deflect } : {}),
+          ...pmSurcharge((o as { deflect?: number }).deflect ?? 0),
           key: o.key,
           label:
             (o.label ?? (o.cardId ? ctx.label(o.cardId) : o.key)) +
@@ -838,14 +883,33 @@ export function deriveFromPendingChoice(ctx: DecisionContext, pc: PendingChoice)
       const capacity = pc.anyNumber
         ? Math.max(1, Math.min(pc.maxPicks ?? pc.options.length, pc.options.length + alreadyPicked) - alreadyPicked)
         : 1;
+      // rule 809.1.c.1 / 429.3 — a [Deflect]-taxed target pick keeps EVERY legal
+      // candidate listed: the ones the pool cannot cover yet carry `needsAdd`
+      // and become answerable the moment a rune Add funds them. The seat's Add
+      // moves ride along on the decision so nobody has to pre-tap.
+      const ctDeflect = (pc as { deflectPerOption?: Readonly<Record<string, number>> }).deflectPerOption ?? {};
+      const ctSurcharge = surchargeAnnotator(ctx, seat);
+      const ctActions = promptIsSurcharged(pc)
+        ? groupActions(ctx, ctx.legal(seat).filter((m) => m.moveId !== "resolvePendingChoice")).options
+        : [];
       const d: PickDecision = {
         ...base,
+        ...(ctActions.length > 0 ? { actions: ctActions } : {}),
         allowDecline: pc.anyNumber === true || pc.optional === true,
         id: decisionId(ctx.seq, seat, "pick"),
         kind: "pick",
         max: capacity,
         min: pc.optional === true && pc.anyNumber !== true ? 0 : 1,
-        options: pc.options.map((id) => ({ card: id, key: id, label: ctx.label(id) })),
+        options: pc.options.map((id) => {
+          const surcharge = ctDeflect[id] ?? 0;
+          return {
+            card: id,
+            ...(surcharge > 0 ? { deflect: surcharge } : {}),
+            ...ctSurcharge(surcharge),
+            key: id,
+            label: ctx.label(id) + (surcharge > 0 ? ` (+${surcharge} [Deflect])` : ""),
+          };
+        }),
         prompt: pc.boundTargets ? "Choose a target to drop" : `Choose a target for ${source.cardId ? ctx.label(source.cardId) : "the effect"}`,
         semantics: pc.boundTargets ? "drop-target" : "target",
         // rule 355.10.d.2 — one legal option is still a choice; flag it so the

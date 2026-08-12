@@ -21,7 +21,8 @@ import type { CardId as CoreCardId, ZoneId as CoreZoneId } from "@tcg/core";
 import type { RiftboundGameState } from "../../../types";
 import { resolveTarget } from "../../../abilities/target-resolver";
 import { getBattlefieldZoneId } from "../../../zones/zone-configs";
-import { payAnyDomainPower, totalPooledPower } from "../chain/resolve";
+import { payAnyDomainPower } from "../chain/resolve";
+import { surchargeFields, surchargedOptions } from "../prompt-cost";
 import { getDeflectSurcharge } from "./cost";
 import { fireTriggers } from "../../../abilities/trigger-runner";
 
@@ -120,10 +121,14 @@ function slotOptions(
 /**
  * rule 809.1.b / 809.1.d (356.2.a.2) — [Deflect] is a MANDATORY additional cost
  * of CHOOSING an opponent's object, owed on top of whatever the card cost, a
- * [0] Hidden flip included (rule 811.1.a). A candidate whose surcharge the
- * caster cannot cover is therefore not a legal choice and is never offered.
- * `deflectTax` marks a real prompt so `pending-choice.ts` charges the pick
- * (rule 809.1.c.1 — the surcharge is owed as the target is chosen).
+ * [0] Hidden flip included (rule 811.1.a).
+ *
+ * rule 429.3 — payability is judged at PICK time, not here: a candidate the
+ * pool cannot cover right now but a rune Add still could stays in the list
+ * (carrying its surcharge), because the chooser may tap/recycle while the
+ * prompt is open. Only a surcharge nothing could ever fund is no legal choice.
+ * `deflectTax` + `deflectPerOption` mark a real prompt so `pending-choice.ts`
+ * gates and charges the pick (rule 809.1.c.1 — owed as the target is chosen).
  */
 export function filterDeflectAffordable(
   draft: RiftboundGameState,
@@ -131,12 +136,19 @@ export function filterDeflectAffordable(
   sourceCardId: string,
   ids: readonly string[],
   ctx: RevealLockContext,
-): { options: string[]; deflectTax: boolean } {
-  const budget = totalPooledPower(draft, playerId);
-  const surchargeOf = (id: string): number =>
-    getDeflectSurcharge(draft, playerId, [id], ctx.cards, sourceCardId, ctx.zones);
-  const options = ids.filter((id) => surchargeOf(id) <= budget);
-  return { deflectTax: options.some((id) => surchargeOf(id) > 0), options };
+): {
+  options: string[];
+  payableNow: string[];
+  deflectTax: boolean;
+  deflectPerOption: Record<string, number>;
+} {
+  return surchargedOptions(
+    draft,
+    playerId,
+    ids,
+    (id) => getDeflectSurcharge(draft, playerId, [id], ctx.cards, sourceCardId, ctx.zones),
+    ctx.zones as never,
+  );
 }
 
 /** Pay the [Deflect] surcharge for objects bound without a prompt (rule 402.2). */
@@ -168,14 +180,18 @@ function advance(
   ctx: RevealLockContext,
 ): boolean {
   for (let i = lock.picked.length; i < lock.slots.length; i++) {
-    const { deflectTax, options } = filterDeflectAffordable(
+    const taxed = filterDeflectAffordable(
       draft,
       lock.playerId,
       lock.cardId,
       slotOptions(draft, ctx, lock, lock.slots[i]),
       ctx,
     );
-    if (options.length >= 2) {
+    const { options, payableNow } = taxed;
+    // rule 402.2 / 429.3 — a sole candidate binds without asking only when its
+    // surcharge is payable NOW; one that first needs a rune Add is prompted, so
+    // the chooser can tap/recycle and then name it (DESIGN.md manual pay).
+    if (options.length >= 2 || (options.length === 1 && payableNow.length === 0)) {
       writeLockedTargets(draft, itemId, lock);
       draft.pendingChoice = {
         bindToChainItemId: itemId,
@@ -184,7 +200,7 @@ function advance(
         playerId: lock.playerId as never,
         remaining: 1,
         sourceCardId: lock.cardId as never,
-        ...(deflectTax ? { deflectTax: true as const } : {}),
+        ...surchargeFields(taxed),
         type: "choose-target",
       };
       return true;

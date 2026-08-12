@@ -51,6 +51,7 @@ import {
   filterDeflectAffordable,
   isSinglePickSlot,
 } from "./reveal-target-lock";
+import { surchargeFields } from "../prompt-cost";
 import {
   collectSequenceTargetSlots,
   enumerateSubsetsUpTo,
@@ -904,15 +905,11 @@ function lockRevealedSpellTarget(
       ctx.zones.getCardZone(id as CoreCardId) === bfZone,
   );
   // rule 809.1.b / 809.1.d — an opponent's [Deflect] object costs extra to
-  // CHOOSE, on top of whatever the card cost (a [0] Hidden flip included), so a
-  // candidate whose surcharge this caster cannot cover is not offered.
-  const { deflectTax, options: affordable } = filterDeflectAffordable(
-    draft,
-    playerId,
-    cardId,
-    options,
-    ctx,
-  );
+  // CHOOSE, on top of whatever the card cost (a [0] Hidden flip included). rule
+  // 429.3 — a surcharge the pool cannot cover but a rune Add still could keeps
+  // the candidate listed; only an unreachable one is not offered.
+  const taxed = filterDeflectAffordable(draft, playerId, cardId, options, ctx);
+  const affordable = taxed.options;
   if (affordable.length === 0) {
     return;
   }
@@ -929,7 +926,7 @@ function lockRevealedSpellTarget(
     remaining: 1,
     ...(affordable.length === 1 ? { soleOption: true as const } : {}),
     sourceCardId: cardId as never,
-    ...(deflectTax ? { deflectTax: true as const } : {}),
+    ...surchargeFields(taxed),
     type: "choose-target",
   };
 }

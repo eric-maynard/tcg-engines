@@ -6,6 +6,7 @@
 // zero everywhere is a legal answer.
 import type { CardId as CoreCardId } from "@tcg/core";
 import { getDeflectSurcharge } from "../../game-definition/moves/play/cost";
+import { surchargeFields, surchargedOptions } from "../../game-definition/moves/prompt-cost";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import type { TargetDescriptor } from "../target-resolver";
 import { resolveTarget } from "../target-resolver";
@@ -120,27 +121,27 @@ export function raiseChoosePerLocationChoice(
   // rule 809.1.c / 809.1.c.1 (356.2.a.2) — [Deflect] taxes ABILITIES as well as
   // spells, and the surcharge is incurred when the target is CHOSEN. This
   // prompt is built from `candidates` (not `target`), so it never passes
-  // through the generic gating in chain/resolve.ts: a candidate whose surcharge
-  // the chooser cannot cover is dropped here, and the prompt carries
-  // `deflectTax` so pending-choice charges it at pick time.
-  const surchargeOf = (id: string): number =>
-    getDeflectSurcharge(
-      ctx.draft,
-      ctx.playerId,
-      [id],
-      ctx.cards as Parameters<typeof getDeflectSurcharge>[3],
-      ctx.sourceCardId,
-    );
-  const deflectTax = options.some((id) => surchargeOf(id) > 0);
-  let pool = options;
-  if (deflectTax) {
-    const budget = Object.values(
-      (ctx.draft.runePools?.[ctx.playerId]?.power ?? {}) as Partial<Record<string, number>>,
-    ).reduce((a: number, b) => a + (b ?? 0), 0);
-    pool = options.filter((id) => surchargeOf(id) <= budget);
-    if (pool.length === 0) {
-      return false;
-    }
+  // through the generic gating in chain/resolve.ts: a candidate no Add could
+  // ever fund is dropped here (809.1.d), one the pool merely does not cover YET
+  // stays listed (429.3), and the prompt carries `deflectTax` +
+  // `deflectPerOption` so pending-choice gates and charges it at pick time.
+  const taxed = surchargedOptions(
+    ctx.draft,
+    ctx.playerId,
+    options,
+    (id) =>
+      getDeflectSurcharge(
+        ctx.draft,
+        ctx.playerId,
+        [id],
+        ctx.cards as Parameters<typeof getDeflectSurcharge>[3],
+        ctx.sourceCardId,
+      ),
+    ctx.zones as never,
+  );
+  const pool = taxed.options;
+  if (pool.length === 0) {
+    return false;
   }
   // rule 355.13: "up to one at EACH location" — the cap is the number of
   // distinct locations that hold a candidate, and declining is always legal.
@@ -157,7 +158,7 @@ export function raiseChoosePerLocationChoice(
     };
   ctx.draft.pendingChoice = {
     anyNumber: true,
-    ...(deflectTax ? { deflectTax: true as const } : {}),
+    ...surchargeFields(taxed),
     ...extra,
     effect: effect as never,
     maxPicks: locations.size,

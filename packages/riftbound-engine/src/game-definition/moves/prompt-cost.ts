@@ -120,14 +120,17 @@ export function promptPayableCost(
       : undefined;
   }
 
-  // NOT covered (deliberately): a [Deflect]-taxed `choose-target` / `pick-many`
-  // (809.1.c.1 — the surcharge is owed as the target is CHOSEN). Opening the
-  // rune window there would buy nothing today: each producer bakes its option
-  // list at prompt time by filtering candidates against the pool as it then
-  // stands (`filterDeflectAffordable` and its five siblings) and never
-  // re-derives it, so a rune added mid-prompt could not make a filtered-out
-  // target reappear. Widening those budgets needs a pick-time payability gate
-  // to replace the filter — tracked separately, not folded in here.
+  // rule 809.1.c.1 / 429.3 — a surcharged `choose-target` / `pick-many` (a
+  // [Deflect] tax, or a keyword surcharge a static imposes) is a Pay step: the
+  // surcharge is owed as the target is CHOSEN, so the chooser may Add runes
+  // while the prompt is open and answer once the pool covers the option they
+  // want (`surchargePayability` re-derives each option after every Add). Which
+  // option is named decides the amount, so no single shortfall is quoted here.
+  if (pc.type === "choose-target" || pc.type === "pick-many") {
+    return promptIsSurcharged(pc) && typeof pc.playerId === "string"
+      ? { energy: 0, openEnded: true, payerId: pc.playerId, power: [] }
+      : undefined;
+  }
 
   if (pc.type !== "opt-in" || typeof payer !== "string") {
     return undefined;
@@ -344,4 +347,148 @@ export function promptNeedsAdd(
     ...(Object.keys(short.power).length > 0 ? { power: short.power } : {}),
     reason: `${parts.join(" and ")} first`,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Pick-time payability of a SURCHARGED option (rule 809.1.c/d + 429.3)
+// ---------------------------------------------------------------------------
+
+/**
+ * rule 809.1.c.1 — a prompt whose PICK carries a price: a [Deflect]-taxed
+ * `choose-target` (`deflectTax`) or the `pick-many` target set whose aggregate
+ * surcharge is gated (`constraint.deflectAffordable`, rule 355.14.d).
+ */
+export function promptIsSurcharged(pending: unknown): boolean {
+  const pc = pending as
+    | { deflectTax?: boolean; constraint?: { deflectAffordable?: boolean } }
+    | undefined;
+  return pc?.deflectTax === true || pc?.constraint?.deflectAffordable === true;
+}
+
+/** rule 135.2.e — the seat's pooled Power, all Domains (what a surcharge draws on). */
+export function pooledPowerOf(state: RiftboundGameState, playerId: string): number {
+  const power = (state.runePools?.[playerId]?.power ?? {}) as Partial<Record<string, number>>;
+  return Object.values(power).reduce<number>((a, b) => a + (b ?? 0), 0);
+}
+
+/** The rune-pool reader the raise-time helpers need (the engine's zone accessor). */
+export interface RunePoolZones {
+  getCardsInZone: (zone: never, player: never) => readonly unknown[];
+}
+
+/**
+ * rule 429.3 / 594 — how much more Power the seat could still ADD while a
+ * prompt is open: one per rune in their Rune Pool. Recycling has no readiness
+ * condition (594), and a surcharge takes Power of ANY Domain (721.1.c), so the
+ * rune count alone is the ceiling. Without a zone reader nothing is assumed.
+ */
+export function addablePowerOf(
+  playerId: string,
+  zones: RunePoolZones | undefined,
+): number {
+  if (!zones?.getCardsInZone) {
+    return 0;
+  }
+  try {
+    return zones.getCardsInZone("runePool" as never, playerId as never).length;
+  } catch {
+    return 0;
+  }
+}
+
+/** What a surcharged option costs and whether the seat can answer with it. */
+export interface SurchargePayability {
+  readonly surcharge: number;
+  /** The pool covers it RIGHT NOW — answering with this option is legal. */
+  readonly payableNow: boolean;
+  /** It is payable now, or would be after the seat's Reaction [Add] abilities. */
+  readonly reachable: boolean;
+  /** Set only while `reachable && !payableNow`: the top-up still owed. */
+  readonly needsAdd?: NeedsAdd;
+}
+
+/**
+ * rule 809.1.d / 429.3 — pick-time payability of ONE option's surcharge.
+ *
+ * `addable` is what Reaction [Add] abilities could still put in the pool
+ * (`addablePowerOf` from a zone reader, or `potentialAddsFromMoves` from the
+ * legal moves). An option the pool cannot cover but an Add could is still a
+ * legal candidate — it stays in the option list carrying `needsAdd`, and only
+ * the ANSWER is refused until the pool actually covers it. An option nothing
+ * could ever fund is not a legal choice at all (809.1.d).
+ */
+export function surchargePayability(
+  state: RiftboundGameState,
+  playerId: string,
+  surcharge: number,
+  addable = 0,
+): SurchargePayability {
+  const pooled = pooledPowerOf(state, playerId);
+  const payableNow = surcharge <= pooled;
+  const reachable = surcharge <= pooled + addable;
+  if (payableNow || !reachable) {
+    return { payableNow, reachable, surcharge };
+  }
+  const owed = surcharge - pooled;
+  return {
+    needsAdd: {
+      power: { rainbow: owed },
+      reason: `recycle ${owed === 1 ? "a rune" : `${owed} runes`} for ${"[rainbow]".repeat(owed)} first`,
+    },
+    payableNow,
+    reachable,
+    surcharge,
+  };
+}
+
+/**
+ * rule 809.1.d — the candidates a surcharged prompt may OFFER, plus the prompt
+ * fields that let every later reader re-derive their payable state. Candidates
+ * whose surcharge no Add could ever fund are dropped (they are not legal
+ * choices); every other candidate stays listed, however short the pool is now.
+ */
+export function surchargedOptions<T extends string>(
+  state: RiftboundGameState,
+  playerId: string,
+  ids: readonly T[],
+  surchargeOf: (id: T) => number,
+  zones: RunePoolZones | undefined,
+): {
+  options: T[];
+  /** The subset the pool covers RIGHT NOW — the only ones that may be AUTO-bound (402.2). */
+  payableNow: T[];
+  deflectTax: boolean;
+  deflectPerOption: Record<string, number>;
+} {
+  const addable = addablePowerOf(playerId, zones);
+  const options: T[] = [];
+  const payableNow: T[] = [];
+  const deflectPerOption: Record<string, number> = {};
+  let deflectTax = false;
+  for (const id of ids) {
+    const surcharge = surchargeOf(id);
+    const pay = surchargePayability(state, playerId, surcharge, addable);
+    if (!pay.reachable) {
+      continue;
+    }
+    options.push(id);
+    if (pay.payableNow) {
+      payableNow.push(id);
+    }
+    if (surcharge > 0) {
+      deflectPerOption[id] = surcharge;
+      deflectTax = true;
+    }
+  }
+  return { deflectPerOption, deflectTax, options, payableNow };
+}
+
+/** The `deflectTax` / `deflectPerOption` fields to spread onto a raised prompt. */
+export function surchargeFields(taxed: {
+  deflectTax: boolean;
+  deflectPerOption: Record<string, number>;
+}): { deflectTax?: true; deflectPerOption?: Record<string, number> } {
+  return taxed.deflectTax
+    ? { deflectPerOption: taxed.deflectPerOption, deflectTax: true as const }
+    : {};
 }

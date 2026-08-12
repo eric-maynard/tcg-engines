@@ -972,6 +972,14 @@ export interface ChooseTargetChoice {
    */
   readonly deflectTax?: true;
   /**
+   * rule 809.1.c / 429.3 — what each surcharged option costs to CHOOSE, by
+   * option id. Written when the prompt is raised so every later reader (the
+   * pick-time gate, the harness decision, the UI) can re-derive whether the
+   * pool covers it — including after a rune Add made mid-prompt. Options with
+   * no surcharge are omitted.
+   */
+  readonly deflectPerOption?: Readonly<Record<string, number>>;
+  /**
    * rule 355.13 / 402.1 — the prompt may be declined (`accept:false`): a "you
    * may" whose choice this pick is.
    */

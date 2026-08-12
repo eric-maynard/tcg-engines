@@ -43,6 +43,7 @@ import { areAllies } from "../../../operations/teams";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../../types";
 import { getCardEffectiveMight, getDeflectSurcharge, xCostIsPower } from "../play/cost";
+import { surchargedOptions } from "../prompt-cost";
 import {
   collectSequenceTargetSlots,
   findAmountReferenceTarget,
@@ -1301,20 +1302,28 @@ export function executeResolvedItem(
     const anyNumber = quantity === "any";
     const multiQuantity = anyNumber || (typeof quantity === "object" && quantity !== null);
     let deflectTax = false;
+    let deflectPerOption: Record<string, number> = {};
     if (options.length > 0) {
-      const surchargeOf = (id: string): number =>
-        getDeflectSurcharge(draft, resolved.controller, [id], baseCtx.cards);
-      const available = totalPooledPower(draft, resolved.controller);
-      deflectTax = options.some((id) => surchargeOf(id) > 0);
-      if (deflectTax) {
-        const payable = options.filter((id) => surchargeOf(id) <= available);
-        // rule 404.2 — a MANDATORY single choice with nothing affordable removes
-        // the item; an "up to N"/"any number" set may simply name nothing (355.13).
-        if (payable.length === 0 && !multiQuantity) {
-          return finalizeOnly ? { remove: true } : undefined;
-        }
-        options = payable;
+      // rule 809.1.d / 429.3 — a candidate the pool cannot cover but a rune Add
+      // still could is a LEGAL choice, so it stays listed with its surcharge and
+      // is refused only at pick time; one nothing could fund is dropped here.
+      const taxed = surchargedOptions(
+        draft,
+        resolved.controller,
+        options,
+        (id) => getDeflectSurcharge(draft, resolved.controller, [id], baseCtx.cards),
+        baseCtx.zones as never,
+      );
+      deflectTax = taxed.deflectTax;
+      deflectPerOption = taxed.deflectPerOption;
+      // rule 404.2 — a MANDATORY single choice with nothing reachable removes
+      // the item; an "up to N"/"any number" set may simply name nothing (355.13).
+      // The surviving list is taken whether or not a SURVIVOR is taxed: a
+      // candidate dropped for an unfundable surcharge must not leak back in.
+      if (taxed.options.length === 0 && !multiQuantity) {
+        return finalizeOnly ? { remove: true } : undefined;
       }
+      options = taxed.options;
     }
     // rule 355.13 (ogn-073-298): "up to N <things>" — the controller picks
     // 0..N distinct targets; picks accumulate like "any number" capped at N.
@@ -1355,7 +1364,7 @@ export function executeResolvedItem(
         maxPicks: upTo,
         picked: [],
         ...bindTag,
-        ...(deflectTax ? { deflectTax: true as const } : {}),
+        ...(deflectTax ? { deflectPerOption, deflectTax: true as const } : {}),
       };
       return undefined;
     }
@@ -1387,7 +1396,7 @@ export function executeResolvedItem(
           // instead of accumulating one unit per prompt.
           ...(effect?.type === "move" ? { answerAsSet: true } : {}),
           picked: [],
-          ...(deflectTax ? { deflectTax: true as const } : {}),
+          ...(deflectTax ? { deflectPerOption, deflectTax: true as const } : {}),
         };
         return undefined;
       }
@@ -1432,7 +1441,7 @@ export function executeResolvedItem(
         ...(typeof baseCtx.sourceZone === "string" ? { sourceZone: baseCtx.sourceZone } : {}),
         // rule 809.1.c.1 — the surcharge for choosing a [Deflect] card is owed
         // at PICK time; the prompt carries the obligation to `pending-choice.ts`.
-        ...(deflectTax ? { deflectTax: true as const } : {}),
+        ...(deflectTax ? { deflectPerOption, deflectTax: true as const } : {}),
       };
       return undefined;
     } else {

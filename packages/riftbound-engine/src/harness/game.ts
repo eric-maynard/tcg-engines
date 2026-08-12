@@ -58,6 +58,17 @@ import { HarnessError, P1, P2, SPECTATOR } from "./types";
 export type Policy = (decision: Decision, game: Game) => AnswerShorthand | undefined;
 
 /** Pass priority/focus; answer only forced prompts (single legal pick). */
+/**
+ * rule 809.1.c.1 / 429.3 (DESIGN.md §Paying costs) — the options an AUTOMATIC
+ * policy may take. An option carrying `needsAdd` is a legal candidate whose
+ * surcharge the pool does not cover yet: answering with it is refused until the
+ * seat taps/recycles runes, and paying is never automatic (a policy must not
+ * spend a live player's runes), so settling treats it as not choosable.
+ */
+function choosableOptions(d: { options: readonly { needsAdd?: unknown }[] }): readonly { key: string }[] {
+  return d.options.filter((o) => o.needsAdd === undefined) as readonly { key: string }[];
+}
+
 export const passivePolicy: Policy = (d) => {
   if (d.kind === "action") {
     if ((d.context === "chain" || d.context === "showdown") && d.passKey) {
@@ -86,15 +97,16 @@ export const passivePolicy: Policy = (d) => {
   // rule 355.10.d.2 — a sole legal option is prompted, never auto-bound. Bots
   // and unattended tests do not need the confirmation click, so settling takes
   // the option (the answer a human's one-click Confirm would give).
-  if (d.kind === "pick" && d.soleOption === true && d.options[0] && !isPlayFromPile) {
-    return { keys: [d.options[0].key], kind: "pick" };
+  // rule 429.3 — but never an option still owing a rune Add: paying is manual.
+  if (d.kind === "pick" && d.soleOption === true && choosableOptions(d)[0] && !isPlayFromPile) {
+    return { keys: [choosableOptions(d)[0]?.key as string], kind: "pick" };
   }
   // rule 355.14.e — a split with one surviving recipient: the whole amount is
   // the only legal assignment.
   if (d.kind === "distribute" && d.soleOption === true && d.buckets[0]) {
     return { allocation: { [d.buckets[0].key]: d.total }, kind: "distribute" };
   }
-  if (d.kind === "pick" && d.options.length === 1 && d.min === 1 && !isPlayFromPile) {
+  if (d.kind === "pick" && choosableOptions(d).length === 1 && d.options.length === 1 && d.min === 1 && !isPlayFromPile) {
     return { keys: [d.options[0]?.key as string], kind: "pick" };
   }
   // rule 356.4.b — an "[N] or [rainbow] less" election nobody answered keeps
@@ -107,7 +119,9 @@ export const passivePolicy: Policy = (d) => {
   if (d.kind === "order" && d.defaultable) {
     return { keys: [], kind: "order" };
   }
-  if (d.kind === "pick" && d.options.length === 0 && d.allowDecline) {
+  // rule 355.13 / 429.3 — nothing left to name (or nothing the pool can pay
+  // for, and this policy never pays): declining is the clean answer.
+  if (d.kind === "pick" && choosableOptions(d).length === 0 && d.allowDecline) {
     return { kind: "decline" };
   }
   // rule 465.2.c.3 — a combat damage assignment always has a forced/greedy
@@ -130,8 +144,8 @@ export const passivePolicy: Policy = (d) => {
 export const firstOptionPolicy: Policy = (d, g) => {
   // "first option" keeps draining an "any number" continuation rather than
   // declining it (the passive policy stops there — rule 355.13).
-  if (d.kind === "pick" && d.min === 0 && d.allowDecline && d.semantics === "target" && d.options.length > 0) {
-    return { keys: [d.options[0]?.key as string], kind: "pick" };
+  if (d.kind === "pick" && d.min === 0 && d.allowDecline && d.semantics === "target" && choosableOptions(d).length > 0) {
+    return { keys: [choosableOptions(d)[0]?.key as string], kind: "pick" };
   }
   const passive = passivePolicy(d, g);
   if (passive !== undefined) {
@@ -139,7 +153,11 @@ export const firstOptionPolicy: Policy = (d, g) => {
   }
   switch (d.kind) {
     case "pick": {
-      return d.options.length > 0 ? { keys: d.options.slice(0, Math.max(1, d.min)).map((o) => o.key), kind: "pick" } : { kind: "decline" };
+      // rule 429.3 — an option still owing a rune Add is not choosable here.
+      const usable = choosableOptions(d);
+      return usable.length > 0
+        ? { keys: usable.slice(0, Math.max(1, d.min)).map((o) => o.key), kind: "pick" }
+        : { kind: "decline" };
     }
     case "yes-no": {
       // rule 429.3 — `needsAdd` means "yes" needs runes tapped first; an

@@ -72,6 +72,7 @@ import type {
   RiftboundMoves,
 } from "../../types";
 import { buildEffectContext, executeResolvedItem } from "./chain-moves";
+import { pooledPowerOf, surchargeFields, surchargedOptions } from "./prompt-cost";
 import { deductAbilityCost } from "./chain/activate-ability";
 import { canAffordPower } from "./chain/effect-context";
 import {
@@ -146,6 +147,46 @@ function chargePromptedDeflectTax(
 }
 
 /**
+ * rule 809.1.d / 429.3 — the PICK-TIME payability gate of a surcharged
+ * `choose-target`. Every reachable candidate stays in the option list even
+ * while the pool is short (the chooser may Add runes with the prompt open), so
+ * the answer itself is what gets refused: naming a set whose surcharge the pool
+ * cannot cover right now leaves the state untouched.
+ *
+ * rule 355.14.d — an "up to N" / split set accumulates, so the whole set named
+ * so far is priced together: a second pick may be unaffordable where the first
+ * was fine.
+ */
+function deflectPickPayable(
+  state: RiftboundGameState,
+  choice: {
+    deflectTax?: true;
+    playerId: string;
+    picked?: readonly string[];
+    boundTargets?: readonly string[];
+    assign?: boolean;
+  },
+  pickedIds: readonly string[],
+  cards: { getCardOwner?: unknown; getCardController?: unknown; getCardMeta?: unknown },
+): boolean {
+  // rule 355.14.h — a DROP prompt un-chooses; nothing new is chosen, nothing owed.
+  if (choice.deflectTax !== true || (choice.boundTargets !== undefined && choice.assign !== true)) {
+    return true;
+  }
+  const whole = [...new Set([...(choice.picked ?? []), ...pickedIds])];
+  if (whole.length === 0) {
+    return true;
+  }
+  const owed = getDeflectSurcharge(
+    state,
+    choice.playerId,
+    whole,
+    cards as Parameters<typeof getDeflectSurcharge>[3],
+  );
+  return owed <= pooledPowerOf(state, choice.playerId);
+}
+
+/**
  * rule 355.10 (sfd-039-221 Royal Entourage) — a modal ability's target belongs
  * to the CHOSEN mode ("ready or exhaust a legend"), so it is declared right
  * after the mode is picked. With two or more legal candidates the controller
@@ -198,21 +239,20 @@ function liftModalTarget(
   // surcharge the chooser cannot cover is not a legal choice and must never be
   // offered (nor auto-bound for free). The source is already on the chain when a
   // modal target is lifted, so the whole pooled Power is the budget.
-  const deflectBudget = Object.values(
-    (draft as { runePools?: Record<string, { power?: Partial<Record<string, number>> }> })
-      .runePools?.[controller]?.power ?? {},
-  ).reduce((a: number, b) => a + (b ?? 0), 0);
-  const options = allOptions.filter(
-    (id) => getDeflectSurcharge(draft, controller, [id], context.cards) <= deflectBudget,
+  const taxed = surchargedOptions(
+    draft,
+    controller,
+    allOptions as readonly string[],
+    (id) => getDeflectSurcharge(draft, controller, [id], context.cards),
+    context.zones,
   );
+  const options = taxed.options;
   const deflectFiltered = options.length < allOptions.length;
   // rule 809.1.c.1 (rule-id: sfd-077-221) — the [Deflect] surcharge is owed
   // when the target is CHOSEN, which for a modal effect is here and not at
   // cast time. A sole auto-bound candidate is charged immediately; a real
   // prompt carries `deflectTax` and is charged at pick time.
-  const deflectTax = options.some(
-    (id) => getDeflectSurcharge(draft, controller, [id], context.cards) > 0,
-  );
+  const deflectTax = taxed.deflectTax;
   // rule 355.8 / 442.1.a (rule-id: ven-035-166) — a mode whose descriptor
   // RESTRICTS what it may choose ("a unit that's [Empowered]") is still the
   // controller's public choice: prompt with the sole survivor rather than
@@ -220,7 +260,11 @@ function liftModalTarget(
   // fixed-destination move prompt in `chain/resolve.ts`).
   const restrictedSole =
     options.length === 1 &&
-    (deflectFiltered ||
+    // rule 429.3 — a sole candidate whose surcharge still needs a rune Add is
+    // never auto-bound (nor auto-charged): prompt so the chooser can
+    // tap/recycle with it open and only then name it.
+    (taxed.payableNow.length === 0 ||
+      deflectFiltered ||
       ((t as { filter?: unknown }).filter !== undefined &&
     resolveTarget({ ...t, filter: undefined, quantity: "all" }, {
       cards: context.cards,
@@ -247,7 +291,7 @@ function liftModalTarget(
     playerId: controller,
     remaining: 1,
     sourceCardId: choice.sourceCardId,
-    ...(deflectTax ? { deflectTax: true as const } : {}),
+    ...surchargeFields(taxed),
     // rule 820.2 (unl-182-219) — the suspended continuation (e.g. the later
     // [Repeat] executions) rides along on the lifted target prompt; dropping
     // it here would silently lose those executions.
@@ -1752,13 +1796,26 @@ export const pendingChoiceMoves: Partial<
           if (multiTargets.length + (choice.picked?.length ?? 0) > cap) {
             return false;
           }
-          return multiTargets.every((id) => choice.options.includes(id));
+          return (
+            multiTargets.every((id) => choice.options.includes(id)) &&
+            // rule 809.1.d / 355.14.d — the whole accumulated set must be payable NOW.
+            deflectPickPayable(state, choice, multiTargets, context.cards)
+          );
         }
         // rule 355.14.e (ogn-041-298): fixed-total split is answered with one allocation.
         if (choice.assign && typeof choice.total === "number") {
-          return isLegalSplitAllocation(choice.options, choice.total, context.params.allocation, splitBoundsOf(choice));
+          const allocation = context.params.allocation;
+          return (
+            isLegalSplitAllocation(choice.options, choice.total, allocation, splitBoundsOf(choice)) &&
+            deflectPickPayable(state, choice, Object.keys(allocation as object), context.cards)
+          );
         }
-        return choice.options.includes(context.params.pickedCardId as string);
+        return (
+          choice.options.includes(context.params.pickedCardId as string) &&
+          // rule 809.1.d / 429.3 — an option whose surcharge the pool cannot cover
+          // yet stays LISTED (a rune Add may still fund it) but is refused now.
+          deflectPickPayable(state, choice, [context.params.pickedCardId as string], context.cards)
+        );
       }
       if (choice.type === "choose-destination") {
         if (choice.playerId !== context.params.playerId) {
@@ -2808,6 +2865,20 @@ export const pendingChoiceMoves: Partial<
 
       if (choice.type === "choose-target") {
         const picked = context.params.pickedCardId as string;
+        // rule 809.1.d / 429.3 — the pick-time payability gate: an answer whose
+        // surcharge the pool cannot cover RIGHT NOW is refused outright, leaving
+        // the prompt open (and the state untouched) so the chooser can Add runes
+        // and answer again. The option itself stays listed — see `surchargedOptions`.
+        const answeredIds = Array.isArray(context.params.pickedCardIds)
+          ? (context.params.pickedCardIds as string[])
+          : choice.assign && typeof choice.total === "number" && context.params.allocation
+            ? Object.keys(context.params.allocation as object)
+            : typeof picked === "string"
+              ? [picked]
+              : [];
+        if (!deflectPickPayable(draft, choice, answeredIds, context.cards)) {
+          return;
+        }
         // rule 356.2.a.1 / 357.2 — the object paying a MANDATORY additional cost
         // of a card an effect is playing: recorded on the pending play item.
         const playItemId = (choice as { playItemId?: string }).playItemId;

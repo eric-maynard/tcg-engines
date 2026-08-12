@@ -11,6 +11,7 @@ import { isAllAtOneBattlefield, resolveTarget } from "../../../abilities/target-
 import { type CounterTargetContext, isLegalCounterTarget } from "../../../chain/counter-target";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
 import { getCardEffectiveMight, getDeflectSurcharge } from "./cost";
+import { addablePowerOf } from "../prompt-cost";
 
 export { costRiderTargetIsClassFilter, replacementTargetIsClassFilter };
 
@@ -663,9 +664,12 @@ function offBoardPlayHasCandidates(
  * chooser cannot cover is not a legal choice, so it cannot be the candidate
  * that makes a play legal under 355.8.
  *
- * Budget = the chooser's pooled Power, less the printed Power pips of a source
- * still sitting in their hand (those are spent on the play itself). A source
- * already on the board (an activated/triggered ability) has no such deduction.
+ * Budget = the chooser's pooled Power PLUS what their Reaction [Add] abilities
+ * could still put in it (rule 429.3 / 594 — one [rainbow] per rune in the Rune
+ * Pool, since the target prompt stays open while they recycle), less the printed
+ * Power pips of a source still sitting in their hand (those are spent on the
+ * play itself). A source already on the board (an activated/triggered ability)
+ * has no such deduction.
  */
 function makeDeflectAffordable(
   ctx: Parameters<typeof resolveTarget>[1],
@@ -676,7 +680,9 @@ function makeDeflectAffordable(
     runePools?: Record<string, { power?: Partial<Record<string, number>> } | undefined>;
   };
   const pool = playerId ? state.runePools?.[playerId] : undefined;
-  let budget = Object.values(pool?.power ?? {}).reduce((a: number, b) => a + (b ?? 0), 0);
+  let budget =
+    Object.values(pool?.power ?? {}).reduce((a: number, b) => a + (b ?? 0), 0) +
+    addablePowerOf(playerId ?? "", ctx.zones as never);
   const source = ctx.sourceCardId as string | undefined;
   if (source && playerId) {
     const inHand = ctx.zones
