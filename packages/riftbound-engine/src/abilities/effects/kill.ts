@@ -1,6 +1,8 @@
 // Effect handler: "kill"
 import type { CardId as CoreCardId } from "@tcg/core";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
+import { getDeflectSurcharge } from "../../game-definition/moves/play/cost";
+import { surchargeFields, surchargedOptions } from "../../game-definition/moves/prompt-cost";
 import { runDieBatch } from "../die-replacement-batch";
 import {
   type LKISnapshot,
@@ -162,12 +164,33 @@ function handleEachOtherChoosesKill(
     // rule 757 / 758 — the pool is described from the CASTER's seat ("a unit
     // you don't control"), but `pid` makes the choice, so a unit that can't be
     // chosen by ENEMY spells is still choosable by its own controller here.
-    const options = candidatesFor(
+    const candidates = candidatesFor(
       { ...effect, target: (effect as { chooserTarget?: unknown }).chooserTarget } as ExecutableEffect,
       ctx,
       caster,
       pid,
     ).filter((id) => !chosen.includes(id));
+    // rule 204.2.a / 809.1.c / 809.1.d — [Deflect] is a mandatory additional cost
+    // of CHOOSING that object, and the player who pays it is the one making this
+    // choice (`pid`), not the caster. A candidate whose surcharge nothing that
+    // seat has could ever fund is not a legal choice and is dropped; the rest are
+    // quoted per option and charged at pick time (`pending-choice.ts
+    // chargePromptedDeflectTax`, via `deflectTax`).
+    const taxed = surchargedOptions(
+      ctx.draft,
+      pid,
+      candidates,
+      (id) =>
+        getDeflectSurcharge(
+          ctx.draft,
+          pid,
+          [id],
+          ctx.cards as Parameters<typeof getDeflectSurcharge>[3],
+          ctx.sourceCardId,
+        ),
+      ctx.zones as never,
+    );
+    const options = taxed.options;
     if (options.length === 0) {
       continue;
     }
@@ -182,6 +205,7 @@ function handleEachOtherChoosesKill(
       remaining: 1,
       ...(options.length === 1 ? { soleOption: true as const } : {}),
       sourceCardId: ctx.sourceCardId as never,
+      ...surchargeFields(taxed),
       type: "choose-target",
     };
     return;

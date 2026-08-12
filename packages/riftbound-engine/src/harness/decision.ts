@@ -41,6 +41,9 @@ function describeShortfall(short: {
     reason: `${parts.join(" and ")} first`,
   };
 }
+import { costModeOfPlayEffect } from "../abilities/effects/play";
+import { hideCostQuote } from "../game-definition/moves/play/hide";
+import { instructionCost } from "../game-definition/moves/play/play-pipeline";
 import { modeOptionLabel, spellModeLabels } from "../game-definition/moves/play/play-time-modes";
 import {
   deflectSurchargeOf,
@@ -124,6 +127,19 @@ export interface DecisionContext {
     /** Set only while `unaffordable`: the smallest top-up that unlocks it. */
     needsAdd?: ActionField["needsAdd"];
   }[];
+  /**
+   * rule 357.1.a / 429.3 / 356.1.b.2 — for a spell whose effect PLAYS the card
+   * it names ("play a unit from your trash, ignoring its Energy cost"), the
+   * named candidates whose own remaining cost the pool cannot pay. The spell is
+   * castable and the candidate is a legal object, so it stays on the offered
+   * list; what a client needs is to dim it and print the pips it owes.
+   */
+  effectPlayShortfalls?(
+    seat: Seat,
+    cardId: string,
+  ): readonly { target: string; needsAdd: NonNullable<ActionField["needsAdd"]> }[];
+  /** rule 477.3.a / 357.1 — what a Hide would charge this seat right now. */
+  hidePrice?(seat: Seat): { energy: number; power: number; free: boolean };
   /**
    * rule 357.1.a / 429.3 — cards this seat could pay for after one Reaction
    * [Add] but cannot pay for now. A UI dims these; the move stays refused.
@@ -233,6 +249,86 @@ export function surchargedPlayTargetsOf(
       }
     }
     return out;
+}
+
+/**
+ * rule 356.1.b.2 / 357.1.a / 429.3 — for a spell that PLAYS the card it names,
+ * the named candidates whose own remaining cost the pool cannot cover.
+ *
+ * "Ignoring its Energy cost" waives only the Energy half (356.1.b.2), so the
+ * printed Power is still owed and an unpayable object makes the instruction do
+ * nothing (359.3.e.6). The candidate is a legal object either way, so it stays
+ * LISTED and is priced here with the same `instructionCost` overrides and the
+ * same `playCostShortfall` the instructed play itself will charge through.
+ */
+export function effectPlayShortfallsOf(
+  engine: HarnessEngine,
+  seat: string,
+  cardId: string,
+): readonly { target: string; needsAdd: NonNullable<ActionField["needsAdd"]> }[] {
+  const spell = (getGlobalCardRegistry().getAbilities(cardId) ?? []).find((a) => a.type === "spell");
+  const effect = spell?.effect as
+    | { type?: string; ignoreCost?: unknown; cost?: { energy?: number; power?: readonly string[] } }
+    | undefined;
+  if (effect?.type !== "play") {
+    return [];
+  }
+  const internal = getInternalState(engine);
+  const state = engine.getState();
+  const board = {
+    cards: {
+      getCardController: (id: CardId) => internal.cards[id as string]?.controller,
+      getCardMeta: (id: CardId) => internal.cardMetas[id as string],
+      getCardOwner: (id: CardId) => internal.cards[id as string]?.owner,
+      updateCardMeta: () => {},
+    },
+    zones: {
+      getCardsInZone: (zoneId: unknown, playerId?: unknown) =>
+        Object.entries(internal.cards)
+          .filter(
+            ([, c]) =>
+              c.zone === (zoneId as string) &&
+              (playerId === undefined || c.owner === (playerId as string)),
+          )
+          .map(([id]) => id as CardId),
+      getCardZone: (id: CardId) => internal.cards[id as string]?.zone,
+    },
+  };
+  const out: { target: string; needsAdd: NonNullable<ActionField["needsAdd"]> }[] = [];
+  const seen = new Set<string>();
+  for (const m of engine.enumerateMoves(seat as PlayerId, {
+    moveIds: ["playSpell"],
+    validOnly: false,
+  })) {
+    const params = (m.params ?? {}) as { cardId?: unknown; targets?: unknown };
+    if (params.cardId !== cardId || !Array.isArray(params.targets)) {
+      continue;
+    }
+    for (const t of params.targets) {
+      if (typeof t !== "string" || seen.has(t)) {
+        continue;
+      }
+      seen.add(t);
+      const { extras, free } = instructionCost({
+        cardId: t,
+        costMode: costModeOfPlayEffect(effect),
+      });
+      if (free) {
+        continue;
+      }
+      const short = playCostShortfall(
+        state,
+        seat,
+        t,
+        { board, ...extras } as Parameters<typeof playCostShortfall>[3],
+        (id: CardId) => internal.cardMetas[id as string],
+      );
+      if (short && (short.energy > 0 || Object.keys(short.power).length > 0)) {
+        out.push({ needsAdd: describeShortfall(short), target: t });
+      }
+    }
+  }
+  return out;
 }
 
 /**
@@ -435,6 +531,24 @@ export function engineDecisionContext(
       })),
     surchargedPlayTargets: (seat, moveId, cardId) =>
       surchargedPlayTargetsOf(engine, seat as string, moveId, cardId),
+    effectPlayShortfalls: (seat, cardId) => effectPlayShortfallsOf(engine, seat as string, cardId),
+    // rule 477.3.a — the Hide control must quote the price it is about to
+    // charge; `hideCostQuote` is the same reading `deductHideCost` pays by.
+    hidePrice: (seat) => {
+      const internal = getInternalState(engine);
+      return hideCostQuote(engine.getState(), seat as string, {
+        zones: {
+          getCardsInZone: (zoneId, playerId) =>
+            Object.entries(internal.cards)
+              .filter(
+                ([, c]) =>
+                  c.zone === (zoneId as string) &&
+                  (playerId === undefined || c.owner === (playerId as string)),
+              )
+              .map(([id]) => id as CardId),
+        },
+      });
+    },
     legal: (seat, moveIds) =>
       engine
         .enumerateMoves(seat as PlayerId, { moveIds: moveIds ? [...moveIds] : undefined, validOnly: true })
@@ -704,6 +818,23 @@ function buildFields(ctx: DecisionContext, moveId: string, variants: FlatMove[],
       fields.push({ arg: "x", kind: "int", max: probeMaxX(ctx, v0), min: 0, name: "xAmount", required: false });
     }
   }
+  // rule 477.3.a / 357.1 — Hide takes [rainbow] (or the ogn-263-298 [1] Energy
+  // alternative) out of the pool, so the control quotes what it will spend
+  // instead of charging a price the client never saw.
+  if (moveId === "hideCard" && variants.length > 0) {
+    const quote = ctx.hidePrice?.((variants[0] as FlatMove).playerId as Seat);
+    if (quote) {
+      const label = quote.free ? "[0]" : quote.energy > 0 ? `[${quote.energy}]` : "[rainbow]";
+      fields.push({
+        arg: "hideCost",
+        kind: "enum",
+        labels: [label],
+        name: "hideCost",
+        options: [label],
+        required: false,
+      });
+    }
+  }
   if (moveId === "playSpell" && variants.length > 0) {
     const cardId = variants[0]?.params.cardId as string | undefined;
     // rule 355.5 — name the two roles of a `target1`/`target2` spell so a UI can title them.
@@ -774,6 +905,39 @@ function buildFields(ctx: DecisionContext, moveId: string, variants: FlatMove[],
           ...(surcharge.some((n) => n > 0) ? { surcharge } : {}),
           ...(unaffordable.some(Boolean) ? { unaffordable } : {}),
         });
+      }
+    }
+    // rule 356.1.b.2 / 357.1.a / 429.3 — a spell that PLAYS the card it names
+    // still owes that card's un-waived cost, and an object it cannot pay for is
+    // simply ignored on resolution (359.3.e.6). The candidate stays LISTED, so
+    // mark it unpayable and name the pips it owes — the same vocabulary a
+    // [Deflect]-surcharged candidate uses one block up.
+    if (cardId) {
+      const shorts = ctx.effectPlayShortfalls?.((variants[0] as FlatMove).playerId as Seat, cardId) ?? [];
+      const field = fields.find((f) => f.name === "targets");
+      if (shorts.length > 0 && field) {
+        const owedBy = new Map(shorts.map((s) => [s.target, s.needsAdd]));
+        const options = [...(field.options ?? [])];
+        const unaffordable = options.map((o, i) => {
+          const first = Array.isArray(o) ? o[0] : o;
+          return field.unaffordable?.[i] === true || (typeof first === "string" && owedBy.has(first));
+        });
+        const cheapest = shorts
+          .map((s) => s.needsAdd)
+          .sort(
+            (a, b) =>
+              (a.energy ?? 0) +
+              Object.values(a.power ?? {}).reduce<number>((x, n) => x + (n ?? 0), 0) -
+              ((b.energy ?? 0) +
+                Object.values(b.power ?? {}).reduce<number>((x, n) => x + (n ?? 0), 0)),
+          )[0];
+        if (unaffordable.some(Boolean)) {
+          fields.splice(fields.indexOf(field), 1, {
+            ...field,
+            ...(field.needsAdd ? {} : cheapest ? { needsAdd: cheapest } : {}),
+            unaffordable,
+          });
+        }
       }
     }
     // rule 356.4.b / 356.4.c.1 — "[N] or [rainbow] less" is ONE discount whose
@@ -915,10 +1079,12 @@ export function deriveActionDecision(ctx: DecisionContext, seat: Seat, cursor: b
         : context === "main"
           ? "Main phase: take an action or end the turn"
           : "Free actions available";
-  // rule 357.1.a — the cards the seat is one Add away from playing. Only worth
-  // shipping while they are actually acting; a free-action menu is not where a
-  // player pays for a card.
-  const reachablePlays = context === "main" ? (ctx.reachablePlays?.(seat) ?? []) : [];
+  // rule 357.1.a / 429.3 — the cards the seat is one Add away from playing.
+  // Every panel the seat actually HOLDS is a place a card gets paid for: a
+  // [Reaction] lives on the chain panel (159.2.b.2) and a showdown's Focus
+  // holder pays there too, so the dimmed pay line belongs to all three. Only a
+  // free-action menu — a seat that is not being asked to act — is not.
+  const reachablePlays = context === "free" ? [] : (ctx.reachablePlays?.(seat) ?? []);
   return {
     context,
     endTurnKey,
@@ -2144,6 +2310,12 @@ const DEFAULT_PREFS: { param: string; keep: (v: unknown) => boolean }[] = [
   // rule 356.1 (unl-089-219) — an alternate play cost is opt-in: plain
   // `play(card)` takes the printed cost unless the test asks for it.
   { keep: (v) => v !== true, param: "altCost" },
+  // rule 811.1.b (ogn-263-298 Swift Scout) — Hide is offered once per payable
+  // price; a plain `hide(card, bf)` that elects nothing takes the granted
+  // "you may pay [1] … instead" line and keeps the [rainbow] Power, since the
+  // alternative is the cheaper resource to part with. Name the other half
+  // (`hideCostElection: "power"`) to pay the printed cost.
+  { keep: (v) => v !== "power", param: "hideCostElection" },
   { keep: (v) => v === undefined, param: "sacrificeId" },
   { keep: (v) => v === undefined, param: "discardId" },
   { keep: (v) => v === undefined, param: "chosenTargetId" },

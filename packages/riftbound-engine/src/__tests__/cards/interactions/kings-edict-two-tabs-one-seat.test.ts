@@ -141,7 +141,7 @@ describe("King's Edict × Tianna Crownguard — one seat, two tabs", () => {
     expect(game.violations()).toEqual([]);
   });
 
-  test.failing("BUG: [Deflect] is not quoted on Tianna's entry — the chooser pick carries no surcharge (rules 204.2.a / 809.1.c / 809.1.d)", async () => {
+  test("[Deflect] is quoted on Tianna's entry — the chooser pick carries her surcharge (rules 204.2.a / 809.1.c / 809.1.d)", async () => {
     // Expected: Tianna's option carries `surcharge: 1` ([Deflect] is a mandatory additional cost
     // incurred once per choice of her, Power of any Domain — 809.1.c/.c.1), and the units without
     // [Deflect] carry none, so both tabs can render the tax on exactly her row.
@@ -157,7 +157,7 @@ describe("King's Edict × Tianna Crownguard — one seat, two tabs", () => {
     expect(byCard.get("p3grunt")?.surcharge).toBeUndefined();
   });
 
-  test.failing("BUG: choosing Tianna charges no [Deflect] Power — the surcharge must be paid exactly once (rules 204.2.a / 809.1.c)", async () => {
+  test("choosing Tianna charges [Deflect] Power — the surcharge must be paid exactly once (rules 204.2.a / 809.1.c)", async () => {
     // Expected: P2 pays exactly one Power (any Domain) for naming Tianna — rainbow 2 → 1 — and the
     // seat that never names her pays nothing.
     // Actual: no Power is deducted from anyone; Tianna is as free to choose as a vanilla unit.

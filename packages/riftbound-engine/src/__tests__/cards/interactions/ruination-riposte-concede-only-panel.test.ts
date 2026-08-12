@@ -113,16 +113,15 @@ describe("The Ruination × Riposte — the action panel while a lethal spell is 
     );
   });
 
-  test.failing("BUG: a Riposte ONE recycle away is not listed with its pay line while you hold chain Priority — reachablePlays is computed for main-phase panels only (357.1.a / 429.3)", async () => {
+  test("a Riposte ONE recycle away is listed with its pay line while you hold chain Priority (357.1.a / 429.3)", async () => {
     // Pool: [2] Energy + one [rainbow]; two READY order runes on board. One recycle turns an order
     // rune into the missing pip, so 357.1.a makes this play reachable during Pay Costs — exactly
     // the case the pay line exists for, and exactly where a [Reaction] lives.
     const game = await ruinationOnTheChain({ energy: 2, power: { rainbow: 1 } }, [["order", false], ["order", false]]);
     expect(game.p1.can("cast", "riposte")).toBe(false); // not paid yet — correct
 
-    // Expected: listed, dimmed, with "recycle a rune for [order] first".
-    // Actual: `reachablePlays` is `undefined` — decision.ts computes it only when
-    // `context === "main"`, so on a chain panel the card is invisible instead of greyed.
+    // Listed, dimmed, with "recycle a rune for [order] first": `reachablePlays` is derived for
+    // every panel the seat holds, not only main-phase ones.
     const reach = panel(game.decision()).reachablePlays ?? [];
     expect(reach.map((r) => r.card)).toContain(game.card("riposte"));
     expect(reach.find((r) => r.card === game.card("riposte"))?.needsAdd.reason).toContain("recycle");
