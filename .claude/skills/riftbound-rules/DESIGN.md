@@ -359,3 +359,54 @@ are listed because an official answer would *change* something, and because re-d
    resolution, does its own play get a normal Make-Relevant-Choices step and priority window, or does naming it at
    finalization pre-bind everything? Eight facets in `drag-under-fizz-no-kaisa-six-points-yes` assume the former.
    Sequencing, not naming, is the open half.
+
+## Community rulings settled against the CR (2026-08-12; do not re-litigate)
+A rules-adjudication pass took the 17 parked ruling-vs-CR items out of the fix queue
+(`.claude/skills/engine-playtest-observer/CONFLICTS-ADJUDICATED-2026-08-12.md` has the full table). Ten were
+riftjudge answers the current Comprehensive Rules supersede; their facets are now PASSING tests that assert the
+engine, each carrying a `// RULING-CONFLICT` note and a "previously asserted the opposite, do not flip back" line.
+The recurring shape is the one already seen for `fiora-peerless` and the 466 pair: the community answer describes
+pre-Unleashed text, or it is contradicted by a *second* riftjudge answer, and the CR names the discriminator.
+- **[Legion] never fires off its own card.** 812.1.c: the Dependent Ability is Active only while "a card DIFFERENT
+  than the one with the Legion ability has been Finalized by you on the same turn" (812.1.b.1 "another card"). So
+  Sun Disc's own play never satisfies it, and with no other play the ability is not on the card at all — it cannot
+  be tapped "for no effect". `4bd896c444b3c607` says both of those things and is wrong on both.
+- **No kill ⇒ no draw.** "Kill a unit at a battlefield. Its controller draws 2" is the CR's *own* example twice
+  over: 355.10.d ("targets the unit, but not its controller") and the Hidden Blade example under 359.3.e.5 ("any
+  instructions related to that unit are ignored"), with 359.3.e.12 making "its controller" read null. Contrast
+  Void Seeker's "Draw 1", which names no referent back to the target and still happens. `719c8ada539c1401` is wrong.
+- **A card played mid-resolution is Pending, not inlined.** 354.3 stops its further steps until the current
+  resolution ends; 337.1/337.1.b then finalize the pending items in append order and 337.4 gives the next item's
+  controller Priority — so it *is* counterable, and a play trigger appended later is newer and resolves first
+  (340.1). `95688f6f6f4b0da4` denies both; riftjudge `22ed336a9af8edc9` agrees with the CR.
+- **Designations are stamped when the showdown BECOMES a Combat Showdown, not when it closes.** 323.14 converts the
+  running Non-Combat Showdown; 464.2 defines that conversion as combat opening; 464.2.c.3 stamps
+  Attacker/Defender "now"; 464.2.c.1.b explicitly contemplates combat opening into a showdown already running.
+  `33552d2333fd187b` is right that the showdown does not end early and wrong that nobody is designated yet.
+- **[Ambush] grants LOCATION validity separately from TIMING.** A card's own "you may play me to its battlefield"
+  clause is a location permission (822.3.a); the Reaction speed comes from Ambush and is conditional (813.4), so if
+  the play's additional cost empties the destination the condition fails at step 5 Check Legality and the play is
+  undone (813.4.b, 822.3). `7c7de024a0a95e9c` wants the Wolf in anyway; official ruling `57b3e2849ef0109a` and the
+  CR agree it cannot be.
+- **"Up to one X" is satisfied by zero** (355.13) — post-errata Salvage keeps the empty target set on the menu;
+  `eea5054e0caa29a0` describes the pre-errata "you may kill a gear" wording.
+- **Not every ruling clash is a clash.** Elder Dragon's three answers all hold at once: 142.4.c alters lethal damage
+  only "for enemy units that have damage marked BY YOU", so who marked the pre-existing damage decides it. A repro
+  that seeds damage with no attributor is testing neither case.
+
+## Open rules questions (need a human or an official ruling)
+The tree is self-consistent without answers to these — each is already implemented one way and pinned by tests. They
+are listed because an official answer would *change* something, and because re-deriving them has cost real cycles.
+1. **Hidden Blade's linked draw.** "Kill a unit at a battlefield. Its controller draws 2" — when the unit is saved,
+   is the draw an *independent* instruction (like Void Seeker's "Draw 1", so it still happens) or an instruction
+   *related to the illegal target* (so it is ignored)? Engine + 33 facets say ignored, on 359.3.e.5's own Hidden
+   Blade example; riftjudge `719c8ada539c1401` says it still draws. This is the single closest call in the set.
+2. **Deceiver's "another".** "Play a ready Reflection unit token there. It becomes a copy of ANOTHER unit there."
+   The copy source is a target chosen at finalization (§ Choices and when they are made), but "another" is relative
+   to a token that does not exist until resolution. Does that make the source choosable at finalization anyway
+   (engine's eventual model) or is it one of the 355.16 "depends on what an earlier instruction produced" cases?
+3. **A spell named at finalization, played at resolution.** Kai'Sa's "play a spell from your trash" targets that
+   spell as the trigger is finalized (355.10.a — the trash is Public). When it is then actually played during
+   resolution, does its own play get a normal Make-Relevant-Choices step and priority window, or does naming it at
+   finalization pre-bind everything? Eight facets in `drag-under-fizz-no-kaisa-six-points-yes` assume the former.
+   Sequencing, not naming, is the open half.

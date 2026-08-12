@@ -15,9 +15,12 @@ import { P1, P2, scenario } from "../../../harness";
 const STALKING_WOLF = "unl-166-219";
 const STALWART_PORO = "ogn-052-298";
 
-/** P1's turn 3. P2 holds bf1 with a 1-Might Guard. P1: ready Stalwart Poro in base, Stalking Wolf in hand, 4 + [order]. */
-function board() {
-  return scenario()
+/**
+ * P1's turn 3. P2 holds bf1 with a 1-Might Guard. P1: ready Stalwart Poro in base, Stalking Wolf in hand, 4 + [order].
+ * `spare` adds a SECOND Poro in base, so the pet-kill can be paid without emptying the destination.
+ */
+function board(spare = false) {
+  const s = scenario()
     .turn(3)
     .resources(P1, { energy: 4, power: { order: 1 } })
     .battlefield("bf1", { controller: P2 })
@@ -25,6 +28,7 @@ function board() {
     .unit(P1, "base", STALWART_PORO, "poro")
     .unit(P1, "base", { might: 3, name: "Untagged" }, "plain") // not a pet: never an eligible sacrifice
     .hand(P1, STALKING_WOLF, "wolf");
+  return spare ? s.unit(P1, "base", STALWART_PORO, "poro2") : s;
 }
 
 const sacrificeMenu = (game: Game) =>
@@ -37,21 +41,27 @@ async function poroAttacks(game: Game): Promise<void> {
 }
 
 describe("Ruling 7c7de024a0a95e9c — Stalking Wolf's pet-kill is a cost of PLAYING it, never an obligation by itself", () => {
-  // BUG — this ruling (7c7de024a0a95e9c: "you may play me to its battlefield even if you don't have other units
-  // there") conflicts with ruling 57b3e2849ef0109a, which the engine implements: an Ambush play whose additional
-  // cost kills the lone friendly unit at the destination empties it before Finalization, so the granted [Reaction]
-  // is void at Check Legality (822.1.b / 822.3 / 813.4.b). Until the conflict is resolved the Wolf's whole line is
-  // unavailable here, so all three facets are tracked as failing.
-  // RULING-CONFLICT: riftjudge 7c7de024a0a95e9c would make the Wolf playable to the emptied battlefield at
-  // Reaction speed; official ruling 57b3e2849ef0109a ("It is not legal on the battlefield you are attacking")
-  // and 822.3 / 813.4.b say the card's "its battlefield" clause grants LOCATION validity, not TIMING — engine
-  // follows 57b3e2849ef0109a, which `cards/unl-166-219.test.ts`, `interactions/stalking-wolf-lone-poro-ambush-
-  // rollback.test.ts` and `core-rules/play-options-parity.test.ts` all pin.
-  test.failing("BUG: holding Focus after the Poro attacks, playing the Wolf is merely an OPTION next to passing — P1 may simply pass, the Poro is not killed and wins its combat", async () => {
+  // RULING-CONFLICT (adjudicated 2026-08-12 — item f52b2c46ed62; PREVIOUSLY these three facets asserted the
+  // opposite, that the Wolf may be played to the battlefield its own cost just emptied. Do not flip them back).
+  // riftjudge 7c7de024a0a95e9c reads "You may play me to its battlefield (even if you don't have other units
+  // there)" as also granting the TIMING to do it. It does not. The card's clause grants LOCATION validity only;
+  // the Reaction speed that lets a unit be played while a showdown is running comes from [Ambush], which is a
+  // CONDITIONAL permissive keyword — 813.4 ("the card does not have the Reaction keyword unless and until those
+  // circumstances are true"), 813.4.a/813.4.b (the condition may be fulfilled while the item is on the chain, but
+  // if it is not fulfilled by step 5 Check Legality the play is undone), and 822.3 ("if there are no units at the
+  // location chosen before Finalization completes FOR ANY REASON, then it is no longer a valid location by
+  // Ambush's reasoning") with 822.3.a ("other effects and permissions may still enable this Unit to be played to
+  // the selected location, but Ambush's permission will not be valid"). Killing the lone friendly unit at the
+  // destination as the play's additional cost empties it before Finalization completes, so the Reaction is void
+  // and the play is rolled back. Official ruling 57b3e2849ef0109a ("it is not legal on the battlefield you are
+  // attacking") says the same thing, and cards/unl-166-219.test.ts,
+  // interactions/stalking-wolf-lone-poro-ambush-rollback.test.ts and core-rules/play-options-parity.test.ts all
+  // pin it. Engine follows the CR + 57b3e2849ef0109a.
+  test("the pet-kill is never an obligation: with the Poro alone at bf1 the Wolf is not even on the menu, P1 simply passes and the Poro wins its combat", async () => {
     const game = await board().build();
     await poroAttacks(game);
-    expect(game.p1.can("play", "wolf")).toBe(true); // available (Ambush: bf1 has my Poro) …
-    expect(game.decision()).toMatchObject({ kind: "action", passKey: expect.any(String) }); // … but so is passing
+    expect(game.p1.can("play", "wolf")).toBe(false); // 822.3/813.4.b — the only payable kill would empty bf1
+    expect(game.decision()).toMatchObject({ kind: "action", passKey: expect.any(String) });
     await game.p1.passFocus();
     expect(game.zoneOf("poro")).toBe("battlefield-bf1"); // nothing forced a kill
     expect(game.zoneOf("wolf")).toBe("hand");
@@ -62,21 +72,23 @@ describe("Ruling 7c7de024a0a95e9c — Stalking Wolf's pet-kill is a cost of PLAY
     expect(game.p1.resources()).toEqual({ energy: 4, power: { order: 1 } });
   });
 
-  test.failing("BUG: if P1 DOES play the Wolf, the cost is mandatory and the Poro is the only eligible pet: every play variant sacrifices the Poro (the untagged unit is never offered)", async () => {
-    const game = await board().build();
+  test("with a SPARE pet in base the play becomes legal, and the attacking Poro is never offered as the sacrifice", async () => {
+    const game = await board(true).build();
     await poroAttacks(game);
-    expect(sacrificeMenu(game)).toEqual(["poro"]);
+    expect(game.p1.can("play", "wolf")).toBe(true);
+    expect(sacrificeMenu(game)).toEqual(["poro2"]); // not "poro": killing it would empty bf1 (822.3)
     const variants = game.p1.option("play", "wolf")?.variants ?? [];
     expect(variants.length).toBeGreaterThan(0);
-    expect(variants.every((v) => v.params.sacrificeId === "poro")).toBe(true); // no "skip the kill" variant
+    expect(variants.every((v) => v.params.sacrificeId === "poro2")).toBe(true); // no "skip the kill" variant
+    expect(variants.every((v) => v.params.location === "battlefield-bf1")).toBe(true);
   });
 
-  test.failing("BUG: … playing it: 4 + [order] paid, the Poro is killed as the cost, the Wolf enters ITS battlefield (bf1) even with no other unit there, takes over the attack and conquers", async () => {
-    const game = await board().build();
+  test("… playing it that way: 4 + [order] paid, the spare Poro dies as the cost, the Wolf joins the attack at bf1 and conquers", async () => {
+    const game = await board(true).build();
     await poroAttacks(game);
-    await game.p1.play("wolf", { sacrifice: "poro", to: "bf1" });
+    await game.p1.play("wolf", { sacrifice: "poro2", to: "bf1" });
     expect(game.p1.resources()).toEqual({ energy: 0, power: { order: 0 } });
-    expect(game.zoneOf("poro")).toBe("trash");
+    expect(game.zoneOf("poro2")).toBe("trash");
     await game.settle();
     expect(game.locationOf("wolf")).toBe("bf1");
     expect(game.zoneOf("guard")).toBe("trash");

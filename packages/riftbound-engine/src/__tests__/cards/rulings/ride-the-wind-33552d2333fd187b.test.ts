@@ -64,18 +64,24 @@ describe("Ruling 33552d2333fd187b — the open showdown runs to its natural clos
     expect(game.gameState.battlefields.bfX?.controller).toBe(null); // nobody controls it during the showdown
   });
 
-  // The ruling says designations are handed out only when the staged combat BEGINS, i.e. after this open
-  // showdown closes. The engine applies 323.14 eagerly: the staged combat joins the running showdown, which
-  // becomes a Combat Showdown and stamps attacker/defender there and then.
-  test.failing(
-    "BUG: ruling 33552d2333fd187b — units should have NO attacker/defender designation while the open showdown is still running (the engine stamps them as soon as the combat is staged into it)",
-    async () => {
-      const game = await surpriseDefense();
-      expect(stack(game)[0]).toMatchObject({ isCombatShowdown: false });
-      expect(game.state("scout").combatRole).toBeNull();
-      expect(game.state("rider").combatRole).toBeNull();
-    },
-  );
+  // RULING-CONFLICT: riftjudge 33552d2333fd187b says designations are handed out only once the open showdown has
+  // closed and the staged combat begins. The CR hands them out earlier: 323.14 turns the running Non-Combat
+  // Showdown into a COMBAT Showdown during the cleanup after the move, and 464.2 defines combat as opening exactly
+  // then ("it either opens with a Combat Showdown, or the current Showdown becomes a Combat Showdown"), which
+  // makes 464.2.c's tasks outstanding — 464.2.c.3: "Units at the Contested Battlefield controlled by the Attacker
+  // or Defender gain the Attacker or Defender designation NOW". 464.2.c.1.b confirms combat can open into a
+  // showdown that is already running (the Focus holder keeps Focus). The rest of the ruling is right and is
+  // asserted above/below: the showdown does not end early, and the first contester is the attacker.
+  // ADJUDICATED 2026-08-12 (CONFLICTS-ADJUDICATED-2026-08-12.md, item 01bd7f7c1abc): this facet PREVIOUSLY
+  // asserted the opposite (no designation yet). Do not flip it back — step 3 below reads the same state.
+  test("rule 323.14 + 464.2.c.3 — the moment the staged combat joins the open showdown it becomes a Combat Showdown and stamps attacker/defender", async () => {
+    const game = await surpriseDefense();
+    expect(stack(game)[0]).toMatchObject({ battlefieldId: "bfX", isCombatShowdown: true });
+    expect(game.state("scout").combatRole).toBe("attacker"); // first contester (460.1)
+    expect(game.state("rider").combatRole).toBe("defender");
+    // …and the showdown is nonetheless still open: designations do not close it.
+    expect(game.decision()).toMatchObject({ context: "showdown", kind: "action" });
+  });
 
   test("step 3: once both players pass, combat runs with P1 (the first contester) as attacker and P2 as defender", async () => {
     const game = await surpriseDefense();

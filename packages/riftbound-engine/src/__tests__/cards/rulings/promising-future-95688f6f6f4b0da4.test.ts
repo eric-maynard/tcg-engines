@@ -10,7 +10,14 @@
  *    completely before the next, all DURING Promising Future's resolution — nothing can be added to the chain meanwhile, so
  *    the played cards can't be reacted to / countered (Windwall, Defy). Triggered abilities of units played this way go on
  *    a new chain only after Promising Future has finished. A card whose Power cost you can't pay isn't played (recycled).
- * Rules: 337.1.b (nothing is added to the chain during a resolution), 356.1.b (play by effect, ignoring cost parts), 383.
+ *
+ * RULING-CONFLICT (adjudicated 2026-08-12 — items 17d8f4d9a8f8 / 555a85d71eb8): the engine does NOT follow the
+ * "nothing can be reacted to" half of that answer. Riftjudge 22ed336a9af8edc9 says the opposite in as many words,
+ * and the CR agrees: 354.3 leaves a card played mid-resolution PENDING, 337.1/337.1.b finalize the pending items
+ * once the current resolution ends, and 337.4 then gives the next item's controller Priority — a real Reaction
+ * window. Ordering follows from the same place: the queued spell keeps its older append slot, so a play trigger
+ * appended later is newer and 340.1 resolves it first.
+ * Rules: 354.3, 337.1 / 337.1.b / 337.4, 340.1, 356.1.b (play by effect, ignoring cost parts), 383.
  */
 import { describe, expect, test } from "bun:test";
 import type { Decision, Game } from "../../../harness";
@@ -170,13 +177,19 @@ describe("Ruling 95688f6f6f4b0da4 — how Promising Future plays the chosen card
   // PF-played Incinerate with Wind Wall, while interactions/pf-two-spells-student-diana-interleave (c) asserts the
   // priority window once the queued plays are finalized. Rules 337.1/337.4/354.3 as the engine reads them agree with
   // the majority, so it deliberately follows them; do not "fix" this without settling the conflict first.
-  test.failing("BUG: ruling 95688f6f6f4b0da4 — engine lets P2 react to (Defy) the Hextech Ray played by Promising Future", async () => {
+  // ADJUDICATED 2026-08-12 (CONFLICTS-ADJUDICATED-2026-08-12.md, item 555a85d71eb8): the CR backs the majority.
+  // 354.3 makes a card played mid-resolution WAIT ("continue resolving [the current effect] before proceeding with
+  // any further steps of this process") — it sits Pending rather than resolving inside PF; 337.1/337.1.b then
+  // finalize the pending items once PF is done, and 337.4 hands the next item's controller PRIORITY, which is the
+  // Reaction window. Nothing in 337.1.b forbids it. This facet PREVIOUSLY asserted the Ray was never counterable —
+  // do not flip it back.
+  test("rule 354.3 + 337.1/337.4 — a card played mid-resolution is only PENDING; it finalizes afterwards and P2 does get a window to Defy it (RULING-CONFLICT, see note)", async () => {
     const game = await board().build();
     await castToFirstLook(game);
     await bothPick(game, "herald");
     const seen = await drive(game);
     expect(game.state("wall").damage).toBe(3); // it did resolve …
-    expect(seen.p2CouldDefyRay).toBe(false); // … and was never counterable
+    expect(seen.p2CouldDefyRay).toBe(true); // … and it was counterable in that window
   });
 
   // Expected: Herald's "When you play me" trigger waits and goes on a NEW chain only after Promising Future (and so the
@@ -186,13 +199,20 @@ describe("Ruling 95688f6f6f4b0da4 — how Promising Future plays the chosen card
   // so a play trigger appended when the Herald entered is NEWER and resolves first under 340.1 LIFO. Putting the
   // trigger below the Ray means lifting/reordering finalized items, which 383.2.c + the
   // interactions/pf-two-spells-student-diana-interleave (a)/(d) ordering spec both forbid. Settle the conflict first.
-  test.failing("BUG: ruling 95688f6f6f4b0da4 — engine resolves the Herald's play trigger before Promising Future's other card (the Ray) has resolved", async () => {
+  // ADJUDICATED 2026-08-12 (CONFLICTS-ADJUDICATED-2026-08-12.md, item 17d8f4d9a8f8): same root as the Defy case.
+  // The Ray keeps the slot its Pending Item took when PF played it (337.1.b — items finalize in append order), so
+  // the Herald's play trigger, appended later, is the NEWEST finalized item and 340.1 resolves it first. Placing it
+  // under the Ray would mean re-ordering already-finalized items, which nothing in 337/340 permits and which
+  // 383.2.c plus interactions/pf-two-spells-student-diana-interleave (a)/(d) forbid outright.
+  // This facet PREVIOUSLY asserted the trigger waits for the Ray — do not flip it back.
+  test("rule 337.1.b + 340.1 — the Herald's play trigger is newer than the queued Ray, so it resolves FIRST (RULING-CONFLICT, see note)", async () => {
     const game = await board().build();
     await castToFirstLook(game);
     await bothPick(game, "herald");
     const seen = await drive(game);
-    expect(game.p2.hand()).toContain("b6"); // the trigger did draw eventually
-    expect(seen.heraldTriggerBeforeRayDone).toBe(false);
+    expect(game.p2.hand()).toContain("b6"); // the trigger did draw
+    expect(seen.heraldTriggerBeforeRayDone).toBe(true);
+    expect(game.state("wall").damage).toBe(3); // and the Ray still resolved afterwards
   });
 
   // RULING-CONFLICT: riftjudge 95688f6f6f4b0da4 says an unaffordable (Power) pick is recycled unplayed; riftjudge

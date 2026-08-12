@@ -75,20 +75,22 @@ describe("Ruling 4bd896c444b3c607 — Sun Disc checks [Legion] when you tap it; 
     expect(game.violations()).toEqual([]);
   });
 
-  // Expected (ruling): tapping Sun Disc with no [Legion] is allowed — the cost is paid and "the ability does nothing".
-  // Actual: the engine treats [Legion] as an activation condition and refuses the activation outright.
-  // RULING-CONFLICT: riftjudge 4bd896c444b3c607 lets an unsatisfied Legion ability be tapped for no effect; rule 812.1.b.1
-  // says Legion is short for "If you have played another card this turn, this card GAINS [Text]" (812.1.c: the Dependent
-  // Ability is Active only then), so with no other play the activated ability is not on the card and cannot be activated.
-  // Engine follows the CR — same model asserted by cards/rulings/sun-disc-80fc9c7dc7e3af38.test.ts; do not flip one alone.
-  test.failing("BUG: ruling 4bd896c444b3c607 — engine forbids activating Sun Disc without [Legion] instead of letting it be tapped for no effect", async () => {
+  // RULING-CONFLICT: riftjudge 4bd896c444b3c607 says an unsatisfied Legion ability may still be tapped "for no
+  // effect"; rule 812.1.b.1 makes Legion short for "If you have played another card this turn, this card GAINS
+  // [Text]", and 812.1.c makes the Dependent Ability Active only while that holds — so with no other play this
+  // turn the activated ability is not on the card at all and there is nothing to activate. Engine follows the CR;
+  // the same model is asserted by cards/rulings/sun-disc-80fc9c7dc7e3af38.test.ts.
+  // ADJUDICATED 2026-08-12 (CONFLICTS-ADJUDICATED-2026-08-12.md, item cf3ad3938e34): this facet PREVIOUSLY
+  // asserted the opposite (that the tap is legal and does nothing). Do not flip it back — see DESIGN.md
+  // "Dependent keywords (Legion / Level)".
+  test("rule 812.1.b.1/812.1.c — with nothing else played this turn Sun Disc has no Legion ability to activate at all", async () => {
     const game = await board().build();
-    expect(game.p1.can("activate", "disc")).toBe(true);
-    await game.p1.activate("disc");
-    await game.settle();
-    expect(game.state("disc").isExhausted).toBe(true);
+    expect(game.p1.can("activate", "disc")).toBe(false);
+    expect(game.state("disc").isExhausted).toBe(false); // the tap never happens, so the cost is never paid
+    // …and the Hooked unit therefore enters exhausted, which is the half of the ruling that IS right.
     await hookInWader(game, "base");
-    expect(game.state("wader")).toMatchObject({ isExhausted: true, isReady: false }); // no retroactive readying
+    expect(game.state("wader")).toMatchObject({ isExhausted: true, isReady: false });
+    expect(game.violations()).toEqual([]);
   });
 
   test("ruling contrast: play a card FIRST, then tap Sun Disc — [Legion] holds and the Hooked unit enters READY", async () => {
@@ -114,15 +116,21 @@ describe("Ruling 4bd896c444b3c607 — Sun Disc checks [Legion] when you tap it; 
     expect(game.violations()).toEqual([]);
   });
 
-  // Expected (ruling): "The turn you play Sun Disc, it does have [Legion] because the ability is separate from the
-  // card itself and sees that you played a card (Sun Disc itself)."
-  // Actual: the engine reads [Legion] as "played a card OTHER than this one", so the ability stays unusable.
-  // RULING-CONFLICT: rule 812.1.c is explicit — "as long as a card DIFFERENT than the one with the Legion ability has been
-  // Finalized by you on the same turn" (812.1.b.1: "another card") — so a just-played Sun Disc never satisfies its own
-  // Legion. Engine follows the CR; asserted directly by cards/rulings/sun-disc-80fc9c7dc7e3af38.test.ts.
-  test.failing("BUG: ruling 4bd896c444b3c607 — Sun Disc's own play should satisfy [Legion] on the turn it is played", async () => {
+  // RULING-CONFLICT: riftjudge 4bd896c444b3c607 says "the turn you play Sun Disc it does have [Legion], because the
+  // ability is separate from the card itself and sees that you played a card (Sun Disc itself)". Rule 812.1.c is
+  // explicit the other way — the Dependent Ability is Active only "as long as a card DIFFERENT than the one with the
+  // Legion ability has been Finalized by you on the same turn" (812.1.b.1: "another card") — so a just-played Sun
+  // Disc never satisfies its own Legion. Engine follows the CR, as cards/rulings/sun-disc-80fc9c7dc7e3af38.test.ts
+  // asserts directly.
+  // ADJUDICATED 2026-08-12 (CONFLICTS-ADJUDICATED-2026-08-12.md, item 2688d35630c1): this facet PREVIOUSLY asserted
+  // the opposite (own play satisfies Legion). Do not flip it back.
+  test("rule 812.1.c — Sun Disc's OWN play never satisfies its Legion; a second card played that turn does", async () => {
     const game = await board(true).build();
     await game.p1.play("disc");
+    await game.settle();
+    expect(game.p1.can("activate", "disc")).toBe(false); // only Sun Disc has been played — no DIFFERENT card
+
+    await game.p1.cast("cleave", { targets: "squire" }); // now a different card has been Finalized this turn
     await game.settle();
     expect(game.p1.can("activate", "disc")).toBe(true);
     await game.p1.activate("disc");

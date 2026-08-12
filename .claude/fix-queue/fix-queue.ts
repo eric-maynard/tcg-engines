@@ -10,7 +10,7 @@
  *   bun fix-queue.ts done <id> --note "…" [--files a,b] # claimed → done
  *   bun fix-queue.ts fail <id> --note "…"              # claimed → failed (attempts++)
  *   bun fix-queue.ts release <id>                      # claimed → open
- *   bun fix-queue.ts requeue-failed [--max-attempts 3] # failed → open
+ *   bun fix-queue.ts requeue-failed [--max-attempts 3] # failed → open (skips items with "noRequeue": true)
  *   bun fix-queue.ts reap [--older-than-min 120]       # stale claimed → open
  *   bun fix-queue.ts stats
  */
@@ -31,6 +31,13 @@ interface Item {
   fileHint?: string; rule?: string;
   repro?: { testFile: string; testName: string };
   createdAt: string; claimedBy?: string; claimedAt?: string; attempts?: number;
+  /**
+   * Permanently parked: `requeue-failed` never picks it up again. Set by a rules-adjudication pass on items
+   * that no engine lane can close (an open rules question, or work blocked on a capability that does not
+   * exist yet) — without it each round re-hands the same item to a fixer who re-derives the same blocker.
+   * Clear it by hand when the blocker is gone.
+   */
+  noRequeue?: boolean;
   resolution?: { note: string; files?: string[]; at: string };
   history?: { at: string; event: string; note?: string }[];
 }
@@ -157,9 +164,12 @@ switch (cmd) {
     break;
   }
   case "requeue-failed": {
-    const max = parseInt(flag("max-attempts", "3")!, 10); let n = 0;
-    for (const i of list("failed")) if ((i.attempts ?? 0) < max && move(i.id, "failed", "open", (x) => ({ ...x, history: [...(x.history ?? []), { at: now(), event: "requeued" }] }))) n++;
-    console.log(JSON.stringify({ requeued: n }));
+    const max = parseInt(flag("max-attempts", "3")!, 10); let n = 0, parked = 0;
+    for (const i of list("failed")) {
+      if (i.noRequeue === true) { parked++; continue; } // permanently parked — see Item.noRequeue
+      if ((i.attempts ?? 0) < max && move(i.id, "failed", "open", (x) => ({ ...x, history: [...(x.history ?? []), { at: now(), event: "requeued" }] }))) n++;
+    }
+    console.log(JSON.stringify({ requeued: n, skipped_parked: parked }));
     break;
   }
   case "reap": {

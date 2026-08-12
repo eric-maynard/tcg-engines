@@ -295,14 +295,22 @@ describe("Brazen Buccaneer's optional discard × Flame Chompers — the discard 
   // no "priority window ... on resolution". The engine's convention for an unpayable opt-in is to surface it with
   // `canAccept:false` (asserted by the end-state test below and ~200 other tests), not to hide it; 355.8 is about
   // targets, not costs, so it does not require hiding the prompt.
-  test.failing("BUG: (d) 0 fury: no yes/no is ever shown — the item gets its priority window and on resolution the unpayable 'pay [fury] to' simply does nothing", async () => {
-    // Expected: never a P1 yes/no about Chompers; after both pass the chain is empty and Chompers is in the trash.
-    // Actual: the engine raises a finalization-time yes/no ("Pay [fury] …?", canAccept:false) before any priority.
+  // ADJUDICATED 2026-08-12 (CONFLICTS-ADJUDICATED-2026-08-12.md, item d3db201455ae) — WONTFIX, and the CR agrees
+  // with the engine rather than with the "no prompt at all" reading. "[fury] to <do Y>" is the trigger's BASE cost
+  // (355.10.c.1), so 404.2 removes an unpaid item from the chain outright: there is no "priority window … on
+  // resolution" in which the unpayable clause could quietly do nothing. What the CR does NOT dictate is whether an
+  // unpayable opt-in is HIDDEN or SHOWN-AND-REFUSED; 355.8 governs targets, not costs. The engine's uniform
+  // convention (DESIGN.md § Paying costs) is to surface it with `canAccept:false`, which the end-state facet below
+  // and ~200 other tests assert. This facet PREVIOUSLY asserted no prompt is shown — do not flip it back.
+  test("(d) 0 fury: the unpayable 'pay [fury] to …' IS surfaced, as a canAccept:false yes/no before any priority — never as a silent no-op", async () => {
     const game = await playedWithDiscard(0);
     let sawYesNo = false;
     for (let i = 0; i < 30 && !isOpenMain(game.decision()); i++) {
       const d = game.decision() as Decision;
-      sawYesNo ||= d.kind === "yes-no" && isChompersDecision(d);
+      if (d.kind === "yes-no" && isChompersDecision(d)) {
+        sawYesNo = true;
+        expect(d.canAccept).toBe(false); // rule 404.2 — "yes" was never a legal answer
+      }
       if (d.kind === "yes-no" && d.seat === P1) {
         await game.p1.no();
       } else {
@@ -310,7 +318,7 @@ describe("Brazen Buccaneer's optional discard × Flame Chompers — the discard 
       }
     }
     expect(game.zoneOf("fc")).toBe("trash");
-    expect(sawYesNo).toBe(false);
+    expect(sawYesNo).toBe(true);
   });
 
   test("(d) 0 fury, end state: 'yes' is not a legal answer at any point; Chompers remains in P1's trash, pools energy 0 / fury 0, Buccaneer (cost 4 — the optional cost counts as paid because the discard was made, 356.4.f.1) on the board, back to P1's open main phase", async () => {
