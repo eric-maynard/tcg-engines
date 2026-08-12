@@ -89,9 +89,26 @@ export function buildBlockedPlays(session: GameSession, playerId: string) {
     if (m.isValid) {
       continue;
     }
-    const cardId = (m.params as { cardId?: unknown }).cardId;
+    // A refused MOVE names its subjects in `unitIds`, not `cardId`, so keying
+    // strictly on `cardId` made it structurally impossible for any movement
+    // refusal to reach the client — a board unit's illegal drag was swallowed
+    // in silence. Blame the unit the refusal is about when the engine named
+    // one, so a multi-unit move reports the member that actually refused.
+    const params = m.params as { cardId?: unknown; unitIds?: unknown };
     const refusal = Harness.refusalOf(m.validationError);
-    if (!refusal || typeof cardId !== "string") {
+    if (!refusal) {
+      continue;
+    }
+    const unitIds = Array.isArray(params.unitIds)
+      ? params.unitIds.filter((u): u is string => typeof u === "string")
+      : [];
+    const cardId =
+      typeof params.cardId === "string"
+        ? params.cardId
+        : refusal.objectId && unitIds.includes(refusal.objectId)
+          ? refusal.objectId
+          : unitIds[0];
+    if (typeof cardId !== "string") {
       continue;
     }
     const key = `${m.moveId}|${cardId}`;
@@ -138,6 +155,36 @@ export function buildUnaffordableTargets(session: GameSession, playerId: string)
     }
   }
   return out;
+}
+
+/**
+ * rule 302.2 — a keyword is printed on the card and is part of what the player
+ * must be able to read off the object (Deflect taxes the OPPONENT, so hiding it
+ * charges them for something the board never showed). Definitions declare
+ * keywords either on the flat `keywords` array or as
+ * `abilities: [{type:"keyword", keyword:X}]` — mirror `CardDefinitionRegistry.
+ * hasKeyword`'s two printed sources so tokens (whose only surface is the
+ * fallback face) read the same as real cards.
+ */
+function printedKeywords(def: unknown): string[] | undefined {
+  const d = def as
+    | { abilities?: { keyword?: string; type?: string }[]; keywords?: string[] }
+    | undefined;
+  if (!d) {
+    return undefined;
+  }
+  const out: string[] = [];
+  for (const k of d.keywords ?? []) {
+    if (typeof k === "string" && !out.includes(k)) {
+      out.push(k);
+    }
+  }
+  for (const a of d.abilities ?? []) {
+    if (a?.type === "keyword" && typeof a.keyword === "string" && !out.includes(a.keyword)) {
+      out.push(a.keyword);
+    }
+  }
+  return out.length > 0 ? out : undefined;
 }
 
 /**
@@ -209,7 +256,12 @@ export function formatMoveLog(
 
   const resolveBattlefield = (id: unknown): string => {
     if (typeof id !== "string") {return String(id ?? "");}
-    const defId = id.replace(/^player-[12]-bf-/, "");
+    // Callers hand us either the bare battlefield instance id
+    // (`player-1-bf-ogn-277-298`, from standardMove.destination) or the ZONE id
+    // for that battlefield (`battlefield-player-1-bf-…`, from playUnit.location).
+    // Strip the zone prefix first or the instance-id regex below never matches
+    // and the raw zone id leaks into the game log.
+    const defId = id.replace(/^battlefield-/, "").replace(/^player-[12]-bf-/, "");
     const def = registry.get(defId);
     return def?.name ?? defId;
   };
@@ -916,6 +968,7 @@ export function buildGameSnapshot(session: GameSession, viewingPlayer?: string) 
         effectivePowerCost: effectiveCost?.power,
         energyCost: def?.energyCost,
         id: cardId,
+        keywords: printedKeywords(def),
         meta: {
           ...baseMeta,
           ...(copySourceId ? { copyOfCardId: copySourceId } : {}),

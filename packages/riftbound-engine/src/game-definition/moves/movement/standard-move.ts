@@ -166,8 +166,17 @@ export const standardMove: Defs["standardMove"] = {
         return false;
       }
 
+      // rule 144.2 — exhausting the unit IS the cost of a Standard Move, and
+      // rule 143.4 puts units on the Board exhausted, so this is the single
+      // most common refusal a player meets. It must carry its cause, or the
+      // drag is swallowed with no explanation anywhere in the UI.
       if (context.counters.getFlag(unitId as CoreCardId, "exhausted")) {
-        return false;
+        return refuse({
+          code: "MOVE_UNIT_EXHAUSTED",
+          object: unitId as string,
+          rule: "144.2",
+          text: "it's exhausted, and exhausting it is the cost of a Standard Move",
+        });
       }
     }
 
@@ -221,6 +230,11 @@ export const standardMove: Defs["standardMove"] = {
     }[] = [];
 
     const readyUnits: string[] = [];
+    // rule 144.2 — units skipped ONLY because they are exhausted are still
+    // offered, one at a time, as INVALID candidates: the condition refuses them
+    // with a named cause so the UI can say why the drag did nothing. Dropping
+    // them here instead is what made the refusal completely silent.
+    const exhaustedBaseUnits: string[] = [];
     for (const cardId of baseCards) {
       if (controllerOf(context.cards, cardId) !== (context.playerId as string)) {
         continue;
@@ -232,6 +246,7 @@ export const standardMove: Defs["standardMove"] = {
       }
 
       if (context.counters.getFlag(cardId, "exhausted")) {
+        exhaustedBaseUnits.push(cardId as string);
         continue;
       }
 
@@ -318,6 +333,14 @@ export const standardMove: Defs["standardMove"] = {
           destination: bfId,
           playerId: context.playerId as string,
           unitIds,
+        });
+      }
+      // Single-unit candidates the condition will refuse with rule 144.2.
+      for (const unitId of exhaustedBaseUnits) {
+        results.push({
+          destination: bfId,
+          playerId: context.playerId as string,
+          unitIds: [unitId],
         });
       }
     }

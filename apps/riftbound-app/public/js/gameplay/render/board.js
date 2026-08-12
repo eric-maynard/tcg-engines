@@ -103,8 +103,14 @@ function renderBattlefields() {
 
     const bfZoneId = `battlefield-${bfId}`;
     const unitsAtBf = zones[bfZoneId] || [];
-    const opponentUnits = unitsAtBf.filter(c => c.owner === opponent);
-    const playerUnits = unitsAtBf.filter(c => c.owner === viewingPlayer);
+    // rule 425.1 — which half of a battlefield an object sits in is a question
+    // about its CONTROLLER, not its owner: a unit taken with Hostile Takeover
+    // (sfd-202-221) keeps its owner but fights for its new controller, so
+    // splitting by owner left it rendered among the enemy's units. Fall back to
+    // owner only for rows a snapshot shipped without a controller.
+    const sideOf = c => c.controller || c.owner;
+    const opponentUnits = unitsAtBf.filter(c => sideOf(c) === opponent);
+    const playerUnits = unitsAtBf.filter(c => sideOf(c) === viewingPlayer);
 
     // rule-id: ogn-197-298 — Rule 723 (Hidden): the engine parks hidden cards
     // in a sibling `facedown-${bfId}` zone, not `battlefield-${bfId}`, so they
@@ -112,12 +118,12 @@ function renderBattlefields() {
     // sees a card BACK; the per-seat snapshot decides whose hover may peek.
     const fdZoneId = `facedown-${bfId}`;
     const facedownAtBf = zones[fdZoneId] || [];
-    const opponentFacedownHtml = facedownAtBf.filter(c => c.owner === opponent).map(c => `<div class="bf-facedown">${renderFacedownCard(c, fdZoneId)}</div>`).join("");
-    const playerFacedownHtml = facedownAtBf.filter(c => c.owner === viewingPlayer).map(c => `<div class="bf-facedown">${renderFacedownCard(c, fdZoneId)}</div>`).join("");
+    const opponentFacedownHtml = facedownAtBf.filter(c => sideOf(c) === opponent).map(c => `<div class="bf-facedown">${renderFacedownCard(c, fdZoneId)}</div>`).join("");
+    const playerFacedownHtml = facedownAtBf.filter(c => sideOf(c) === viewingPlayer).map(c => `<div class="bf-facedown">${renderFacedownCard(c, fdZoneId)}</div>`).join("");
     const oppSlots = groupAttachments(opponentUnits);
     const mySlots = groupAttachments(playerUnits);
-    const oppN = oppSlots.length + facedownAtBf.filter(c => c.owner === opponent).length;
-    const myN = mySlots.length + facedownAtBf.filter(c => c.owner === viewingPlayer).length;
+    const oppN = oppSlots.length + facedownAtBf.filter(c => sideOf(c) === opponent).length;
+    const myN = mySlots.length + facedownAtBf.filter(c => sideOf(c) === viewingPlayer).length;
     const crowded = Math.max(oppN, myN) >= BF_CROWDED_AT;
 
     const bfName = bfNames[bfId] || bfId.replace(/^ogn-|^sfd-|^unl-/g, "").replace(/-\d+$/, "");
