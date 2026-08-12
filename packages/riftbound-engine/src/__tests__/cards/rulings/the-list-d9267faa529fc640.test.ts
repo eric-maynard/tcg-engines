@@ -50,7 +50,9 @@ async function listOnPal(): Promise<Game> {
   const game = await board().build();
   expect(game.state("pal").might).toBe(8);
   await game.p2.play("list");
-  await passBoth(game);
+  // rule 358 / 135.2.b.3 — a permanent's play finalizes at once and the
+  // "as you play this, name a tag" step never reaches the Chain: nobody gets a
+  // Reaction window here, the naming prompt is up immediately.
   expect(game.decision()).toMatchObject({ kind: "name", seat: P2 });
   await game.p2.name("Poro");
   expect(game.state("list").meta.namedTag).toBe("Poro");

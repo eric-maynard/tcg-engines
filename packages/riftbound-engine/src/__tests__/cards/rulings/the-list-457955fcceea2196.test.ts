@@ -57,10 +57,9 @@ describe("Ruling 457955fcceea2196 — The List's [Exhaust] ability can be reacte
     expect(game.p1.legal().map((o) => o.key)).toEqual(["concede:-", "passChainPriority:-"]);
   });
 
-  // Expected (ruling): playing a permanent finalizes at once, so the "as you play this, name a tag" step gives
-  // nobody a Reaction window. Actual: the engine models the naming as a play-self TRIGGER, which is put on the
-  // chain and offers both seats priority before the tag is even named.
-  test.failing("BUG: ruling 457955fcceea2196 — the play-time naming should open no Reaction window; the engine chains it and gives P2 priority", async () => {
+  // Playing a permanent finalizes at once, so the "as you play this, name a tag" step gives nobody a
+  // Reaction window: the naming is an `asYouPlay` name-card step, resolved inline off the Chain.
+  test("ruling 457955fcceea2196 — the play-time naming opens no Reaction window", async () => {
     const game = await scenario()
       .resources(P1, { energy: 3 })
       .unit(P2, "base", { might: 3, name: "Poro Pal", tags: ["Poro"] }, "poro")

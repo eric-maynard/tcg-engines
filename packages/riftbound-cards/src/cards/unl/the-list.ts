@@ -12,7 +12,9 @@ const abilities: Ability[] = [
   {
     // rule 762: the tag is named as the card is played and recorded on it; the
     // activated ability's `tag: "named"` filter reads it back.
-    effect: { cardType: "tag", type: "name-card" },
+    // rule 135.2.b.3 / 358: "As you play this" happens WHILE the Gear is being
+    // played, so `asYouPlay` keeps the naming off the Chain — no Reaction window.
+    effect: { asYouPlay: true, cardType: "tag", type: "name-card" },
     trigger: { event: "play-self" },
     type: "triggered",
   },
