@@ -98,9 +98,13 @@ function onCardClick(cardId) {
       handleCostPaymentRuneClick(cardId);
       return;
     }
-    // Clicking the pending card again cancels costPayment
+    // Clicking the pending card again cancels costPayment. Tearing down an open
+    // payment prompt is never silent — a drag that finds no legal move falls
+    // through to this click path, so the player must be told the prompt is gone.
     if (cardId === interaction.pendingCardId) {
+      const pendingName = String(findCard(cardId)?.name ?? cardId).replace(/^player-[12]-/, "");
       cancelInteraction();
+      showToast(`Payment for ${pendingName} cancelled`);
       return;
     }
     // Clicking any other card cancels costPayment and selects the new card
@@ -154,21 +158,72 @@ function onCardClick(cardId) {
   }
 }
 
-/** Handle left-clicking a rune while in costPayment mode (exhaust immediately) */
-function handleCostPaymentRuneClick(runeCardId) {
-  // Left-click during cost payment = exhaust for energy
-  const exhaustMove = availableMoves.find(m =>
-    m.moveId === "exhaustRune" && (m.params?.runeId === runeCardId || m.params?.cardId === runeCardId)
-  );
+/** Domain of a rune card (`domain` may be a single value or a list). */
+function runeDomain(card) {
+  const d = card?.domain;
+  return (Array.isArray(d) ? d[0] : d) || null;
+}
 
-  if (exhaustMove) {
+/**
+ * rule 164.2 — the two rune gestures produce different things: exhausting adds
+ * Energy (164.2.a), recycling adds Power of the rune's Domain (164.2.b) and is
+ * legal on an already-exhausted rune. So which gesture a rune offers during
+ * cost payment depends on which half of the cost is still outstanding: a ready
+ * rune settles a generic Energy shortfall by exhausting, and a rune whose
+ * Domain matches an unpaid pip settles that pip by recycling. Offering only
+ * "exhaust" leaves a 0/0 + [chaos] cost with no reachable affordance at all.
+ */
+function runeCostAffordance({ canExhaust, canRecycle, domain, energyShortfall, unmetPips }) {
+  const pips = unmetPips || [];
+  // rule 357.1 — a [rainbow] pip takes Power of ANY Domain, so every rune pays it.
+  const paysAPip = canRecycle && pips.length > 0 && (pips.includes("rainbow") || (domain ? pips.includes(domain) : false));
+  if ((energyShortfall || 0) > 0 && canExhaust) return "exhaust";
+  if (paysAPip) return "recycle";
+  if (canExhaust) return "exhaust";
+  return null;
+}
+
+/** Outstanding halves of the cost currently being paid, for rune affordances. */
+function costPaymentOutstanding() {
+  const card = findCard(interaction?.pendingCardId);
+  if (!card) return { energyShortfall: 0, unmetPips: [] };
+  const pool = gameState?.runePools?.[viewingPlayer];
+  const { energy, unmetPips } = costPaymentCostState(card, pool?.energy ?? 0, pool);
+  return { energyShortfall: Math.max(0, energy - (pool?.energy ?? 0)), unmetPips };
+}
+
+/** Handle left-clicking a rune while in costPayment mode (exhaust or recycle) */
+function handleCostPaymentRuneClick(runeCardId) {
+  const matches = m => m.params?.runeId === runeCardId || m.params?.cardId === runeCardId;
+  const exhaustMove = availableMoves.find(m => m.moveId === "exhaustRune" && matches(m));
+  const recycleMove = availableMoves.find(m => m.moveId === "recycleRune" && matches(m));
+  const card = findCard(runeCardId);
+  const { energyShortfall, unmetPips } = costPaymentOutstanding();
+  const gesture = runeCostAffordance({
+    canExhaust: !!exhaustMove,
+    canRecycle: !!recycleMove,
+    domain: runeDomain(card),
+    energyShortfall,
+    unmetPips,
+  });
+
+  if (gesture === "recycle") {
+    snapshotResources();
+    executeMove(recycleMove.moveId, recycleMove.params, recycleMove.playerId);
+    return;
+  }
+
+  if (gesture === "exhaust") {
     snapshotResources();
     executeMove(exhaustMove.moveId, exhaustMove.params, exhaustMove.playerId);
     return;
   }
 
-  // No exhaust available — explain why
-  const card = findCard(runeCardId);
+  // Nothing this rune can do for THIS cost — explain why
+  if (unmetPips.length > 0 && recycleMove) {
+    showToast(`Recycle a ${[...new Set(unmetPips)].map(p => `[${p}]`).join(" / ")} rune — this one is ${runeDomain(card) ?? "another domain"}`);
+    return;
+  }
   if (card?.meta?.exhausted) {
     showToast("Rune is already exhausted");
   } else if (gameState?.turn?.phase && gameState.turn.phase !== "main") {
@@ -223,54 +278,8 @@ function cancelInteraction() {
 /** Remove .valid-target and .drag-over classes from all elements */
 function clearValidTargetHighlights() {
   document.querySelectorAll(".valid-target").forEach(el => el.classList.remove("valid-target"));
-  document.querySelectorAll(".unaffordable-target").forEach(el => el.classList.remove("unaffordable-target"));
   document.querySelectorAll(".drag-over").forEach(el => el.classList.remove("drag-over"));
   document.body.classList.remove("targeting-mode");
-}
-
-/**
- * rule 809.1.d / 429.3 — the play-time targets the engine LISTS for `cardId`
- * but the pool cannot pay for yet (a [Deflect] surcharge a Reaction [Add] could
- * still fund). 809.1.d drops a candidate only when NOTHING could fund it, so
- * these must be shown dimmed with what they need rather than hidden — the same
- * treatment the cost modal gives a `needsAdd` option.
- */
-function unaffordableTargetsFor(cardId) {
-  return (gameState?.unaffordableTargets || []).filter(t => !cardId || t.cardId === cardId);
-}
-
-/**
- * rule 357.1.a / 429.3 — the entry for `cardId` among the hand cards the engine
- * says are ONE Reaction [Add] away from playable, or null. The card is not in
- * `availableMoves` (paying is manual, so the play stays refused), but it must
- * not look inert either: clicking it opens the Pay step and the pay line says
- * which tap or recycle unlocks it.
- */
-function reachablePlayFor(cardId) {
-  return (gameState?.reachablePlays || []).find(r => r.cardId === cardId) || null;
-}
-
-/** "needs [chaos] — recycle a rune for [chaos] first" for a card one Add away. */
-function reachablePlayHint(cardId) {
-  const r = reachablePlayFor(cardId);
-  if (!r?.needsAdd) return "";
-  const pips = Object.entries(r.needsAdd.power || {})
-    .flatMap(([d, n]) => Array.from({ length: n || 0 }, () => `[${d}]`))
-    .join("");
-  const energy = r.needsAdd.energy ? `[${r.needsAdd.energy}]` : "";
-  return `needs ${[energy, pips].filter(Boolean).join("")} — ${r.needsAdd.reason}`;
-}
-
-/** The cheapest pay line across the dimmed targets, e.g. "needs [rainbow] — recycle a rune". */
-function unaffordableTargetHint(cardId) {
-  const rows = unaffordableTargetsFor(cardId).filter(t => t.needsAdd);
-  if (rows.length === 0) return "";
-  const owed = t => Object.values(t.needsAdd.power || {}).reduce((a, n) => a + (n || 0), 0);
-  const best = rows.reduce((a, b) => (owed(b) < owed(a) ? b : a));
-  const pips = Object.entries(best.needsAdd.power || {})
-    .flatMap(([d, n]) => Array.from({ length: n || 0 }, () => `[${d}]`))
-    .join("");
-  return `needs ${pips} — ${best.needsAdd.reason}`;
 }
 
 // ---- Targeting mode -----------------------------------------------------------
@@ -688,15 +697,11 @@ function updateTargetBanner() {
     buttons.push({ label: `Target ${nm}`, pick: id });
   }
 
-  // rule 429.3 / 357.1.a — quote the cheapest top-up that would unlock a dimmed
-  // candidate, so the player can see the Add that opens it up.
-  const needHint = unaffordableTargetHint(interaction.sourceCardId);
-  const needSuffix = needHint ? ` · ${needHint}` : "";
   const chosenNames = chosen.map(id => (findCard(id)?.name || id).replace(/^player-[12]-/, ""));
   // rule 809.1.c — quote the running [Deflect] total for the set chosen so far.
   const tax = chosen.length === 0 ? "" : ` · ${deflectSurchargeText(chosen)}`;
   const text = chosen.length === 0
-    ? `Choose a target for ${name}${needSuffix} — Esc to cancel`
+    ? `Choose a target for ${name} — Esc to cancel`
     : repeats.length > 0
       ? `${name}: ${chosenNames.join(", ")}${tax} — Play, or pay Repeat · Esc to cancel`
       : paid.length > 0
@@ -744,19 +749,6 @@ function hideTargetBanner() {
 function applyChooseTargetHighlights() {
   for (const id of interaction.validTargets || []) {
     document.querySelectorAll(`[data-card-id="${CSS.escape(id)}"]`).forEach(el => el.classList.add("valid-target"));
-  }
-  // rule 809.1.d — a candidate whose [Deflect] surcharge is REACHABLE but unpaid
-  // is listed too, dimmed: hiding it is what made a Deflect body silently vanish
-  // from the glow. Clicking it stays a no-op until an Add funds the pip.
-  const valid = new Set(interaction.validTargets || []);
-  for (const t of unaffordableTargetsFor(interaction.sourceCardId)) {
-    for (const id of t.targets || []) {
-      if (valid.has(id)) continue;
-      document.querySelectorAll(`[data-card-id="${CSS.escape(id)}"]`).forEach(el => {
-        el.classList.add("unaffordable-target");
-        el.title = t.needsAdd?.reason ? `[Deflect] ${t.surcharge} — ${t.needsAdd.reason}` : `[Deflect] ${t.surcharge}`;
-      });
-    }
   }
   document.body.classList.add("targeting-mode");
 }
@@ -903,6 +895,51 @@ function cardPlaySpeed(card) {
 }
 
 /**
+ * rule 809.1.d / 429.3 — the play-time targets the engine LISTS for `cardId`
+ * but the pool cannot pay for yet (a [Deflect] surcharge a Reaction [Add] could
+ * still fund). 809.1.d drops a candidate only when NOTHING could fund it, so
+ * these must be shown dimmed with what they need rather than hidden — the same
+ * treatment the cost modal gives a `needsAdd` option.
+ */
+function unaffordableTargetsFor(cardId) {
+  return (gameState?.unaffordableTargets || []).filter(t => !cardId || t.cardId === cardId);
+}
+
+/**
+ * rule 357.1.a / 429.3 — the entry for `cardId` among the hand cards the engine
+ * says are ONE Reaction [Add] away from playable, or null. The card is not in
+ * `availableMoves` (paying is manual, so the play stays refused), but it must
+ * not look inert either: clicking it opens the Pay step and the pay line says
+ * which tap or recycle unlocks it.
+ */
+function reachablePlayFor(cardId) {
+  return (gameState?.reachablePlays || []).find(r => r.cardId === cardId) || null;
+}
+
+/** "needs [chaos] — recycle a rune for [chaos] first" for a card one Add away. */
+function reachablePlayHint(cardId) {
+  const r = reachablePlayFor(cardId);
+  if (!r?.needsAdd) return "";
+  const pips = Object.entries(r.needsAdd.power || {})
+    .flatMap(([d, n]) => Array.from({ length: n || 0 }, () => `[${d}]`))
+    .join("");
+  const energy = r.needsAdd.energy ? `[${r.needsAdd.energy}]` : "";
+  return `needs ${[energy, pips].filter(Boolean).join("")} — ${r.needsAdd.reason}`;
+}
+
+/** The cheapest pay line across the dimmed targets, e.g. "needs [rainbow] — recycle a rune". */
+function unaffordableTargetHint(cardId) {
+  const rows = unaffordableTargetsFor(cardId).filter(t => t.needsAdd);
+  if (rows.length === 0) return "";
+  const owed = t => Object.values(t.needsAdd.power || {}).reduce((a, n) => a + (n || 0), 0);
+  const best = rows.reduce((a, b) => (owed(b) < owed(a) ? b : a));
+  const pips = Object.entries(best.needsAdd.power || {})
+    .flatMap(([d, n]) => Array.from({ length: n || 0 }, () => `[${d}]`))
+    .join("");
+  return `needs ${pips} — ${best.needsAdd.reason}`;
+}
+
+/**
  * A refusal carries its cause: the ENGINE's own reason for withholding this
  * card, shipped on the snapshot (`blockedPlays`), naming the object and rule
  * that blocked it ("Mageseeker Warden: … (rule 358.3.a)"). Prefer it over the
@@ -942,7 +979,7 @@ function playTimingBlockReason(card) {
 
 // Exported for the play-block-reason unit test (browser: `module` is undefined).
 if (typeof module !== "undefined" && module && module.exports) {
-  module.exports = { engineBlockReason, playTimingBlockReason, cardPlaySpeed, payablePowerCost, unpaidPowerPips, costPaymentCostState };
+  module.exports = { engineBlockReason, playTimingBlockReason, cardPlaySpeed, payablePowerCost, unpaidPowerPips, costPaymentCostState, costShortfallIsReachable, runeCostAffordance };
 }
 
 /**
@@ -1072,7 +1109,7 @@ function enterHideOnlySelected(cardId, hideMoves) {
   const label = document.getElementById("actionBarLabel");
   const btns = document.getElementById("actionBarBtns");
   const name = String(card?.name || cardId).replace(/^player-[12]-/, "");
-  const why = engineBlockReason(cardId) || (typeof playTimingBlockReason === "function" ? playTimingBlockReason(card) : "");
+  const why = typeof playTimingBlockReason === "function" ? playTimingBlockReason(card) : "";
   label.textContent = `${name} — can't be played right now${why ? ` (${why})` : ""}; it has [Hidden], so you may hide it face-down:`;
   btns.innerHTML = hideMoves.map((m, i) =>
     `<button class="action-bar-btn" data-hide-at="${esc(String(m.params?.battlefieldId ?? ""))}" onclick='executeHideVariant(${i})' title="rule 723: pay the Hide cost and put this card face-down here; reveal it from your next turn">${esc(`Hide at ${getBattlefieldName(String(m.params?.battlefieldId ?? ""))}`)}</button>`
@@ -1159,7 +1196,7 @@ function enterHandCardSelected(cardId) {
     // rule 507-510: when the state is closed to this card (chain open and it is
     // not a Reaction, not our turn, wrong phase) the engine withholds the play
     // for a timing reason — never blame the energy pool for it.
-    const stateReason = engineBlockReason(cardId) || playTimingBlockReason(card);
+    const stateReason = playTimingBlockReason(card);
     if (stateReason) {
       showToast(stateReason);
       selectedCard = cardId;
@@ -1167,36 +1204,40 @@ function enterHandCardSelected(cardId) {
       return;
     }
 
-    // rule 357.1.a — the engine says this card is one Reaction [Add] away: open
-    // the Pay step and quote exactly what it needs, instead of leaving the card
-    // inert (or blaming the energy pool for a Power pip it cannot see).
-    const reachable = reachablePlayFor(cardId);
-    if (card && reachable) {
-      const pool = gameState?.runePools?.[viewingPlayer];
-      enterCostPaymentMode(cardId, card, pool?.energy ?? 0);
-      showToast(reachablePlayHint(cardId));
-      return;
-    }
-
     // Fall back to the existing manual cost-payment mode (users who prefer clicking
     // runes manually still get the old flow).
     const needed = payableEnergyCost(card);
-    const printedPips = payablePowerCost(card);
-    if (card && (needed > 0 || printedPips.length > 0)) {
+    const pips = payablePowerCost(card);
+    if (card && (needed > 0 || pips.length > 0)) {
       const pool = gameState?.runePools?.[viewingPlayer];
       const totalEnergy = pool?.energy ?? 0;
       // rule 357.1 — an unpaid power pip leaves the cost unpaid just as missing
       // energy does, so it must open the payment bar too.
       const unmet = unpaidPowerPips(card, pool);
       if (totalEnergy < needed || unmet.length > 0) {
-        const runeExhaustMoves = availableMoves.filter(m =>
-          m.moveId === "exhaustRune" || m.moveId === "recycleRune"
-        );
-        if (runeExhaustMoves.length > 0) {
+        // rule 414.4: only an exhaustable rune can actually pay the cost —
+        // `recycleRune` generates no energy, so it must not open a payment mode
+        // the player has no way to complete.
+        // rule 203.3: a cost whose payment action is impossible cannot be paid, so
+        // existence of ONE rune move is not enough — the whole shortfall has to be
+        // reachable, or the bar opens on a prompt whose only exit is Cancel.
+        const runeExhaustMoves = availableMoves.filter(m => m.moveId === "exhaustRune");
+        const runeRecycleMoves = availableMoves.filter(m => m.moveId === "recycleRune");
+        const reachable = costShortfallIsReachable({
+          needed,
+          pips: pips.length,
+          unmetPips: unmet.length,
+          currentEnergy: totalEnergy,
+          readyRunes: runeExhaustMoves.length,
+          recyclableRunes: runeRecycleMoves.length,
+        });
+        if (reachable && (runeExhaustMoves.length > 0 || (unmet.length > 0 && runeRecycleMoves.length > 0))) {
           enterCostPaymentMode(cardId, card, totalEnergy);
           return;
         }
-        showToast(`Not enough energy (${totalEnergy}/${needed}) — no runes available`);
+        showToast(unmet.length > 0
+          ? `Can't pay ${unmet.map(p => `[${p}]`).join("")} — not enough runes to recycle`
+          : `Not enough energy (${totalEnergy}/${needed}) — not enough ready runes to pay it`);
       }
     }
     // No playable moves for this card, just select it for info
@@ -1224,8 +1265,29 @@ function enterHandCardSelected(cardId) {
   showActionBar(card?.name || cardId, playMoves);
 }
 
+/**
+ * rule 203.3 — "if the action of a cost is impossible, the cost cannot be paid".
+ * Can the player still reach this cost from the current pool? Mirrors the solver in
+ * auto-pay.js planCostPayment: every printed pip also covers one point of the energy
+ * cost, each remaining generic point needs one READY rune to exhaust (rule 414.1.b:
+ * an exhausted rune cannot be exhausted again), and each unmet pip needs one rune to
+ * recycle — recycling works on an exhausted rune, so it does not eat a ready one.
+ * Optimistic where the two compete: never say "unpayable" for a cost that some
+ * ordering could still pay.
+ */
+function costShortfallIsReachable({ needed, pips, unmetPips, currentEnergy, readyRunes, recyclableRunes }) {
+  const genericNeeded = Math.max(0, (needed || 0) - (pips || 0) - (currentEnergy || 0));
+  if ((readyRunes || 0) < genericNeeded) return false;
+  if ((recyclableRunes || 0) < (unmetPips || 0)) return false;
+  return true;
+}
+
 /** Enter cost payment mode for a card that needs more energy */
 function enterCostPaymentMode(cardId, card, currentEnergy) {
+  // A hint toast names the card it was raised for ("needs [chaos] …"); switching
+  // the pending card must not leave the previous card's instruction on screen
+  // next to the new pay bar.
+  if (typeof clearToasts === "function" && interaction.pendingCardId !== cardId) clearToasts();
   interaction = {
     mode: "costPayment",
     sourceCardId: cardId,
@@ -1279,38 +1341,63 @@ function showCostPaymentActionBar(card, currentEnergy) {
       html += `<button class="action-bar-btn" style="background:#2a5040;border-color:#50c878;color:#80e8a0;" onclick='executeInteractionMove(${JSON.stringify(moveId)})'>${esc(moveLabel)}</button>`;
     }
   } else if (!isAffordable) {
+    // Don't instruct the player to exhaust runes when none can be exhausted
+    // (rule 414.1.b) — say the cost is unpayable and how to back out instead.
+    const canExhaust = availableMoves.some(m => m.moveId === "exhaustRune");
     // rule 357.1 — an unmet power pip is paid by recycling a rune of that domain,
     // not by exhausting for generic energy, so name the right gesture.
     const pipHint = unmetPips.length
       ? `Recycle a ${[...new Set(unmetPips)].map(p => `[${esc(p)}]`).join(" / ")} rune for power`
       : "";
-    html += `<span style="color:#6a6288;font-size:11px;">${pipHint || "Exhaust runes to generate energy"}${pipHint && currentEnergy < cost ? " · exhaust runes for energy" : ""}</span>`;
+    // A pips-only shortfall is paid by recycling, which works on exhausted runes
+    // too (rule 164.2.b) — so "all runes are exhausted" is not a dead end there.
+    const canRecycleForPip = unmetPips.length > 0 && availableMoves.some(m => m.moveId === "recycleRune");
+    html += (canExhaust || canRecycleForPip)
+      ? `<span style="color:#6a6288;font-size:11px;">${pipHint || "Exhaust runes to generate energy"}${pipHint && currentEnergy < cost ? " · exhaust runes for energy" : ""}</span>`
+      : `<span style="color:#6a6288;font-size:11px;">All runes are exhausted — this cost can't be paid right now. Press Escape to cancel.</span>`;
   }
 
   btns.innerHTML = html;
   bar.classList.remove("hidden");
 }
 
-/** Highlight runes in the rune pool that can be exhausted */
+/** Badge each rune with the gesture that actually advances THIS cost. */
 function applyRuneTappableHighlights() {
   clearRuneTappableHighlights();
-  const runeExhaustMoves = availableMoves.filter(m =>
-    m.moveId === "exhaustRune" || m.moveId === "recycleRune"
-  );
-  for (const move of runeExhaustMoves) {
+  // rule 414.1.b: an already-Exhausted object cannot be Exhausted again, so only
+  // runes with a live `exhaustRune` move get the pulsing "TAP" affordance.
+  // rule 164.2.b: an unpaid pip is settled by RECYCLING a rune of that Domain,
+  // which the exhaust badge can never advertise — those runes get their own
+  // "recycle" affordance so a pips-only shortfall has a visible gesture.
+  const { energyShortfall, unmetPips } = costPaymentOutstanding();
+  const runeMoves = availableMoves.filter(m => m.moveId === "exhaustRune" || m.moveId === "recycleRune");
+  const byRune = new Map();
+  for (const move of runeMoves) {
     const cardId = move.params?.runeId || move.params?.cardId;
-    if (cardId) {
-      const el = document.querySelector(`[data-card-id="${CSS.escape(cardId)}"]`);
-      if (el && !el.classList.contains("rune-tappable")) {
-        el.classList.add("rune-tappable");
-      }
-    }
+    if (!cardId) continue;
+    const entry = byRune.get(cardId) || { canExhaust: false, canRecycle: false };
+    if (move.moveId === "exhaustRune") entry.canExhaust = true; else entry.canRecycle = true;
+    byRune.set(cardId, entry);
+  }
+  for (const [cardId, entry] of byRune) {
+    const gesture = runeCostAffordance({
+      canExhaust: entry.canExhaust,
+      canRecycle: entry.canRecycle,
+      domain: runeDomain(findCard(cardId)),
+      energyShortfall,
+      unmetPips,
+    });
+    if (!gesture) continue;
+    const el = document.querySelector(`[data-card-id="${CSS.escape(cardId)}"]`);
+    const cls = gesture === "recycle" ? "rune-recyclable" : "rune-tappable";
+    if (el && !el.classList.contains(cls)) el.classList.add(cls);
   }
 }
 
 /** Remove .rune-tappable class from all elements */
 function clearRuneTappableHighlights() {
   document.querySelectorAll(".rune-tappable").forEach(el => el.classList.remove("rune-tappable"));
+  document.querySelectorAll(".rune-recyclable").forEach(el => el.classList.remove("rune-recyclable"));
 }
 
 // Ability buttons rendered into the on-card action bar, in render order; the

@@ -153,10 +153,16 @@ function renderPlayerInfo() {
   }
 }
 
+/** Drop any toast still on screen — a toast names the card it was raised for,
+ * so it must not outlive that card's prompt (toasts live 2500ms on their own). */
+function clearToasts() {
+  document.querySelectorAll(".toast").forEach(t => t.remove());
+}
+
 /** Show a toast notification */
 function showToast(message) {
   // Remove existing toast
-  document.querySelectorAll(".toast").forEach(t => t.remove());
+  clearToasts();
   const toast = document.createElement("div");
   toast.className = "toast";
   toast.textContent = message;

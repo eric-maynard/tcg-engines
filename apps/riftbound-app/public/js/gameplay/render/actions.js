@@ -206,9 +206,17 @@ function humanizeEffect(e) {
     // rule 355.5 — a chain item must say what it will do: describe the body of a
     // conditional effect (plus its condition), never the raw "conditional" type.
     case "conditional": {
-      const body = humanizeEffect(e.then ?? e.effect);
+      // rule 355.5 (ven-037-166 Tomb-Raider Barbara) — the object is often named
+      // on the conditional NODE ("Disempower an enemy gear; otherwise kill it"),
+      // leaving both branches targetless. Inherit the node's target so the branch
+      // names the real card type instead of falling back to "a unit".
+      const inherit = (b) =>
+        b && typeof b === "object" && b.target === undefined && e.target !== undefined
+          ? { ...b, target: e.target }
+          : b;
+      const body = humanizeEffect(inherit(e.then ?? e.effect));
       const cond = humanizeCondition(e.condition);
-      const alt = humanizeEffect(e.else);
+      const alt = humanizeEffect(inherit(e.else));
       if (!body) return alt ? `Otherwise ${alt}` : "";
       return `${body}${cond ? ` if ${cond}` : ""}${alt ? `, otherwise ${alt}` : ""}`;
     }
@@ -486,9 +494,20 @@ function activatedAbilityLabel(cardId, abilityIndex, sourceCardId) {
   return `${name} — ${seg}${suffix}`;
 }
 
+// rule 357.1.a — during the pay-costs step the only things the controller may do
+// are Add resources (or cancel). Anything that SPENDS the pool being accumulated
+// for the pending card must not be offered while that payment is open.
+const COST_PAYMENT_PANEL_MOVES = ["exhaustRune", "recycleRune", "addResources"];
+
 function renderActions() {
   const list = document.getElementById("actionsList");
-  if (!availableMoves || availableMoves.length === 0) {
+  const payingCosts = interaction.mode === "costPayment" && !!interaction.pendingCardId;
+  // While a payment is open the panel shows only the Add-resource actions plus an
+  // explicit way out — never another play that would spend the pool being built.
+  const panelMoves = payingCosts
+    ? (availableMoves ?? []).filter(m => COST_PAYMENT_PANEL_MOVES.includes(m.moveId))
+    : availableMoves;
+  if (!payingCosts && (!availableMoves || availableMoves.length === 0)) {
     list.innerHTML = '<div style="color:#6a6288; font-size:11px; padding:4px;">No moves available</div>';
     return;
   }
@@ -543,7 +562,7 @@ function renderActions() {
     other: { label: "Other", moveIds: [], moves: [] },
   };
 
-  for (const move of availableMoves) {
+  for (const move of panelMoves) {
     // Prompt answers are rendered by the pending / trigger-order block above the
     // sections — never as an anonymous "Other" group.
     if (move.moveId === "resolvePendingChoice") continue;
@@ -561,6 +580,13 @@ function renderActions() {
   }
 
   let html = "";
+  if (payingCosts) {
+    const pendingName = String(findCard(interaction.pendingCardId)?.name ?? interaction.pendingCardId)
+      .replace(/^player-[12]-/, "");
+    html += `<div class="action-section-title" style="background:#3a2a4a;color:#ffd070;padding:6px;border-radius:3px;">
+      Paying for ${esc(pendingName)} — add resources or cancel
+    </div>`;
+  }
   // Move groups whose variants differ only by target; the button enters
   // targeting mode (interactions.js) instead of executing a variant directly.
   const targetPlayGroups = [];
@@ -868,6 +894,12 @@ function renderActions() {
   // A blank AVAILABLE ACTIONS panel is indistinguishable from a hung client.
   // When the legal-move set is empty — or is only `concede`, which is routed to
   // the sidebar header above — say so on screen and name the escape, so a dead
+  if (payingCosts) {
+    if (!panelMoves.length) {
+      html += '<div style="color:#6a6288; font-size:11px; padding:4px;">No resources can be added right now.</div>';
+    }
+    html += `<button class="action-btn" onclick="cancelInteraction()">Cancel payment</button>`;
+  }
   // end reads as a dead end rather than as a freeze.
   if (!html.trim()) {
     const onlyConcede = availableMoves.length > 0 &&
