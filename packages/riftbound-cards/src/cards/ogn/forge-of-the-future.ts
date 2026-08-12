@@ -28,6 +28,22 @@ const abilities: Ability[] = [
       amount: 4,
       from: "trash",
       owner: "any",
+      // rule 355.10.a.1 — a trash is a PUBLIC zone, so "up to 4 cards from
+      // trashes" is an ordinary variable-count target set: it is named while the
+      // ability is finalized on the chain (355.5 / 355.13 / 402.2) and locked
+      // there (355.15), never gathered again as the ability resolves.
+      // rules 402 / 404.1 — for an activated ability "Make relevant choices" is
+      // step 2 and "Pay Costs" is step 4 (357.2 is the card-play analogue), so
+      // the "Kill this" cost is paid AFTER this set is chosen: the Forge is
+      // still a gear on the board at choice time and can never be one of its
+      // own targets (`excludeSelf`).
+      target: {
+        controller: "any",
+        excludeSelf: true,
+        location: "trash",
+        quantity: { upTo: 4 },
+        type: "card",
+      },
       type: "recycle",
       upTo: true,
     },

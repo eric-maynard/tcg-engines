@@ -1,8 +1,10 @@
 // Effect handler: "recycle"
 import type { CardId as CoreCardId, PlayerId as CorePlayerId, ZoneId as CoreZoneId } from "@tcg/core";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
-import { leaveBoard } from "../../operations/leave-board";
+import { leaveBoard, orderBatchTriggersByTurnOrder } from "../../operations/leave-board";
+import type { RiftboundGameState } from "../../types";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
+import { isSlotBound, legalBoundIds } from "../target-slots";
 import { type EffectHelpers, getTargetIds, resolveAmount } from "./_helpers";
 
 /**
@@ -55,6 +57,43 @@ function turnOrderSeats(ctx: EffectContext): string[] {
   const turn = (ctx.draft as { turn?: { activePlayer?: string } }).turn;
   const at = seats.indexOf(turn?.activePlayer ?? "");
   return at < 0 ? seats : [...seats.slice(at), ...seats.slice(0, at)];
+}
+
+/**
+ * rule 416.1.c (rule-id: ogn-212-298) — a card always recycles to ITS OWNER's
+ * Main Deck, whoever was instructed to recycle it, and that owner is the player
+ * who "recycles" it for trigger purposes. So one instruction touching several
+ * players' cards is one recycle event per owner, and each owner's "when you
+ * recycle one or more cards to your Main Deck" (ogn-235-298 Karma, Channeler)
+ * fires exactly once. rule 383.3.d.1 — the batch left at once, so the turn
+ * player's triggers go on the Chain first.
+ *
+ * The same split lives in `moves/pending-choice.ts fireRecycleEvent` for the
+ * prompt-answered form; keep the two in step.
+ */
+function fireRecycleByOwner(cardIds: readonly string[], ctx: EffectContext): void {
+  if (cardIds.length === 0) {
+    return;
+  }
+  const byOwner = new Map<string, string[]>();
+  for (const id of cardIds) {
+    const owner = String(ctx.cards.getCardOwner(id as CoreCardId) ?? ctx.playerId);
+    const bucket = byOwner.get(owner);
+    if (bucket) {
+      bucket.push(id);
+    } else {
+      byOwner.set(owner, [id]);
+    }
+  }
+  const chainLenBefore =
+    (ctx.draft as RiftboundGameState).interaction?.chain?.items?.length ?? 0;
+  for (const owner of turnOrderSeats(ctx)) {
+    const own = byOwner.get(owner);
+    if (own && own.length > 0) {
+      ctx.fireTriggers?.({ cardIds: own, playerId: owner, type: "recycle" });
+    }
+  }
+  orderBatchTriggersByTurnOrder(ctx.draft as RiftboundGameState, chainLenBefore);
 }
 
 /**
@@ -205,6 +244,20 @@ export function handle_recycle(effect: ExecutableEffect, ctx: EffectContext, _h:
     // the prompt is offered even when the zone holds no more than N.
     const upTo =
       (effect as { upTo?: boolean }).upTo === true || targetSpec?.quantity?.upTo !== undefined;
+    // rule 355.10.a.1 / 355.15 / 359.3.e.5 (rule-id: ogn-212-298 Forge of the
+    // Future) — a trash is a PUBLIC zone, so "Recycle up to 4 cards from
+    // trashes" named its whole set while the ability was finalized (355.5 /
+    // 355.13 / 402.2) and that set is stamped on this very node. Recycle the
+    // members that are still legal and leave the rest unaffected: never a fresh
+    // scan of the piles, never a replacement pick (355.15).
+    if (isSlotBound(effect)) {
+      const chosen = (legalBoundIds(effect, ctx) ?? []).slice(0, want);
+      for (const id of chosen) {
+        recycleToDeckBottom(id, ctx);
+      }
+      fireRecycleByOwner(chosen, ctx);
+      return;
+    }
     if (n <= 0) {
       return;
     }

@@ -120,7 +120,7 @@ carve-outs, and a choice reaches resolution only by matching one of them:
 
 | carve-out | rule | what defers, and to whom |
 |---|---|---|
-| the object sits in a non-Public zone | 355.10.a / 355.10.a.1 | hand, deck, banishment. **Trashes, bases, battlefields, Legend/Champion/Facedown zones are PUBLIC**, so "recycle cards from trashes" and "a spell in a trash" are ordinary targets chosen at finalization. |
+| the object sits in a non-Public zone | 355.10.a / 355.10.a.1 | hand, deck, banishment. **Trashes, bases, battlefields, Legend/Champion/Facedown zones are PUBLIC**, so "recycle cards from trashes" and "a spell in a trash" are ordinary targets chosen at finalization — the SET form as much as the single-object form (see § A Public pile is a target pool). |
 | named only as a restriction on another choice | 355.10.b | "at a battlefield" in *"kill a unit at a battlefield"*. But *"kill ALL units at a battlefield"* targets the battlefield. |
 | part of a cost / trigger condition / replacement | 355.10.c, 355.10.c.1 | "[do X] to [do Y]" — X names nothing. Note costs are paid in step 4, AFTER the step-2 choices (357.2). |
 | programmatic — criteria, not selection | 355.10.d, 355.10.d.1 | "each unit here", "all gear". **355.10.d.2: being the only legal option is NOT programmatic** — see the section below. |
@@ -161,6 +161,29 @@ from `harness/types.ts`, `reason` built with `decision.ts describeShortfall`, re
 option may only use `payableNow` (auto-binding a merely *reachable* option would commit a payment behind the
 player's back).
 
+### A Public pile is a target pool (settled 2026-08-12)
+355.10.a defers a choice only while the object sits in a zone whose information status is not Public, and
+355.10.a.1 names the trashes as Public — 355.10.a's own example is "*Return a unit from your trash to your hand*
+TARGETS a unit card in your trash, because your trash is Public". So an instruction that picks CARDS OUT OF A
+TRASH is an ordinary Make-Relevant-Choices target — the "up to N" / "any number" SET form (`target-slots.ts`, the
+same slot machinery as "buff up to two friendly units") exactly as much as the single-object form. Consequences,
+all of them the ordinary target consequences and none of them special-cased:
+- the set is named before anyone receives Priority (355.5 / 355.13 / 402.2) and locked there (355.15);
+- a responder who moves a chosen card out of the trash makes that one recycle do nothing (359.3.e.5) and the
+  set is never topped back up (355.15) — the handler reads `_bound`, never the pile, at resolution;
+- **costs are paid in step 4, AFTER the step-2 choices** — rule 402 is "2. Make relevant choices" and rule 404
+  is "4. Pay Costs" for an ability (355/357.2 are the card-play analogue) — so an ability whose cost trashes
+  something cannot then name what the cost just trashed. Forge of the Future carries `excludeSelf` for this;
+- "up to N" may still be answered with zero (355.13), so the set never gates the activation.
+The engine keeps `hand`, `deck`, `banishment` and `anywhere` at resolution (355.10.a — hidden information), and
+`recycle` stays a resolution-time gatherer in its rune-pool and private-zone forms; the carve-in is precisely a
+recycle whose own descriptor names the pile. riftjudge `2f2fb3a61bb3446a` turns out **not** to be a conflict at all: read it
+(riftjudge 10759) and it answers only "is *Kill this* a cost?", cites only 150.1 / 150.2, and never says when the
+set is chosen — "if both players pass, the ability resolves, and you carry out the recycle effect" describes the
+EFFECT executing at resolution, which is still true here; only the CHOICE moved to step 2. The "picks at
+resolution, with the dead Forge on its own menu" reading was an inference drawn in the tests, not the ruling's
+text, and 402 (step 2 choices) / 404 (step 4 costs) settle it. The ruling's own subject is honoured unchanged.
+
 ### Two different shapes name a second object — do not try to unify them
 A spell that names MORE than one caster-chosen object comes in two structurally different forms, and the
 Make-Choices step covers only the first. Keeping them apart is deliberate; folding the second into the general
@@ -191,8 +214,8 @@ Every row below follows from the table above; the "why" column names the carve-o
 | Relentless Pursuit sfd-184-221 — "You may attach an Equipment … to it" | unit AND Equipment both FIN; **no friendly Equipment ⇒ unplayable** (355.8) | 355.12 — "you may" defers the decision, not the object; ruling 4283ca02526c0650 agrees |
 | Shuriken Flip — friendly mover + destination | both locked at play; **no friendly unit ⇒ unplayable** | same 355.12 + 355.4 pair; ruling b6531d2345e9ef12 |
 | Moonfall unl-198-219 — "Choose a battlefield … up to one enemy unit … enemy units there −2" | anchor FIN and gating; mover FIN, non-gating (355.13); the −2 is programmatic and prompts nothing | 355.10.b names the battlefield a target; 355.10.d silences the −2 |
-| Forge of the Future ogn-212-298 — "Recycle up to 4 cards from trashes" | set FIN, before the kill-cost is paid (357.2) — the Forge can never be its own target | **trashes are Public (355.10.a.1)**, so 355.10.a does not apply. riftjudge `2f2fb3a61bb3446a` says resolution and is NOT followed |
-| Drag Under sfd-164-221 played by a conquer trigger | the trash spell is a TARGET of the trigger, named at finalization | 355.10.a.1 again |
+| Forge of the Future ogn-212-298 — "Recycle up to 4 cards from trashes" | set FIN, before the kill-cost is paid (357.2) — the Forge can never be its own target — **implemented** (`target-slots.ts` public-pile carve-in + `excludeSelf` on the card's descriptor) | **trashes are Public (355.10.a.1)**, so 355.10.a does not apply. riftjudge `2f2fb3a61bb3446a` was read as saying resolution; its text does not (see § A Public pile is a target pool) |
+| Drag Under sfd-164-221 played by a conquer trigger | the trash spell is a TARGET of the trigger, named at finalization — **not yet implemented for Kai'Sa ogn-112-298**, blocked on Open rules question 3 below (naming is settled; the RESOLUTION sequencing of the play it then performs is not). The single-object form IS implemented for sfd-140-221 Fizz | 355.10.a.1 again |
 | Deceiver — "It becomes a copy of another unit there" | copy source FIN on the trigger | a chosen board object; no carve-out applies |
 | Reflection ruling 40ecc1be71f6fc76 | the token is minted FIRST, then the reflexive "becomes a copy" item makes its OWN choice | 355.5.b — a trigger the item GENERATES never makes its choices during the parent's finalization. Not a contradiction of the Deceiver row: different card shapes |
 | Angle Shot sfd-011-221 — "attach … or detach …" | a mode (355.3), so it must be MADE — a cast naming none is asked, never silently resolved as a detach | 355.10.d.2 — one legal half is still a choice |

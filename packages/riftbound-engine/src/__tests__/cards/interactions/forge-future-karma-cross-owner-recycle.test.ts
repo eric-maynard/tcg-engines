@@ -56,22 +56,26 @@ function board() {
     .deck(P2, [SKULKER, SKULKER, SKULKER], ["e1", "e2", "e3"]);
 }
 
-/** Activate "Kill this:", both pass, P1 names `picks` from the trashes (declining any "up to" remainder). */
+/**
+ * Activate "Kill this:", P1 names `picks` from the trashes at FINALIZATION, then both players pass so the
+ * ability resolves off that locked set.
+ *
+ * MIGRATED 2026-08-12 (DESIGN.md § "Choices and when they are made"): the set used to be named after both
+ * reaction windows closed. A trash is a PUBLIC zone (355.10.a.1), so "Recycle up to 4 cards from trashes" is
+ * an ordinary variable-count target set chosen in Make Relevant Choices (355.5 / 355.13 / 402.2) and locked
+ * there (355.15). riftjudge `2f2fb3a61bb3446a` says resolution and is superseded — do not flip this back.
+ */
 async function recycle(picks: readonly string[]): Promise<Game> {
   const game = await board().build();
   expect(game.p1.deck()).toEqual(["d1", "d2", "d3"]);
   expect(game.p2.deck()).toEqual(["e1", "e2", "e3"]);
   await game.p1.activate("forge");
-  expect(game.zoneOf("forge")).toBe("trash"); // the cost
+  expect(game.zoneOf("forge")).toBe("trash"); // the cost, paid in step 4 — after the step-2 choices (357.2)
+  const d = game.decision();
+  expect(d).toMatchObject({ kind: "pick", max: 4, min: 0, seat: P1, timing: "FIN" });
+  await game.p1.pick(...picks);
   await game.p1.passPriority();
   await game.p2.passPriority();
-  const d = game.decision();
-  expect(d).toMatchObject({ kind: "pick", max: 4, min: 0, seat: P1 });
-  await game.p1.pick(...picks);
-  const rest = game.decision();
-  if (rest?.kind === "pick" && rest.seat === P1 && rest.semantics === "from-revealed") {
-    await game.p1.decline();
-  }
   return game;
 }
 
@@ -121,18 +125,24 @@ async function drain(game: Game): Promise<Drained> {
 }
 
 describe("Forge of the Future recycles from both trashes — owner's decks, no ordering, each owner's Karma triggers", () => {
-  test("cost & offer: the Forge dies as the COST, the recycle waits on the chain, and on resolution P1 may pick 0–4 cards from EITHER trash (dead Forge included)", async () => {
+  // MIGRATED 2026-08-12: this facet used to assert the offer AFTER both passes, with the dead Forge on the
+  // menu. 355.10.a.1 (a trash is Public) + 402.2 put the set in Make Relevant Choices, and 357.2 pays the
+  // "Kill this" cost in step 4 — AFTER those choices — so the Forge can never be one of its own targets.
+  // Do not flip this back.
+  test("cost & offer: the Forge dies as the COST, the recycle waits on the chain, and at FINALIZATION P1 may pick 0–4 cards from EITHER trash (never the Forge itself)", async () => {
     const game = await board().build();
     await game.p1.activate("forge");
     expect(game.zoneOf("forge")).toBe("trash");
     expect(game.chain()).toEqual([expect.objectContaining({ cardId: "forge", controller: P1, triggered: false })]);
+    const d = game.decision();
+    expect(d).toMatchObject({ kind: "pick", max: 4, min: 0, seat: P1, timing: "FIN" });
+    const offered = d?.kind === "pick" ? d.options.map((o) => o.card ?? o.key).toSorted() : [];
+    expect(offered).toEqual(["a1", "a2", "a3", "b1", "b2", "b3"]);
+    // …and only then does anyone hold priority.
+    await game.p1.decline();
+    expect(game.decision()).toMatchObject({ context: "chain", kind: "action", seat: P1 });
     await game.p1.passPriority();
     expect(game.decision()).toMatchObject({ context: "chain", kind: "action", seat: P2 });
-    await game.p2.passPriority();
-    const d = game.decision();
-    expect(d).toMatchObject({ kind: "pick", max: 4, min: 0, seat: P1 });
-    const offered = d?.kind === "pick" ? d.options.map((o) => o.card ?? o.key).toSorted() : [];
-    expect(offered).toEqual(["a1", "a2", "a3", "b1", "b2", "b3", "forge"]);
   });
 
   // ── (a) destination = OWNER's deck ─────────────────────────────────────────────────────────

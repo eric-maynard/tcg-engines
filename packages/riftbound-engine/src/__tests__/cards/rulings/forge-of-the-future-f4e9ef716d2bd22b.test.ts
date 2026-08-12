@@ -35,16 +35,23 @@ function board() {
     .trash(P1, JUNK(4), "j4");
 }
 
+/**
+ * MIGRATED 2026-08-12 (DESIGN.md § "Choices and when they are made"): the four cards are NAMED while the
+ * ability is finalized — a trash is a PUBLIC zone (355.10.a.1), so the set is an ordinary target set
+ * (355.5 / 355.13 / 402.2) locked by 355.15 — and RECYCLED when it resolves. This helper used to name them
+ * after both reaction windows had closed; do not flip it back. The ruling's own point (four recycles are one
+ * event, so Karma triggers once) is untouched by the timing and is still asserted below.
+ */
 async function forgeRecyclesFour(): Promise<Game> {
   const game = await board().build();
   await game.p1.activate("forge");
   expect(game.zoneOf("forge")).toBe("trash");
-  await game.p1.passPriority();
-  await game.p2.passPriority();
   const d = game.decision();
-  expect(d).toMatchObject({ kind: "pick", max: 4, seat: P1 });
+  expect(d).toMatchObject({ kind: "pick", max: 4, seat: P1, timing: "FIN" });
   expect(pickOptions(d)).toEqual(expect.arrayContaining(["j1", "j2", "j3", "j4"]));
   await game.p1.pick("j1", "j2", "j3", "j4");
+  await game.p1.passPriority();
+  await game.p2.passPriority();
   for (const j of ["j1", "j2", "j3", "j4"]) {
     expect(game.zoneOf(j)).toBe("mainDeck");
   }

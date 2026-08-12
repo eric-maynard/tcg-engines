@@ -9,6 +9,18 @@
  *    then it resolves. If instead an outside effect (Acceptable Losses) kills the Forge, no recycle happens — you did
  *    not activate anything.
  * Rules: 150.1/150.2 (text before ":" is a cost), 402 (activated abilities → chain), FAQ #9207.
+ *
+ * TIMING settled 2026-08-12 (DESIGN.md § "Choices and when they are made" / § "A Public pile is a target
+ * pool"): the recycle SET is named while the ability is FINALIZED, not as it resolves. CR 355.10.a.1 makes a
+ * trash a PUBLIC zone, so 355.5 / 355.13 / 402.2 name the set in Make Relevant Choices and 355.15 locks it;
+ * 402 is "2. Make relevant choices" and 404 is "4. Pay Costs", so the "Kill this" cost is paid AFTER those
+ * choices and the Forge can never be one of its own targets.
+ *
+ * This is NOT a ruling conflict, though the tree previously recorded it as one: the ruling above answers only
+ * "is *Kill this* a cost?", cites only 150.1 / 150.2, and never says when the set is chosen — its "if both
+ * players pass, the ability resolves, and you carry out the recycle effect" is about the EFFECT executing at
+ * resolution, which is still true. Its actual SUBJECT ("Kill this" is the activation cost, an outside kill
+ * grants no recycle) is unaffected and still asserted below. Do not flip the timing back.
  */
 import { describe, expect, test } from "bun:test";
 import type { Decision } from "../../../harness";
@@ -46,25 +58,24 @@ describe("Ruling 2f2fb3a61bb3446a — 'Kill this:' is Forge of the Future's own 
     await game.p1.activate("forge");
     expect(game.zoneOf("forge")).toBe("trash"); // cost paid up front
     expect(game.chain()).toEqual([expect.objectContaining({ cardId: "forge", controller: P1, triggered: false, type: "ability" })]);
+    // 402.2 — the set is named first, before anyone receives Priority (355.13: naming nothing is legal).
+    expect(game.decision()).toMatchObject({ kind: "pick", seat: P1, timing: "FIN" });
+    await game.p1.decline();
     expect(game.decision()).toMatchObject({ context: "chain", kind: "action", seat: P1 });
     await game.p1.passPriority();
     expect(game.decision()).toMatchObject({ context: "chain", kind: "action", seat: P2 }); // P2 may react
     expect(game.zoneOf("j1")).toBe("trash"); // nothing recycled yet
   });
 
-  test("after both pass it resolves: P1 picks up to 4 cards from ANY trash (the dead Forge itself included) and they are recycled into the decks", async () => {
+  // MIGRATED 2026-08-12: was "after both pass it resolves: P1 picks … (the dead Forge itself included)".
+  // See the RULING-CONFLICT note at the top of the file — do not flip it back.
+  test("P1 names up to 4 cards from ANY trash as the ability is finalized (never the Forge itself) and they are recycled into their owners' decks when it resolves", async () => {
     const game = await board().build();
     await game.p1.activate("forge");
-    await game.p1.passPriority();
-    await game.p2.passPriority();
     const d = game.decision();
-    expect(d).toMatchObject({ kind: "pick", max: 4, min: 0, seat: P1 });
-    expect((d as Pick).options.map((o) => o.card ?? o.key).sort()).toEqual(["forge", "j1", "j2", "j3"]);
+    expect(d).toMatchObject({ kind: "pick", max: 3, min: 0, seat: P1, timing: "FIN" });
+    expect((d as Pick).options.map((o) => o.card ?? o.key).sort()).toEqual(["j1", "j2", "j3"]);
     await game.p1.pick("j1", "j2", "j3");
-    // "up to 4": the engine re-offers the remainder — decline the 4th.
-    if (game.decision()?.kind === "pick") {
-      await game.p1.decline();
-    }
     await game.settle();
     expect(game.zoneOf("j1")).toBe("mainDeck");
     expect(game.zoneOf("j2")).toBe("mainDeck");

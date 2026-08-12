@@ -31,6 +31,20 @@
  * information); so do `spend-buff` ("spend any number of buffs" is a payment)
  * and Might-referencing splits (Alpha Strike is a spell and names its set at
  * play time).
+ *
+ * A TRASH is not private. Rule 355.10.a defers a choice only while the object
+ * sits in a zone whose information status is not Public, and 355.10.a.1 lists
+ * the trashes as Public alongside the bases, the battlefields and the
+ * Legend/Champion/Facedown zones — so "Recycle up to 4 cards from trashes"
+ * (ogn-212-298 Forge of the Future) is an ordinary variable-count target set,
+ * chosen in Make Relevant Choices (355.5 / 402.2) and locked there (355.15),
+ * not a pile the handler gathers as it resolves. The single-object form of the
+ * same rule was already finalized (sfd-140-221 Fizz names its trash spell on
+ * the chain); this is that answer applied to the SET form. See DESIGN.md
+ * § "Choices and when they are made" and § "A Public pile is a target pool" —
+ * the carve-out table is closed. (riftjudge `2f2fb3a61bb3446a` is NOT a
+ * counter-authority: it answers only "is *Kill this* a cost?", cites 150.1 /
+ * 150.2, and never says when the set is chosen.)
  * Leaf module: must not import move definitions.
  */
 import type { CardId as CoreCardId } from "@tcg/core";
@@ -54,10 +68,17 @@ export interface MultiPickSlot {
   readonly cap?: number;
 }
 
-const PRIVATE_LOCATIONS: readonly string[] = ["hand", "deck", "trash", "banishment", "anywhere"];
+/** rule 355.10.a — zones whose information status is NOT Public; a pick there waits for resolution. */
+const PRIVATE_LOCATIONS: readonly string[] = ["hand", "deck", "banishment", "anywhere"];
+/** rule 355.10.a.1 — the Public PILES a set of cards may be named in while the item is finalized. */
+const PUBLIC_PILE_LOCATIONS: readonly string[] = ["trash"];
 /** rule 355.16 — conditions only an earlier instruction of the SAME resolution answers. */
 const RESOLUTION_DETERMINED_CONDITIONS: readonly string[] = ["discarded-card-type"];
-/** Instructions whose "any number"/"up to" set is a payment or gathers its own candidates. */
+/**
+ * Instructions whose "any number"/"up to" set is a payment or gathers its own
+ * candidates. `recycle` is listed for its private-zone / rune-pool forms only —
+ * a recycle whose descriptor names a Public pile is carved back in below.
+ */
 const SELF_GATHERING_STEPS: readonly string[] = ["spend-buff", "play", "look", "reveal", "discard", "recycle", "predict"];
 
 function multiQuantityCap(q: unknown): { multi: boolean; cap?: number } {
@@ -80,13 +101,23 @@ function slotShapeOf(node: AnyEffect): Omit<MultiPickSlot, "path" | "node"> | un
   if (node.chooseAtResolution === true || t.chooseAtResolution === true) {
     return undefined;
   }
-  if (typeof t.type !== "string" || ["self", "trigger-source", "player", "battlefield", "pending-value", "card"].includes(t.type)) {
+  if (typeof t.type !== "string" || ["self", "trigger-source", "player", "battlefield", "pending-value"].includes(t.type)) {
+    return undefined;
+  }
+  // rule 355.10.a.1 — "Recycle up to N cards from trashes": a trash is Public,
+  // so the set is named while the item is finalized (355.5 / 355.13 / 402.2).
+  // `recycle` and a `from` zone are otherwise resolution-time gatherers, so the
+  // carve-in is exactly this shape: a recycle whose own descriptor names the pile.
+  const publicPileSet =
+    String(node.type) === "recycle" && typeof t.location === "string" && PUBLIC_PILE_LOCATIONS.includes(t.location);
+  // A bare `card` descriptor names no board object; it is a slot only over a Public pile.
+  if (t.type === "card" && !publicPileSet) {
     return undefined;
   }
   if (typeof t.location === "string" && PRIVATE_LOCATIONS.includes(t.location)) {
     return undefined;
   }
-  if ((node.from !== undefined && node.from !== "here") || SELF_GATHERING_STEPS.includes(String(node.type))) {
+  if (!publicPileSet && ((node.from !== undefined && node.from !== "here") || SELF_GATHERING_STEPS.includes(String(node.type)))) {
     return undefined;
   }
   // rule 422.1.a / 355.10.e — instructions another player performs choose nothing here.

@@ -62,18 +62,19 @@ describe("Forge of the Future (ogn-212-298)", () => {
     expect(game.p1.resources()).toEqual({ energy: 0, power: {} });
   });
 
-  test("on resolution P1 picks up to 4 cards from ANY trash; each goes to the bottom of its owner's main deck", async () => {
-    // Expected: a pick prompt (min 0, max 4) listing every trash card (t1–t5, e1 and the Forge
-    // itself); choosing t1, t2, e1 recycles them — t1/t2 to the bottom of P1's deck, e1 to the
-    // bottom of P2's deck; t3–t5 stay. Actual: the ability resolves with no prompt and recycles nothing.
+  // MIGRATED 2026-08-12 (DESIGN.md § "Choices and when they are made"): the set is named at FINALIZATION,
+  // not on resolution — a trash is a PUBLIC zone (355.10.a.1), so "Recycle up to 4 cards from trashes" is an
+  // ordinary variable-count target set (355.5 / 355.13 / 402.2) locked by 355.15. The Forge itself left the
+  // menu because 357.2 pays the "Kill this" cost in step 4, AFTER the step-2 choices. riftjudge
+  // `2f2fb3a61bb3446a` says resolution and is superseded — do not flip this back.
+  test("at finalization P1 picks up to 4 cards from ANY trash; each goes to the bottom of its owner's main deck", async () => {
     const game = await trashBoard().build();
     const p1Deck = game.p1.deck().length;
     const p2Deck = game.p2.deck().length;
     await game.p1.activate("forge", KILL_ABILITY);
-    await game.settle();
     const d = game.decision();
-    expect(d).toMatchObject({ kind: "pick", seat: P1, max: 4 });
-    expect(d?.kind === "pick" ? d.options.map((o) => o.card).sort() : []).toEqual(["e1", "forge", "t1", "t2", "t3", "t4", "t5"]);
+    expect(d).toMatchObject({ kind: "pick", seat: P1, max: 4, timing: "FIN" });
+    expect(d?.kind === "pick" ? d.options.map((o) => o.card).sort() : []).toEqual(["e1", "t1", "t2", "t3", "t4", "t5"]);
     await game.p1.answer(["t1", "t2", "e1"]);
     await game.settle();
     expect(game.zoneOf("t1")).toBe("mainDeck");
@@ -87,11 +88,10 @@ describe("Forge of the Future (ogn-212-298)", () => {
   });
 
   test("'up to 4' — the controller may recycle nothing at all", async () => {
-    // Expected: the pick allows declining / choosing zero; all trash cards stay. Actual: no prompt.
+    // MIGRATED 2026-08-12: the "up to N" set (355.13) is answered at finalization; do not flip it back.
     const game = await trashBoard().build();
     await game.p1.activate("forge", KILL_ABILITY);
-    await game.settle();
-    expect(game.decision()).toMatchObject({ kind: "pick", seat: P1 });
+    expect(game.decision()).toMatchObject({ kind: "pick", seat: P1, timing: "FIN" });
     await game.p1.decline();
     await game.settle();
     expect(game.p1.trash().sort()).toEqual(["forge", "t1", "t2", "t3", "t4", "t5"]);

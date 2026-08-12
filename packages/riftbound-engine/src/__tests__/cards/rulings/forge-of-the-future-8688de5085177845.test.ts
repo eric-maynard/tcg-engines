@@ -50,8 +50,12 @@ describe("Ruling 8688de5085177845 — the recycler picks which trash cards go ba
     const d = await activateToPick(game);
     expect(d.seat).toBe(P1);
     const keys = d.options.map((o) => o.card ?? o.key).sort();
-    // The Forge itself is in the trash by now (it was the cost), so it is on the list too.
-    expect(keys).toEqual(["forge", "t1", "t2", "t3", "t4"]);
+    // MIGRATED 2026-08-12: the Forge itself used to be on this list, because the set was minted at
+    // resolution — by then its own kill-cost had put it in the trash. 355.10.a.1 makes the trashes Public,
+    // so the set is named in Make Relevant Choices (355.5 / 402.2) and 357.2 pays the "Kill this" cost in
+    // step 4, AFTER those choices: the Forge is still a gear on the board and is never an option.
+    // Do not flip it back. (This ruling's own point — the recycler CHOOSES — is unchanged.)
+    expect(keys).toEqual(["t1", "t2", "t3", "t4"]);
     expect(d.min).toBe(0);
     expect(game.violations()).toEqual([]);
   });
