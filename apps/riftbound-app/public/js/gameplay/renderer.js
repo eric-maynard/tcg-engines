@@ -106,11 +106,19 @@ function renderPlayerInfo() {
     const pool = gameState.runePools[pid];
     const isActive = gameState.turn?.activePlayer === pid;
 
+    // rules 163.1 / 163.2 / 166 — Energy and each Domain's Power share one Rune
+    // Pool but are different resources, and the pips differ only by color, so
+    // every pip carries its own name. Energy always renders (even at 0) so the
+    // pill reads the same for both players instead of losing its label the
+    // moment the value goes above zero.
     let resourceHtml = "";
     if (pool) {
-      if (pool.energy > 0) resourceHtml += `<span class="resource-pip pip-energy">${pool.energy}</span>`;
+      const energy = pool.energy ?? 0;
+      resourceHtml += `<span class="resource-pip pip-energy" title="Energy" aria-label="Energy ${energy}">${energy}</span>`;
       for (const [domain, amount] of Object.entries(pool.power || {})) {
-        if (amount > 0) resourceHtml += `<span class="resource-pip pip-${domain}">${amount}</span>`;
+        if (amount > 0) {
+          resourceHtml += `<span class="resource-pip pip-${domain}" title="${esc(domain)} Power" aria-label="${esc(domain)} Power ${amount}">${amount}</span>`;
+        }
       }
     }
 
@@ -139,7 +147,7 @@ function renderPlayerInfo() {
       ${xpHtml}
       <div class="player-stat">
         <span class="stat-label">Resources</span>
-        <div class="resource-pips">${resourceHtml || (pool ? '<span style="color:#6a6288">Energy 0</span>' : '<span style="color:#6a6288">None</span>')}</div>
+        <div class="resource-pips">${resourceHtml || '<span style="color:#6a6288">None</span>'}</div>
       </div>
     `;
   }
