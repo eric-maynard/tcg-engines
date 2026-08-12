@@ -156,6 +156,23 @@ const coreState = () => p.evaluate(() => {
     interaction: gs.interaction, pendingChoice: gs.pendingChoice ?? null, zones: gs.zones, canUndo: gs.canUndo,
   }));
 });
+/**
+ * `coreState()` once the client has stopped moving: a frame the previous step
+ * caused (goldfish follow-ups, chain resolution, an AI reply) can still be in
+ * flight, and comparing a mid-flight snapshot against a settled one reports a
+ * round-trip drift that the server never had.
+ */
+const settledCoreState = async (ms = 1500) => {
+  let prev = await coreState();
+  const t = Date.now();
+  while (Date.now() - t < ms) {
+    await p.waitForTimeout(150);
+    const cur = await coreState();
+    if (cur === prev) return cur;
+    prev = cur;
+  }
+  return prev;
+};
 const rewindEnabled = () => p.evaluate(() => { const b = document.getElementById("undoBtn") as HTMLButtonElement | null; return !!b && !b.disabled; });
 const redoEnabled = () => p.evaluate(() => { const b = document.getElementById("redoBtn") as HTMLButtonElement | null; return !!b && !b.disabled; });
 /** Wait for the client to receive the rewind frame (log sentinel / redo line as newest entry), bounded. */
@@ -318,7 +335,7 @@ for (let i = 0; i < STEPS; i++) {
     } else if (r < 0.43 && (await rewindEnabled())) {
       // Press Rewind at a random moment; half the time press Redo right after and
       // check the HARD invariant: Rewind→Redo reproduces the pre-rewind snapshot.
-      const before = await coreState();
+      const before = await settledCoreState();
       await p.click("#undoBtn", { timeout: 3000 });
       const gotUndo = await waitNewestLog("Rewound their last action.");
       did = "rewind"; tgt = gotUndo ? "ok" : "no rewind frame";
@@ -326,7 +343,7 @@ for (let i = 0; i < STEPS; i++) {
         await p.click("#redoBtn", { timeout: 3000 });
         const gotRedo = await waitNewestLog("Move redone.");
         await p.waitForTimeout(200);
-        const after = await coreState();
+        const after = await settledCoreState();
         did = "rewind+redo"; tgt = gotRedo ? "ok" : "no redo frame";
         if (gotRedo && before !== after) {
           pendingRewindViolation = { rule: "undo-redo-roundtrip", detail: `Rewind→Redo changed the snapshot (before ${before?.length}b, after ${after?.length}b)`, step: stepN };

@@ -778,8 +778,10 @@ function revealPickInfo(pending) {
     : fromDeckTop ? "Revealed from the top of the deck — both players see them."
     : place.zone === "trash" || place.zone === "board" || place.zone === "banishment" || place.zone === "runePool" ? `Cards in ${place.text} (public — both players see them).`
     : "Both players can see these cards.";
-  const rules = on === "recycle" ? "Recycle = put on the BOTTOM of its deck (rule 424.4)."
-    : on === "banish" ? "Banished cards leave the game zone they were in (rule 416.3)."
+  // rule 416.1 / 416.1.a: Recycling puts the card on the bottom of the corresponding deck.
+  // rule 427.2: a Banished card is placed directly into the Banishment zone from its origin.
+  const rules = on === "recycle" ? "Recycle = put on the BOTTOM of its deck (rule 416.1)."
+    : on === "banish" ? "Banished cards go straight to the Banishment zone from where they were (rule 427.2)."
     : on === "discard" ? "Discarded cards go to their owner's trash."
     : on === "draw" ? "The picked card goes to your hand."
     : on === "play" ? "The picked card is played now (it goes on the chain)." : "";
@@ -1197,6 +1199,24 @@ function describePlayVariantBase(m, card) {
       detail: `${cost} — discard ${name} as an additional cost`,
     };
   }
+  // rule-id: sfd-044-221 (Legion Quartermaster) — a "return a friendly gear to
+  // its owner's hand" additional cost is a BOUNCE, not a kill. The enumerator
+  // still fills the legacy `sacrificeId` alongside `costs.paid`, so the cost
+  // kind must be read off `costs.paid` / `quote.paidIds` before the kill
+  // wording (and its sacrifice discount) is used.
+  const paidIds = m.params?.costs?.paid ?? {};
+  const bouncePaid = paidIds["return-to-hand"];
+  if (bouncePaid) {
+    const ids = Array.isArray(bouncePaid.objects) && bouncePaid.objects.length
+      ? bouncePaid.objects
+      : (sacIds ?? []);
+    const list = ids.map(id => findCard(id)?.name ?? id).join(" + ") || "a card";
+    // A bounce cost carries no cost discount, so the effective play cost stands.
+    return {
+      label: `Play + return ${list}`,
+      detail: `${baseCost} — return ${list} to its owner's hand as an additional cost`,
+    };
+  }
   if (sacIds) {
     const names = sacIds.map(id => findCard(id)?.name ?? id);
     const list = names.join(" + ");
@@ -1456,6 +1476,11 @@ function renderChainOverlay() {
       const resolveParams = JSON.stringify(resolveMove.params).replace(/'/g, "\\'");
       html += `<button class="chain-resolve-btn" onclick='executeMove("${resolveMove.moveId}", ${resolveParams}, "${resolveMove.playerId}")'>Resolve</button>`;
     }
+  } else {
+    // The waiting seat previously got an EMPTY .chain-actions body, so an
+    // indefinite "…waiting" was indistinguishable from a hang (Escape is
+    // refused on this overlay). Always emit an escape hatch here.
+    html += `<button class="chain-resync-btn" onclick="if (typeof requestResync === 'function') requestResync()">Not moving? Resync</button>`;
   }
   html += `</div>`;
 

@@ -15,6 +15,7 @@ import { type CallModel, type ModelRequest, type ModelToolUse, ClaudeOpponent, a
 import { buildDefaultDeck } from "../decks";
 import { createGameFromDecks, finalizePregame } from "../pregame";
 import { REWIND_LOG_SENTINEL, rewindEpoch, rewindSession } from "../rewind";
+import { buildGameSnapshot } from "../snapshot";
 import { type GameSession, type WsData, gameSessions } from "../state";
 import { applySessionMove } from "../turn";
 import { gameWsMessage } from "../ws-game";
@@ -402,4 +403,61 @@ describe("WS undo — vs-Claude seat", () => {
       await idle(ai).catch(() => undefined);
     }
   }, 30_000);
+});
+
+// ---------------------------------------------------------------------------
+// Round trip: Rewind→Redo must reproduce the client snapshot byte for byte
+// (the monkey driver's `undo-redo-roundtrip` hard invariant, as a driven test).
+// ---------------------------------------------------------------------------
+
+/** The parts of the snapshot a rewind round trip must reproduce (log / seq / rewind frame excluded). */
+function coreSnapshot(session: GameSession, seat: string): string {
+  const gs = buildGameSnapshot(session, seat) as unknown as Record<string, unknown>;
+  const canon = (v: unknown): unknown =>
+    Array.isArray(v)
+      ? v.map(canon)
+      : v && typeof v === "object"
+        ? Object.fromEntries(Object.keys(v as object).sort().map((k) => [k, canon((v as Record<string, unknown>)[k])]))
+        : v;
+  const { log: _log, seq: _seq, ...rest } = gs;
+  return JSON.stringify(canon(rest));
+}
+
+describe("WS undo/redo — snapshot round trip", () => {
+  for (const sandbox of [false, true]) {
+    test(`${sandbox ? "Goldfish sandbox" : "duel"}: after every driven action, Rewind→Redo restores an identical snapshot for BOTH seats`, () => {
+      const { c1, session } = playing({ sandbox });
+      const actions: { seat: string; moveId: string; params: Record<string, unknown> }[] = [];
+      for (let i = 0; i < 8; i++) {
+        const st = session.engine.getState();
+        if (st.status !== "playing") {
+          break;
+        }
+        const seat = st.turn.activePlayer as string;
+        const legal = session.engine
+          .enumerateMoves(seat as never, { validOnly: true })
+          .filter((m) => m.moveId !== "concede" && m.moveId !== "endTurn");
+        // Prefer chain-opening plays: the monkey's drift was seen on an action
+        // whose chain the opponent then let resolve into a reveal prompt.
+        const rank = (id: string) => (id === "playSpell" ? 0 : id === "playUnit" ? 1 : id === "activateAbility" ? 2 : 3);
+        const ordered = [...legal].sort((a, b) => rank(a.moveId) - rank(b.moveId));
+        const pick = ordered[i % ordered.length];
+        if (!pick) {
+          break;
+        }
+        actions.push({ moveId: pick.moveId, params: { ...(pick.params as Record<string, unknown>) }, seat });
+        expect(applySessionMove(session, seat, pick.moveId, { ...(pick.params as Record<string, unknown>) }).success).toBe(true);
+
+        const before = [P1, P2].map((s) => coreSnapshot(session, s));
+        const undone = rewindSession(session, "undo", { actor: P1 });
+        if (!undone.ok) {
+          continue;
+        }
+        expect(rewindSession(session, "redo", { actor: P1 }).ok).toBe(true);
+        expect([P1, P2].map((s) => coreSnapshot(session, s))).toEqual(before);
+      }
+      expect(actions.length).toBeGreaterThan(0);
+      expect(c1.frames.length).toBeGreaterThan(0);
+    });
+  }
 });
