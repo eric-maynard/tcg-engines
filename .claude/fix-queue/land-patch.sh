@@ -8,13 +8,18 @@ LABEL="$(printf '%s' "${1:-pX}" | tr -cd 'A-Za-z0-9_-' | cut -c1-24)"; MSG="${2:
 out() { printf '%s=%s\n' "$1" "$2"; }
 FILES=(); for f in "$@"; do f="${f#$REPO/}"; case "$f" in *do_not_commit*|apps/riftbound-app/data/*|"") ;; *) [ -e "$f" ] || git ls-files --error-unmatch "$f" >/dev/null 2>&1 && FILES+=("$f");; esac; done
 # file-level embargo: .claude/fix-queue/embargo-files.txt lines "owner<TAB>regex" — patches touching matching files are refused unless LABEL starts with owner
+EF="$REPO/.claude/fix-queue/embargo-files.txt"
+# A pattern that matches no tracked file protects nothing while looking like a
+# guard — that fail-open case already let two package files through. Say so
+# loudly on every land so a typo cannot sit there silently.
+if [ -s "$EF" ]; then while IFS=$'\t' read -r owner rx; do [ -z "$rx" ] && continue; git -C "$REPO" ls-files | grep -Eq "$rx" || out embargo_pattern_dead "$owner: $rx matches no tracked file — the embargo is NOT in force"; done < "$EF"; fi
 EF="$REPO/.claude/fix-queue/embargo-files.txt"; if [ -s "$EF" ]; then while IFS=$'\t' read -r owner rx; do [ -z "$rx" ] && continue; case "$LABEL" in "$owner"*) continue;; esac; hit=$(printf '%s\n' "${FILES[@]}" | grep -E "$rx" | head -1); if [ -n "$hit" ]; then out embargoed_file "$hit (owned by $owner package) — DROP this file from your land list and re-run; NEVER git checkout/restore/stash it in the shared tree (that destroys the package owner's uncommitted work)"; out committed false; exit 0; fi; done < "$EF"; fi
 [ ${#FILES[@]} -gt 0 ] || { out committed false; out reason no_files; exit 0; }
 out files "${#FILES[@]}"
 # priority lane: if .land.priority names label prefixes (one per line), other callers yield up to 20 min before contending for the lock
 PRIO="$REPO/.claude/fix-queue/.land.priority"; FASTQ="$REPO/.claude/fix-queue/.land.fast-waiting"
 case "$LABEL" in fast-*|coordinator*) touch "$FASTQ.$$";; esac  # announce a fast/coordinator land is waiting → others yield
-for _ in $(seq 1 60); do mine=1; case "$LABEL" in fast-*|coordinator*) mine=0;; esac; othersfast=$(ls "$FASTQ".* 2>/dev/null | grep -v "\.$$\$" | head -1); if [ $mine = 1 ] && [ -n "$othersfast" ]; then sleep 15; continue; fi; [ -s "$PRIO" ] || break; grep -q . "$PRIO" || break; y=1; while read -r pfx; do [ -n "$pfx" ] && case "$LABEL" in "$pfx"*) y=0;; esac; done < "$PRIO"; [ $y = 0 ] && break; sleep 20; done
+for _ in $(seq 1 60); do mine=1; case "$LABEL" in fast-*|coordinator*) mine=0;; esac; othersfast=""; for m in "$FASTQ".*; do [ -e "$m" ] || continue; mpid=${m##*.}; case "$m" in *".$$") continue;; esac; if kill -0 "$mpid" 2>/dev/null; then othersfast="$m"; break; else rm -f "$m" 2>/dev/null; fi; done; if [ $mine = 1 ] && [ -n "$othersfast" ]; then sleep 15; continue; fi; [ -s "$PRIO" ] || break; grep -q . "$PRIO" || break; y=1; while read -r pfx; do [ -n "$pfx" ] && case "$LABEL" in "$pfx"*) y=0;; esac; done < "$PRIO"; [ $y = 0 ] && break; sleep 20; done
 trap 'rm -f "$FASTQ.$$" 2>/dev/null' EXIT
 # tmp hygiene (cheap, once per land): prune day-old playtest traces and 12h-stale worker scratch dirs so /tmp (tmpfs) never fills
 ( find /tmp/playtest-traces -mindepth 1 -maxdepth 1 -mmin +1440 -exec rm -rf {} + ; for d in /tmp/w[0-9]i[0-9]* /tmp/w[0-9][0-9]i[0-9]* /tmp/rb-land-baseline-*; do [ -e "$d" ] && [ -n "$(find "$d" -maxdepth 0 -mmin +720)" ] && rm -rf "$d"; done ) >/dev/null 2>&1 || true
