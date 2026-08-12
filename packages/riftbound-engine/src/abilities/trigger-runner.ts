@@ -1442,6 +1442,18 @@ function evaluateControlCondition(
   return exact !== undefined ? count === exact : count >= min;
 }
 
+/** Every card id standing on the board (bases + battlefields) — where Equipment lives. */
+function allBoardCardIds(ctx: TriggerRunnerContext): CoreCardId[] {
+  const ids: CoreCardId[] = [];
+  for (const playerId of Object.keys(ctx.draft.players)) {
+    ids.push(...ctx.zones.getCardsInZone("base" as CoreZoneId, playerId as CorePlayerId));
+  }
+  for (const bfId of Object.keys(ctx.draft.battlefields)) {
+    ids.push(...ctx.zones.getCardsInZone(`battlefield-${bfId}` as CoreZoneId));
+  }
+  return ids;
+}
+
 /**
  * Build the list of cards on the board with their abilities.
  * Scans base, battlefield, and legendZone zones, looks up abilities from the card definition registry.
@@ -1456,6 +1468,22 @@ export function getBoardCards(
   // control-changed permanent triggers for whoever controls it now.
   const controllerOf = (cardId: CoreCardId, fallback: string): string =>
     ctx.cards.getCardController?.(cardId) ?? ctx.cards.getCardOwner(cardId) ?? fallback;
+  // rule 150.2 — an attachment is recorded on the Equipment (`attachedTo`); the
+  // wearer's mirror (`equippedWith`) is the same fact from the other end, and a
+  // position that only ever wrote the Equipment's side would otherwise lose the
+  // conferred Effect Text. Read the attachment from both ends.
+  const boardCardIds = allBoardCardIds(ctx);
+  const wornBy = (cardId: CoreCardId, meta: Partial<RiftboundCardMeta> | undefined): Partial<RiftboundCardMeta> | undefined => {
+    const declared = (meta?.equippedWith ?? []) as string[];
+    const extra: string[] = [];
+    for (const other of boardCardIds) {
+      const host = (ctx.cards.getCardMeta(other) as { attachedTo?: string } | undefined)?.attachedTo;
+      if (host === (cardId as string) && !declared.includes(other as string)) {
+        extra.push(other as string);
+      }
+    }
+    return extra.length === 0 ? meta : ({ ...(meta ?? {}), equippedWith: [...declared, ...extra] } as Partial<RiftboundCardMeta>);
+  };
   // rule-id: ogn-100-298 — include triggers implied by granted effect keywords.
   const abilitiesOf = (cardId: CoreCardId): TriggerableAbility[] => {
     const printed = toTriggerableAbilities(cardId as string);
@@ -1465,7 +1493,7 @@ export function getBoardCards(
       ...delayedTriggerAbilities(meta),
       ...copiedAttachmentAbilities(cardId as string, meta, ctx, printed, event),
       // rule 150.2 — Effect Text from every Equipment attached to this unit.
-      ...attachedEffectTextAbilities(meta),
+      ...attachedEffectTextAbilities(wornBy(cardId, meta)),
     ];
     const all = granted.length > 0 ? [...printed, ...granted] : printed;
     // rule-id: sfd-030-221 — Skyfall of Areion makes hold effects conquer

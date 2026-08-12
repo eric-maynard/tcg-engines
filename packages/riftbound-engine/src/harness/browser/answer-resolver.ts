@@ -154,6 +154,17 @@ export class AnswerResolver {
       }
     }
 
+    // rule 429.3 / 429.3.a and rule 650 — a seat's own open prompt does not
+    // swallow the actions that stay legal during it (conceding above all), so
+    // route an action answer to that seat's action menu.
+    if (target.kind !== "action" && answer.kind === "action" && target.seat === seat) {
+      const free = deriveActionDecision(this.host.ctx(), seat, false);
+      const acting = free ?? deriveActionDecision(this.host.ctx(), seat, true);
+      if (acting && acting.options.length > 0) {
+        target = acting;
+      }
+    }
+
     if (target.kind === "action") {
       if (answer.kind !== "action") {
         return this.fail({ code: "WRONG_ANSWER_KIND", message: `An action decision needs an action answer, got ${answer.kind}` });

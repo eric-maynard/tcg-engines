@@ -351,8 +351,13 @@ export class EngineBackend implements GameBackend {
     // remain legal during it — route an action answer to the seat's action menu
     // even while that seat's own non-action prompt is open.
     if (target.kind !== "action" && answer.kind === "action" && target.seat === seat) {
-      const acting = deriveActionDecision(this.ctx(), seat, false);
-      if (acting) {
+      // rule 650 — conceding is legal at any time, including from inside the
+      // seat's own open prompt. A free menu whose ONLY option is `concede` is
+      // suppressed (it is no prompt), so fall back to the cursor-form menu —
+      // same options — to keep that answer routable.
+      const free = deriveActionDecision(this.ctx(), seat, false);
+      const acting = free ?? deriveActionDecision(this.ctx(), seat, true);
+      if (acting && acting.options.length > 0) {
         target = acting;
       }
     }
