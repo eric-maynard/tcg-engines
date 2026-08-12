@@ -655,12 +655,17 @@ function spellPlayStateRefusal(
       code: "TIMING_ILLEGAL",
       rule: timing === "reaction" ? "159.2.b.2" : timing === "action" ? "338.1.a.2" : "159.1.a",
       subject: cardId,
+      // Name the state the player is actually in — "while the chain is loaded"
+      // on a card refused in the beginning phase is a false explanation, and a
+      // false explanation is worse than a bare refusal.
       text:
-        timing === "action"
-          ? "an [Action] can only be played on your turn or in a showdown, never while the chain is loaded — only a [Reaction] is legally timed here"
-          : timing === "standard"
-            ? "a standard-speed spell can only be played in your own open main phase"
-            : "this spell's timing is not legal in the current state",
+        turnState === "neutral-closed" || turnState === "showdown-closed"
+          ? `an ${timing === "action" ? "[Action]" : "unmarked spell"} can't be played while the chain is loaded — only a [Reaction] is legally timed there`
+          : timing === "action"
+            ? `an [Action] can only be played in an open main phase or a showdown, not during the ${state.turn.phase} phase`
+            : timing === "standard"
+              ? `a standard-speed spell can only be played in your own open main phase, not during the ${state.turn.phase} phase`
+              : "this spell's timing is not legal in the current state",
     });
   }
   // rule 316.5.b — in a Neutral Open State only the Turn Player may play spells.

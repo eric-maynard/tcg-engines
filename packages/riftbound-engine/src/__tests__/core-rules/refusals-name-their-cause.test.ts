@@ -85,7 +85,12 @@ describe("shape 1 — wrong timing (331.1.a / 338.1.a.2 / 159.2.a.1)", () => {
     expectWellFormed(refusal);
     expect(refusal?.code).toBe("TIMING_ILLEGAL");
     expect(refusal?.message).toMatch(/\[Action\]/);
-    expect(refusal?.message).toMatch(/showdown|your turn/i);
+    // It names the STATE that refuses it — here a loaded chain, where only a
+    // [Reaction] is legal. A reason that described some OTHER state ("only on
+    // your turn", with no chain in sight) would be a false explanation, which
+    // is worse than a bare refusal, so the wording follows the turn state.
+    expect(refusal?.message).toMatch(/chain/i);
+    expect(refusal?.message).toMatch(/\[Reaction\]/);
     // It names the card it refuses, so a client can put it on that tile.
     expect(refusal?.subjectId).toBe(game.card("rebuke"));
   });
