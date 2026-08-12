@@ -12,7 +12,7 @@
  * and therefore served the full unredacted state to any caller.
  */
 
-import { afterAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -23,7 +23,8 @@ process.env.RIFTBOUND_DB_PATH ??= path.join(TMP_DIR, "test.db");
 
 const { closeDb } = await import("../../src/db/schema");
 const { handleGameRoutes } = await import("../routes-game");
-const { gameSessions } = await import("../state");
+const { gameSessions, lobbies } = await import("../state");
+const { createLobby, handleLobbyRoutes } = await import("../routes-lobby");
 
 type GameSession = import("../state").GameSession;
 
@@ -134,5 +135,81 @@ describe("GET /api/game/:id/state — an unauthenticated caller never sees priva
     for (const card of ended.zones["hand"] ?? []) {
       expect(card).toMatchObject({ definitionId: "", name: "Hidden card" });
     }
+  });
+});
+
+/**
+ * WHY the test above is allowed to say "unredacted": a sandbox session holds
+ * exactly ONE human — the person who created it. The other seat is a bot
+ * (passive Goldfish, or a Claude seat, which redacts anyway) or, in hot seat,
+ * the same human acting as Player 2. Nothing in that response is private FROM
+ * its only human, which is why per-seat redaction would be wrong here rather
+ * than merely stricter: hot seat is one human legitimately driving both seats.
+ *
+ * That justification is load-bearing for an UNAUTHENTICATED route, so it is
+ * pinned here rather than assumed. It holds because `createLobby` fills
+ * `lobby.guest` for every sandbox mode and `POST /api/lobby/join` refuses a
+ * lobby that already has a guest — a stranger cannot become the second human.
+ * If a future change ever leaves a sandbox lobby's guest seat empty, this test
+ * fails instead of the unredacted view silently opening to that stranger.
+ *
+ * The decision, its threat model and the conditions that would flip it are
+ * recorded in `.claude/skills/riftbound-rules/DESIGN.md` § "Who may read a
+ * game's state (REST)". Read that before changing any of this.
+ */
+describe("a sandbox session can never hold a second human — the premise the unredacted view rests on", () => {
+  /** The real join route. (Creation goes through `createLobby` directly: the
+   *  route's own `SANDBOX_ENABLED` gate is an operator switch, not the
+   *  invariant under test, and it is read once at module load.) */
+  const join = async (body: unknown) =>
+    handleLobbyRoutes(
+      new Request("http://x/api/lobby/join", { body: JSON.stringify(body), headers: { "Content-Type": "application/json" }, method: "POST" }),
+      new URL("http://x/api/lobby/join"),
+      {} as never,
+    );
+
+  // A Claude seat needs a key OR the mock switch to be creatable at all; the
+  // seat itself is never driven here, only the lobby's second-seat occupancy.
+  const prevMock = process.env.RB_AI_MOCK;
+  beforeAll(() => { process.env.RB_AI_MOCK = "1"; });
+  afterAll(() => { if (prevMock === undefined) { delete process.env.RB_AI_MOCK; } else { process.env.RB_AI_MOCK = prevMock; } });
+
+  for (const opponent of [
+    { kind: "goldfish", mode: "passive" },
+    { kind: "goldfish", mode: "active" }, // hot seat — the host plays both seats
+    { kind: "claude", model: "haiku" },
+  ] as const) {
+    test(`${opponent.kind}/${"mode" in opponent ? opponent.mode : opponent.model}: the second seat is already taken, so joining by code is refused`, async () => {
+      const created = createLobby({ name: "Owner", opponent, sandbox: true }, null);
+      expect(created.status).toBe(200);
+      const { code, lobbyId } = created.body as { code: string; lobbyId: string };
+
+      const lobby = lobbies.get(lobbyId)!;
+      expect(lobby.sandbox).toBe(true);
+      expect(lobby.guest).not.toBeNull(); // the bot (or the host's own second seat) owns it
+
+      const joined = await join({ code, name: "Stranger" });
+      expect(joined?.status).toBe(400);
+      expect(await joined!.json()).toMatchObject({ error: "Lobby is full" });
+      // …and the refusal did not hand the caller the ids it would need anyway.
+      expect(lobby.guest?.name).not.toBe("Stranger");
+    });
+  }
+
+  test("a NON-sandbox lobby is the one that takes a second human — and that session's REST view is the redacted spectator one", async () => {
+    const created = createLobby({ name: "Owner", sandbox: false }, null);
+    expect(created.status).toBe(200);
+    const { code, lobbyId } = created.body as { code: string; lobbyId: string };
+    expect(lobbies.get(lobbyId)?.sandbox).toBe(false);
+
+    const joined = await join({ code, name: "Guest" });
+    expect(joined?.status).toBe(200);
+    expect(lobbies.get(lobbyId)?.guest?.name).toBe("Guest");
+
+    // Two humans ⇒ `sandbox: false` ⇒ restSnapshot takes the SPECTATOR branch,
+    // which the first test in this file pins.
+    const game = await board().build();
+    const state = await restState(sessionOf(game.engine, false));
+    expect(state.zones["facedown-bf2"]?.[0]).toMatchObject({ definitionId: "", name: "Hidden card" });
   });
 });

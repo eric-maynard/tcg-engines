@@ -380,3 +380,46 @@ are listed because an official answer would *change* something, and because re-d
    resolution, does its own play get a normal Make-Relevant-Choices step and priority window, or does naming it at
    finalization pre-bind everything? Eight facets in `drag-under-fizz-no-kaisa-six-points-yes` assume the former.
    Sequencing, not naming, is the open half.
+
+## Who may read a game's state (REST) — decision 2026-08-12, do not change silently
+
+`GET /api/game/:id/state` answers with one of two views (`server/routes-game.ts restSnapshot`):
+
+| session | view | why |
+|---|---|---|
+| real duel, or vs-Claude | `SPECTATOR` — every private zone (hands, decks, facedown) opaque | two parties, one of them not the caller (108.7.c / 128.4 / 723) |
+| sandbox (passive Goldfish, hot seat) | unredacted, the whole table | one human, and it is theirs |
+
+**The decision: the sandbox view stays unredacted.** Per-seat redaction is not "merely stricter" here, it is
+wrong: hot seat is *by definition* one human driving both seats, and a solo practice game's other hand belongs to
+a bot. There is nothing in that response that is private from its only human.
+
+**What that rests on, and what now enforces it.** The justification is "a sandbox session holds exactly one
+human". That was true only structurally — `createLobby` fills `lobby.guest` for every sandbox mode (the bot's
+label, or `Player 2` for hot seat) and `POST /api/lobby/join` refuses a lobby that already has a guest. An
+assumption that load-bearing under an UNAUTHENTICATED route should not be inferred from two files, so
+`snapshot-privacy.test.ts` now pins it: for each sandbox mode a stranger's join is refused `Lobby is full`, and
+the non-sandbox lobby (the one that *does* take a second human) is shown taking the SPECTATOR branch.
+
+**Residual risk, stated plainly.** The route has no authentication and `GameSession` has no owner: what protects a
+sandbox game today is only that its `gameId` is an unguessable UUID. That is a capability URL, not authorization,
+and this app is fronted by a hosted research app that reverse-proxies every path for any authenticated principal —
+so anyone who *obtains* the id can read the owner's hand. Nothing currently hands the id out (the 4-letter lobby
+code is the only small secret, and joining a sandbox lobby is refused without revealing `lobbyId`/`gameId`), which
+is why this is recorded rather than fixed.
+
+**Flip the decision the moment any of these becomes true** — at that point the answer is an owner binding
+(`GameSession` records the creating user id, which the lobby already resolves via `getUserIdFromRequest`; the
+unredacted view requires that owner, everyone else gets `SPECTATOR`), not per-seat redaction:
+
+1. any endpoint that lists, enumerates or searches games/lobbies;
+2. any spectate, replay-sharing or resume-by-link feature (a shared URL is a shared capability);
+3. a sandbox session ever holding two humans — i.e. any change that leaves a sandbox lobby's guest seat empty,
+   which is exactly what the new test fails on;
+4. the app consuming the relay's verified `x-rb-user` identity for anything (once real identity is available at
+   the route, "unauthenticated by design" stops being defensible).
+
+Follow-up queue item `64e48c356245` carries the owner-binding work. It is PARKED (`noRequeue`), not abandoned: no
+engine lane can finish it, because it needs a human call on what a *null* owner means — local dev runs with no
+login, so "deny unless you are the owner" would lock a developer out of their own practice game. Un-park it with
+that answer, or when one of the four triggers above fires.
