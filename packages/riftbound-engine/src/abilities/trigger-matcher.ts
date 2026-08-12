@@ -812,7 +812,10 @@ function triggerMatchesEvent(
       }
     }
   } else if (on === "enemy-units") {
-    if ("owner" in event && event.owner === card.owner) {
+    // rule 740.1.a / 489.8.e — "enemy" is everyone who is not you AND not your
+    // teammate: an ally's unit is friendly, never an enemy one. `alliedSeats`
+    // degrades to identity outside team modes, so two-player play is unchanged.
+    if ("owner" in event && alliedSeats(state, event.owner as string, card.owner)) {
       return false;
     }
   } else if (on === "controller" || on === "controller-or-allies") {
@@ -825,15 +828,21 @@ function triggerMatchesEvent(
         return false;
       }
     }
-    // Player-scoped event must be for this card's controller.
-    if ("playerId" in event && event.playerId !== card.owner) {
+    // Player-scoped event must be for this card's controller — or, for the
+    // `controller-or-allies` form ("you or an ally", rule 489.8.e), for anyone
+    // on their team. In a solo game the two forms are the same test.
+    const seatMatches = (pid: string | undefined): boolean =>
+      on === "controller-or-allies"
+        ? alliedSeats(state, pid as string, card.owner)
+        : pid === card.owner;
+    if ("playerId" in event && !seatMatches(event.playerId as string | undefined)) {
       return false;
     }
     // rule 441.3.a (rule-id: ven-153-166) — when the event names the player the
     // effect DIRECTED to act (`actor`), that player is "you", whoever owns the
     // subject: my Sanction empowering an enemy unit is still ME empowering.
     const actor = "actor" in event && typeof event.actor === "string" ? event.actor : undefined;
-    if (actor !== undefined && actor !== card.owner) {
+    if (actor !== undefined && !seatMatches(actor)) {
       return false;
     }
     // rule 464.2.c.2 (sfd-126-221) — "when YOU attack/defend" is attributed to
@@ -844,7 +853,7 @@ function triggerMatchesEvent(
       !("playerId" in event) &&
       "owner" in event &&
       typeof event.owner === "string" &&
-      event.owner !== card.owner
+      !seatMatches(event.owner)
     ) {
       return false;
     }
@@ -876,7 +885,10 @@ function triggerMatchesEvent(
       return false;
     }
   } else if (on === "opponent") {
-    if ("playerId" in event && event.playerId === card.owner) {
+    // rule 740.1.a / 489.8.e — "an opponent" is a seat on another team, so a
+    // TEAMMATE scoring / drawing / playing is not an opponent doing it. Identity
+    // outside team modes, so two-player play is unchanged.
+    if ("playerId" in event && alliedSeats(state, event.playerId as string, card.owner)) {
       return false;
     }
   } else if (typeof on === "object" && on !== null) {

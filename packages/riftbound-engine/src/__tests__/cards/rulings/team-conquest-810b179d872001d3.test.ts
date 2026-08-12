@@ -80,15 +80,12 @@ describe("Ruling 810b179d872001d3 — 2v2: your ally's battlefields are not your
     expect(game.winner()).toBe(P1);
   });
 
-  test.failing(
-    "BUG: ruling 810b179d872001d3 — the engine counts the ALLY's battlefield in the Final Point's 'every battlefield scored this turn' check, so P1 draws a card instead of the winning point",
+  test(
+    "ruling 810b179d872001d3 — the ALLY's battlefield is ignored by the Final Point's 'every battlefield scored this turn' check, so P1 takes the winning point",
     async () => {
-      // Expected (489.8.b + this ruling): bfC is controlled by P1's teammate, so it is disqualified
-      // from being scored by the team this turn and must be IGNORED by 471.1.b.1 — conquering bfB
-      // with bfA already scored is therefore the Final Point and the team wins at 11.
-      // Actual: `finalPointRestrictionApplies` (operations/points.ts) walks every battlefield in play
-      // with no teammate exemption, finds bfC unscored, and turns the point into a draw (P1 stays on
-      // 10 with one extra card).
+      // 489.8.b + this ruling: bfC is controlled by P1's teammate, so it is disqualified from being
+      // scored by the team this turn and is IGNORED by 471.1.b.1 — conquering bfB with bfA already
+      // scored is therefore the Final Point and the team wins at 11.
       const game = await afterFirstConquest({ allyBattlefield: true });
       const handBefore = game.p1.hand().length;
       await game.p1.move("u2", "bfB");
@@ -100,15 +97,12 @@ describe("Ruling 810b179d872001d3 — 2v2: your ally's battlefields are not your
     },
   );
 
-  test("what the engine does today, recorded: the conquest happens, the point does not, and P1 draws instead", async () => {
+  test("the ally never rides along: the winning point is P1's alone and the board stays legal", async () => {
     const game = await afterFirstConquest({ allyBattlefield: true });
-    const handBefore = game.p1.hand().length;
     await game.p1.move("u2", "bfB");
     await game.settle();
     expect(game.gameState.battlefields.bfB?.controller).toBe(P1);
-    expect(game.p1.points()).toBe(10);
-    expect(game.p1.hand().length).toBe(handBefore + 1);
-    expect(game.isOver()).toBe(false);
+    expect(game.seat(P3).points()).toBe(0);
     expect(game.seat(P4).points()).toBe(0);
     expect(game.violations()).toEqual([]);
   });

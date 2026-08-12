@@ -54,8 +54,8 @@ describe("Ruling 91af2468caa0cf8c — a unit token IS played; a battlefield toke
     expect(game.violations()).toEqual([]);
   });
 
-  test.failing(
-    "BUG: ruling 91af2468caa0cf8c / rule 652.2.a — a conceding player's battlefield should be REPLACED by a token battlefield (a token that is never 'played'); the engine instead keeps the original battlefield and only clears its controller",
+  test(
+    "ruling 91af2468caa0cf8c / rule 652.2.a — a conceding player's battlefield is REPLACED by a token battlefield (a token that is never 'played')",
     async () => {
       const game = await scenario({ players: 3 })
         .battlefield("bf1", { owner: P1 })

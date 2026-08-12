@@ -29,6 +29,8 @@
 
 import type { CardId as CoreCardId, PlayerId as CorePlayerId, ZoneId as CoreZoneId } from "@tcg/core";
 import type { PlayerId, RiftboundCardMeta, RiftboundGameState } from "../types/game-state";
+import { createInteractionState } from "../chain/chain-state";
+import { getGlobalCardRegistry } from "./card-lookup";
 import { recordDepartedOwner } from "./leave-board";
 import { recordPublicReveal } from "./public-reveal";
 
@@ -122,9 +124,16 @@ export function removePlayer(
   // Collect all owned cards first; then banish. We avoid mutating a zone
   // While iterating its ids.
   const toBanish: CoreCardId[] = [];
+  // rule 652.2 — battlefields are NOT banished with the rest of the removed
+  // player's cards: the slot stays on the board and is replaced in place by a
+  // token battlefield below (652.2.a/652.2.b).
+  const battlefieldIds = new Set<string>(Object.keys(draft.battlefields ?? {}));
   for (const zid of zoneIds) {
     const owned = zones.getCardsInZone(zid as CoreZoneId, playerId as CorePlayerId);
     for (const cid of owned) {
+      if (battlefieldIds.has(cid as string)) {
+        continue;
+      }
       toBanish.push(cid);
     }
   }
@@ -165,12 +174,29 @@ export function removePlayer(
     zones.removeCardFromGame?.({ cardId: cid });
   }
 
-  // Rule 652.2: Battlefields previously controlled by the removed player
-  // Revert to an uncontrolled state. Rule 652.2.a would replace them with
-  // A token battlefield with no abilities — the engine does not yet model
-  // Dynamic battlefield creation, so the closest rule-compliant fallback
-  // Is to flip the controller to `null` so no one scores from it.
-  for (const bf of Object.values(draft.battlefields ?? {})) {
+  // rule 652.2 / 652.2.a — the battlefield the removed player CONTRIBUTED (the
+  // one they own), if it is in use, is REPLACED by a token battlefield with no
+  // abilities. Ownership is what 652.2 keys on, not control: a battlefield of
+  // theirs that an opponent has conquered is still the one they contributed,
+  // and a battlefield they merely control belongs to someone else and only
+  // loses its controller (below). The replacement is a definition swap in
+  // place: the id stays, so the units and hidden cards there keep pointing at
+  // the same slot and do not move (652.2.b), while the emptied ability list
+  // ends any continuous effect the printed battlefield was applying (652.2.c)
+  // and `isToken` makes it a real token — of the one card type that is never
+  // "played" (rule 186 / 185.2.a, ruling 91af2468caa0cf8c).
+  const registry = getGlobalCardRegistry();
+  for (const [bfId, bf] of Object.entries(draft.battlefields ?? {})) {
+    if (cards.getCardOwner(bfId as CoreCardId) === (playerId as CorePlayerId)) {
+      const printed = registry.get(bfId);
+      registry.register(bfId, {
+        ...(printed ?? { cardType: "battlefield", id: bfId, name: "Battlefield" }),
+        abilities: [],
+        isToken: true,
+      });
+    }
+    // rule 652.1 — every permanent they controlled is banished, so a
+    // battlefield they controlled has no unit of theirs left to hold it.
     if (bf.controller === playerId) {
       bf.controller = null;
       bf.contested = false;
@@ -189,10 +215,20 @@ export function removePlayer(
     draft.runePools[playerId].power = {};
   }
 
+  // rule 651.3 — the removed player is no longer a Relevant Player anywhere.
+  // Stamping the set on the interaction is what keeps every LATER rotation
+  // honest: `chain-state.ts eligibleSeats` reads it, so a chain opened after
+  // the removal never seats them even though the callers of `addToChain` build
+  // their turn order from the full player registry.
+  if (draft.interaction === undefined) {
+    (draft as { interaction?: unknown }).interaction = createInteractionState();
+  }
+  const { interaction } = draft;
+  (interaction as { removedPlayers?: string[] }).removedPlayers = [...removed];
+
   // Rule 652.4: Counter all chain items whose controller is the removed
   // Player. We flag them as countered so the chain resolver will skip
   // Their effects when they pop.
-  const { interaction } = draft;
   if (interaction?.chain) {
     for (const item of interaction.chain.items) {
       if (item.controller === playerId) {
@@ -210,25 +246,26 @@ export function removePlayer(
       passedPlayers: string[];
       relevantPlayers: string[];
     };
-    if (chainMutable.activePlayer === playerId) {
-      const remaining = chainMutable.turnOrder.filter((p) => p !== playerId);
-      chainMutable.turnOrder = remaining;
-      chainMutable.activePlayer = remaining[0] ?? "";
-      chainMutable.passedPlayers = chainMutable.passedPlayers.filter(
-        (p) => p !== playerId,
-      );
-    } else {
-      // Drop from the turn order regardless so subsequent rotations skip.
-      chainMutable.turnOrder = chainMutable.turnOrder.filter(
-        (p) => p !== playerId,
-      );
-      chainMutable.passedPlayers = chainMutable.passedPlayers.filter(
-        (p) => p !== playerId,
-      );
-    }
+    const order = [...chainMutable.turnOrder];
+    const heldPriority = chainMutable.activePlayer === playerId;
+    chainMutable.turnOrder = order.filter((p) => p !== playerId);
+    chainMutable.passedPlayers = chainMutable.passedPlayers.filter(
+      (p) => p !== playerId,
+    );
     chainMutable.relevantPlayers = chainMutable.relevantPlayers.filter(
       (p) => p !== playerId,
     );
+    if (heldPriority) {
+      // rule 652.5.c.1 — Priority goes to the NEXT Relevant Player in order
+      // after the one who left, not back to the head of the seat list; and
+      // 652.5.c.2 — if everyone still Relevant has already passed, nobody
+      // holds Priority and the top item resolves.
+      chainMutable.activePlayer = nextInOrder(
+        order,
+        playerId,
+        (p) => chainMutable.relevantPlayers.includes(p) && !chainMutable.passedPlayers.includes(p),
+      );
+    }
   }
 
   // Rule 652.5.b: Same handling for showdown focus stack.
@@ -238,27 +275,31 @@ export function removePlayer(
         relevantPlayers: string[];
         passedPlayers: string[];
         focusPlayer: string;
+        focusOrder?: string[];
         active: boolean;
       };
       // rule 652.5.b.1 — Focus goes to the NEXT player in order after the
       // removed one, not back to the head of the list (a player who may have
-      // already passed this round).
-      const order = [...mutable.relevantPlayers];
+      // already passed this round). rule 347.2.b — the order Focus walks is
+      // the full turn-order rotation stamped on the showdown, not only its
+      // participants; fall back to the participants when it is absent.
+      const order = [...(mutable.focusOrder ?? mutable.relevantPlayers)];
       mutable.relevantPlayers = mutable.relevantPlayers.filter((p) => p !== playerId);
       mutable.passedPlayers = mutable.passedPlayers.filter((p) => p !== playerId);
-      if (mutable.focusPlayer === playerId) {
-        const from = order.indexOf(playerId);
-        let next = "";
-        for (let step = 1; step <= order.length && next === ""; step += 1) {
-          const candidate = order[(from + step) % order.length];
-          if (candidate !== undefined && candidate !== playerId) {
-            next = candidate;
-          }
-        }
-        mutable.focusPlayer = next;
+      if (mutable.focusOrder !== undefined) {
+        mutable.focusOrder = mutable.focusOrder.filter((p) => p !== playerId);
       }
-      // If no relevant players remain, end the showdown.
-      if (mutable.relevantPlayers.length === 0) {
+      if (mutable.focusPlayer === playerId) {
+        mutable.focusPlayer = nextInOrder(order, playerId, (p) => p !== playerId);
+      }
+      // rule 652.5.b.2 — if no Relevant Player remains, the showdown ends.
+      // rule 652.5.b.3 — so does a removal that leaves everyone still in it
+      // already Passed: there is nobody left to break the sequence.
+      const remainingFocus = order.filter((p) => p !== playerId);
+      const allPassed =
+        remainingFocus.length > 0 &&
+        remainingFocus.every((p) => mutable.passedPlayers.includes(p));
+      if (mutable.relevantPlayers.length === 0 || allPassed) {
         mutable.active = false;
       }
     }
@@ -273,14 +314,54 @@ export function removePlayer(
   // Any test or consumer reading `state.turn.activePlayer` sees the
   // Correct next player.
   if (draft.turn.activePlayer === playerId) {
-    const remaining = getActivePlayers(draft, removed);
-    if (remaining.length > 0) {
-      (draft.turn as { activePlayer: PlayerId }).activePlayer =
-        remaining[0] as PlayerId;
+    // rule 652.5.a.1 — "play proceeds in Turn Order to the NEXT available
+    // player": the successor of the seat that left, not the head of the
+    // registry. With two players those are the same seat, which is why this
+    // only ever mattered from three seats up.
+    const seats = seatOrder(draft);
+    const remaining = new Set(getActivePlayers(draft, removed));
+    const next = nextInOrder(seats, playerId, (p) => remaining.has(p as PlayerId));
+    if (next !== "") {
+      (draft.turn as { activePlayer: PlayerId }).activePlayer = next as PlayerId;
     }
   }
 
   return getActivePlayers(draft, removed);
+}
+
+/**
+ * Seat order for a game: the player registry, rotated so the player who took
+ * the first turn leads it when that is recorded (rule 510 / 734).
+ */
+function seatOrder(state: RiftboundGameState): string[] {
+  const ids = Object.keys(state.players);
+  const first = state.setup?.firstPlayer;
+  return first !== undefined && ids.includes(first)
+    ? [first, ...ids.filter((p) => p !== first)]
+    : ids;
+}
+
+/**
+ * The first entry strictly AFTER `from` in `order` (wrapping) that satisfies
+ * `accept`, or `""` when none does. `from` itself is never returned.
+ *
+ * Every "who acts next" clause of rule 652.5 is this walk: turn (652.5.a.1),
+ * Focus (652.5.b.1) and Priority (652.5.c.1) all resume at the seat after the
+ * one that left rather than at the head of the list.
+ */
+function nextInOrder(
+  order: readonly string[],
+  from: string,
+  accept: (playerId: string) => boolean,
+): string {
+  const at = order.indexOf(from);
+  for (let step = 1; step <= order.length; step += 1) {
+    const candidate = order[(at + step) % order.length];
+    if (candidate !== undefined && candidate !== from && accept(candidate)) {
+      return candidate;
+    }
+  }
+  return "";
 }
 
 /**

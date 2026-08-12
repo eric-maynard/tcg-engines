@@ -117,6 +117,7 @@ function victoryScoreDelta(effect: VictoryScoreStatic | undefined): number {
 }
 
 function staticAppliesToPlayer(
+  state: RiftboundGameState,
   effect: VictoryScoreStatic,
   sourceOwner: string | undefined,
   playerId: string,
@@ -127,7 +128,13 @@ function staticAppliesToPlayer(
       return sourceOwner === playerId;
     case "opponent":
     case "opponents":
-      return sourceOwner !== undefined && sourceOwner !== playerId;
+      // rule 489.8.e / 740.1.a — "your opponents" means the other TEAM, so a
+      // teammate's "your opponents need one more point" passive must not raise
+      // your own Victory Score. Identity outside team modes.
+      return (
+        sourceOwner !== undefined &&
+        !areAllies(state, sourceOwner as PlayerId, playerId as PlayerId)
+      );
     default:
       return true;
   }
@@ -161,7 +168,7 @@ export function effectiveVictoryScore(
         }
         const effect = ability.effect as VictoryScoreStatic | undefined;
         const delta = victoryScoreDelta(effect);
-        if (delta === 0 || !effect || !staticAppliesToPlayer(effect, card.owner, playerId)) {
+        if (delta === 0 || !effect || !staticAppliesToPlayer(state, effect, card.owner, playerId)) {
           continue;
         }
         if (!boardStaticConditionMet(ability.condition, card, state, io)) {
@@ -458,8 +465,21 @@ function finalPointRestrictionApplies(
     return false;
   }
   const scored = state.scoredThisTurn[playerId] ?? [];
-  const everyBattlefieldScored = Object.keys(state.battlefields ?? {}).every(
-    (bfId) => bfId === battlefieldId || scored.includes(bfId),
+  const everyBattlefieldScored = Object.entries(state.battlefields ?? {}).every(
+    ([bfId, bf]) => {
+      // rule 489.8.b — a battlefield a TEAMMATE controls is disqualified from
+      // being scored by that team this turn, so 471.1.b.1 must ignore it (control
+      // is never shared, 489.8.c).
+      const controller = bf?.controller ?? undefined;
+      if (
+        controller !== undefined &&
+        controller !== playerId &&
+        areAllies(state, playerId, controller as PlayerId)
+      ) {
+        return true;
+      }
+      return bfId === battlefieldId || scored.includes(bfId);
+    },
   );
   return !everyBattlefieldScored;
 }
@@ -620,9 +640,9 @@ export interface BurnOutIO extends PointsIO {
 }
 
 /**
- * rule 431.2 — one Burn Out for `playerId`: shuffle their trash into their Main
- * Deck, then an opponent gains 1 point (every opponent in the engine's
- * multiplayer approximation; `opponentId` narrows it to the chosen one).
+ * rule 431.2 / 607.2 — one Burn Out for `playerId`: shuffle their trash into
+ * their Main Deck, then ONE opponent of their choosing gains 1 point (607.2.b;
+ * pass it as `opponentId`, else the next opponent in seat order takes it).
  * `sequenceIndex` > 0 marks a repeat Burn Out of one uninterrupted sequence:
  * its point is unpreventable (431.3.b) and wins immediately (431.3.c.1).
  *
@@ -641,11 +661,27 @@ export function burnOut(
   io.zones.shuffleZone?.("mainDeck" as CoreZoneId, playerId as CorePlayerId);
 
   const sequenceIndex = opts.sequenceIndex ?? 0;
-  const opponents = (Object.keys(draft.players) as PlayerId[]).filter(
-    (pid) => pid !== playerId && (opts.opponentId === undefined || pid === opts.opponentId),
+  // rule 607.2.b — the burning-out player chooses ONE OPPONENT to gain 1 point,
+  // not "every other player": with three or more seats a Burn Out used to hand
+  // a point to the whole table at once, and in a 2v2 to the burner's own
+  // TEAMMATE (489.8.e — a teammate is never an opponent). The choice itself is
+  // the caller's (`opts.opponentId`, threaded from the `discard` move); with
+  // none supplied the next opponent in seat order takes it, which is what the
+  // two-player game has always done because there was only ever one candidate.
+  const candidates = (Object.keys(draft.players) as PlayerId[]).filter(
+    (pid) => !areAllies(draft, playerId, pid) && !(draft.removedPlayers ?? []).includes(pid),
   );
-  for (const opponentId of opponents) {
-    awardPoints(draft, opponentId, 1, { method: "burn-out", sequenceIndex }, io);
+  const seats = Object.keys(draft.players) as PlayerId[];
+  const from = seats.indexOf(playerId);
+  const fallback = Array.from({ length: seats.length }, (_, i) => seats[(from + 1 + i) % seats.length]).find(
+    (pid) => pid !== undefined && candidates.includes(pid),
+  );
+  const chosen =
+    opts.opponentId !== undefined && candidates.includes(opts.opponentId)
+      ? opts.opponentId
+      : fallback;
+  if (chosen !== undefined) {
+    awardPoints(draft, chosen, 1, { method: "burn-out", sequenceIndex }, io);
   }
   const winner = checkVictory(draft, { immediate: sequenceIndex > 0, io });
   return { gameEnded: winner !== null || draft.status !== "playing" };

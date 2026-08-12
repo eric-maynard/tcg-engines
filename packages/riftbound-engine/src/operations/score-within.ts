@@ -7,7 +7,9 @@
  * The parser emits `points`; older hand-authored shapes used `range`.
  */
 
+import type { PlayerId, RiftboundGameState } from "../types/game-state";
 import { getBattlefieldVictoryScoreBonus } from "./battlefield-setup-effects";
+import { areAllies } from "./teams";
 
 interface ScoreWithinShape {
   readonly points?: number;
@@ -18,6 +20,8 @@ interface ScoreWithinShape {
 interface ScoreWithinState {
   readonly victoryScore?: number;
   readonly battlefields?: Record<string, unknown>;
+  /** rule 489.8.e — team map, so "an opponent" can exclude a teammate. */
+  readonly teams?: Readonly<Record<string, number>>;
   readonly players: Record<
     string,
     { readonly victoryPoints?: number; readonly victoryScoreModifier?: number } | undefined
@@ -31,8 +35,15 @@ export function scoreWithinConditionMet(
 ): boolean {
   const range = condition.points ?? condition.range ?? 0;
   const whose = condition.whose ?? "opponent";
+  // rule 489.8.e / 740.1.a — "an opponent's score" reads the other TEAM's
+  // scores; a teammate closing on the Victory Score is your side doing well,
+  // not an opponent threatening. `areAllies` is identity outside team modes.
   const pids = Object.keys(state.players).filter((pid) =>
-    whose === "your" ? pid === playerId : whose === "any" ? true : pid !== playerId,
+    whose === "your"
+      ? pid === playerId
+      : whose === "any"
+        ? true
+        : !areAllies(state as RiftboundGameState, playerId as PlayerId, pid as PlayerId),
   );
   // rule 194.3.a / 365.1: "within N points of the Victory Score" measures against the
   // player's EFFECTIVE Victory Score, so board passives (Aspirant's Climb) count too.

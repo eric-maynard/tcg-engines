@@ -91,15 +91,15 @@ describe("Ruling 874744f03bfaa101 — Focus and priority travel in turn order, n
   // The engine resolves the chain item as soon as the attacker and the defender have passed:
   // P3 is skipped entirely, so a third player can never answer a chain they are not part of.
   // Rules 336–340 pass priority to EVERY player in turn order before the top item resolves.
-  test.failing(
-    "BUG: ruling 874744f03bfaa101 — the third player never receives chain priority; the engine resolves the item after only P1 and P2 pass",
+  test(
+    "ruling 874744f03bfaa101 — the third player receives chain priority before the item resolves",
     async () => {
       const game = await board().build();
       await game.p1.move("raider", "bf1");
       await game.p1.cast("a1", { targets: "raider" });
       await game.p1.passPriority();
       await game.p2.passPriority();
-      expect(game.chain().length).toBe(1); // engine: already 0 — it resolved without P3
+      expect(game.chain().length).toBe(1);
       expect(game.decision()).toMatchObject({ context: "chain", seat: P3 });
       expect(game.seat(P3).can("cast", "s3")).toBe(true);
     },
@@ -111,6 +111,7 @@ describe("Ruling 874744f03bfaa101 — Focus and priority travel in turn order, n
     await game.p1.cast("a1", { targets: "raider" });
     await game.p1.passPriority();
     await game.p2.passPriority();
+    await game.seat(P3).passPriority();
     expect(game.chain()).toEqual([]);
     expect(game.state("raider").might).toBe(5);
     expect(showdown(game)).toMatchObject({ active: true, focusPlayer: P2 });

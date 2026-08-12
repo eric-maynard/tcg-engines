@@ -269,6 +269,34 @@ export interface TurnInteractionState {
    * deferred mode and consumed by `applyPendingFocusPass`.
    */
   focusPassPending?: boolean;
+
+  /**
+   * rule 651.3 — players removed from the game (concede, repeated burn-out).
+   * They are no longer a Relevant Player in any showdown, never receive Focus
+   * or Priority again, and must be skipped by every rotation here. Stamped by
+   * `operations/player-removal.ts removePlayer`; absent in the ordinary case.
+   *
+   * It lives on the interaction state rather than being re-derived from
+   * `RiftboundGameState` because the chain primitives take only this slice.
+   */
+  removedPlayers?: readonly string[];
+}
+
+/**
+ * rule 651.3 — `order` minus the players who have been removed from the game.
+ * Order is preserved; an empty result falls back to the input so a degenerate
+ * state (everyone removed) can never produce an empty rotation.
+ */
+export function eligibleSeats(
+  state: TurnInteractionState,
+  order: readonly string[],
+): string[] {
+  const removed = state.removedPlayers;
+  if (!removed || removed.length === 0) {
+    return [...order];
+  }
+  const kept = order.filter((p) => !removed.includes(p));
+  return kept.length > 0 ? kept : [...order];
 }
 
 /**
@@ -494,8 +522,15 @@ export function addToChain(
 
   const existingItems = state.chain?.items ?? [];
   const activeShowdown = getActiveShowdown(state);
-  const relevantPlayers =
-    state.chain?.relevantPlayers ?? activeShowdown?.relevantPlayers ?? turnOrder;
+  // rules 336–340: PRIORITY on a chain is a turn-order construct — every
+  // player in the game answers the chain before its top item resolves. It is
+  // NOT the showdown's Relevant-Player list (rule 462, the participants), and
+  // it is not derived from Focus either: a chain outside a showdown gets the
+  // same rotation. In a two-player game the two lists coincide, which is why
+  // this only ever showed up with three or more seats. A player removed from
+  // the game (rule 651.3) never gets priority again.
+  const seats = eligibleSeats(state, turnOrder);
+  const relevantPlayers = state.chain?.relevantPlayers ?? seats;
 
   // Rule 553.4.a: the showdown ends when all Relevant Players pass *in
   // sequence*. Taking an action (adding to the chain) breaks the sequence,
@@ -523,7 +558,7 @@ export function addToChain(
       relevantPlayers,
       activePlayer,
       passedPlayers: [], // Reset passes when new item added
-      turnOrder,
+      turnOrder: state.chain?.turnOrder ?? seats,
       // rule 346.1: a chain that OPENED from a triggered (or Add) ability —
       // the Combat Chain is the canonical case — does not pass Focus when it
       // empties. Latched from the item that created the chain.
@@ -544,7 +579,11 @@ export function passPriority(state: TurnInteractionState): TurnInteractionState 
     return state;
   }
 
-  const { activePlayer, relevantPlayers, passedPlayers, turnOrder } = state.chain;
+  const { activePlayer, passedPlayers } = state.chain;
+  // rule 651.3 / 652.5.c — a removed player is not a Relevant Player any more,
+  // so neither the all-passed test nor the rotation may wait on them.
+  const relevantPlayers = eligibleSeats(state, state.chain.relevantPlayers);
+  const turnOrder = eligibleSeats(state, state.chain.turnOrder);
 
   // Mark current player as passed
   const newPassed = [...passedPlayers, activePlayer];
@@ -618,7 +657,11 @@ export function allPlayersPassed(state: TurnInteractionState): boolean {
   if (!state.chain) {
     return false;
   }
-  return state.chain.relevantPlayers.every((p) => state.chain!.passedPlayers.includes(p));
+  // rule 652.5.c.2 — a removal that leaves every remaining Relevant Player
+  // already passed makes the top item resolve; it must not wait on the seat
+  // that left.
+  const passed = state.chain.passedPlayers;
+  return eligibleSeats(state, state.chain.relevantPlayers).every((p) => passed.includes(p));
 }
 
 /**
@@ -650,8 +693,12 @@ export function passFocusForEmptiedChain(state: TurnInteractionState): TurnInter
   if (!sd) {
     return state;
   }
-  const idx = sd.relevantPlayers.indexOf(sd.focusPlayer);
-  const nextFocus = sd.relevantPlayers[(idx + 1) % sd.relevantPlayers.length];
+  // rule 347.2.b — Focus travels the same full turn-order rotation `passFocus`
+  // walks (every player, not only the showdown's participants), minus anyone
+  // removed from the game (651.3).
+  const order = eligibleSeats(state, sd.focusOrder ?? sd.relevantPlayers);
+  const idx = order.indexOf(sd.focusPlayer);
+  const nextFocus = order[(idx + 1) % order.length];
   const top = state.showdownStack.length - 1;
   return {
     ...state,
@@ -754,10 +801,10 @@ function afterItemsLeft(state: TurnInteractionState, items: ChainItem[]): TurnIn
   // rule 340.4 / 652.5.c.1 — a player who has left the game (or is otherwise no
   // longer Relevant) can hold neither Priority nor the decision it carries, so
   // seat the next Relevant Player in Turn Order instead of the dead controller.
-  const relevant = state.chain.relevantPlayers;
+  const relevant = eligibleSeats(state, state.chain.relevantPlayers);
   let seated = newTopController;
   if (!relevant.includes(newTopController)) {
-    const order = state.chain.turnOrder;
+    const order = eligibleSeats(state, state.chain.turnOrder);
     seated = relevant[0] ?? "";
     const from = order.indexOf(newTopController);
     for (let i = 1; i <= order.length; i += 1) {
@@ -828,8 +875,11 @@ export function passFocus(state: TurnInteractionState): TurnInteractionState {
 
   const { focusPlayer, passedPlayers } = activeShowdown;
   // rule 347.2.b — Focus cycles every player in turn order, not only the
-  // showdown's participants (rule 462).
-  const relevantPlayers = activeShowdown.focusOrder ?? activeShowdown.relevantPlayers;
+  // showdown's participants (rule 462). rule 651.3 — minus removed players.
+  const relevantPlayers = eligibleSeats(
+    state,
+    activeShowdown.focusOrder ?? activeShowdown.relevantPlayers,
+  );
 
   const newPassed = [...passedPlayers, focusPlayer];
 
@@ -967,14 +1017,18 @@ export function advanceFocusAfterPlay(
   if (!showdown || showdown.focusPlayer !== playerId) {
     return next;
   }
-  const idx = showdown.relevantPlayers.indexOf(showdown.focusPlayer);
+  // rule 347.2.b — Focus goes to the next player in TURN ORDER, which is the
+  // rotation stamped on the showdown, not its participant list (rule 462): a
+  // bystander in a multiplayer game gets Focus between the two combatants.
+  const order = eligibleSeats(next, showdown.focusOrder ?? showdown.relevantPlayers);
+  const idx = order.indexOf(showdown.focusPlayer);
   if (idx < 0) {
     return next;
   }
   const stack = [...next.showdownStack];
   stack[stack.length - 1] = {
     ...showdown,
-    focusPlayer: showdown.relevantPlayers[(idx + 1) % showdown.relevantPlayers.length],
+    focusPlayer: order[(idx + 1) % order.length],
     passedPlayers: [],
   };
   return { ...next, showdownStack: stack };

@@ -9,6 +9,7 @@ export {
   breakPassSequence,
   collapseTriggerBatch,
   createInteractionState,
+  eligibleSeats,
   endShowdown,
   getActiveShowdown,
   getTurnState,

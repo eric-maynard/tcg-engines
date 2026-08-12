@@ -17,7 +17,7 @@ import type {
   GameMoveDefinitions,
 } from "@tcg/core";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../../types";
-import { createInteractionState, getActiveShowdown } from "../../../chain";
+import { createInteractionState, eligibleSeats, getActiveShowdown } from "../../../chain";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
 import { enterPlayedPermanent } from "./play-pipeline";
 import {
@@ -50,14 +50,18 @@ export function advanceFocusAfterAction(
   if (!showdown) {
     return state;
   }
-  const idx = showdown.relevantPlayers.indexOf(showdown.focusPlayer);
+  // rule 347.2.b — the next Relevant Player is the next seat in TURN ORDER
+  // (`focusOrder`), not the next of the showdown's two participants (rule 462);
+  // rule 651.3 — never a seat that has left the game.
+  const order = eligibleSeats(state, showdown.focusOrder ?? showdown.relevantPlayers);
+  const idx = order.indexOf(showdown.focusPlayer);
   if (idx < 0) {
     return state;
   }
   const stack = [...state.showdownStack];
   stack[stack.length - 1] = {
     ...showdown,
-    focusPlayer: showdown.relevantPlayers[(idx + 1) % showdown.relevantPlayers.length],
+    focusPlayer: order[(idx + 1) % order.length],
     passedPlayers: [],
   };
   return { ...state, showdownStack: stack };
