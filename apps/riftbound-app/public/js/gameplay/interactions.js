@@ -23,6 +23,9 @@ function onCardClick(cardId) {
     if (handleArmedCardClick(cardId)) return;
   }
 
+  // rule 144.3 — a multi-unit Standard Move is being assembled: clicks add/remove movers.
+  if (typeof handleGroupMoveCardClick === "function" && handleGroupMoveCardClick(cardId)) return;
+
   // Pending choose-target/choose-card: clicking a highlighted board card resolves it.
   if (gameState?.pendingChoice) {
     const pick = pendingChoicePickForCard(cardId);
@@ -198,6 +201,7 @@ function findCard(cardId) {
 
 /** Cancel the current interaction, reset to idle */
 function cancelInteraction() {
+  if (typeof clearGroupMove === "function") clearGroupMove();
   interaction = {
     mode: "idle",
     sourceCardId: null,
@@ -1459,7 +1463,7 @@ function applyValidTargetHighlights() {
     for (const bfId of interaction.validTargets || []) {
       document.querySelector(`[data-bf-id="${CSS.escape(bfId)}"]`)?.classList.add("valid-target");
     }
-  } else if (interaction.action === "moveUnit") {
+  } else if (interaction.action === "moveUnit" || interaction.action === "groupMove") {
     // Highlight valid destinations: battlefields, or the base row (rule 144.4.b).
     for (const bfId of interaction.validTargets) {
       const bfEl = bfId === "player-base"
@@ -1509,6 +1513,11 @@ function showActionBar(cardName, moves, hint) {
       const bfName = getBattlefieldName(bfId);
       html += `<button class="action-bar-btn" onclick='onZoneClick("${esc(bfId)}")'>${esc("Move to " + bfName)}</button>`;
     }
+    // rule 144.3 — the same units may instead move as ONE action (one Contested check,
+    // one showdown, one Cleanup). The solo one-click move above stays the default.
+    if (typeof GroupMove !== "undefined" && GroupMove.canGroup(availableMoves, interaction.sourceCardId)) {
+      html += `<button class="action-bar-btn" data-group-move-start onclick='startGroupMove(${JSON.stringify(interaction.sourceCardId)})'>Move as a group…</button>`;
+    }
   }
   html += abilityBarHtml(interaction.sourceCardId);
 
@@ -1537,6 +1546,11 @@ function showBattlefieldCardActionBar(cardName, gankMoves, recallMoves) {
     }
     const bfName = getBattlefieldName(bfId);
     html += `<button class="action-bar-btn" onclick='onZoneClick("${esc(bfId)}")'>${esc("Gank to " + bfName)}</button>`;
+  }
+  // rule 144.3 — join this unit with others into ONE move action (144.3.b: origins may differ,
+  // so a unit here can move together with one in base).
+  if (typeof GroupMove !== "undefined" && GroupMove.canGroup(availableMoves, interaction.sourceCardId)) {
+    html += `<button class="action-bar-btn" data-group-move-start onclick='startGroupMove(${JSON.stringify(interaction.sourceCardId)})'>Move as a group…</button>`;
   }
   html += abilityBarHtml(interaction.sourceCardId);
 

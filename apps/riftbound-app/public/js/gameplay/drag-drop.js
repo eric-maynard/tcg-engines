@@ -2,6 +2,8 @@
 
 /** Handle clicks on zone containers (battlefields for movement targets) */
 function onZoneClick(targetId) {
+  // rule 144.3 — a group of movers is assembled: this click picks their shared destination.
+  if (typeof onGroupMoveZoneClick === "function" && onGroupMoveZoneClick(targetId)) return;
   if (interaction.mode !== "cardSelected") return;
 
   // Find source card element for animation
