@@ -14,6 +14,7 @@ import { P1, P2, scenario } from "../../harness";
 
 const CARD = "ogn-023-298";
 const FILLER = "ogn-175-298";
+const GRENADE = "unl-020-219";
 const BOLT = {
   abilities: [{ effect: { amount: 3, target: { type: "unit" }, type: "damage" }, timing: "action", type: "spell" }],
   cardType: "spell",
@@ -117,5 +118,32 @@ describe("Unlicensed Armory (ogn-023-298)", () => {
     await game.p2.cast("bolt2", { targets: "ally" });
     await game.settle();
     expect(game.zoneOf("ally")).toBe("trash");
+  });
+  test("the shield is still offered when an unrelated prompt is already open (rule 371.2)", async () => {
+    // Dancing Grenade's own "its controller may replay this" opt-in occupies
+    // `pendingChoice` at the moment the lethal damage is checked.
+    const game = await scenario()
+      .resources(P1, { energy: 2, power: { fury: 3 } })
+      .gear(P1, CARD, "armory")
+      .unit(P1, "base", { might: 2 }, "ally")
+      .hand(P1, FILLER, "junk")
+      .hand(P1, GRENADE, "nade")
+      .build();
+    await game.p1.activate("armory", 0, { discard: "junk", targets: ["ally"] });
+    await game.settle();
+    await game.p1.cast("nade", { targets: "ally" });
+    await game.settle();
+    const prompts: string[] = [];
+    for (let i = 0; i < 5; i++) {
+      const d = game.decision();
+      if (!d || d.kind !== "yes-no") break;
+      prompts.push(JSON.stringify(d));
+      await game.p1.no();
+      await game.settle();
+    }
+    // The [fury] shield must be ASKED, and declining it must cost nothing.
+    expect(prompts.some((p) => p.includes("armory"))).toBe(true);
+    expect(game.zoneOf("ally")).toBe("trash");
+    expect(game.p1.power("fury")).toBe(2);
   });
 });

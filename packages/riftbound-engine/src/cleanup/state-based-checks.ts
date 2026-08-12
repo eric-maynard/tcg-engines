@@ -24,7 +24,7 @@ import type {
   PlayerId as CorePlayerId,
   ZoneId as CoreZoneId,
 } from "@tcg/core";
-import { runDieBatch } from "../abilities/die-replacement-batch";
+import { hasPayableOptionalShield, runDieBatch } from "../abilities/die-replacement-batch";
 import { recalculateStaticEffects } from "../abilities/static-abilities";
 import { fireTriggers, type TriggerRunnerContext } from "../abilities/trigger-runner";
 import { isResolvingChainItem, noteOutstandingCleanup } from "../chain/resolution-guard";
@@ -364,7 +364,14 @@ export function performCleanup(ctx: CleanupContext, opts: CleanupOptions = {}): 
     ((openPrompt.type === "opt-in" && openPrompt.suspendedDeathCardId !== undefined) ||
       openPrompt.resume?.kind === "die-order" ||
       openPrompt.resume?.kind === "die-batch-order" ||
-      openPrompt.resume?.kind === "die-assign");
+      openPrompt.resume?.kind === "die-assign" ||
+      // rule 371.2 — a payable OPTIONAL costed shield ("you may pay [fury] …
+      // instead") has to be ASKED, and only one pendingChoice slot exists: with
+      // an unrelated prompt open (Dancing Grenade's replay opt-in) the batch used
+      // to spend the power silently. Wait instead — `postChoiceCleanup` re-runs
+      // the checks once that prompt is answered. Deaths with no such shield still
+      // happen now, so nothing else is deferred.
+      hasPayableOptionalShield(ctx, lethalIds));
   if (opts.shieldsOnly === true) {
     // rule 321 / 323.5 — between two damage instances of one resolving item:
     // offer the damage-time shields and leave every lethal unit standing.

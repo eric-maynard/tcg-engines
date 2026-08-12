@@ -153,6 +153,29 @@ function controllerOf(ctx: Ctx, cardId: string): string {
   );
 }
 
+/**
+ * rule 371.2 — is some unit in this batch still carrying a PAYABLE optional
+ * costed die shield ("you may pay [C] to … instead")? Such a batch owes its
+ * controller a question, so a caller holding the single pendingChoice slot for
+ * something else must let the batch wait rather than have it pay silently.
+ */
+export function hasPayableOptionalShield(ctx: Ctx, cardIds: readonly string[]): boolean {
+  for (const entry of activeEntries(ctx.draft)) {
+    if (entry?.replaces !== "die" || entry.condition?.type !== "pay-cost") {
+      continue;
+    }
+    const cost = entry.condition?.cost;
+    const cardId = cardIds.find((id) => entry.targetCardIds?.includes(id) === true);
+    if (cost === undefined || cardId === undefined) {
+      continue;
+    }
+    if (canPayCost(ctx.draft, entry.owner ?? controllerOf(ctx, cardId), cost)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function activeEntries(draft: RiftboundGameState): BoundEntry[] {
   return ((draft as { activeReplacements?: BoundEntry[] }).activeReplacements ?? []) as BoundEntry[];
 }

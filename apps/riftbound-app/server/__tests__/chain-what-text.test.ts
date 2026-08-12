@@ -137,3 +137,30 @@ describe("action-group accordion survives re-renders", () => {
     expect(A.expandedMoveGroups.has("exhaustRune")).toBe(false);
   });
 });
+
+describe("chain item text — conditional whose target sits on the node (rule 355.5)", () => {
+  const A = loadActions(fakeDocument());
+
+  // ven-037-166 Tomb-Raider Barbara: the enemy GEAR is named on the conditional
+  // node, so both branches are targetless and used to fall back to "a unit".
+  test("both branches name the node's card type, not the generic unit fallback", () => {
+    const eff = {
+      condition: { type: "target-empowered" },
+      else: { type: "kill" },
+      target: { controller: "enemy", type: "gear" },
+      then: { type: "disempower" },
+      type: "conditional",
+    };
+    expect(A.humanizeEffect(eff)).toBe("Disempower an enemy gear, otherwise Kill an enemy gear");
+  });
+
+  test("a branch with its own target keeps it", () => {
+    const eff = {
+      else: { target: { controller: "friendly", type: "unit" }, type: "kill" },
+      target: { controller: "enemy", type: "gear" },
+      then: { type: "disempower" },
+      type: "conditional",
+    };
+    expect(A.humanizeEffect(eff)).toBe("Disempower an enemy gear, otherwise Kill a friendly unit");
+  });
+});

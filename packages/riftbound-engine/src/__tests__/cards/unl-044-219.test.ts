@@ -26,6 +26,8 @@ import type { PickDecision } from "../../harness";
 import { loadDefaultCardPool, P1, P2, scenario } from "../../harness";
 
 const CARD = "unl-044-219";
+const PREMONITION = "sfd-087-221";
+const FILLER = "ogn-175-298";
 const SHIELDBEARER = "ogn-051-298"; // Unit · 3 · When you play me, stun a unit. (a triggered ABILITY on the chain)
 
 function bolt(name: string, energyCost = 1, powerCost: string[] = []) {
@@ -163,7 +165,7 @@ describe("Flurry of Feathers (unl-044-219)", () => {
       .resources(P1, { energy: 4, power: { calm: 2 } })
       .hand(P1, CARD, "fof")
       .hand(P2, bolt("Bolt A"), "boltA")
-      .hand(P2, bolt("Bolt B"), "boltB")
+      .hand(P2, { ...bolt("Bolt B"), abilities: [{ effect: { amount: 2, target: { type: "unit" }, type: "damage" }, timing: "reaction", type: "spell" }], rulesText: "[Reaction]\nDeal 2 to a unit.", timing: "reaction" }, "boltB")
       .build();
     await game.p1.cast("fof");
     await game.settle();
@@ -262,5 +264,31 @@ describe("Flurry of Feathers (unl-044-219)", () => {
         type: "spell",
       },
     ]);
+  });
+
+  test("with two spells on the chain, the counter mode asks WHICH spell to counter (rule 355.8)", async () => {
+    const game = await scenario()
+      .active(P2)
+      .resources(P2, { energy: 4, power: { mind: 6 } })
+      .deck(P2, [FILLER, FILLER, FILLER, FILLER, FILLER, FILLER], ["d1", "d2", "d3", "d4", "d5", "d6"])
+      .resources(P1, { energy: 4, power: { calm: 2 } })
+      .unit(P1, "base", { might: 5, name: "Victim" }, "victim")
+      .hand(P2, PREMONITION, "premA")
+      .hand(P2, PREMONITION, "premB")
+      .hand(P1, CARD, "fof")
+      .build();
+    await game.p2.cast("premA");
+    await game.p2.cast("premB");
+    await game.p2.passPriority();
+    await game.p1.cast("fof");
+    await game.p1.chooseMode(0);
+    const d = game.decision() as PickDecision;
+    expect(d).toMatchObject({ kind: "pick", seat: P1, semantics: "target" });
+    expect(d.options.map((o) => o.key).sort()).toEqual(["premA", "premB"]);
+    await game.p1.pick("premA");
+    expect(game.chain().find((i) => i.cardId === "fof")).toMatchObject({ targets: ["premA"] });
+    await game.settle();
+    expect(game.zoneOf("premA")).toBe("trash");
+    expect(game.p2.hand()).toHaveLength(3); // only premB drew
   });
 });

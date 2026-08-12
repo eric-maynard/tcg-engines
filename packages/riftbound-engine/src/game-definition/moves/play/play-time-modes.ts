@@ -12,6 +12,7 @@ import {
 } from "../../../abilities/effects/choice";
 import type { EffectContext, ExecutableEffect } from "../../../abilities/effect-executor";
 import { resolveTarget } from "../../../abilities/target-resolver";
+import { isLegalCounterTarget } from "../../../chain/counter-target";
 import { getDeflectSurcharge } from "./cost";
 import { surchargeFields, surchargedOptions } from "../prompt-cost";
 
@@ -80,6 +81,35 @@ export function collectChoiceNodes(effect: unknown, out: AnyEffect[] = []): AnyE
   return out;
 }
 
+/**
+ * rule 355.8 / 425.1 — the chain items a "Counter a spell" mode may legally name,
+ * keyed by card id (the countering item itself is never among them, 355.9.c).
+ */
+function counterModeOptions(effect: { target?: unknown }, ctx: EffectContext): string[] {
+  const items = (ctx.draft as { interaction?: { chain?: { items?: ChainItemLike[] } } }).interaction
+    ?.chain?.items;
+  if (!items) {
+    return [];
+  }
+  const out: string[] = [];
+  for (const item of items) {
+    if (
+      item?.cardId === undefined ||
+      out.includes(item.cardId) ||
+      !isLegalCounterTarget(effect, item, ctx.sourceCardId, {
+        controllerOf: (id) =>
+          ctx.cards.getCardController?.(id as never) ?? ctx.cards.getCardOwner(id as never),
+        playerId: ctx.playerId,
+        zoneOf: (id) => ctx.zones.getCardZone(id as never),
+      })
+    ) {
+      continue;
+    }
+    out.push(item.cardId);
+  }
+  return out;
+}
+
 /** The effect of mode `index` on a `choice` node. */
 function modeEffect(node: AnyEffect, index: number): ExecutableEffect | undefined {
   const options = node.options as { effect?: ExecutableEffect }[] | undefined;
@@ -91,7 +121,15 @@ function modeEffect(node: AnyEffect, index: number): ExecutableEffect | undefine
  * the mode names no single board object (players, tokens created, "all …").
  */
 function modeTargetOptions(node: AnyEffect, index: number, ctx: EffectContext): string[] {
-  const effect = modeEffect(node, index) as { target?: unknown } | undefined;
+  const effect = modeEffect(node, index) as { target?: unknown; type?: string } | undefined;
+  // rule 355.8 (unl-044-219 Flurry of Feathers) — a "Counter a spell" mode names a
+  // CHAIN ITEM, not a board object, so it carries no `target` descriptor. Offer the
+  // legal chain items the way play-spell's counter branch does; without this the
+  // mode locked in with no target and the handler silently countered the topmost
+  // spell for the caster.
+  if (effect?.type === "counter") {
+    return counterModeOptions(effect, ctx);
+  }
   const tgt = effect?.target as { type?: string; quantity?: unknown } | undefined;
   if (!tgt || typeof tgt !== "object") {
     return [];
