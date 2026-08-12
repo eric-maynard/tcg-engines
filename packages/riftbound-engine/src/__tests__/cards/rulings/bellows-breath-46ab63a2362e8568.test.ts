@@ -93,7 +93,7 @@ describe("Ruling 46ab63a2362e8568 — Vex shaves the whole cost of a repeated Be
   // leave [1] + 0 Power, Ezreal's optional-additional discount takes the Repeat's last Energy to zero — a FREE
   // repeated Bellows Breath. Actual: the engine floors the whole spell at [1] Energy and Ezreal shaves nothing
   // more, so 1 Energy is still charged.
-  test.failing("BUG: ruling 46ab63a2362e8568 — 2 Vex + Ezreal should make the repeated spell cost [0]; the engine still charges [1]", async () => {
+  test("ruling 46ab63a2362e8568 — 2 Vex + Ezreal make the repeated spell cost [0]", async () => {
     const game = await attackWith(2, true, WALL);
 
     expect(await spend(game, { repeat: 1, targets: "wall" })).toEqual({ energy: 0, power: 0 });

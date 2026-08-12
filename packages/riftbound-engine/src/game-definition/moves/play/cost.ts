@@ -2518,6 +2518,7 @@ export function getEffectiveSpellRepeatCost(
   playerId: string,
   cardId: string,
   board?: CostExtras["board"],
+  options?: { skipOptionalAdditionalFlex?: boolean },
 ): RepeatTiers | undefined {
   const intrinsic = getGlobalCardRegistry().getSpellRepeatCost(cardId) ?? [];
   const granted = board
@@ -2550,7 +2551,7 @@ export function getEffectiveSpellRepeatCost(
   // additional cost, and the payer chooses which half of the tier each
   // reduction shaves off. Resolve that choice against the pool so a tier that
   // could go either way is dropped from whichever resource is short.
-  const flex = board
+  const flex = board && options?.skipOptionalAdditionalFlex !== true
     ? computeOptionalAdditionalCostFlexReduction({ draft: state, ...board }, playerId)
     : 0;
   if (flex > 0) {
@@ -3920,6 +3921,24 @@ export function computePlayResourceCost(
   const repeatTiers =
     repeatN > 0 ? getEffectiveSpellRepeatCost(state, playerId, cardId, extras.board) : undefined;
   const repeatSurcharge = getRepeatEnergySurcharge(cardId, repeatN, repeatTiers);
+  // rule 356.4.e (ruling 46ab63a2362e8568) — "Optional additional costs you pay
+  // cost [1] or [rainbow] less" (sfd-149-221) is its OWN discount, so another
+  // discount's "to a minimum of [1]" may not swallow it. Price the [Repeat]
+  // tiers WITHOUT it, and subtract the Energy it shaves after the floored board
+  // reduction, exactly like the other unfloored discounts below.
+  const repeatFlexEnergy = Math.max(
+    0,
+    getRepeatEnergySurcharge(
+      cardId,
+      repeatN,
+      repeatN > 0
+        ? getEffectiveSpellRepeatCost(state, playerId, cardId, extras.board, {
+            skipOptionalAdditionalFlex: true,
+          })
+        : undefined,
+    ) - repeatSurcharge,
+  );
+  const repeatSurchargeBeforeFlex = repeatSurcharge + repeatFlexEnergy;
   const boardReduction = getBoardCostReduction(state, playerId, cardId, extras);
   // rule 356.3 — opponents' static cost increases, added after all discounts.
   const boardIncrease = getBoardCostIncrease(state, playerId, cardId, extras);
@@ -3941,11 +3960,18 @@ export function computePlayResourceCost(
   // discount eat an additional cost, and a discount's own minimum (356.4.e) is
   // measured against that total, not against the printed Energy alone.
   const increased =
-    Math.max(0, baseCost.energy + modifier) + boardIncrease.energy + runtimeIncrease + repeatSurcharge;
+    Math.max(0, baseCost.energy + modifier) +
+    boardIncrease.energy +
+    runtimeIncrease +
+    repeatSurchargeBeforeFlex;
   // rule 356.4.e: a discount's minimum binds only that discount, and the payer
   // orders discounts — floored board auras go first so unfloored ones aren't lost.
   const discounted =
-    applyStaticCostReduction(increased, boardReduction) - interactive - selfScaled - nextPlayEnergy;
+    applyStaticCostReduction(increased, boardReduction) -
+    interactive -
+    selfScaled -
+    nextPlayEnergy -
+    repeatFlexEnergy;
   const energy = Math.max(
     0,
     Math.max(0, discounted) +
@@ -4040,13 +4066,18 @@ export function computePlayResourceCost(
   // can lift the total back above zero, so the waiver never swallows them.
   // rule 820.1.c.1 (rule-id: sfd-080-221 × sfd-140-221) — an elected [Repeat]
   // is an ADDITIONAL cost of this play, so it survives the waiver too.
-  const waivedEnergy = additionalEnergy + boardIncrease.energy + runtimeIncrease + repeatSurcharge;
+  const waivedEnergy =
+    additionalEnergy + boardIncrease.energy + runtimeIncrease + repeatSurchargeBeforeFlex;
   // rule 356.4.e / 356.4.f — what the waiver left is still a Total Cost a
   // discount may eat, bounded by that discount's own minimum: a floor never
   // RAISES a total that the waiver already brought to 0.
   const waivedAfterDiscount = Math.max(
     0,
-    applyStaticCostReduction(waivedEnergy, boardReduction) - interactive - selfScaled - nextPlayEnergy,
+    applyStaticCostReduction(waivedEnergy, boardReduction) -
+      interactive -
+      selfScaled -
+      nextPlayEnergy -
+      repeatFlexEnergy,
   );
   return {
     any,
