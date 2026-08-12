@@ -275,8 +275,9 @@ function renderRuneStacks(runes, opts = {}) {
     // Rule 133.5.a.1: every rune must be individually clickable to exhaust,
     // so render all cards (no STACK_MAX cap) — the count label still shows the total.
     // [rule:ui-rune-row-stable] Fan order = pool order, never re-sorted by
-    // exhausted state: tapping a rune must not move any OTHER rune (offsets and
-    // z-index depend only on the index). The tapped card rotates inside its own
+    // exhausted state: tapping a rune must not move any OTHER rune (offsets depend
+    // only on the index; z-index on the index plus the card's own readiness band,
+    // see [rule:ui-rune-ready-stays-clickable] below). The tapped card rotates inside its own
     // slot (gameplay.css anchors the rotation to the slot's top strip), so an
     // exhausted rune mid-fan still shows its full-width strip and side wings.
     const visibleCards = cards;
@@ -301,12 +302,17 @@ function renderRuneStacks(runes, opts = {}) {
     // zone. With height alone the clamp applies when the row is squeezed.
     html += `<div class="rune-stack${compact ? " rune-stack--compact" : ""}" data-rune-domain="${esc(domain)}" style="height:${Math.round(stackHeight + LABEL_H)}px;">`;
     html += `<div class="rune-stack-label" style="color:${color};">${labelText}</div>`;
-    // [rule:ui-rune-ready-stays-clickable] Stacking follows the fan (later =
-    // lower on screen = on top). A tapped rune's rotated footprint starts at its
-    // own top edge, so it can never cover the visible strip of the rune before
-    // it; hover raises the pointed-at rune above all (CSS z-index, no movement).
+    // [rule:ui-rune-ready-stays-clickable] Stacking follows the fan (later = lower on
+    // screen = on top) WITHIN a readiness band, but every READY rune sits above every
+    // exhausted one — the two bands the stylesheet already documents (exhausted 10+i,
+    // ready 100+i). With one flat band, a tapped rune's 110px-tall rotated footprint
+    // over a 26px fan step buried the CENTRE of the ready rune above it — the point
+    // any centre-targeting click aims at — so that rune could not be exhausted at all
+    // (rule 133.5.a.1: every rune must be individually clickable). The rotated card is
+    // 154px wide against the ready card's 110px, so its side wings stay exposed either
+    // way and it keeps its own click target for [Recycle].
     visibleCards.forEach((c, i) => {
-      const zIndex = 10 + i;
+      const zIndex = (c.meta?.exhausted ? 10 : 100) + i;
       html += renderRuneCard(c, LABEL_H - 2 + Math.round(i * step), zIndex, color);
     });
     html += `</div>`;
@@ -364,4 +370,10 @@ function runePoolRoom(gridEl) {
   const cs = getComputedStyle(gridEl);
   const inner = gridEl.clientHeight - (parseFloat(cs.paddingTop) || 0) - (parseFloat(cs.paddingBottom) || 0);
   return inner > 60 ? inner : undefined;
+}
+
+// Sandbox-eval hook for the UI tests (same pattern as interactions.js): the browser
+// never defines `module`, so this is inert in the page.
+if (typeof module !== "undefined" && module && module.exports) {
+  module.exports = { renderRuneStacks, renderRuneCard };
 }

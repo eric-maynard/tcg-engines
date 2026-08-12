@@ -237,6 +237,9 @@ document.addEventListener("pointermove", (e) => {
 
   // Haven't crossed the drag threshold yet
   if (!dragState.isDragging) {
+    // Remember that the pointer really travelled: a parked gesture that crossed the
+    // threshold is a drag the player watched fail, not a click (see pointerup).
+    if (dist >= DRAG_THRESHOLD) dragState.moved = true;
     // A drag that already decided it cannot start stays parked so pointerup can
     // still treat the gesture as a click (see the noDrag branch below).
     if (dragState.noDrag) return;
@@ -496,6 +499,16 @@ document.addEventListener("pointerup", (e) => {
       beginTargetingOrPlay(targetingMoves, cardId);
     } else if (hideOnlyAfterDrop && typeof enterHideOnlySelected === "function") {
       enterHideOnlySelected(cardId, hideOnlyAfterDrop);
+    }
+  } else if (dragState.noDrag && dragState.moved &&
+             interaction.mode === "costPayment" && interaction.pendingCardId === cardId) {
+    // A gesture that travelled but could never start a drag is NOT a click: routing
+    // it to onCardClick() re-clicks the pending card, which cancels cost payment —
+    // so dragging the unaffordable card away tore down its own payment prompt with
+    // no ghost, no toast, nothing. DESIGN.md §Paying costs: never end a gesture in
+    // silence, and never take the prompt away without saying so.
+    if (typeof showToast === "function") {
+      showToast("Still can't pay for that — tap runes to pay, or press Cancel");
     }
   } else {
     // Was just a click (didn't cross drag threshold) — handle as card click
