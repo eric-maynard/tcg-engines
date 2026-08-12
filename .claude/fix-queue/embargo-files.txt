@@ -1,5 +1,5 @@
-coordinator,makechoices,anyadd	riftbound-engine/src/game-definition/moves/chain/resolve\.ts$|riftbound-engine/src/game-definition/moves/pending-choice\.ts$
-cleanup466	riftbound-engine/src/game-definition/moves/combat/resolve-full-combat\.ts$
-identity	riftbound-engine/src/operations/object-identity\.ts$
-makechoices	riftbound-engine/src/game-definition/moves/play/play-spell\.ts$
-makechoices,zeroenergy	riftbound-engine/src/harness/decision\.ts$
+# All package lanes (anyadd, makechoices, zeroenergy, cleanup466, identity,
+# multiplayer, privacy, trashtiming) completed 2026-08-12; their embargoes are
+# released. Add a line only while a lane is ACTIVELY editing a file, and remove
+# it when that lane reports done — a stale embargo silently blocks the queue
+# (it blocked the Piercing Light blind-benchmark fix after its owner finished).

@@ -103,6 +103,10 @@ for f in "${FILES[@]}"; do case "$f" in apps/riftbound-app/public/js/*.js|apps/r
 FAST=0; case "$LABEL" in fast-*) FAST=1;; esac; [ "${LAND_FAST:-0}" = 1 ] && FAST=1
 if [ "$FAST" = 1 ] && ! printf '%s\n' "${FILES[@]}" | grep -q '^packages/'; then out engine_tests "SKIPPED (fast lane: app-only patch)"; else
 # sharded engine suite: N parallel bun processes over a round-robin split of the test files (same log format, merged)
+if printf '%s\n' "${FILES[@]}" | grep -q '^packages/'; then
+  IMPOUT=$( cd "$WT" && timeout 120 bun -e 'import("./packages/riftbound-engine/src/harness/index.ts").then(()=>process.exit(0)).catch(e=>{console.log(String(e).split("\n")[0]);process.exit(1)})' 2>/dev/null ); IMPRC=$?
+  if [ "$IMPRC" != 0 ]; then out import_broken "${IMPOUT:-probe rc=$IMPRC} — this patch leaves the engine NON-IMPORTING (usually a symbol imported from a sibling file whose half was not included in the land); add the missing file(s) to your land list"; out committed false; exit 0; fi
+fi
 LOG=$(mktemp); SHARDS=${LAND_SHARDS:-6}; SD=$(mktemp -d)
 ( cd "$WT" && find packages/riftbound-engine/src/__tests__ -name '*.test.ts' | sort | awk -v n="$SHARDS" -v d="$SD" '{print "./" $0 > (d "/shard" (NR%n))}' )
 for sf in "$SD"/shard*; do ( cd "$WT" && timeout 900 bun test $(cat "$sf") >"$sf.log" 2>&1 || true ) & done; wait
