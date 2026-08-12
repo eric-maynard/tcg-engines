@@ -89,9 +89,11 @@ describe("Ruling 6e1e69d5ec52c9db — a Decree kill is credited to the Decree's 
     expect(offered).toBe(false);
     expect(game.state("shrine").isExhausted).toBe(false);
     expect(game.p2.hand()).toEqual([]);
-    // The stunned Sleeper dealt no combat damage, so the Raider is untouched and takes the battlefield.
-    expect(game.zoneOf("raider")).toBe("battlefield-bf1");
-    expect(game.gameState.battlefields.bf1?.controller).toBe(P2);
+    // The stunned Sleeper dealt no combat damage, so the Raider is untouched — but it was still
+    // present at the Combat Cleanup with a live Defender, so rule 466.1.a.2 step 3d recalled it
+    // before the Decree trigger resolved: No Result (466.3.d), and bf1 empties to Uncontrolled.
+    expect(game.zoneOf("raider")).toBe("base");
+    expect(game.gameState.battlefields.bf1?.controller).toBeNull();
     expect(game.violations()).toEqual([]);
   });
 });

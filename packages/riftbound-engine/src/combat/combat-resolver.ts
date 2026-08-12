@@ -394,6 +394,17 @@ export function planDamageAssignment(
   ) {
     hasChoice = totalDamage < order.reduce((sum, id) => sum + (need[id] ?? 0), 0);
   }
+  // rule 465.2.c.4 / 465.2.c.6 / 355.10.d.2 — the "never more than minimum
+  // lethal" cap only holds while some unit still lacks lethal. Once the damage
+  // covers every unit's need the SURPLUS may sit on any one of them ([Tank]
+  // included: its tier is satisfied the moment it is lethal), so with two or
+  // more recipients {Galio 7, Bird 1} and {Galio 6, Bird 2} are both legal and
+  // the assigning player must be asked — a genuine choice is never programmatic.
+  // Excess-damage counters (ogn-034-298) read the answer, so it is not cosmetic.
+  const totalNeed = order.reduce((sum, id) => sum + (need[id] ?? 0), 0);
+  if (!hasChoice && order.length > 1 && totalDamage > totalNeed) {
+    hasChoice = true;
+  }
 
   return {
     defaultAllocation: distributeDamage(units, totalDamage, role, opts),

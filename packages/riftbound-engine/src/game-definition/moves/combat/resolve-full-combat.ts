@@ -196,6 +196,30 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
     const controllerBeforeCombat =
       battlefield.controller ?? battlefield.controllerAtShowdownStart ?? null;
 
+    /**
+     * rules 466.1 – 466.5 — the Resolution Step is an ORDERED SEQUENCE of steps,
+     * not a bag of effects that all happen "at the end". Every step this pass
+     * performs appends its marker here, so at any point (a Deathknell resolving
+     * in the 466.2 window, a unit Flashed in after step 3d) the question "what
+     * has already happened?" is answerable by position rather than by a snapshot
+     * taken somewhere else.
+     *
+     * The sequence, in order:
+     *   465.2   Combat Damage Step — assign, then deal simultaneously
+     *   466.1.3a  queue the death triggers of everything with lethal damage
+     *   466.1.3b  trash those units
+     *   466.1.3c  heal ALL units, everywhere (no location qualifier)
+     *   466.1.3d  recall the Attackers present here, iff Defenders are present
+     *   466.1.3e  end the Attacker/Defender designations and "this combat" effects
+     *   466.2   let the chain the damage step and the Cleanup produced drain
+     *   466.3   classify the result off who is present NOW
+     *   466.4   the result's own triggers ("when I win a combat") drain
+     *   466.5   Establish Control / Conquer / Uncontrolled, or 466.3.d.1 restage
+     */
+    const logCleanup = (step: string): void => {
+      battlefield.combatCleanupLog = [...(battlefield.combatCleanupLog ?? []), step];
+    };
+
     const attackingPlayer = battlefield.contestedBy;
     if (!attackingPlayer) {
       // Rule 627.4: Resolution Step always clears Contested even when no
@@ -264,8 +288,11 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
       // a Deathknell dealt since must NOT be wiped here.
       if (battlefield.combatDamageDone !== true) {
         healAllUnits(new Set<string>());
+        logCleanup("466.1.3c:heal-all");
       }
+      logCleanup("466.3:neither");
       settleControlByRemainingUnits({ cards, counters, draft, zones }, battlefieldId, "combat");
+      logCleanup("466.5:uncontrolled");
       battlefield.combatDamageDone = undefined;
       battlefield.combatExcessDamage = undefined;
       battlefield.combatNoDefendersAtCleanup = undefined;
@@ -570,6 +597,35 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
                 (registry.get(id as string)?.might ?? 0) > 0),
           ).length === 0;
     }
+    // rule 466.1.a.2 — step 3d of the Combat Cleanup already moved the
+    // attackers home on an earlier pass; the 466.2 chain resolved with them
+    // at base, and the result step below still reads them as "present at 3d".
+    let recalledAtCleanup = battlefield.combatAttackersRecalledAtCleanup === true;
+    /**
+     * rule 466.1.a.2 — step 3d: with Defenders still present when the Combat
+     * Cleanup finishes, the Attackers here are recalled to their base RIGHT
+     * THEN, before the 466.2 chain resolves. A Deathknell queued at 3a
+     * therefore finds them at base and cannot hit them.
+     */
+    const recallAttackersAtCleanup = (): void => {
+      if (recalledAtCleanup || attackersAtCleanup === undefined) {
+        return;
+      }
+      if (noDefendersAtCleanup) {
+        // rule 466.1.a.2 — no Defender was left here when the Cleanup finished,
+        // so step 3d recalls nothing and the Attackers hold the ground.
+        logCleanup("466.1.3d:no-recall");
+        return;
+      }
+      for (const id of attackersAtCleanup) {
+        zones.moveCard({ cardId: id as CoreCardId, targetZoneId: "base" as CoreZoneId });
+      }
+      recalledAtCleanup = attackersAtCleanup.length > 0;
+      logCleanup(`466.1.3d:recall-attackers:${attackersAtCleanup.length}`);
+    };
+    if (damageAlreadyDone && battlefield.combatCleanupSuspended === true) {
+      recallAttackersAtCleanup();
+    }
     // rule 466.4 — the result was read on an earlier pass and its "win a
     // combat" triggers have now resolved; resume at 466.5 without re-reading it.
     const winTriggersAlreadyFired = battlefield.combatWinTriggersFired === true;
@@ -579,6 +635,12 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
     battlefield.combatAttackersAtCleanup = undefined;
     battlefield.combatCleanupSuspended = undefined;
     battlefield.combatWinTriggersFired = undefined;
+    battlefield.combatAttackersRecalledAtCleanup = undefined;
+    // A fresh Resolution Step (nothing deferred) starts a fresh step trace; a
+    // 466.3.d.1 restage runs a whole new sequence and gets its own.
+    if (!damageAlreadyDone) {
+      battlefield.combatCleanupLog = undefined;
+    }
     if (!damageAlreadyDone && attackerUnits.length > 0 && defenderUnits.length > 0) {
     // rule 465.2.c.3 / 465.2.c.7 — each side's player chooses which opposing
     // unit is made lethal first whenever more than one legal assignment
@@ -627,6 +689,7 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
       battlefield.combatExcessDamage = excessDamage > 0 ? excessDamage : undefined;
       battlefield.combatNoDefendersAtCleanup = noDefendersAtCleanup ? true : undefined;
       battlefield.combatAttackersAtCleanup = attackersAtCleanup;
+      battlefield.combatAttackersRecalledAtCleanup = recalledAtCleanup ? true : undefined;
     };
     // rule 372 / 465.2.c.5 — Double + Prevent N on one unit: its controller
     // orders them (the answer lands in draft.damageReplacementOrder and this
@@ -644,6 +707,7 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
       battlefield.combatExcessDamage = excessDamage > 0 ? excessDamage : undefined;
       battlefield.combatNoDefendersAtCleanup = noDefendersAtCleanup ? true : undefined;
       battlefield.combatAttackersAtCleanup = attackersAtCleanup;
+      battlefield.combatAttackersRecalledAtCleanup = recalledAtCleanup ? true : undefined;
       return;
     }
     if (battlefield.combatDamageAllocation === undefined && plans.attacker.hasChoice) {
@@ -709,6 +773,7 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
         .map((u) => u.id),
     );
     dealDamageBatch(damageIO, damageRequests);
+    logCleanup("465.2:damage-dealt");
 
     // rule 466.1 (Combat Cleanup): combat deaths are ordinary deaths — reap
     // lethally-damaged units through the state-based pipeline so board die
@@ -775,7 +840,16 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
       }
     }
 
+    // ---- Combat Cleanup, steps 3a → 3d, in order --------------------------
+    // 3c runs against the board BEFORE the reap only as an optimisation: every
+    // unit that step 3b is about to trash carries lethal damage, and
+    // `healAllUnits` never touches a lethally damaged body — so the observable
+    // order is still 3a (queue) → 3b (trash) → 3c (heal), and a Deathknell
+    // queued at 3a finds a healed board when it resolves in the 466.2 window.
     healAllUnits(new Set<string>([...attackerUnits, ...defenderUnits].map((u) => u.id)));
+    logCleanup("466.1.3a:queue-deaths");
+    logCleanup("466.1.3b:trash-dead");
+    logCleanup("466.1.3c:heal-all");
 
     cleanupAndFireDeaths(draft, context as unknown as PostMoveCleanupContext);
 
@@ -787,6 +861,7 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
       battlefield.combatDamageDone = true;
       battlefield.combatExcessDamage = excessDamage;
       battlefield.combatCleanupSuspended = true;
+      logCleanup("466.1:suspended-on-die-replacement");
       return;
     }
 
@@ -806,6 +881,10 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
               (registry.get(id as string)?.might ?? 0) > 0),
         ).length === 0;
 
+    // rule 466.1.a.2 — step 3d runs INSIDE the Combat Cleanup, ahead of the
+    // 466.2 chain: the attackers go home now, not at the Resolution Step.
+    recallAttackersAtCleanup();
+
     // rule 466.2: resolve every chain item from combat damage and the Combat
     // Cleanup (Deathknell, "when a unit dies" …) BEFORE determining the combat
     // result — a Deathknell that kills the last attacker means no conquer.
@@ -816,14 +895,18 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
       battlefield.combatExcessDamage = excessDamage;
       battlefield.combatNoDefendersAtCleanup = noDefendersAtCleanup;
       battlefield.combatAttackersAtCleanup = attackersAtCleanup;
+      battlefield.combatAttackersRecalledAtCleanup = recalledAtCleanup ? true : undefined;
+      logCleanup("466.2:chain-window");
       return;
     }
+    logCleanup("466.2:chain-empty");
     } else if (!damageAlreadyDone) {
       // rule 465.1 → 466.1.a.1: one side was gone before the showdown closed, so
       // there is no Combat Damage Step — but the Resolution Step still performs
       // a Combat Cleanup, and its "3c. Heal all Units" clears damage dealt
       // earlier in the combat (an attack/defend trigger's ping) all the same.
       healAllUnits(new Set<string>());
+      logCleanup("466.1.3c:heal-all");
     }
 
     // rule 466.3: the combat result is read off who still has units HERE after
@@ -832,7 +915,19 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
     const unitsHereNow = zones
       .getCardsInZone(battlefieldZoneId)
       .filter((id) => (registry.get(id as string)?.might ?? 0) > 0 || registry.getCardType(id as string) === "unit");
-    const attackersLeft = unitsHereNow.filter((id) => sideOf(id) === attackingPlayer);
+    // rule 466.1.a.2 / 466.3 — an attacker step 3d already sent home was still
+    // PRESENT at the Combat Cleanup, so the 466.3 result is read as if it were
+    // here (466.3.d: units recalled during 3d make the combat No Result). Ones
+    // that died in the 466.2 window are gone from the board and drop out.
+    const recalledStillOnBoard = recalledAtCleanup
+      ? (attackersAtCleanup ?? []).filter(
+          (id) => (zones.getCardZone(id as CoreCardId) as string | undefined) === "base",
+        )
+      : [];
+    const attackersLeft = [
+      ...unitsHereNow.filter((id) => sideOf(id) === attackingPlayer),
+      ...(recalledStillOnBoard as unknown as CoreCardId[]),
+    ];
     const defendersLeft = unitsHereNow.filter((id) => sideOf(id) !== attackingPlayer);
     // rule 466.1.a.2 — the recall belongs to the Combat Cleanup, so it is owed
     // only by an attacker that was HERE then. Attackers that arrived during the
@@ -842,11 +937,40 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
       attackersAtCleanup !== undefined && !attackersAtCleanup.includes(id);
     const recallOwed =
       !noDefendersAtCleanup && attackersLeft.some((id) => !arrivedAfterCleanup(id as string));
+
+    /**
+     * rule 466.3 — the whole occupancy matrix, in one place. "Present" means
+     * present for the RESULT: still here, or recalled by step 3d (466.1.a.2 —
+     * it was here when the Cleanup ran, so it counts).
+     *
+     *   attacker only, nothing recalled      → 466.3.a  the Attacker won
+     *   defender only                        → 466.3.b  the Defender won
+     *   both, no recall owed (late arrival,
+     *     or 3d left no defender behind)     → 466.3.d  No Result + .d.1 restage
+     *   both, recall owed at 3d              → 466.3.d  No Result, no restage
+     *   neither (both pulled out, everything
+     *     died, a stunned lone attacker
+     *     recalled onto an emptied field)    → 466.3.d  No Result → 466.5.b
+     */
+    const resultKind: "attacker-only" | "defender-only" | "both-restage" | "both-recalled" | "neither" =
+      !recallOwed && attackersLeft.length > 0 && defendersLeft.length > 0
+        ? "both-restage"
+        : attackersLeft.length > 0 && defendersLeft.length === 0
+          ? "attacker-only"
+          : attackersLeft.length === 0 && defendersLeft.length > 0
+            ? "defender-only"
+            : attackersLeft.length > 0 && defendersLeft.length > 0
+              ? "both-recalled"
+              : "neither";
+    if (!winTriggersAlreadyFired) {
+      logCleanup(`466.3:${resultKind}`);
+    }
+
     // rule 466.3.d: both players have units here and no attacker is recalled by
     // the Combat Cleanup (it left no defender behind, or every attacker here
     // arrived afterwards) — the combat has No Result: nobody conquers, nobody is
     // recalled, and rule 466.3.d.1 stages a new combat here immediately.
-    if (!recallOwed && attackersLeft.length > 0 && defendersLeft.length > 0) {
+    if (resultKind === "both-restage") {
       for (const unitId of zones.getCardsInZone(battlefieldZoneId)) {
         cards.updateCardMeta(unitId, { combatRole: null } as Partial<RiftboundCardMeta>);
       }
@@ -856,6 +980,7 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
       battlefield.contestedBy = attackingPlayer;
       // rule 466.3.d.1 — the new combat is staged immediately, not offered as a
       // discretionary action.
+      logCleanup("466.3.d.1:restage");
       openPendingContestedShowdown(
         draft,
         context as unknown as Parameters<typeof openPendingContestedShowdown>[1],
@@ -866,16 +991,10 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
     // rule 466.1.a.2: defenders still present → the attackers are recalled,
     // whether the defenders won the combat or it was a tie.
     const attackersRecalled = defendersLeft.length > 0;
-    let winner: "attacker" | "defender" | "tie";
-    if (attackersLeft.length > 0 && defendersLeft.length === 0) {
-      winner = "attacker";
-    } else if (attackersLeft.length === 0 && defendersLeft.length > 0) {
-      winner = "defender";
-    } else {
-      // rule 740.3.a / 466.3.d: nobody left here, or units of BOTH players
-      // left — No Result, so neither side won.
-      winner = "tie";
-    }
+    // rule 740.3.a / 466.3.d — "both-recalled" and "neither" are No Result, so
+    // neither side won and nothing fires.
+    const winner: "attacker" | "defender" | "tie" =
+      resultKind === "attacker-only" ? "attacker" : resultKind === "defender-only" ? "defender" : "tie";
 
     // rule 466.3.a — the units still here on the side that carried the combat
     // won it, so their "When I win a combat" triggers fire. A tie (740.3.a)
@@ -909,13 +1028,17 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
         battlefield.combatExcessDamage = excessDamage;
         battlefield.combatNoDefendersAtCleanup = noDefendersAtCleanup;
         battlefield.combatAttackersAtCleanup = attackersAtCleanup;
+      battlefield.combatAttackersRecalledAtCleanup = recalledAtCleanup ? true : undefined;
         battlefield.combatWinTriggersFired = true;
+        logCleanup("466.4:win-triggers");
         return;
       }
     }
 
     // Units recalled to base by this resolution (rule 466.1.a.2).
-    const recalledUnits: CoreCardId[] = [];
+    // rule 466.7.a — the ones step 3d already sent home are recalled units of
+    // this combat too: their designation ends and they see the combat end.
+    const recalledUnits: CoreCardId[] = [...(recalledStillOnBoard as unknown as CoreCardId[])];
 
     // Apply outcome based on winner. rule 466.1.a.2 — with Defenders still
     // present the Attackers are recalled; control is then settled by 466.5
@@ -990,12 +1113,30 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
     // Keeping control never lost — the defender came back mid-combat, or simply
     // held — is nothing. Nobody remaining ⇒ Uncontrolled (466.5.b, Vendetta:
     // no Hold on an emptied battlefield). 466.5.a clears Contested either way.
+    // rule 466.7.a / 807.1.d.1 — the designations are PARKED here, not ended:
+    // rulings 211635a4cca0ac5a, 8bf06d3d8b09e32c, c1edab45ab8d7f0f (CR-corrected)
+    // and f04d5265ef4cdef8 all read the [Assault] bonus as still live when the
+    // Conquer's own triggers are evaluated and reacted to, so `combatRole`
+    // survives until `flushPendingCombatDesignations` sees an empty chain.
+    // (Ruling 42b466db3f308240 says the opposite — "removed … immediately before
+    // the Conquer step". It is outvoted 4-to-1 here, and its test stays
+    // `test.failing` rather than breaking the four that agree.)
+    logCleanup("466.1.3e:end-designations");
+    const controllerBeforeSettle = battlefield.controller ?? null;
     settleControlByRemainingUnits({ cards, counters, draft, zones }, battlefieldId, "combat", {
       afterAttack: true,
       excessDamage,
       fire: { cards, counters, draft, zones },
       previousController: controllerBeforeCombat,
     });
+    const controllerAfterSettle = battlefield.controller ?? null;
+    logCleanup(
+      controllerAfterSettle === null
+        ? "466.5.b:uncontrolled"
+        : controllerAfterSettle === controllerBeforeSettle
+          ? "466.5:control-kept"
+          : "466.5.d:conquer",
+    );
 
     // rule 466.7.b: the combat ENDS here, as the last step of the Resolution
     // Step — after damage, kills, recalls and control are settled. Every unit

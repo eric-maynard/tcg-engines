@@ -65,8 +65,15 @@ describe("Ruling 000f1dd68cfb26c7 — flip Zhonya's during the showdown; with si
     expect(game.p2.legal().map((o) => o.verb)).not.toContain("cast");
     expect(game.p1.legal().map((o) => o.verb)).toContain("resolveCombat");
     // Run the combat: 8 into 2+2 — both defenders die, Zhonya's never entered play, Brute conquers.
-    await game.p1.choose(game.p1.legal().find((o) => o.verb === "resolveCombat")!.key);
-    await game.settle();
+    // 465.2.c.4 — 8 into 2 + 2 leaves 4 over once both are lethal, so P1 places the surplus.
+    for (let i = 0; i < 4; i++) {
+      const step = game.p1.legal().find((o) => o.verb === "resolveCombat");
+      if (step === undefined) {
+        break;
+      }
+      await game.p1.choose(step.key);
+      await game.settle();
+    }
     expect(game.zoneOf("a")).toBe("trash");
     expect(game.zoneOf("b")).toBe("trash");
     expect(game.zoneOf("zh")).toBe("trash"); // orphaned face-down card at a lost battlefield

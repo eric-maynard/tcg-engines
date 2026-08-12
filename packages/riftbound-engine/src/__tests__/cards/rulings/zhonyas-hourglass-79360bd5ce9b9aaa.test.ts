@@ -102,10 +102,12 @@ describe("Ruling 79360bd5ce9b9aaa — a Zhonya's flipped at bf1 saves units dyin
     expect(game.decision()).toMatchObject({ context: "showdown", kind: "action", seat: P2 });
     await game.p2.reveal("zh");
     expect(game.zoneOf("zh")).toBe("base");
-    game.script(P1, [(d) => (d.kind === "distribute" ? { allocation: { calf: 4, yak: 4 }, kind: "distribute" } : undefined)]);
     // rule 347.1.b — P2's Focus action closing its chain passes Focus back to P1, so P1 acts first again.
     await game.p1.passFocus();
     await game.p2.passFocus();
+    // 465.2.c.4 / 355.10.d.2 — 8 covers Yak (4) and Calf (2) with 2 to spare, so P1 places the
+    // surplus; {calf 4, yak 4} kills both simultaneously either way.
+    await game.p1.distribute({ calf: 4, yak: 4 });
     if (game.decision()?.kind === "action") {
       await game.settle();
     }

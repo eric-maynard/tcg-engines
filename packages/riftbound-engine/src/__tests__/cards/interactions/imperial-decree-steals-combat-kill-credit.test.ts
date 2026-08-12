@@ -18,7 +18,8 @@
  * with a single attacker A. In the showdown P1 casts Imperial Decree.
  *  4-Might A: 4 < 5 is not lethal → the Cleanup kills nothing; D took damage → Decree's delayed trigger kills D.
  *    Responsible: Decree's ability + the Decree spell, controller P1. A / P2 are NOT attributed → P2's Shrine does
- *    NOT trigger. D → P1's trash; A survives (D dealt 0) and P2 conquers bf1. Because a P1 spell is attributed,
+ *    NOT trigger. D → P1's trash; A survives (D dealt 0) but step 3d of the Combat Cleanup already recalled it
+ *    (466.1.a.2 — D was still present), so the combat is No Result and bf1 empties to Uncontrolled. Because a P1 spell is attributed,
  *    an Immortal Phoenix in P1's trash WOULD trigger ("you kill a unit with a spell").
  *  5-Might A (contrast): 5 ≥ 5 lethal → D dies in the Combat Cleanup, killedBy = A / P2 → Shrine triggers (D was
  *    stunned + enemy): P2 may exhaust it and draw 1. Decree's trigger still fires (D took damage) but finds D gone
@@ -134,7 +135,9 @@ describe("4-Might attacker: non-lethal combat damage, the Decree trigger kills D
     await game.p2.passFocus();
     await game.p1.passFocus(); // both pass Focus → combat damage step
     expect(game.zoneOf("d")).toBe("battlefield-bf1"); // survived the Combat Cleanup
-    expect(game.zoneOf("a")).toBe("battlefield-bf1");
+    // rule 466.1.a.2 — D was still present when the Combat Cleanup ran, so its step 3d
+    // recalled A to base BEFORE the 466.2 chain (the Decree trigger) resolves.
+    expect(game.zoneOf("a")).toBe("base");
     expect(game.state("a").damage).toBe(0); // 423.1.b
     expect(game.chain()).toEqual([expect.objectContaining({ cardId: "decree", controller: P1, triggered: true })]);
   });
@@ -151,15 +154,17 @@ describe("4-Might attacker: non-lethal combat damage, the Decree trigger kills D
     expect(game.p2.hand()).toEqual([]);
   });
 
-  test("A survives with no defender left → P2 conquers bf1 and scores 1; back to P2's open main phase with no violations", async () => {
+  // rule 466.1.a.2 / 466.3.d — A was recalled by step 3d (D was still there), so the combat is
+  // No Result: A conquers nothing, and D's later Decree death leaves bf1 empty (466.5.b).
+  test("A was recalled at 3d and D then dies to the Decree → nobody is left at bf1, so it goes Uncontrolled and nobody scores; back to P2's open main phase with no violations", async () => {
     const game = await board(4).build();
     await stunD(game);
     await attackAndDecree(game);
     await finish(game);
-    expect(game.zoneOf("a")).toBe("battlefield-bf1");
-    expect(game.gameState.battlefields.bf1?.controller).toBe(P2);
+    expect(game.zoneOf("a")).toBe("base");
+    expect(game.gameState.battlefields.bf1?.controller).toBeNull();
     expect(game.gameState.battlefields.bf1?.contested).toBe(false);
-    expect(game.p2.points()).toBe(1);
+    expect(game.p2.points()).toBe(0);
     expect(game.decision()).toMatchObject({ context: "main", kind: "action", seat: P2 });
     expect(game.violations()).toEqual([]);
   });

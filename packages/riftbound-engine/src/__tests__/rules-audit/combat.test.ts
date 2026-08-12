@@ -625,6 +625,16 @@ describe("Rule 627.2: If both sides still have units, attackers are recalled", (
     // Defender total = 10 → distributed: 1 lethal to atk-small-a, 1 lethal to atk-small-b
     // -> all attackers dead, defender survives → defender wins.
     applyMove(engine, "resolveFullCombat", { battlefieldId: "bf-1" });
+    // rule 465.2.c.4 / 355.10.d.2 — the defender's 10 covers both 1-Might attackers with 8 left
+    // over, and once everything is lethal that surplus may sit on either of them: a real choice,
+    // so P2 is asked before any damage is written. Answer it and resume the Resolution Step.
+    if (getState(engine).pendingChoice !== undefined) {
+      applyMove(engine, "resolvePendingChoice", {
+        allocation: { "atk-small-a": 9, "atk-small-b": 1 },
+        playerId: P2,
+      });
+      applyMove(engine, "resolveFullCombat", { battlefieldId: "bf-1" });
+    }
 
     // Defender still alive on battlefield
     expect(getCardsInZone(engine, "battlefield-bf-1", P2)).toContain("def-huge");

@@ -48,12 +48,19 @@ describe("Dune Surfer (ven-004-166)", () => {
     expect(poor.p1.can("play", "surfer")).toBe(false);
   });
 
-  test("baseline (no Surfer, 815.1.c.2): 6 attacking Might into Wall (5, Tank) + Small (2) is FORCED to {wall:5, small:1} — no prompt; Wall dies, Small holds bf1", async () => {
+  test("baseline (no Surfer, 815.1.c.2): P1's 6 attacking Might into Wall (5, Tank) + Small (2) is FORCED to {wall:5, small:1} — P1 is not asked; Wall dies, Small holds bf1", async () => {
     const game = await assault(false).build();
     await game.p1.move(["surfer", "pal"], "bf1");
     await game.settle();
     await game.p1.choose("resolveFullCombat:bf1");
-    expect(game.decision()?.kind).not.toBe("distribute"); // single legal line → auto-assigned
+    // 6 cannot make both lethal (5 + 2), and [Tank] pins the order, so P1's line is the only one.
+    // P2's return is a different question: its 7 covers both 3-Might attackers with 1 to spare, and
+    // that spare point may sit on either (465.2.c.4 / 355.10.d.2), so P2 IS asked.
+    expect(game.decision()).toMatchObject({ kind: "distribute", seat: P2 });
+    await game.p2.distribute({ pal: 3, surfer: 4 });
+    if (game.p1.can("resolveFullCombat:bf1")) {
+      await game.p1.choose("resolveFullCombat:bf1");
+    }
     await game.settle();
     expect(game.zoneOf("wall")).toBe("trash");
     expect(game.zoneOf("small")).toBe("battlefield-bf1");
@@ -79,8 +86,9 @@ describe("Dune Surfer (ven-004-166)", () => {
     if (game.decision()?.kind === "distribute") {
       await game.p2.distribute({ pal: 3, surfer: 4 });
     }
-    if (game.p1.can("resolveFullCombat:bf1")) {
+    for (let i = 0; i < 3 && game.p1.can("resolveFullCombat:bf1"); i++) {
       await game.p1.choose("resolveFullCombat:bf1");
+      await game.settle();
     }
     await game.settle();
     expect(game.zoneOf("small")).toBe("trash");

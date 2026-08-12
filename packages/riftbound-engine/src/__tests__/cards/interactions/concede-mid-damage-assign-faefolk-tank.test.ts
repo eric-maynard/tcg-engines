@@ -140,8 +140,11 @@ describe("Concession during the Combat Damage Step — Tasty Faefolk into Sunlit
     const p2Hand = game.p2.hand();
     await game.p1.move("fae", "bf2");
     await game.p1.passFocus();
-    await game.p2.passFocus(); // no distribute prompt: the assignment is forced
-    expect(game.decision()?.kind).not.toBe("distribute");
+    await game.p2.passFocus();
+    // 465.2.c.6 fixes the order ([Tank] Guardian first, lethal 4), and 465.2.c.4 frees the 6th
+    // point once the Sentry's 1 is covered — so P1 is asked where that last point lands.
+    expect(game.decision()).toMatchObject({ kind: "distribute", seat: P1 });
+    await game.p1.distribute({ guardian: 4, sentry: 2 });
     expect(game.zoneOf("guardian")).toBe("trash");
     expect(game.zoneOf("sentry")).toBe("trash");
     const settled = await game.settle();

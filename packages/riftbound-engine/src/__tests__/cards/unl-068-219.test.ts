@@ -91,7 +91,10 @@ describe("Spectral Centaur (unl-068-219)", () => {
       .build();
     await game.p1.move(["a1", "a2"], "bf1");
     await game.p1.passFocus();
-    await game.p2.passFocus(); // combat damage: both 1-Might attackers die
+    await game.p2.passFocus();
+    // 465.2.c.4 / 355.10.d.2 — the Wall's 4 covers both 1-Might attackers with 2 to spare, and once
+    // every unit is lethal the surplus may sit on either of them, so P2 is asked where it goes.
+    await game.p2.distribute({ a1: 3, a2: 1 }); // combat damage: both 1-Might attackers die
     expect(game.zoneOf("a1")).toBe("trash");
     expect(game.zoneOf("a2")).toBe("trash");
     expect(game.chain().filter((c) => c.cardId === "cent" && c.triggered)).toHaveLength(2);

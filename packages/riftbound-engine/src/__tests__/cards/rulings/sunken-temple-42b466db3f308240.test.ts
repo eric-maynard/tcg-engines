@@ -65,10 +65,14 @@ describe("Ruling 42b466db3f308240 — [Assault] never makes the conqueror [Might
     expect(game.p1.hand()).toHaveLength(hand + 1);
   });
 
-  // The engine keeps the Attacker designation (and therefore [Assault]) alive while the conquer trigger is
-  // evaluated, so it OFFERS the Temple's pay-[1]-draw-1 for an Assault-inflated 5 Might. The ruling says the
-  // designations are stripped in the Combat Cleanup, before the Conquer step, so nothing should be Mighty.
-  test.failing("BUG: ruling 42b466db3f308240 — after a real combat the engine still reads the Assault bonus (5) at the Conquer and offers Sunken Temple's draw", async () => {
+  // This ruling's LAST paragraph ("the Assault bonus and Attacker designation are removed during the Combat
+  // Cleanup phase, immediately before the Conquer step") is contradicted by four other rulings the engine
+  // already implements: 211635a4cca0ac5a (Assault lasts until Combat Cleanup, AFTER all chain interactions),
+  // 8bf06d3d8b09e32c and f04d5265ef4cdef8 (Sunken Temple DOES see an Assault-only-Mighty conqueror) and
+  // c1edab45ab8d7f0f (explicitly CR-corrected to the same answer). The engine follows the four; making this
+  // one pass breaks all of them, so it stays marked failing until a judge settles the conflict. The rest of
+  // the ruling — no Attacker designation, and therefore no Assault, on a walk-in — is covered above and green.
+  test.failing("CONFLICT: ruling 42b466db3f308240 — after a real combat the engine still reads the Assault bonus (5) at the Conquer and offers Sunken Temple's draw", async () => {
     const game = await scenario()
       .resources(P1, { energy: 1 })
       .battlefield("temple", { controller: P2, def: SUNKEN_TEMPLE, inert: false, owner: P2 })

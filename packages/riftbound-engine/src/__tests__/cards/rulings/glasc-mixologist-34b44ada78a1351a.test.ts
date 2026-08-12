@@ -42,6 +42,9 @@ async function bothDie(): Promise<Game> {
   await game.p2.move("titan", "bf1");
   await game.p2.passFocus();
   await game.p1.passFocus();
+  // 465.2.c.4 / 355.10.d.2 — 12 covers both 5-Might Mixologists with 2 to spare, and once every
+  // unit is lethal that surplus may pile onto either of them, so P2 is asked where it goes.
+  await game.p2.distribute({ glascA: 7, glascB: 5 });
   expect(game.zoneOf("glascA")).toBe("trash");
   expect(game.zoneOf("glascB")).toBe("trash");
   expect(game.zoneOf("karthus")).toBe("trash"); // NOT on the board at the moment of death

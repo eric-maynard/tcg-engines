@@ -52,11 +52,14 @@ async function attackAndPass(wallMight: number): Promise<Game> {
 }
 
 describe("Ruling 03f6a3b625bedec1 — the defender must assign lethal unit-by-unit; it can't dump everything on one attacker", () => {
-  test("6-Might Wall vs Mourner (2) + Bruiser (3): 6 ≥ 2+3 covers lethal on BOTH, so P2 gets no say at all — the assignment is forced, both attackers die and the Deathknell P2 wanted to dodge fires", async () => {
+  test("6-Might Wall vs Mourner (2) + Bruiser (3): 6 ≥ 2+3 covers lethal on BOTH — P2 only gets to say WHERE the spare point lands (the ruling's 'only the LAST unit in the chosen order may take excess'), and both attackers die either way, so the Deathknell P2 wanted to dodge fires", async () => {
     const game = await attackAndPass(6);
     const handBefore = game.p1.hand().length;
-    // No distribute prompt for P2: with lethal reachable on every attacker there is nothing to choose (465.2.c.3–4).
-    expect(game.decision()?.kind).not.toBe("distribute");
+    // 2 + 3 = 5 of the 6 is forced; the 6th point may only pile onto whichever unit P2 served last,
+    // which is a genuine choice between {mourner 3, bruiser 3} and {mourner 2, bruiser 4}
+    // (465.2.c.3 / 465.2.c.4 / 355.10.d.2). Neither line spares anybody.
+    expect(game.decision()).toMatchObject({ kind: "distribute", seat: P2, total: 6 });
+    expect((await game.p2.try((p) => p.distribute({ bruiser: 3, mourner: 3 }))).ok).toBe(true);
     await game.settle();
     expect(game.zoneOf("mourner")).toBe("trash");
     expect(game.zoneOf("bruiser")).toBe("trash");

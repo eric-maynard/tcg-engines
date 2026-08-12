@@ -136,6 +136,7 @@ export interface RiftboundCardMeta {
    */
   attachedOnTurn?: number;
 
+
   /** Card IDs of equipment attached to this unit (unit only) */
   equippedWith?: CardId[];
 
@@ -445,8 +446,25 @@ export interface BattlefieldState {
    * presence alongside a defender makes the result a No Result (466.3.d).
    */
   combatAttackersAtCleanup?: readonly string[];
+  /**
+   * rule 466.1.a.2 — step 3d of the Combat Cleanup has already moved those
+   * attackers to base, ahead of the 466.2 chain; the Resolution Step must not
+   * recall them twice, and still reads them as present for the 466.3 result.
+   */
+  combatAttackersRecalledAtCleanup?: boolean;
   /** rules 371.2/372/373 — the Combat Cleanup parked a die-replacement prompt; the result step re-reads the board on re-run. */
   combatCleanupSuspended?: boolean;
+
+  /**
+   * rule 466.1 – 466.5 — the ordered trace of this combat's Resolution Step, one
+   * entry per step actually performed (`466.1.3d:recall-attackers:1`,
+   * `466.3:no-result-recalled`, `466.5:conquer` …). The Combat Cleanup is a
+   * SEQUENCE, not a bag of effects: a unit that arrives partway through is
+   * handled by which steps have already run, so the trace is what makes "what
+   * has happened by now" answerable. Reset when a fresh Combat Damage Step
+   * begins here (a 466.3.d.1 restage starts a new trace).
+   */
+  combatCleanupLog?: readonly string[];
 
   /**
    * rule 466.7 / 807.1.d.1 — the cards whose Attacker/Defender designation (and

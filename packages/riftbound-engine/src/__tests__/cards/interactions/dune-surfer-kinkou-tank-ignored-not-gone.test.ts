@@ -198,11 +198,13 @@ describe("(b) P1's assignment with Dune Surfer here — a genuine choice, Tank o
 });
 
 describe("(c) P2's assignment onto P1's units — P2 is NOT directed by Dune Surfer (767): Tank on Towering Combatant binds P2", () => {
-  test("P2 is never offered a choice: its 8 is a forced line (Combatant lethal 4 first, the rest to the Surfer) — no P2 distribute prompt, Combatant ≥ 4, Surfer ≥ 3, both attackers die", async () => {
+  test("P2's [Tank] order is forced (Combatant lethal 4 first, then the Surfer) but the 8th point is free once both are lethal, so P2 is asked exactly once — Combatant ≥ 4, Surfer ≥ 3, both attackers die", async () => {
     const game = await attack(FULL);
     await toAssignment(game);
+    // 465.2.c.6 pins the ORDER (Combatant first); 465.2.c.4 lifts the minimum-lethal cap once
+    // 4 + 3 are covered, so the 8th point may sit on either — a real choice (355.10.d.2).
     const p2Asked = await finishCombat(game, { guardian: 5, skulker: 2 });
-    expect(p2Asked).toBe(0);
+    expect(p2Asked).toBe(1);
     expect(dealt(game, "combatant") + dealt(game, "surfer")).toBe(8);
     expect(dealt(game, "combatant")).toBeGreaterThanOrEqual(4);
     expect(dealt(game, "surfer")).toBeGreaterThanOrEqual(3);

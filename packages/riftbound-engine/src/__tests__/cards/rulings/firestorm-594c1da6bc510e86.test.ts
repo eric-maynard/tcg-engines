@@ -46,7 +46,9 @@ async function stormThenAttack(): Promise<Game> {
     }
     if (d.seat === P1) {
       expect(d.total).toBe(13); // 7 + 6
-      await game.p1.distribute({ big: 8, small: 5 });
+      // 465.2.c.3 / 465.2.c.4 — lethal is 5 more on Big and 2 more on Small; the 6 left over may
+      // only pile onto ONE of them (the last one served), never be spread across both.
+      await game.p1.distribute({ big: 11, small: 2 });
     } else {
       expect(d.total).toBe(13); // 8 + 5 — the damaged defenders still deal their FULL Might
       await game.p2.distribute({ a: 7, b: 6 });
