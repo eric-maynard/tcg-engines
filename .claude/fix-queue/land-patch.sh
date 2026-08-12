@@ -47,6 +47,20 @@ trap 'rm -f "$FASTQ.$$" 2>/dev/null' EXIT
 # tmp hygiene (cheap, once per land): prune day-old playtest traces and 12h-stale worker scratch dirs so /tmp (tmpfs) never fills
 ( find /tmp/playtest-traces -mindepth 1 -maxdepth 1 -mmin +1440 -exec rm -rf {} + ; for d in /tmp/w[0-9]i[0-9]* /tmp/w[0-9][0-9]i[0-9]* /tmp/rb-land-baseline-*; do [ -e "$d" ] && [ -n "$(find "$d" -maxdepth 0 -mmin +720)" ] && rm -rf "$d"; done ) >/dev/null 2>&1 || true
 exec 9>"$REPO/.claude/fix-queue/.land.lock"
+TKQ="$REPO/.claude/fix-queue/.land.tickets"; TKL="$REPO/.claude/fix-queue/.land.tickets.lock"
+if [ -w "$(dirname "$TKQ")" ] 2>/dev/null; then
+  touch "$TKQ" 2>/dev/null
+  grep -q "^$$	" "$TKQ" 2>/dev/null || ( flock 7; printf '%s\t%s\t%s\n' "$$" "$(date +%s)" "$LABEL" >> "$TKQ" ) 7>"$TKL" 2>/dev/null
+  trap '( flock 7; grep -v "^'"$$"'	" "'"$TKQ"'" > "'"$TKQ"'.tmp" 2>/dev/null; mv -f "'"$TKQ"'.tmp" "'"$TKQ"'" 2>/dev/null ) 7>"'"$TKL"'" 2>/dev/null' EXIT
+  for _t in $(seq 1 120); do
+    ( flock 7; awk -F'\t' -v now="$(date +%s)" -v ttl="${LAND_TICKET_TTL:-1800}" '($2 ~ /^[0-9]+$/) && (now-$2 < ttl)' "$TKQ" > "$TKQ.tmp" 2>/dev/null; mv -f "$TKQ.tmp" "$TKQ" 2>/dev/null ) 7>"$TKL" 2>/dev/null
+    _head=$(awk -F'\t' 'NR==1{print $1}' "$TKQ" 2>/dev/null)
+    [ -z "$_head" ] && break                      # queue unreadable/empty → fall through
+    [ "$_head" = "$$" ] && break                  # our turn
+    kill -0 "$_head" 2>/dev/null || { ( flock 7; grep -v "^$_head	" "$TKQ" > "$TKQ.tmp" 2>/dev/null; mv -f "$TKQ.tmp" "$TKQ" 2>/dev/null ) 7>"$TKL" 2>/dev/null; continue; }
+    sleep 10
+  done
+fi
 flock -w 1800 9 || { out committed false; out reason lock_timeout; exit 0; }
 HEAD_SHA=$(git rev-parse HEAD); WT="/tmp/rb-land-wt-LOCKED-do-not-touch"
 # fresh side worktree at HEAD (reused dir; always reset)
@@ -123,7 +137,14 @@ git -C "$REPO" update-ref "refs/heads/$BR" "$NEW" "$HEAD_SHA" || { out committed
 PREV_SHA=$(git -C "$REPO" rev-parse HEAD~1 2>/dev/null)
 git -C "$REPO" reset -q -- "${FILES[@]}" >/dev/null 2>&1   # index ← new HEAD for these paths; working tree untouched
 out committed true; out sha "$(git -C "$REPO" rev-parse --short HEAD)"
-GIT_TERMINAL_PROMPT=0 git -C "$REPO" push origin "$BR" 2>&1 | tail -1 | sed 's/^/push=/'
+PUSHLOG=$(mktemp); GIT_TERMINAL_PROMPT=0 git -C "$REPO" push origin "$BR" >"$PUSHLOG" 2>&1; PUSH_RC=$?
+tail -1 "$PUSHLOG" | sed 's/^/push=/'
+if [ "$PUSH_RC" != 0 ]; then out push_failed "rc=$PUSH_RC — THE COMMIT IS LOCAL ONLY, origin does not have it; re-run \`git -C $REPO push origin $BR\` (see $(head -3 "$PUSHLOG" | tr '\n' ' '))"; else
+  # Trust nothing: confirm origin actually advanced to what we just committed.
+  REMOTE_SHA=$(git -C "$REPO" ls-remote origin "$BR" 2>/dev/null | cut -f1)
+  [ -n "$REMOTE_SHA" ] && [ "$REMOTE_SHA" != "$(git -C "$REPO" rev-parse HEAD)" ] && out push_unverified "origin/$BR is ${REMOTE_SHA:0:8}, local HEAD is $(git -C "$REPO" rev-parse --short HEAD) — another lane may have pushed after you, or your push did not land"
+fi
+rm -f "$PUSHLOG"
 # sync + bounce from the VERIFIED worktree at the new HEAD (never the dirty main tree → no mixed snapshots on the devbox)
 NEW_SHA=$(git rev-parse HEAD); git -C "$WT" reset -q --hard "$NEW_SHA" >/dev/null 2>&1
 
@@ -137,8 +158,13 @@ for f in "${FILES[@]}"; do
   [ -e "$REPO/$f" ] || continue
   cur=$(git -C "$REPO" hash-object "$REPO/$f" 2>/dev/null)
   new=$(git -C "$REPO" rev-parse "$NEW_SHA:$f" 2>/dev/null)
-  uniq=$(git -C "$REPO" diff "$NEW_SHA" -- "$f" 2>/dev/null | grep -c '^+[^+]')
-  if [ -n "$cur" ] && [ -n "$new" ] && [ "$cur" != "$new" ] && [ "${uniq:-1}" = 0 ]; then
+  shadow=0
+  if [ -n "$cur" ] && [ -n "$new" ] && [ "$cur" != "$new" ]; then
+    for c in $(git -C "$REPO" rev-list -n 60 "$NEW_SHA" -- "$f" 2>/dev/null); do
+      [ "$(git -C "$REPO" rev-parse "$c:$f" 2>/dev/null)" = "$cur" ] && { shadow=1; break; }
+    done
+  fi
+  if [ "$shadow" = 1 ]; then
     git -C "$REPO" show "$NEW_SHA:$f" > "$REPO/$f" 2>/dev/null && out refreshed_shared "$f"
   elif [ -n "$cur" ] && [ -n "$new" ] && [ "$cur" != "$new" ]; then
     # Could not refresh: the shared copy carries edits of its own (or the file
@@ -167,5 +193,6 @@ NEEDS_RESTART=0
 printf '%s\n' "${FILES[@]}" | grep -qE '^packages/|^apps/riftbound-app/server/|^apps/riftbound-app/[^/]+\.ts$' && NEEDS_RESTART=1
 if [ -e "$BL" ] && [ $(( $(date +%s) - $(stat -c %Y "$BL") )) -lt 14400 ]; then out app "deferred(browser-pass-active)"; [ "$NEEDS_RESTART" = 1 ] && { touch /tmp/rb-bounce-owed; out bounce_owed "server/engine code changed but a browser pass holds the lock — the devbox is running OLD server code until someone bounces it"; }
 elif [ -e "$LB" ] && [ $(( $(date +%s) - $(stat -c %Y "$LB") )) -lt 900 ] && [ "$NEEDS_RESTART" = 0 ]; then out app "deferred(rate-limit, client-only patch — static assets are already live)";
-else touch "$LB"; out app "$(ssh -o ConnectTimeout=10 emaynard-tcg 'kill $(cat /tmp/app.pid) 2>/dev/null; sleep 3; curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/play' 2>/dev/null)"; fi
+else RBCODE=$(ssh -o ConnectTimeout=10 emaynard-tcg 'kill $(cat /tmp/app.pid) 2>/dev/null; sleep 3; curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/play' 2>/dev/null);
+  if [ "$RBCODE" = "200" ]; then touch "$LB"; out app "$RBCODE"; else out app "${RBCODE:-unreachable}"; out bounce_failed "ssh/curl did not confirm a 200 (empty usually means ssh could not run — a land inside an agent sandbox cannot reach the devbox). The devbox may be running OLD code: re-run the rsync and bounce with the sandbox disabled, then verify your symbol is on the box."; fi; fi
 bun "$REPO/.claude/fix-queue/fix-queue.ts" metrics 2>/dev/null | sed 's/^/metrics=/' || true
