@@ -96,13 +96,12 @@ describe("Legend Zone with zero and with two legends", () => {
     expect(game.violations()).toEqual([]);
   });
 
-  // BUG — rules 355.8 + 358.3.a: with an empty Legend Zone NEITHER mode of "ready or exhaust a
-  // legend" has a legal object, so no mode may be offered and the instruction is simply skipped on
-  // resolution. Actual: the engine raises a "Choose a mode" modal listing both modes ("Ready a
-  // legend" / "Exhaust a legend") even though each has zero candidates, and the game BLOCKS there —
-  // `settle()` cannot drain it and `advanceTurn()` throws "cannot end turn while Choose a mode is
-  // pending".
-  test.failing("ZERO legends BUG: Royal Entourage's 'ready or exhaust a legend' must be skipped, not opened as an empty modal (355.8, 358.3.a)", async () => {
+  // rules 355.8 + 358.3.a: with an empty Legend Zone NEITHER mode of "ready or exhaust a legend"
+  // has a legal object, so no mode is offered and the instruction is simply skipped on resolution.
+  // Raising the menu anyway used to BLOCK the game outright — `settle()` could not drain it and
+  // `advanceTurn()` threw "cannot end turn while Choose a mode is pending". The harness invariant
+  // `noEmptyPrompt` now fails any prompt raised with zero selectable options.
+  test("ZERO legends: Royal Entourage's 'ready or exhaust a legend' must be skipped, not opened as an empty modal (355.8, 358.3.a)", async () => {
     const game = await scenario()
       .resources(P1, { energy: 4, power: { calm: 1 } })
       .hand(P1, ROYAL_ENTOURAGE, "royal")

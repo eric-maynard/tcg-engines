@@ -107,6 +107,7 @@ describe("invariants", () => {
     expect(DEFAULT_INVARIANTS.map((i) => i.name)).toEqual([
       "energyNonNegative",
       "cardConservation",
+      "noEmptyPrompt",
       "pendingChoiceGatesMoves",
       "singleDecisionCursor",
       "noOrphanChain",

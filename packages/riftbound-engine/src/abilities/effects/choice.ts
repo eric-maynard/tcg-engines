@@ -121,11 +121,15 @@ function modeHasLegalTarget(option: { effect?: ExecutableEffect }, ctx: EffectCo
   if (tgt === undefined || typeof tgt === "string") {
     return true;
   }
-  // Only board-object descriptors are judged here: everything else (players,
-  // runes, cards in private zones, the source itself) is either always legal
-  // or lives in a zone the board resolver does not scan.
+  // Only descriptors the resolver can actually enumerate are judged here:
+  // everything else (players, cards in private zones, the source itself) is
+  // either always legal or lives in a zone the board resolver does not scan.
+  // rule 355.9.a.4 (sfd-039-221 Royal Entourage "ready or exhaust a legend") —
+  // a Legend Zone IS enumerable, and an EMPTY one leaves the mode with no legal
+  // object: judging it here is what keeps the menu from offering a mode nobody
+  // could ever answer.
   const kind = (tgt as { type?: string }).type;
-  if (kind !== "unit" && kind !== "gear" && kind !== "unit-or-gear") {
+  if (kind !== "unit" && kind !== "gear" && kind !== "unit-or-gear" && kind !== "legend") {
     return true;
   }
   if (ctx.boundTargets && ctx.boundTargets.length > 0) {
@@ -239,17 +243,23 @@ export function handle_choice(effect: ExecutableEffect, ctx: EffectContext, h: E
   if (availableIndices.length === 0) {
     return;
   }
-  // rule 355.3 / 355.8 (sfd-077-221) — drop modes with no legal target; if no
-  // mode has one the effect still resolves and simply does nothing.
+  // rule 355.3 / 355.8 (sfd-077-221) — drop modes with no legal target.
   const targetable = availableIndices.filter((i) =>
     modeHasLegalTarget(options[i] as { effect?: ExecutableEffect }, ctx),
   );
+  // rule 355.8 + 358.3.a (sfd-039-221 Royal Entourage with an EMPTY Legend
+  // Zone) — when NO mode has a legal object there is nothing to offer: a modal
+  // instruction whose every mode is unchoosable is simply SKIPPED as it
+  // resolves. Offering the menu anyway raises a prompt with an empty answer
+  // set, which no seat can answer and no `settle()` can drain — the game hangs
+  // there. (The harness invariant `noEmptyPrompt` fails any future regression.)
+  if (targetable.length === 0) {
+    return;
+  }
   // rule-id: ven-035-166 — whether an unchoosable mode was dropped here; the
   // survivor's own target is then still declared through the modal prompt.
-  const prunedAMode = targetable.length > 0 && targetable.length < availableIndices.length;
-  if (targetable.length > 0) {
-    availableIndices = targetable;
-  }
+  const prunedAMode = targetable.length < availableIndices.length;
+  availableIndices = targetable;
   // rule-id: sfd-091-221 (rule 355.8) — "draw 1 or buff me": the controller
   // picks which mode resolves. With ≥2 modes and no other prompt in flight,
   // pause via a `choose-mode` pending choice; `resolvePendingChoice` runs the
@@ -324,7 +334,7 @@ export function playTimeModeOptions(
     return [];
   }
   const notChosen = (effect as { notChosenThisTurn?: boolean }).notChosenThisTurn === true;
-  let indices = options.map((_unused, i) => i).filter((i) => !(notChosen && excluded.includes(i)));
+  const indices = options.map((_unused, i) => i).filter((i) => !(notChosen && excluded.includes(i)));
   // rule 355.8 (unl-044-219) — "Counter a spell" with no spell on the chain, a
   // sequence whose mandatory step has nothing to choose …: judged with the same
   // gate that decides whether a spell naming only that instruction could be played.
@@ -346,8 +356,10 @@ export function playTimeModeOptions(
       (!CHAIN_OR_COMPOUND.includes(String(options[i]?.effect?.type)) ||
         spellEffectHasLegalTargets(options[i]?.effect as SpellEffectTargetShape | undefined, gateCtx)),
   );
-  if (targetable.length > 0) {
-    indices = targetable;
-  }
-  return indices;
+  // rule 355.8 / 358.3.a — the same rule the resolution-time menu follows: a
+  // mode with no legal object is NOT offered, and when no mode has one there is
+  // nothing to offer at all. The caller reads the empty list as "no mode choice
+  // belongs to this play" and the instruction is skipped when it resolves —
+  // never a menu whose every entry is unanswerable.
+  return targetable.length > 0 ? targetable : [];
 }

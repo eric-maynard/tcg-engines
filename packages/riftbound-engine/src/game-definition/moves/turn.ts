@@ -13,7 +13,7 @@ import {
   isPlayerRemoved,
   removePlayer,
 } from "../../operations/player-removal";
-import { revealFacedownCardsAtGameEnd } from "../../operations/points";
+import { finishGame } from "../../operations/points";
 import { emptyRunePoolInPlace } from "../../operations/riftbound-operations";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../types";
 
@@ -111,10 +111,17 @@ export const turnMoves: Partial<
    * player is removed via the rule-652 pipeline and the game continues
    * with the remaining players; only when a single player is left does
    * the game actually finish.
+   *
+   * rule 650 — "at ANY time" is unconditional, and this move is what makes it
+   * true: it is never gated on priority, on holding the Decision, or on the
+   * prompt a seat is being asked (a seat trapped in its own modal must still be
+   * able to quit). The pregame counts too — rules 113 / 117 (battlefield keep,
+   * Mulligan) are part of the game, so `setup` is a conceding window as much as
+   * `playing` is.
    */
   concede: {
     condition: (state, context) => {
-      if (state.status !== "playing") {
+      if (state.status !== "playing" && state.status !== "setup") {
         return false;
       }
       // An already-removed player cannot concede again.
@@ -124,7 +131,7 @@ export const turnMoves: Partial<
       return true;
     },
     enumerator: (state, context) => {
-      if (state.status !== "playing") {
+      if (state.status !== "playing" && state.status !== "setup") {
         return [];
       }
       if (isPlayerRemoved(state, context.playerId as string)) {
@@ -143,14 +150,14 @@ export const turnMoves: Partial<
         const playerIds = Object.keys(draft.players);
         const opponentId = playerIds.find((id) => id !== playerId);
 
-        draft.status = "finished";
-        draft.winner = opponentId;
         (draft as { removedPlayers?: string[] }).removedPlayers = [playerId];
-        // rule 651.3 / 196 — the game ends at once: any prompt that was open
-        // (either seat's) is abandoned rather than left owed an answer.
-        draft.pendingChoice = undefined;
-        // rule 421.4 — the game ending reveals every facedown card to all players.
-        revealFacedownCardsAtGameEnd(draft, { cards: context.cards, zones: context.zones });
+        // rule 651.3 / 196 / 421.4 — the one game-end path: status/winner, the
+        // end record, any open prompt abandoned, every facedown card revealed.
+        finishGame(
+          draft,
+          { metadata: { concededBy: playerId }, reason: "concede", winner: opponentId },
+          { cards: context.cards, zones: context.zones },
+        );
 
         context.endGame?.({
           metadata: { concededBy: playerId },
@@ -175,12 +182,12 @@ export const turnMoves: Partial<
       const remaining = getActivePlayers(draft);
       if (remaining.length <= 1) {
         const winnerId = remaining[0];
-        draft.status = "finished";
-        draft.winner = winnerId;
-        // rule 651.3 / 196 — see above: no prompt survives the end of the game.
-        draft.pendingChoice = undefined;
-        // rule 421.4 — the game ending reveals every facedown card to all players.
-        revealFacedownCardsAtGameEnd(draft, { cards: context.cards, zones: context.zones });
+        // rule 651.1 / 651.3 / 196 / 421.4 — see above: one path ends the game.
+        finishGame(
+          draft,
+          { metadata: { concededBy: playerId }, reason: "concede", winner: winnerId },
+          { cards: context.cards, zones: context.zones },
+        );
 
         context.endGame?.({
           metadata: { concededBy: playerId },

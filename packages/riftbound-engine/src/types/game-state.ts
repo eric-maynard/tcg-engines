@@ -41,6 +41,21 @@ export type GamePhase =
 export type GameStatus = "setup" | "playing" | "finished";
 
 /**
+ * rule 196 — how a game ended. `victory_points` = rule 194.2 / 472 (the
+ * Cleanup points check); `effect_win` = rule 195 / 472.2 ("you win the game");
+ * `concede` = rule 650; `last_player_standing` = rule 651.1 after the rule-652
+ * removal pipeline left one player.
+ */
+export type GameEndReason = "victory_points" | "effect_win" | "concede" | "last_player_standing";
+
+/** rule 196 — the end record every game-end path writes (see `finishGame`). */
+export interface GameEndRecord {
+  readonly reason: GameEndReason;
+  readonly winner?: PlayerId;
+  readonly metadata?: Readonly<Record<string, unknown>>;
+}
+
+/**
  * Combat role for units in combat
  */
 export type CombatRole = "attacker" | "defender" | null;
@@ -1690,6 +1705,13 @@ export interface RiftboundGameState {
 
   /** Winner player ID (if game is finished) */
   readonly winner?: PlayerId;
+
+  /**
+   * rule 196 — WHY the game ended, written by the one game-end path
+   * (`operations/points.ts finishGame`). `RuleEngine.getGameEndResult()` reads
+   * it, so a consumer never has to guess a reason from `winner` alone.
+   */
+  readonly gameEndResult?: GameEndRecord;
 
   /**
    * Players that have been removed from the game (rule 651/652).

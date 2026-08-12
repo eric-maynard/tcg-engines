@@ -30,7 +30,7 @@ import {
   type StaticAbilityContext,
 } from "../abilities/static-abilities";
 import { isResolvingChainItem } from "../chain/resolution-guard";
-import type { PlayerId, RiftboundGameState } from "../types";
+import type { GameEndReason, GameEndRecord, PlayerId, RiftboundGameState } from "../types";
 import { getBattlefieldVictoryScoreBonus } from "./battlefield-setup-effects";
 import { getGlobalCardRegistry } from "./card-lookup";
 import { recordPublicReveal } from "./public-reveal";
@@ -209,19 +209,63 @@ export function findWinner(
 }
 
 /**
+ * rule 196 / 421.4 / 651.3 — THE end of a game. Every way a Riftbound game can
+ * end (a points win at a Cleanup, a 195/472.2 "you win the game" effect, a
+ * concession, the last player standing) goes through here, so no path can end
+ * the game while skipping part of what ending it means:
+ *   - `status`/`winner` written once (first writer wins — 196: the game is over
+ *     the instant it ends, and a later would-be winner never re-decides it);
+ *   - the END RECORD (`gameEndResult`) written, so every consumer — the app's
+ *     Bo3 bookkeeping included — can name the REASON rather than guessing
+ *     "points" (`RuleEngine.getGameEndResult()` reads it off the state);
+ *   - rule 651.3 / 196 — any open prompt is abandoned rather than left owed an
+ *     answer (a prompt outliving the game is a hang);
+ *   - rule 421.4 — every facedown card is revealed to all players.
+ */
+export function finishGame(
+  draft: RiftboundGameState,
+  end: {
+    readonly reason: GameEndReason;
+    readonly winner?: string;
+    readonly metadata?: Readonly<Record<string, unknown>>;
+  },
+  io?: BoardIO,
+): PlayerId | null {
+  if (draft.status === "finished") {
+    return (draft.winner as PlayerId | undefined) ?? null;
+  }
+  // rule 650 — a concession during the pregame (rules 113 / 117) ends the game
+  // from `setup` just as well; every other caller only ever runs while playing.
+  if (draft.status !== "playing" && draft.status !== "setup") {
+    return null;
+  }
+  (draft as { status: string }).status = "finished";
+  if (end.winner !== undefined) {
+    (draft as { winner?: PlayerId }).winner = end.winner as PlayerId;
+  }
+  (draft as { gameEndResult?: GameEndRecord }).gameEndResult = {
+    reason: end.reason,
+    ...(end.metadata ? { metadata: { ...end.metadata } } : {}),
+    ...(end.winner !== undefined ? { winner: end.winner as PlayerId } : {}),
+  };
+  draft.pendingChoice = undefined;
+  revealFacedownCardsAtGameEnd(draft, io);
+  return (draft.winner as PlayerId | undefined) ?? null;
+}
+
+/**
  * rule 472.2 — an ALTERNATE win condition ("you win the game"). It does not go
  * through the points check, so it is written here rather than by
  * {@link checkVictory}, and it applies immediately on resolution (rule 321's
  * "no Cleanup while a Chain Item resolves" gates the points check only).
  * First writer wins: a game already finished is never re-decided.
  */
-export function declareWinner(draft: RiftboundGameState, playerId: string): PlayerId | null {
-  if (draft.status !== "playing") {
-    return (draft.winner as PlayerId | undefined) ?? null;
-  }
-  (draft as { status: string }).status = "finished";
-  (draft as { winner?: PlayerId }).winner = playerId as PlayerId;
-  return playerId as PlayerId;
+export function declareWinner(
+  draft: RiftboundGameState,
+  playerId: string,
+  io?: BoardIO,
+): PlayerId | null {
+  return finishGame(draft, { reason: "effect_win", winner: playerId }, io);
 }
 
 /**
@@ -267,9 +311,7 @@ export function checkVictory(
   }
   const winner = findWinner(draft, opts.io);
   if (winner) {
-    (draft as { status: string }).status = "finished";
-    (draft as { winner?: PlayerId }).winner = winner;
-    revealFacedownCardsAtGameEnd(draft, opts.io);
+    finishGame(draft, { reason: "victory_points", winner }, opts.io);
   }
   return winner;
 }

@@ -86,7 +86,17 @@ export function noteGameState(session: GameSession, gameId?: string): void {
     const summary = matchSummary(session);
     const n = summary.gameNumber;
     const who = result.winner ? actorName(result.winner, session.playerNames) : "Nobody";
-    const how = result.reason === "concede" ? " by concession" : "";
+    // rule 196 — the engine's end record names WHY, so the Bo3 log can tell a
+    // "you win the game" effect from a points win instead of narrating both the
+    // same way (`operations/points.ts finishGame` writes the record).
+    const how =
+      result.reason === "concede"
+        ? " by concession"
+        : result.reason === "effect_win"
+          ? " by a game-winning effect"
+          : result.reason === "victory_points"
+            ? " on points"
+            : "";
     if (match.format === "bo3") {
       session.log.push(makeLogEntry(`Game ${n}: ${who} wins${how}. Match score: ${scoreLine(session, summary.score)}.`));
       if (summary.decided && summary.winner) {

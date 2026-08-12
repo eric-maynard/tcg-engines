@@ -1087,9 +1087,13 @@
     #chainOverlay.visible .chain-box { pointer-events: auto; }
     /* A pending prompt is answered in its box OR from the sidebar's duplicate
        buttons / the board; the dimmed backdrop must not swallow those clicks
-       (nothing behind it can do harm — the engine only accepts the answer). */
-    #choiceOverlay.visible[data-mode="pending"] { pointer-events: none; }
-    #choiceOverlay.visible[data-mode="pending"] .chain-box { pointer-events: auto; }
+       (nothing behind it can do harm — the engine only accepts the answer).
+       [rule:650-quit-always-reachable] This holds for EVERY mode of the choice
+       modal, not just `pending`: rule 650 lets a player concede at any time, so
+       a modal that ate the sidebar's Leave / Concede buttons would trap a human
+       inside a prompt with no way out. The box keeps its own clicks. */
+    #choiceOverlay.visible { pointer-events: none; }
+    #choiceOverlay.visible .chain-box { pointer-events: auto; }
 
     .chain-box {
       background: #1a1830;

@@ -9,6 +9,7 @@ import type { PlayerId } from "@tcg/core";
 import { isPaymentPromptFor } from "../game-definition/moves/chain/activate-ability";
 import { promptPayableCost } from "../game-definition/moves/prompt-cost";
 import { getGlobalCardRegistry } from "../operations/card-lookup";
+import type { PendingChoice } from "../types";
 import { getActingSeat, getPendingChoiceChooser } from "../views/acting-seat";
 import { isTokenInstance } from "./card-state";
 import type { FullSnapshot, HarnessEngine } from "./internal";
@@ -166,6 +167,78 @@ export const pendingChoiceGatesMoves: Invariant = {
   name: "pendingChoiceGatesMoves",
 };
 
+/**
+ * rule 355.8 / 358.3.a — NEVER RAISE A PROMPT WITH AN EMPTY ANSWER SET.
+ *
+ * A choice with no legal object is not a choice: rule 355.8 says such an option
+ * is not offered, and rule 358.3.a says an instruction that can do nothing is
+ * simply SKIPPED as it resolves. A prompt raised with zero selectable options
+ * is therefore never right — and it is worse than wrong, it is a HANG: no seat
+ * can answer it, `settle()` cannot drain it, and `advanceTurn()` refuses to end
+ * a turn while a choice is pending. A real game stops dead there.
+ *
+ * So every raiser must decide "nothing to offer ⇒ skip the instruction" before
+ * it writes `pendingChoice`, and this oracle turns any that forgets into a test
+ * failure. Only the option-BEARING prompt shapes are judged; a yes/no, a
+ * number, a name-a-card and a `new-choices` slot that may be kept are all
+ * answerable with an empty option list.
+ */
+export const noEmptyPrompt: Invariant = {
+  check: ({ cur }) => {
+    if (cur.state.status !== "playing") {
+      return [];
+    }
+    const out: string[] = [];
+    for (const pc of [cur.state.pendingChoice, cur.state.pendingTriggerOrder]) {
+      if (!pc) {
+        continue;
+      }
+      const n = selectableOptionCount(pc);
+      if (n === 0) {
+        const chooser = getPendingChoiceChooser(pc);
+        const source = (pc as { sourceCardId?: string }).sourceCardId;
+        out.push(
+          `${pc.type} prompt raised for ${chooser}${source ? ` from ${source}` : ""} with zero selectable options` +
+            ` — 355.8/358.3.a: offer nothing and skip the instruction instead (nobody can answer this, and settle() cannot drain it)`,
+        );
+      }
+    }
+    return out;
+  },
+  name: "noEmptyPrompt",
+};
+
+/**
+ * How many options the seat may actually pick from, or `undefined` for prompt
+ * shapes that carry no option list (yes/no, a number, a card name) and are
+ * answerable regardless.
+ */
+function selectableOptionCount(pc: PendingChoice): number | undefined {
+  switch (pc.type) {
+    case "choose-target":
+    case "choose-destination":
+    case "choose-mode":
+    case "choose-player":
+    case "weaponmaster-equip":
+    case "combat-damage":
+    case "pick-many":
+      return pc.options.length;
+    case "order":
+      return pc.items.length;
+    case "order-cards":
+      return pc.cards.length;
+    case "reveal-and-pick":
+      return pc.revealed.length;
+    // rule 751–755 — a slot with nothing to re-choose to is answerable while it
+    // may be KEPT (753.2 settles it otherwise); only a slot that MUST be named
+    // and has nothing to name is a trap.
+    case "new-choices":
+      return pc.keepable ? undefined : pc.options.length;
+    default:
+      return undefined;
+  }
+}
+
 export const singleDecisionCursor: Invariant = {
   check: ({ cur, engine }) => {
     if (cur.state.status !== "playing") {
@@ -266,6 +339,7 @@ export const costPaid: Invariant = {
 export const DEFAULT_INVARIANTS: readonly Invariant[] = [
   energyNonNegative,
   cardConservation,
+  noEmptyPrompt,
   pendingChoiceGatesMoves,
   singleDecisionCursor,
   noOrphanChain,

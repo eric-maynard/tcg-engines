@@ -410,12 +410,21 @@ function raiseGroupSubsetRepick(
   // all located at the same battlefield": the subset may never mix locations.
   const location = (effect.target as { location?: string } | undefined)?.location;
   const oneLocation = location === "battlefield" || location === "here" || location === "same";
+  // rule 355.11.b + 358.3.a — a unit that alone breaks the cap can be in no
+  // legal subset; when that leaves NO option there is no subset to ask for and
+  // nothing the instruction may affect, so it is handled by doing nothing.
+  // Asking anyway would raise a prompt with an empty answer set (harness
+  // invariant `noEmptyPrompt`) that no seat could meaningfully answer, and
+  // returning "not handled" would affect the whole over-cap group instead.
+  const subsetOptions = bound.filter((id) => mightOf(id) <= limit).map((id) => ({ cardId: id, key: id }));
+  if (subsetOptions.length === 0) {
+    return true;
+  }
   ctx.draft.pendingChoice = {
     constraint: { totalMightAtMost: limit, ...(oneLocation ? { sameLocation: true } : {}) },
     max: bound.length,
     min: 0,
-    // A unit that alone breaks the cap can be in no legal subset.
-    options: bound.filter((id) => mightOf(id) <= limit).map((id) => ({ cardId: id, key: id })),
+    options: subsetOptions,
     playerId: ctx.playerId,
     prompt: `Choose original targets with total Might ${limit} or less to affect`,
     resume: {

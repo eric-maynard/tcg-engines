@@ -394,7 +394,15 @@ export class RuleEngine<
         metadata?: Record<string, unknown>;
       }
     | undefined {
-    return this.gameEndResult;
+    // A game can also end inside the rules layer (a victory check during a
+    // Cleanup, a "you win the game" effect) where no move context — and so no
+    // `endGame()` — is in reach. Those paths write the same record onto game
+    // state as `gameEndResult`; read it when no move declared one.
+    return (
+      this.gameEndResult ??
+      (this.currentState as { gameEndResult?: { winner?: PlayerId; reason: string; metadata?: Record<string, unknown> } })
+        .gameEndResult
+    );
   }
 
   /**

@@ -1216,6 +1216,14 @@ export function finalizePendingItems(draftLike: unknown, ctx: FinalizationContex
   if (!ctx?.cards || !ctx?.zones || typeof ctx.zones.getCardsInZone !== "function") {
     return;
   }
+  // rule 196 / 651.3 — the game ends the instant it ends: nothing is finalized
+  // after that, and no prompt is raised for the items left on the Chain. Without
+  // this a concession taken AT a play-time prompt tore the prompt down only for
+  // this pass to put it straight back, leaving a dead question on a finished
+  // game (the app renders whatever `pendingChoice` says).
+  if (draft.status !== "playing") {
+    return;
+  }
   mintKillReflexives(draft, ctx);
   for (let guard = 0; guard < 64; guard++) {
     if (draft.pendingChoice) {

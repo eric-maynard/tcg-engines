@@ -166,7 +166,11 @@ function renderMatchGameOver(box, info) {
   const cur = m.current && m.current.finished ? m.current : { winner: info.winner };
   const gameWinner = cur.winner || info.winner;
   const iWonGame = gameWinner === viewingPlayer;
-  const how = cur.reason === "concede" ? " by concession" : "";
+  // rule 196 — the reason comes from the engine's end record; an effect win
+  // ("you win the game") is not a points win and must not be narrated as one.
+  const how = cur.reason === "concede" ? " by concession"
+    : cur.reason === "effect_win" ? " by a game-winning effect"
+    : cur.reason === "victory_points" ? " on points" : "";
   const decided = bo3 ? Boolean(m.decided) : true;
   const matchWinner = m.winner || (decided ? gameWinner : null);
   const iWonMatch = matchWinner === viewingPlayer;
@@ -202,7 +206,7 @@ function renderMatchGameOver(box, info) {
     : decided && votedRematch ? "Waiting for your opponent to accept the rematch…" : "";
   html += `<div class="go-waiting" id="goWaiting">${waiting}</div>`;
   if (bo3 && (m.games || []).length) {
-    html += `<div class="go-games">${m.games.map((g) => `Game ${g.gameNumber}: ${g.winner ? esc(pName(g.winner)) : "no winner"}${g.reason === "concede" ? " (concession)" : ""}`).join(" · ")}</div>`;
+    html += `<div class="go-games">${m.games.map((g) => `Game ${g.gameNumber}: ${g.winner ? esc(pName(g.winner)) : "no winner"}${g.reason === "concede" ? " (concession)" : g.reason === "effect_win" ? " (effect)" : ""}`).join(" · ")}</div>`;
   }
   box.innerHTML = html;
   box.dataset.format = m.format;
