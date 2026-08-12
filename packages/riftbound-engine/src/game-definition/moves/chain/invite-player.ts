@@ -17,6 +17,14 @@ type Defs = GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCar
  * actions). The invited player becomes Relevant for the remainder of
  * this chain/showdown and is appended to the rotation so they get
  * priority/focus after everyone ahead of them has passed.
+ *
+ * NOTE — this is a SHOWDOWN move in practice, and that is correct, not dead
+ * code. Priority on a chain already reaches every player in turn order (rules
+ * 336-340, `chain-state.ts addToChain`), so there is never anyone left to
+ * invite INTO a chain and the condition below rightly refuses. A showdown's
+ * Relevant Players are its participants (rule 462), a genuinely narrower list,
+ * and that is the branch this move serves. Do not "simplify" it by deleting
+ * the showdown half on the grounds that the chain half never fires.
  */
 export const invitePlayer: Defs["invitePlayer"] = {
   condition: (state, context) => {
