@@ -124,21 +124,28 @@ describe("Noxian Guillotine × Pouty Poro × Gold — hybrid [C] pip vs Deflect'
     expect(game.locationOf("poro")).toBe("bf1"); // no Legion: delayed kill only
   });
 
-  // DESIGN (DESIGN.md §Paying costs): manual pay — deliberate deviation from 357.1.a. Affordability (and so the
-  // set of legal Deflect targets) is POOL-ONLY: a READY Gold that has not been cracked yet is not credited. The
-  // player cracks Gold first (previous test), then the Poro is offered.
-  test("DESIGN (manual pay, deviates from 357.1.a/429.3): (ii) {4, fury:1} + READY Gold still on the board — the Poro is NOT yet offered and a cast at it is refused with nothing spent; cracking Gold first makes it legal", async () => {
+  // rule 809.1.d / 429.3.a — a READY Gold IS a Reaction [Add] the caster could still crack, so the
+  // Poro it could fund stays a legal choice: LISTED, carrying its surcharge, and dimmed. Paying
+  // stays manual (DESIGN.md §Paying costs) — nothing is auto-cracked, so the cast is refused until
+  // the player cracks Gold themselves.
+  test("(ii) {4, fury:1} + READY Gold still on the board — the Poro is listed-but-unaffordable and a cast at it is refused with nothing spent; cracking Gold first makes it legal", async () => {
     const game = await board({ gold: "ready", power: { fury: 1 } }).build();
     expect(game.state("token-gold").isReady).toBe(true);
-    expect(targetsOffered(game, "ng")).not.toContain("poro");
+    expect(targetsOffered(game, "ng")).toContain("poro");
+    const field = game.p1.option("cast", "ng")?.fields.find((f) => f.name === "targets");
+    const poroIdx = (field?.options ?? []).findIndex((o) => (Array.isArray(o) ? o[0] : o) === "poro");
+    expect(field?.unaffordable?.[poroIdx]).toBe(true);
+    expect(field?.needsAdd?.power).toEqual({ rainbow: 1 });
     expect(targetsOffered(game, "ng")).toContain("vanilla");
     expect((await game.p1.try((p) => p.cast("ng", { targets: "poro" }))).ok).toBe(false);
     expect(game.zoneOf("ng")).toBe("hand");
     expect(game.has("token-gold")).toBe(true); // Gold was not auto-cracked
     expect(game.p1.resources()).toEqual({ energy: 4, power: { fury: 1 } });
-    // Manual path: crack Gold → [A] in the pool → Poro offered.
+    // Manual path: crack Gold → [A] in the pool → the Poro stops being dimmed.
     await game.p1.activate("token-gold", 0, { sacrifice: "token-gold" });
     expect(targetsOffered(game, "ng")).toContain("poro");
+    const after = game.p1.option("cast", "ng")?.fields.find((f) => f.name === "targets");
+    expect(after?.unaffordable ?? []).not.toContain(true);
     expect((await game.p1.try((p) => p.cast("ng", { targets: "poro" }))).ok).toBe(true);
     expect(game.p1.resources()).toEqual({ energy: 0, power: { fury: 0, rainbow: 0 } });
   });

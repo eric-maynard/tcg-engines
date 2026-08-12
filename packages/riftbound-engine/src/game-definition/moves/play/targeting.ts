@@ -10,8 +10,11 @@ import {
 import { isAllAtOneBattlefield, resolveTarget } from "../../../abilities/target-resolver";
 import { type CounterTargetContext, isLegalCounterTarget } from "../../../chain/counter-target";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
-import { getCardEffectiveMight, getDeflectSurcharge } from "./cost";
+import type { RiftboundGameState } from "../../../types";
+import type { CostExtras } from "./cost";
+import { canAffordCard, getCardEffectiveMight, getDeflectSurcharge } from "./cost";
 import { addablePowerOf } from "../prompt-cost";
+import type { NeedsAdd } from "../prompt-cost";
 
 export { costRiderTargetIsClassFilter, replacementTargetIsClassFilter };
 
@@ -1225,4 +1228,131 @@ export function chosenMoveDestinations(
     return undefined;
   }
   return zones.filter((z) => z !== current);
+}
+
+
+// ---------------------------------------------------------------------------
+// PLAY-TIME payability of a surcharged target (rule 809.1.d + 429.3 / 357.1.a)
+// ---------------------------------------------------------------------------
+
+/**
+ * What a target tuple a play could NAME but not yet PAY for still needs.
+ *
+ * rule 809.1.d — a [Deflect]-surcharged candidate is dropped from a play's
+ * target list only when NOTHING could fund it. One the caster's Reaction [Add]
+ * abilities could still fund is a legal choice that is merely unaffordable
+ * right now, so it stays listed and the ANSWER is what gets refused (this is
+ * what 43bb893 established for surcharged PROMPTS; the play-time list is the
+ * same question asked one step earlier).
+ */
+export interface PlayTargetPayability {
+  /** rule 809.1.c.1 — the Power surcharge naming this tuple incurs. */
+  readonly surcharge: number;
+  /** The top-up that would make this tuple payable (429.3 / 357.1.a). */
+  readonly needsAdd: NeedsAdd;
+}
+
+/** The board readers the play-time payability probe needs. */
+export interface PlayPayabilityIo {
+  readonly board: NonNullable<CostExtras["board"]>;
+  readonly getCardMeta?: Parameters<typeof canAffordCard>[4];
+  readonly getFlag?: (cardId: never, flag: string) => unknown;
+}
+
+/** The same state with `extra` more universal Power pooled for `playerId`. */
+function withExtraPooledPower(
+  state: RiftboundGameState,
+  playerId: string,
+  extra: number,
+): RiftboundGameState {
+  const pool = state.runePools?.[playerId];
+  return {
+    ...state,
+    runePools: {
+      ...state.runePools,
+      [playerId]: {
+        ...pool,
+        energy: pool?.energy ?? 0,
+        power: {
+          ...(pool?.power ?? {}),
+          rainbow: ((pool?.power as Record<string, number> | undefined)?.rainbow ?? 0) + extra,
+        },
+      },
+    },
+  } as RiftboundGameState;
+}
+
+/**
+ * rule 809.1.c.1 — the Power surcharge naming `targets` for a play of `cardId`
+ * incurs (0 when nothing chosen is [Deflect]-taxed, or the tax is waived here).
+ */
+export function deflectSurchargeOf(
+  state: RiftboundGameState,
+  playerId: string,
+  cardId: string,
+  targets: readonly string[],
+  board: NonNullable<CostExtras["board"]>,
+): number {
+  return getDeflectSurcharge(
+    state,
+    playerId,
+    [...targets],
+    board.cards,
+    cardId,
+    board.zones as Parameters<typeof getDeflectSurcharge>[5],
+  );
+}
+
+/**
+ * rule 809.1.d / 429.3 — is this target tuple, which the play cannot afford as
+ * the pool stands, one a Reaction [Add] could still fund? Returns the surcharge
+ * and the smallest top-up that unlocks it, or `undefined` when the tuple is
+ * unaffordable for some OTHER reason (the spell's own cost is out of reach), is
+ * not surcharged at all, or nothing the seat has could ever pay for it.
+ *
+ * The probe re-prices the real play (`canAffordCard`) against a copy of the
+ * state with more Power pooled, so it can never disagree with what the move's
+ * own `condition` will charge — no second cost model to drift.
+ */
+export function playTargetPayability(
+  state: RiftboundGameState,
+  playerId: string,
+  cardId: string,
+  extras: CostExtras,
+  io: PlayPayabilityIo,
+): PlayTargetPayability | undefined {
+  const targets = extras.targets;
+  if (!targets || targets.length === 0) {
+    return undefined;
+  }
+  const surcharge = getDeflectSurcharge(
+    state,
+    playerId,
+    [...targets],
+    io.board.cards,
+    cardId,
+    io.board.zones as Parameters<typeof getDeflectSurcharge>[5],
+  );
+  if (surcharge <= 0) {
+    return undefined;
+  }
+  // rule 429.3 / 429.3.a — every Reaction [Add] the seat still holds, runes and
+  // Gold-style gear alike, is what "could still fund it" means.
+  const addable = addablePowerOf(playerId, io.board.zones as unknown as Parameters<typeof addablePowerOf>[1], {
+    getCardController: io.board.cards.getCardController as never,
+    ...(io.getFlag ? { getFlag: io.getFlag } : {}),
+    state,
+  });
+  for (let k = 1; k <= addable; k++) {
+    if (canAffordCard(withExtraPooledPower(state, playerId, k), playerId, cardId, extras, io.getCardMeta)) {
+      return {
+        needsAdd: {
+          power: { rainbow: k },
+          reason: `recycle ${k === 1 ? "a rune" : `${k} runes`} for ${"[rainbow]".repeat(k)} first`,
+        },
+        surcharge,
+      };
+    }
+  }
+  return undefined;
 }

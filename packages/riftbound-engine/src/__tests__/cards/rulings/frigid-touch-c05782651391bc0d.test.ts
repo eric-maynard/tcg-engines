@@ -57,10 +57,16 @@ describe("Ruling c05782651391bc0d — Repeated Frigid Touch on a Mighty Fiora pa
     expect(game.violations()).toEqual([]);
   });
 
-  test("the second Deflect pip is mandatory: with 4 energy but only ONE power, [fiora, fiora] with Repeat is not a legal cast (single Fiora, or Fiora + the vanilla Other, still is)", async () => {
+  test("the second Deflect pip is mandatory: with 4 energy but only ONE power, [fiora, fiora] with Repeat is not a legal cast — it is listed-but-unaffordable and dispatching it is refused (single Fiora, or Fiora + the vanilla Other, still is legal)", async () => {
     const game = await board({ energy: 4, power: { mind: 1 } }).build();
-    const offered = (game.p1.option("cast", "frigid")?.fields.find((f) => f.name === "targets")?.options ?? []) as string[][];
-    expect(offered).not.toContainEqual(["fiora", "fiora"]);
+    const field = game.p1.option("cast", "frigid")?.fields.find((f) => f.name === "targets");
+    const offered = (field?.options ?? []) as string[][];
+    // rule 809.1.d — the double-Fiora tuple is dimmed, not hidden: a rune Add could fund the
+    // second pip, and 809.1.d drops a candidate only when NOTHING could.
+    const bothIdx = offered.findIndex((o) => Array.isArray(o) && o.join("|") === "fiora|fiora");
+    if (bothIdx >= 0) {
+      expect(field?.unaffordable?.[bothIdx]).toBe(true);
+    }
     expect(offered).toContainEqual(["fiora"]);
     expect(offered).toContainEqual(["fiora", "other"]);
     const r = await game.p1.try((p) => p.cast("frigid", { repeat: 1, targets: ["fiora", "fiora"] }));

@@ -237,6 +237,30 @@ export interface ActionField {
   readonly roles?: readonly string[];
   readonly min?: number;
   readonly max?: number;
+  /**
+   * rule 809.1.c.1 — per `options` entry, the Power surcharge naming it incurs
+   * (0 where free). Present only when some entry is taxed.
+   */
+  readonly surcharge?: readonly number[];
+  /**
+   * rule 809.1.d / 429.3 — per `options` entry, true when it is LISTED but not
+   * payable from the pool as it stands. 809.1.d drops a candidate only when
+   * NOTHING could fund it, so a candidate a Reaction [Add] could still pay for
+   * stays on the list: a client dims the tile instead of hiding it, and the
+   * play itself is refused until the pool actually covers the surcharge.
+   * Present only when some entry is unaffordable.
+   */
+  readonly unaffordable?: readonly boolean[];
+  /**
+   * rule 429.3 / 357.1.a — the CHEAPEST top-up that would unlock one of the
+   * `unaffordable` entries, so a UI can render one pay line ("recycle a rune
+   * for [rainbow] first") rather than a sum over every taxed candidate.
+   */
+  readonly needsAdd?: {
+    readonly energy?: number;
+    readonly power?: Readonly<Record<string, number>>;
+    readonly reason: string;
+  };
   /** true when every variant sets this param (agent must supply or accept a follow-up). */
   readonly required: boolean;
 }

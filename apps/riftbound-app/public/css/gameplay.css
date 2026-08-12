@@ -2378,6 +2378,18 @@
       background: #2a1a05; color: #fff4d8; font-size: 12px; font-weight: 600; cursor: pointer;
     }
     .prompt-pay-rune:hover { background: #3d2708; }
+    /* [rule:809.1.d/429.3] The board twin of `.choice-modal-card--needs-add`: a
+       play-time target whose [Deflect] surcharge is reachable but unpaid stays
+       on the board, dimmed and dashed, instead of dropping out of the glow. It
+       is deliberately NOT clickable — the play is refused until an Add lands,
+       and the banner quotes what that Add is. */
+    .unaffordable-target {
+      outline: 2px dashed rgba(255, 214, 122, .55);
+      outline-offset: 2px;
+      opacity: .55;
+      filter: grayscale(.35);
+      cursor: not-allowed;
+    }
     .choice-modal-btn--needs-add { opacity: .5; cursor: not-allowed; border-style: dashed; }
     .choice-modal-btn--needs-add:hover { background: #2a2545; border-color: #3a3560; }
     /* [rule:809.1.c.1/429.3] A [Deflect]-taxed candidate the pool cannot cover

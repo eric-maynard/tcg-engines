@@ -238,10 +238,16 @@ describe("Trapping Grounds (unl-217-219)", () => {
     await game.p2.tapRune();
     await game.p2.tapRune();
     expect(game.p2.resources()).toEqual({ energy: 2, power: {} });
-    const noPower = game.p2.option("cast", "bolt")?.fields.find((f) => f.arg === "targets")?.options;
-    expect(noPower).toHaveLength(2);
-    expect(noPower).toEqual(expect.arrayContaining([["raider"], ["wall"]])); // the Bird is not choosable without a Power for Deflect
-    expect(noPower).not.toContainEqual([bird]);
+    const noPowerField = game.p2.option("cast", "bolt")?.fields.find((f) => f.arg === "targets");
+    const noPower = noPowerField?.options;
+    expect(noPower).toEqual(expect.arrayContaining([["raider"], ["wall"]]));
+    // rule 809.1.d — P2 still holds runes, so the Bird's [Deflect] pip is REACHABLE: the Bird stays
+    // listed and dimmed with the pay line quoted, and only the cast is refused.
+    const birdIdx = (noPower ?? []).findIndex((o) => (Array.isArray(o) ? o[0] : o) === bird);
+    expect(birdIdx).toBeGreaterThanOrEqual(0);
+    expect(noPowerField?.unaffordable?.[birdIdx]).toBe(true);
+    expect(noPowerField?.surcharge?.[birdIdx]).toBe(1);
+    expect(noPowerField?.needsAdd?.power).toEqual({ rainbow: 1 });
     expect((await game.p2.try((p) => p.cast("bolt", { targets: bird }))).ok).toBe(false);
 
     const paid = await attack(4, [1]).hand(P2, BOLT, "bolt").build();

@@ -7,6 +7,7 @@ import {
   computePlayResourceCost,
   effectiveVictoryScore,
   getGlobalCardRegistry,
+  Harness,
   modeOptionLabel,
 } from "@tcg/riftbound";
 import type { CostReductionContext, RiftboundCardMeta } from "@tcg/riftbound";
@@ -30,6 +31,44 @@ export function buildAvailableMoves(session: GameSession, playerId: string) {
     // the printed variant and answers the engine's labelled mode → target
     // prompts, so the per-mode variants would only crowd the targeting flow.
     .filter((m) => !(m.moveId === "playSpell" && m.params.mode !== undefined));
+}
+
+/**
+ * rule 809.1.d / 429.3 — the play-time targets that are LISTED but not payable.
+ *
+ * A [Deflect]-surcharged candidate the pool cannot cover but a Reaction [Add]
+ * still could is a legal choice the player simply cannot afford yet, so it must
+ * be shown dimmed with what it needs — hiding it is what made a Deflect body
+ * silently vanish from a spell's target glow. These are, by construction, NOT
+ * legal moves, so they travel beside `moves` rather than inside it and the
+ * client keeps refusing to dispatch them until an Add lands.
+ */
+export function buildUnaffordableTargets(session: GameSession, playerId: string) {
+  const cardIds = new Set<string>();
+  for (const m of session.engine.enumerateMoves(playerId as PlayerId, { validOnly: false })) {
+    if (m.moveId === "playSpell" && typeof (m.params as { cardId?: unknown }).cardId === "string") {
+      cardIds.add((m.params as { cardId: string }).cardId);
+    }
+  }
+  const out: {
+    cardId: string;
+    targets: string[];
+    surcharge: number;
+    needsAdd?: { energy?: number; power?: Record<string, number>; reason: string };
+  }[] = [];
+  for (const cardId of cardIds) {
+    for (const t of Harness.surchargedPlayTargetsOf(session.engine, playerId, "playSpell", cardId)) {
+      if (t.unaffordable) {
+        out.push({
+          cardId,
+          ...(t.needsAdd ? { needsAdd: t.needsAdd as { energy?: number; power?: Record<string, number>; reason: string } } : {}),
+          surcharge: t.surcharge,
+          targets: [...t.targets],
+        });
+      }
+    }
+  }
+  return out;
 }
 
 /**
@@ -794,6 +833,14 @@ export function buildGameSnapshot(session: GameSession, viewingPlayer?: string) 
     setup: state.setup,
     status: state.status,
     turn: state.turn,
+    // rule 809.1.d / 429.3 — the viewer's play-time targets that are LISTED but
+    // not payable yet. Rides on the snapshot (not on `moves`) precisely because
+    // these are NOT legal moves: the client dims them and quotes what they need,
+    // and dispatching one stays refused until a Reaction [Add] funds it.
+    unaffordableTargets:
+      viewingPlayer === undefined || state.status !== "playing"
+        ? []
+        : buildUnaffordableTargets(session, viewingPlayer),
     victoryScore: state.victoryScore,
     // rule 194.3.a — battlefields like Aspirant's Climb raise the threshold
     // without touching victoryScoreModifier, so the raw victoryScore alone is

@@ -79,6 +79,7 @@ export {
   narrowVariants,
   resolvePendingAnswer,
   spellSupportsX,
+  surchargedPlayTargetsOf,
 } from "./decision";
 export type { DecisionContext, NarrowResult } from "./decision";
 export { applyMove, endTurn, nextPlayerAfter, PROCEDURE_MOVES, runProcedures } from "./turn-driver";

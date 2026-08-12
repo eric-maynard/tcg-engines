@@ -132,7 +132,7 @@ describe("Mosstomper mirror — XP is one pool per player; Level 3 reads only it
     expect(game.violations()).toEqual([]);
   });
 
-  test("(a) conversely P1's Mosstomper now HAS Deflect against P2: on P2's next turn, with 2 + [fury][fury] and no [rainbow], no Falling Star tuple naming moss1 is offered and a forced cast is rejected (809.1.c)", async () => {
+  test("(a) conversely P1's Mosstomper now HAS Deflect against P2: on P2's next turn, with 2 + [fury][fury] and no [rainbow], every Falling Star tuple naming moss1 is listed-but-unaffordable and a forced cast is rejected (809.1.c / 809.1.d)", async () => {
     const game = await p1Holds();
     await game.advanceTurn(); // → P2's turn 4 (P1 still has 3 XP; moss1 keeps Deflect)
     expect(game.turnPlayer()).toBe(P2);
@@ -141,7 +141,15 @@ describe("Mosstomper mirror — XP is one pool per player; Level 3 reads only it
     await game.p2.do("addResources", { energy: 2, power: { fury: 2 } });
     const tuples = starTuples(game, "p2", "star2");
     expect(tuples).toContainEqual(["moss2", "moss2"]); // its own Mosstomper: Deflect never taxes the controller
-    expect(tuples.some((t) => t.includes("moss1"))).toBe(false);
+    // rule 809.1.d — a taxed tuple a rune Add could still fund stays LISTED and dimmed; only the
+    // cast is refused. P2 has runes here, so moss1's tuples are offered as unaffordable.
+    const field = game.p2.option("cast", "star2")?.fields.find((f) => f.name === "targets");
+    const mossIdx = (field?.options ?? []).findIndex(
+      (o) => Array.isArray(o) && (o as string[]).includes("moss1"),
+    );
+    expect(mossIdx).toBeGreaterThanOrEqual(0);
+    expect(field?.unaffordable?.[mossIdx]).toBe(true);
+    expect(field?.surcharge?.[mossIdx]).toBeGreaterThan(0);
     await expect(game.p2.cast("star2", { targets: ["moss1", "moss1"] })).rejects.toThrow();
     expect(game.zoneOf("star2")).toBe("hand");
     expect(game.state("moss1").damage).toBe(0);

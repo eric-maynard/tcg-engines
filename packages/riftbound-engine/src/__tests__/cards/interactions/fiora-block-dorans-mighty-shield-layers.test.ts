@@ -237,7 +237,16 @@ describe("Fiora, Victorious × Block × Doran's Blade — Mighty/Shield layering
     const poor = await equipped(P2).rune(P2, "fury").hand(P2, ZAP, "zap").build();
     await poor.p2.tapRune(); // 1 energy, 0 power — also forces a static re-evaluation
     expect(offered(poor)).toContain("buddy");
-    expect(offered(poor)).not.toContain("fiora");
+    // rule 809.1.d / 429.3 — Fiora stays LISTED (a rune Add could still fund the [rainbow]) but
+    // dimmed, and the cast at her is refused with nothing spent.
+    const poorField = poor.p2.option("cast", "zap")?.fields.find((f) => f.name === "targets");
+    const fioraIdx = (poorField?.options ?? []).findIndex(
+      (o) => (Array.isArray(o) ? o[0] : o) === "fiora",
+    );
+    expect(poorField?.unaffordable?.[fioraIdx]).toBe(true);
+    expect(poorField?.surcharge?.[fioraIdx]).toBe(1);
+    expect((await poor.p2.try((pl) => pl.cast("zap", { targets: "fiora" }))).ok).toBe(false);
+    expect(poor.p2.resources()).toEqual({ energy: 1, power: {} });
 
     const rich = await equipped(P2).rune(P2, "fury").resources(P2, { power: { fury: 1 } }).hand(P2, ZAP, "zap").build();
     await rich.p2.tapRune();

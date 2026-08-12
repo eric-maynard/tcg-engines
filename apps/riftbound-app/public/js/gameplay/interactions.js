@@ -219,8 +219,32 @@ function cancelInteraction() {
 /** Remove .valid-target and .drag-over classes from all elements */
 function clearValidTargetHighlights() {
   document.querySelectorAll(".valid-target").forEach(el => el.classList.remove("valid-target"));
+  document.querySelectorAll(".unaffordable-target").forEach(el => el.classList.remove("unaffordable-target"));
   document.querySelectorAll(".drag-over").forEach(el => el.classList.remove("drag-over"));
   document.body.classList.remove("targeting-mode");
+}
+
+/**
+ * rule 809.1.d / 429.3 — the play-time targets the engine LISTS for `cardId`
+ * but the pool cannot pay for yet (a [Deflect] surcharge a Reaction [Add] could
+ * still fund). 809.1.d drops a candidate only when NOTHING could fund it, so
+ * these must be shown dimmed with what they need rather than hidden — the same
+ * treatment the cost modal gives a `needsAdd` option.
+ */
+function unaffordableTargetsFor(cardId) {
+  return (gameState?.unaffordableTargets || []).filter(t => !cardId || t.cardId === cardId);
+}
+
+/** The cheapest pay line across the dimmed targets, e.g. "needs [rainbow] — recycle a rune". */
+function unaffordableTargetHint(cardId) {
+  const rows = unaffordableTargetsFor(cardId).filter(t => t.needsAdd);
+  if (rows.length === 0) return "";
+  const owed = t => Object.values(t.needsAdd.power || {}).reduce((a, n) => a + (n || 0), 0);
+  const best = rows.reduce((a, b) => (owed(b) < owed(a) ? b : a));
+  const pips = Object.entries(best.needsAdd.power || {})
+    .flatMap(([d, n]) => Array.from({ length: n || 0 }, () => `[${d}]`))
+    .join("");
+  return `needs ${pips} — ${best.needsAdd.reason}`;
 }
 
 // ---- Targeting mode -----------------------------------------------------------
@@ -585,11 +609,15 @@ function updateTargetBanner() {
     buttons.push({ label: `Target ${nm}`, pick: id });
   }
 
+  // rule 429.3 / 357.1.a — quote the cheapest top-up that would unlock a dimmed
+  // candidate, so the player can see the Add that opens it up.
+  const needHint = unaffordableTargetHint(interaction.sourceCardId);
+  const needSuffix = needHint ? ` · ${needHint}` : "";
   const chosenNames = chosen.map(id => (findCard(id)?.name || id).replace(/^player-[12]-/, ""));
   // rule 809.1.c — quote the running [Deflect] total for the set chosen so far.
   const tax = chosen.length === 0 ? "" : ` · ${deflectSurchargeText(chosen)}`;
   const text = chosen.length === 0
-    ? `Choose a target for ${name} — Esc to cancel`
+    ? `Choose a target for ${name}${needSuffix} — Esc to cancel`
     : repeats.length > 0
       ? `${name}: ${chosenNames.join(", ")}${tax} — Play, or pay Repeat · Esc to cancel`
       : paid.length > 0
@@ -637,6 +665,19 @@ function hideTargetBanner() {
 function applyChooseTargetHighlights() {
   for (const id of interaction.validTargets || []) {
     document.querySelectorAll(`[data-card-id="${CSS.escape(id)}"]`).forEach(el => el.classList.add("valid-target"));
+  }
+  // rule 809.1.d — a candidate whose [Deflect] surcharge is REACHABLE but unpaid
+  // is listed too, dimmed: hiding it is what made a Deflect body silently vanish
+  // from the glow. Clicking it stays a no-op until an Add funds the pip.
+  const valid = new Set(interaction.validTargets || []);
+  for (const t of unaffordableTargetsFor(interaction.sourceCardId)) {
+    for (const id of t.targets || []) {
+      if (valid.has(id)) continue;
+      document.querySelectorAll(`[data-card-id="${CSS.escape(id)}"]`).forEach(el => {
+        el.classList.add("unaffordable-target");
+        el.title = t.needsAdd?.reason ? `[Deflect] ${t.surcharge} — ${t.needsAdd.reason}` : `[Deflect] ${t.surcharge}`;
+      });
+    }
   }
   document.body.classList.add("targeting-mode");
 }

@@ -17,7 +17,11 @@
 import type { CardId, PlayerId } from "@tcg/core";
 import { costElectionHalves } from "../game-definition/moves/play/cost";
 import { modeOptionLabel, spellModeLabels } from "../game-definition/moves/play/play-time-modes";
-import { pairEffectRoles } from "../game-definition/moves/play/targeting";
+import {
+  deflectSurchargeOf,
+  pairEffectRoles,
+  playTargetPayability,
+} from "../game-definition/moves/play/targeting";
 import {
   potentialAddsFromMoves,
   promptIsSurcharged,
@@ -74,9 +78,130 @@ export interface DecisionContext {
    * caster an "[N] or [rainbow] less" election (both halves payable, different)?
    */
   costElectionLive?(seat: Seat, cardId: CardRef, targets?: readonly string[]): boolean;
+  /**
+   * rule 809.1.d / 429.3 — the target tuples playing `cardId` may still NAME
+   * but cannot yet PAY for: a [Deflect]-surcharged candidate whose surcharge a
+   * Reaction [Add] could still fund. 809.1.d drops a candidate only when
+   * nothing could fund it, so these stay on the offered list (dimmed) while the
+   * play itself keeps being refused — the same contract 43bb893 gave surcharged
+   * prompts, one step earlier.
+   */
+  surchargedPlayTargets?(
+    seat: Seat,
+    moveId: string,
+    cardId: string,
+  ): readonly {
+    targets: readonly string[];
+    surcharge: number;
+    /** true when the tuple is offered but not payable from the pool as it stands. */
+    unaffordable: boolean;
+    /** Set only while `unaffordable`: the smallest top-up that unlocks it. */
+    needsAdd?: ActionField["needsAdd"];
+  }[];
   /** Whether procedures are auto-run (then they are hidden from menus). */
   readonly autoProcedures: boolean;
   readonly seq: number;
+}
+
+/**
+ * rule 809.1.d / 429.3 — the target tuples a play of `cardId` may still NAME,
+ * with the ones it cannot yet PAY for marked and priced.
+ *
+ * The enumerator already OFFERS every candidate the spell's descriptor resolves
+ * to; it is the move's own `condition` that refuses the ones whose [Deflect]
+ * surcharge the pool cannot cover. So the dropped set is exactly
+ * (raw enumeration − valid enumeration), and each member is re-priced with
+ * `playTargetPayability` to ask whether a Reaction [Add] could still fund it.
+ * Nothing here re-derives targets or costs by hand, so it cannot drift from
+ * what the play will actually charge.
+ *
+ * Exported because the same list is what a CLIENT needs in order to dim a
+ * candidate rather than hide it: by construction these are not legal moves, so
+ * the app server ships them alongside the legal-move list.
+ */
+export function surchargedPlayTargetsOf(
+  engine: HarnessEngine,
+  seat: string,
+  moveId: string,
+  cardId: string,
+): readonly {
+  targets: readonly string[];
+  surcharge: number;
+  unaffordable: boolean;
+  needsAdd?: ActionField["needsAdd"];
+}[] {
+    const internal = getInternalState(engine);
+    const of = (validOnly: boolean) =>
+      engine
+        .enumerateMoves(seat as PlayerId, { moveIds: [moveId], validOnly })
+        .filter((m) => (m.params as { cardId?: string } | undefined)?.cardId === cardId);
+    const valid = new Set(of(true).map((m) => canonicalJson(m.params)));
+    const board = {
+      cards: {
+        getCardController: (id: CardId) => internal.cards[id as string]?.controller,
+        getCardMeta: (id: CardId) => internal.cardMetas[id as string],
+        getCardOwner: (id: CardId) => internal.cards[id as string]?.owner,
+        updateCardMeta: () => {},
+      },
+      zones: {
+        getCardsInZone: (zoneId: unknown, playerId?: unknown) =>
+          Object.entries(internal.cards)
+            .filter(
+              ([, c]) =>
+                c.zone === (zoneId as string) &&
+                (playerId === undefined || c.owner === (playerId as string)),
+            )
+            .map(([id]) => id as CardId),
+        getCardZone: (id: CardId) => internal.cards[id as string]?.zone,
+      },
+    };
+    const out: {
+      targets: readonly string[];
+      surcharge: number;
+      unaffordable: boolean;
+      needsAdd?: ActionField["needsAdd"];
+    }[] = [];
+    for (const m of of(false)) {
+      const params = (m.params ?? {}) as Record<string, unknown>;
+      const targets = params.targets as readonly string[] | undefined;
+      if (!targets || targets.length === 0) {
+        continue;
+      }
+      // A tuple the play CAN afford is priced but never dimmed.
+      if (valid.has(canonicalJson(params))) {
+        const tax = deflectSurchargeOf(
+          engine.getState(),
+          seat as string,
+          cardId,
+          targets,
+          board as Parameters<typeof deflectSurchargeOf>[4],
+        );
+        if (tax > 0) {
+          out.push({ surcharge: tax, targets, unaffordable: false });
+        }
+        continue;
+      }
+      const pay = playTargetPayability(
+        engine.getState(),
+        seat as string,
+        cardId,
+        { ...params, board, targets: [...targets] } as Parameters<typeof playTargetPayability>[3],
+        {
+          board: board as Parameters<typeof playTargetPayability>[4]["board"],
+          getCardMeta: (id: CardId) => internal.cardMetas[id as string],
+          getFlag: (id: never, name: string) => {
+            const meta = internal.cardMetas[id as unknown as string] as
+              | { __flags?: Record<string, unknown>; [k: string]: unknown }
+              | undefined;
+            return meta?.__flags?.[name] === true || meta?.[name] === true;
+          },
+        },
+      );
+      if (pay) {
+        out.push({ needsAdd: pay.needsAdd, surcharge: pay.surcharge, targets, unaffordable: true });
+      }
+    }
+    return out;
 }
 
 export function engineDecisionContext(
@@ -137,6 +262,14 @@ export function engineDecisionContext(
       );
     },
     label: (card) => cardLabel(engine, card),
+    // rule 809.1.d — the enumerator already OFFERS every candidate the spell's
+    // descriptor resolves to; it is the move's own `condition` that refuses the
+    // ones whose [Deflect] surcharge the pool cannot cover. So the dropped set
+    // is exactly (raw enumeration − valid enumeration), and each member is
+    // re-priced with `playTargetPayability` to see whether a Reaction [Add]
+    // could still fund it. Nothing here re-derives targets or costs by hand.
+    surchargedPlayTargets: (seat, moveId, cardId) =>
+      surchargedPlayTargetsOf(engine, seat as string, moveId, cardId),
     legal: (seat, moveIds) =>
       engine
         .enumerateMoves(seat as PlayerId, { moveIds: moveIds ? [...moveIds] : undefined, validOnly: true })
@@ -431,6 +564,52 @@ function buildFields(ctx: DecisionContext, moveId: string, variants: FlatMove[],
         name: "xAmount",
         required: true,
       });
+    }
+    // rule 809.1.d / 429.3 — a [Deflect]-surcharged candidate the pool cannot
+    // cover but a Reaction [Add] could is still a legal choice, so it stays on
+    // the offered list carrying its surcharge and marked unaffordable; only the
+    // PLAY is refused until the pip is actually pooled. Without this the
+    // candidate simply vanished, leaving a client nothing to dim and no pay
+    // line to quote (43bb893 fixed the same thing for surcharged prompts).
+    if (cardId && targetsField) {
+      const seat = (variants[0] as FlatMove).playerId as Seat;
+      const reachable = ctx.surchargedPlayTargets?.(seat, moveId, cardId) ?? [];
+      const field = fields.find((f) => f.name === "targets") ?? targetsField;
+      const options = [...(field.options ?? [])];
+      const priced = new Map(reachable.map((r) => [canonicalJson([...r.targets]), r]));
+      const surcharge = options.map((o) => priced.get(canonicalJson(o))?.surcharge ?? 0);
+      const unaffordable = options.map(() => false);
+      let cheapest: ActionField["needsAdd"] | undefined;
+      const seen = new Set(options.map((o) => canonicalJson(o)));
+      for (const r of reachable) {
+        if (!r.unaffordable) {
+          continue;
+        }
+        const key = canonicalJson([...r.targets]);
+        if (seen.has(key)) {
+          continue;
+        }
+        seen.add(key);
+        options.push([...r.targets]);
+        surcharge.push(r.surcharge);
+        unaffordable.push(true);
+        const owed = Object.values(r.needsAdd?.power ?? {}).reduce<number>((a, n) => a + (n ?? 0), 0);
+        const best = Object.values(cheapest?.power ?? {}).reduce<number>((a, n) => a + (n ?? 0), 0);
+        if (cheapest === undefined || owed < best) {
+          cheapest = r.needsAdd;
+        }
+      }
+      if (surcharge.some((n) => n > 0) || unaffordable.some(Boolean)) {
+        fields.splice(fields.indexOf(field), 1, {
+          ...field,
+          max: Math.max(...options.map((o) => (Array.isArray(o) ? o.length : 1))),
+          min: Math.min(...options.map((o) => (Array.isArray(o) ? o.length : 1))),
+          ...(cheapest ? { needsAdd: cheapest } : {}),
+          options,
+          ...(surcharge.some((n) => n > 0) ? { surcharge } : {}),
+          ...(unaffordable.some(Boolean) ? { unaffordable } : {}),
+        });
+      }
     }
     // rule 356.4.b / 356.4.c.1 — "[N] or [rainbow] less" is ONE discount whose
     // half the caster elects; offer it up front as well as after the play.

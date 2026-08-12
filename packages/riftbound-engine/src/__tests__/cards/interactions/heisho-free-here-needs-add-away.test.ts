@@ -125,7 +125,12 @@ describe("Heisho — the Deflect waiver is per chosen object, so one picker carr
 
   test("(b) one recycle is the whole fix: the away Poro becomes selectable and the cast then spends base pip + surcharge (164.2.b, 809.1.c.1 — any Domain pays it)", async () => {
     const game = await board(1, 1).build();
-    expect(targetsOffered(game, "rocket")).not.toContain(game.card("awayporo"));
+    // 809.1.d — listed, but dimmed: the surcharge is reachable, not paid.
+    const before = game.p1.option("cast", "rocket")?.fields.find((f) => f.name === "targets");
+    const awayIdx = (before?.options ?? []).findIndex(
+      (o) => (Array.isArray(o) ? o[0] : o) === game.card("awayporo"),
+    );
+    expect(before?.unaffordable?.[awayIdx]).toBe(true);
     await game.p1.recycleRune("k0"); // a [fury] Power, which still pays the [rainbow] surcharge
     expect(game.p1.resources()).toEqual({ energy: 4, power: { fury: 1, rainbow: 1 } });
     expect(targetsOffered(game, "rocket").sort()).toEqual(
@@ -140,26 +145,52 @@ describe("Heisho — the Deflect waiver is per chosen object, so one picker carr
 
   // ── (a)/(c) the BUG: the reachable-but-unpaid candidate is dropped instead of dimmed ──────────
 
-  test.failing("BUG: a [Deflect] surcharge a rune Add could still fund makes the away Poro DISAPPEAR from the play-time target list instead of staying listed-and-unaffordable — 809.1.d drops a candidate only when NOTHING could fund it (429.3/357.1.a)", async () => {
-    // Expected: with 1 pooled [rainbow] (the base cost) and one ready rune, BOTH Poros are enumerated —
-    // the Heisho one free, the away one carrying its 1-pip surcharge and a needsAdd hint — and only the
-    // ANSWER is refused until the pip is actually in the pool. That is what 43bb893 established for
-    // surcharged `choose-target` / `pick-many` prompts (DESIGN.md §Paying costs, surcharged-pick bullet).
-    // Actual: play-time target enumeration is still pool-only, so the away Poro is absent from the
-    // `targets` field entirely (proved non-vacuously by the '(d) control' test above, where the same
-    // candidate IS enumerated once the pip is pre-pooled). Nothing on a play option carries `surcharge`
-    // or `needsAdd`, so the client has nothing to dim and no shortfall to quote.
+  // rule 809.1.d — with 1 pooled [rainbow] (the base cost) and one ready rune, BOTH Poros are
+  // enumerated: the Heisho one free, the away one carrying its 1-pip surcharge and a needsAdd. Only
+  // the ANSWER is refused until the pip is actually pooled — the contract 43bb893 established for
+  // surcharged `choose-target` / `pick-many` prompts, applied one step earlier at play time. The
+  // '(d) control' test above proves this non-vacuously: the same candidate is enumerated once the
+  // pip is pre-pooled, so "listed dimmed" is distinguishable from "not listed".
+  test("(a) a [Deflect] surcharge a rune Add could still fund keeps the away Poro LISTED-and-unaffordable rather than dropping it — 809.1.d drops a candidate only when NOTHING could fund it (429.3/357.1.a)", async () => {
     const game = await board(1, 1).build();
     expect(targetsOffered(game, "rocket").sort()).toEqual(
       [game.card("awayporo"), game.card("hereporo")].sort(),
     );
+    // Listed is not payable: the play itself is still refused, and refusing changes nothing.
+    const early = await game.p1.try((p) => p.cast("rocket", { targets: "awayporo" }));
+    expect(early.ok).toBe(false);
+    expect(game.zoneOf("rocket")).toBe("hand");
+    // The field says WHICH one is dimmed and what it costs.
+    const field = game.p1.option("cast", "rocket")?.fields.find((f) => f.name === "targets");
+    const away = (field?.options ?? []).findIndex(
+      (o) => (Array.isArray(o) ? o[0] : o) === game.card("awayporo"),
+    );
+    const here = (field?.options ?? []).findIndex(
+      (o) => (Array.isArray(o) ? o[0] : o) === game.card("hereporo"),
+    );
+    expect(field?.unaffordable?.[away]).toBe(true);
+    expect(field?.surcharge?.[away]).toBe(1);
+    // 809.3 / 766 — Heisho waives the instalment for the object chosen HERE, so its Poro is free.
+    expect(field?.unaffordable?.[here]).toBe(false);
+    expect(field?.surcharge?.[here]).toBe(0);
   });
 
-  test.failing("BUG: the shortfall a player would need is never quoted at play time — it should be the cheapest unfundable option (ONE [rainbow], the away Poro), not a sum over both Deflect bodies and not silence", async () => {
-    // Expected: the cast option advertises what the away pick still owes, e.g. a `needsAdd`-shaped
-    // field naming one [rainbow] ("needs [rainbow] — recycle a rune"). Heisho's Poro contributes 0,
-    // so the number is 1, never 2.
-    // Actual: `ActionField` has no surcharge/needsAdd channel at all — the field carries only `options`.
+  test("(a) one recycle re-derives it: the away Poro stops being dimmed and the field's pay line clears (429.3 / 357.1.a)", async () => {
+    const game = await board(1, 1).build();
+    await game.p1.recycleRune("k0");
+    const field = game.p1.option("cast", "rocket")?.fields.find((f) => f.name === "targets");
+    expect(field?.needsAdd).toBeUndefined();
+    expect(field?.unaffordable ?? []).not.toContain(true);
+    await game.p1.cast("rocket", { targets: "awayporo" });
+    await game.settle();
+    expect(game.zoneOf("awayporo")).toBe("trash");
+    expect(game.violations()).toEqual([]);
+  });
+
+  // rule 429.3 — the cast option advertises what the away pick still owes: ONE [rainbow]. Heisho's
+  // Poro contributes 0 to that number (809.3 waives its instalment), so it is never 2, and the
+  // quote is the CHEAPEST unlock rather than a sum over every Deflect body on the board.
+  test("(c) the shortfall is quoted at play time as the cheapest unfundable option — ONE [rainbow], the away Poro", async () => {
     const game = await board(1, 1).build();
     const field = game.p1.option("cast", "rocket")?.fields.find((f) => f.name === "targets");
     expect(field).toMatchObject({ needsAdd: { power: { rainbow: 1 } } });
