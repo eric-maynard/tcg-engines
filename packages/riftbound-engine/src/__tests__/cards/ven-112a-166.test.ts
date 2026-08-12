@@ -43,9 +43,10 @@ describe("Zed, Without a Sound (ven-112a-166)", () => {
       .unit(P1, "base", { might: 2, name: "Squire" }, "squire")
       .build();
 
-    await game.p1.activate("zed");
-    await game.settle({ policy: "first" });
-
+    // rule 355.8 — with no legal partner the ability may not be activated at all;
+    // it must not charge [1][chaos] for an effect that resolves to nothing.
+    expect(game.p1.can("activate", "zed")).toBe(false);
+    expect(game.p1.resources()).toMatchObject({ energy: 1, power: { chaos: 1 } });
     expect(game.locationOf("zed")).toBe("bf1");
     expect(game.locationOf("squire")).toBe("base");
   });

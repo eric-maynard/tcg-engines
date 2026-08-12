@@ -202,6 +202,22 @@ export function findConditionalBranchTarget(
 }
 
 /**
+ * rule-id: ven-112a-166 (rule 355.8) — a `{type:"move", swap:true}` effect ("Move
+ * me and a Shadow Clone you control to each other's locations") names its chosen
+ * object on `partner`, never on `target`. Surface that descriptor so the play /
+ * activation gate refuses the ability when no legal partner exists, instead of
+ * charging the cost for an effect that resolves to nothing.
+ */
+export function findSwapPartnerTarget(
+  effect: SpellEffectTargetShape | undefined,
+): SpellEffectTargetDescriptor | undefined {
+  if (effect?.type !== "move") return undefined;
+  if ((effect as { swap?: boolean }).swap !== true) return undefined;
+  const partner = (effect as { partner?: SpellEffectTargetDescriptor }).partner;
+  return partner && typeof partner !== "string" ? partner : undefined;
+}
+
+/**
  * rule-id: sfd-017-221 / ogn-213-298 (rule 355.8) — a `sequence` spell ("Kill a
  * unit at a battlefield. Its controller draws 2.") carries its caster-chosen
  * target on a sub-effect, not on the sequence itself. Surface that lead
@@ -1000,6 +1016,8 @@ export function spellEffectHasLegalTargets(
     // rule-id: ven-008-166 (rule 355.8) — a conditional whose branches both
     // damage the same chosen unit still needs one legal target to be played.
     findConditionalBranchTarget(effect),
+    // rule-id: ven-112a-166 (rule 355.8) — a location swap's chosen partner.
+    findSwapPartnerTarget(effect),
   ]) {
     if (!targetDescriptorIsSatisfiable(tgt, effect.player, ctx, affordable)) {
       return false;
