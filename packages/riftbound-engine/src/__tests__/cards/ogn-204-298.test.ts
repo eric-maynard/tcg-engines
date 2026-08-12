@@ -57,6 +57,22 @@ describe("Seal of Discord (ogn-204-298)", () => {
     expect(game.p1.can("activate", "seal")).toBe(true);
   });
 
+  test("the printed [Reaction] is on the ABILITY, so the gear itself can't be played during a Closed State (309.1.a / 813.1.c.2)", async () => {
+    const game = await scenario()
+      .resources(P1, { energy: 1, power: { chaos: 1 } })
+      .unit(P1, "base", { might: 2 }, "ally")
+      .hand(P1, CLEAVE, "cleave")
+      .hand(P1, CARD, "seal")
+      .build();
+    expect(game.p1.can("play", "seal")).toBe(true);
+    await game.p1.cast("cleave", { targets: "ally" });
+    // Chain open = Closed State: only cards with the Reaction keyword may be
+    // played (309.1.a). Seal of Discord prints [Reaction] inside its activated
+    // ability, which grants activation permission only (813.1.c.2).
+    expect(game.chain()).toHaveLength(1);
+    expect(game.p1.can("play", "seal")).toBe(false);
+  });
+
   test("[Reaction]: usable on the opponent's turn while their spell is on the chain; the spell stays pending (rule 813.1.c.2)", async () => {
     const game = await scenario()
       .active(P2)

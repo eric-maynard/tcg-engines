@@ -411,6 +411,16 @@
       transform-origin: center;
     }
 
+    /* A transform does not change layout: a rotated .card still reserves its
+       upright 100px in the flex row while painting 140px wide, so the next
+       sibling overlaps its border. Reserve the 20px overhang on each side.
+       (The rune stack compensates separately with its fixed 156px width.) */
+    .zone-row > .card.exhausted,
+    .zone-row > .card.card--exhausted {
+      margin-left: 20px;
+      margin-right: 20px;
+    }
+
     .card.stunned { border-color: #d04040; box-shadow: inset 0 0 8px #d0404044; }
     .card.buffed { border-color: #f0c040; box-shadow: inset 0 0 8px #f0c04044; }
     /* rule-827: Empowered permanents get a distinct glow so `[Empowered]>` state reads on-board */

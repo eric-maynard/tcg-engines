@@ -247,6 +247,21 @@ function unwrapSpellWrappedAbilities<T>(abilities: readonly T[], cardType: strin
 }
 
 /**
+ * rule 813.1.c.1 vs 813.1.c.2 — a [Reaction]/[Action] printed INSIDE an activated
+ * ability ("[Exhaust]: [Reaction] — [Add] [chaos]", "[Reaction][>] Kill this,
+ * [Exhaust]: …") is permission to ACTIVATE that ability in a Closed State; it is
+ * not permission to play the CARD (which would violate 309.1.a). Only keywords on
+ * a card-level line set the card's timing class, so drop every activated-ability
+ * line — an ability line is the one with a cost separator `:`.
+ */
+function cardLevelText(text: string): string {
+  return text
+    .split("\n")
+    .filter((line) => !line.includes(":"))
+    .join("\n");
+}
+
+/**
  * rule 155 / 159.2.a.1: a spell's timing class comes from its printed
  * [Action]/[Reaction] keyword; without one it is "standard" (no showdowns).
  * The printed text is authoritative — card data historically only had
@@ -257,7 +272,7 @@ function normalizeSpellTiming(card: Card): Card {
   if (!card.rulesText) {
     return card;
   }
-  const text = card.rulesText.replace(/\([^)]*\)/g, "");
+  const text = cardLevelText(card.rulesText.replace(/\([^)]*\)/g, ""));
   // rule 813.1 / 806.1: [Action] and [Reaction] are timing permissions on ANY
   // card type — a unit or gear printing one keeps its own default timing
   // otherwise (only spells fall back to "standard").
