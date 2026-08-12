@@ -320,6 +320,59 @@ function payableEnergyCost(card) {
   return typeof card?.energyCost === "number" ? card.energyCost : 0;
 }
 
+/**
+ * rule 356.3 — the power pips the engine will actually charge. As with energy,
+ * the server-priced `effectivePowerCost` (added surcharges, waived pips) wins
+ * over the printed `powerCost`.
+ */
+function payablePowerCost(card) {
+  if (Array.isArray(card?.effectivePowerCost)) return card.effectivePowerCost.slice();
+  return Array.isArray(card?.powerCost) ? card.powerCost.slice() : [];
+}
+
+/**
+ * rule 357.1 — "pay the combined Energy cost (if any) and Power cost (if any)".
+ * The pips of `card`'s cost the given rune pool cannot cover yet.
+ */
+function unpaidPowerPips(card, pool) {
+  const pips = payablePowerCost(card);
+  if (pips.length === 0) return [];
+  const src = pool ?? gameState?.runePools?.[viewingPlayer];
+  const avail = { ...(src?.power || {}) };
+  // [rainbow] is payable with power of ANY domain, so settle the coloured pips first.
+  const ordered = pips.slice().sort((a, b) => (a === "rainbow" ? 1 : 0) - (b === "rainbow" ? 1 : 0));
+  const unmet = [];
+  for (const pip of ordered) {
+    if (pip === "rainbow") {
+      const key = Object.keys(avail).find(k => (avail[k] ?? 0) > 0);
+      if (key) { avail[key] -= 1; continue; }
+    } else if ((avail[pip] ?? 0) > 0) {
+      avail[pip] -= 1;
+      continue;
+    }
+    unmet.push(pip);
+  }
+  return unmet;
+}
+
+/**
+ * rule 357.1 — what the cost-payment bar must state: BOTH halves of the cost.
+ * A card is affordable only when the energy is pooled AND every power pip is
+ * covered; judging on energy alone offers a play the engine will refuse.
+ */
+function costPaymentCostState(card, currentEnergy, pool) {
+  const printed = payableEnergyCost(card);
+  const energy = printed || (typeof interaction?.pendingCardCost === "number" ? interaction.pendingCardCost : 0);
+  const pips = payablePowerCost(card);
+  const unmetPips = unpaidPowerPips(card, pool);
+  return {
+    energy,
+    pips,
+    unmetPips,
+    isAffordable: (currentEnergy ?? 0) >= energy && unmetPips.length === 0,
+  };
+}
+
 function isBaseCostVariant(m) {
   return !m.params?.paidAdditionalCost && !m.params?.repeatCount;
 }
@@ -876,7 +929,7 @@ function playTimingBlockReason(card) {
 
 // Exported for the play-block-reason unit test (browser: `module` is undefined).
 if (typeof module !== "undefined" && module && module.exports) {
-  module.exports = { playTimingBlockReason, cardPlaySpeed };
+  module.exports = { playTimingBlockReason, cardPlaySpeed, payablePowerCost, unpaidPowerPips, costPaymentCostState };
 }
 
 /**
@@ -1115,10 +1168,14 @@ function enterHandCardSelected(cardId) {
     // Fall back to the existing manual cost-payment mode (users who prefer clicking
     // runes manually still get the old flow).
     const needed = payableEnergyCost(card);
-    if (card && needed > 0) {
+    const printedPips = payablePowerCost(card);
+    if (card && (needed > 0 || printedPips.length > 0)) {
       const pool = gameState?.runePools?.[viewingPlayer];
       const totalEnergy = pool?.energy ?? 0;
-      if (totalEnergy < needed) {
+      // rule 357.1 — an unpaid power pip leaves the cost unpaid just as missing
+      // energy does, so it must open the payment bar too.
+      const unmet = unpaidPowerPips(card, pool);
+      if (totalEnergy < needed || unmet.length > 0) {
         const runeExhaustMoves = availableMoves.filter(m =>
           m.moveId === "exhaustRune" || m.moveId === "recycleRune"
         );
@@ -1180,14 +1237,17 @@ function showCostPaymentActionBar(card, currentEnergy) {
   const btns = document.getElementById("actionBarBtns");
 
   const displayName = (card.name || card.id).replace(/^player-[12]-/, "");
-  const cost = payableEnergyCost(card) || interaction.pendingCardCost;
-  const isAffordable = currentEnergy >= cost;
-  const countClass = isAffordable ? "affordable" : "insufficient";
+  // rule 357.1: the cost is Energy AND Power — state and gate on both halves.
+  const { energy: cost, pips, unmetPips, isAffordable } = costPaymentCostState(card, currentEnergy);
+  const countClass = currentEnergy >= cost ? "affordable" : "insufficient";
+  const pipsHtml = pips.length
+    ? ` + <span class="power-pips ${unmetPips.length ? "insufficient" : "affordable"}">${pips.map(p => `[${esc(p)}]`).join("")}</span>`
+    : "";
 
   label.innerHTML = `
     <span class="cost-payment-progress">
-      Need energy for <strong>${esc(displayName)}</strong>:
-      <span class="energy-count ${countClass}">${currentEnergy} / ${cost}</span>
+      Need cost for <strong>${esc(displayName)}</strong>:
+      <span class="energy-count ${countClass}">${currentEnergy} / ${cost}</span>${pipsHtml}
     </span>
   `;
 
@@ -1206,7 +1266,12 @@ function showCostPaymentActionBar(card, currentEnergy) {
       html += `<button class="action-bar-btn" style="background:#2a5040;border-color:#50c878;color:#80e8a0;" onclick='executeInteractionMove(${JSON.stringify(moveId)})'>${esc(moveLabel)}</button>`;
     }
   } else if (!isAffordable) {
-    html += `<span style="color:#6a6288;font-size:11px;">Exhaust runes to generate energy</span>`;
+    // rule 357.1 — an unmet power pip is paid by recycling a rune of that domain,
+    // not by exhausting for generic energy, so name the right gesture.
+    const pipHint = unmetPips.length
+      ? `Recycle a ${[...new Set(unmetPips)].map(p => `[${esc(p)}]`).join(" / ")} rune for power`
+      : "";
+    html += `<span style="color:#6a6288;font-size:11px;">${pipHint || "Exhaust runes to generate energy"}${pipHint && currentEnergy < cost ? " · exhaust runes for energy" : ""}</span>`;
   }
 
   btns.innerHTML = html;
