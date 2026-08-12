@@ -71,20 +71,19 @@ describe("Ruling 2b7458ab2218e6b9 — Deathgrip needs two friendly units", () =>
     expect(game.state("ally1")).toMatchObject({ might: 2, mightModifier: 0 });
   });
 
-  // Expected (355.8 / 358.1): with only one friendly unit there is no legal "another friendly unit",
-  // so Deathgrip cannot be played at all.
-  // Actual: the engine only checks the victim at play time (the recipient is a resolution-time
-  // choice), so the cast is offered and goes through, killing the lone ally for nothing but a card.
-  test.failing(
-    "BUG: ruling 2b7458ab2218e6b9 — with a single friendly unit Deathgrip is still castable (engine checks only the victim at play time)",
-    async () => {
-      const game = await board(1).build();
-      expect(game.p1.units().length + game.p1.units("bf1").length).toBeGreaterThan(0);
-      expect(game.p1.can("cast", "grip")).toBe(false);
-    },
-  );
+  // RULING-CONFLICT: riftjudge 2b7458ab2218e6b9 says Deathgrip cannot be played without two
+  // friendly units (reading the recipient as a second play-time chosen object, 355.8 / 358.1);
+  // CR 355.10 makes an object chosen while the spell RESOLVES not a play-time target, and CR 402.4
+  // removes an empty mandatory object set silently — so with one friendly unit the play is legal
+  // and only the Might bonus is lost. Engine follows CR, the same reading as the recipient-timing
+  // facet above (which is green).
+  test("with a single friendly unit it is STILL a legal play — the recipient is not a play-time target (CR 355.10)", async () => {
+    const game = await board(1).build();
+    expect(game.p1.units().length + game.p1.units("bf1").length).toBeGreaterThan(0);
+    expect(game.p1.can("cast", "grip")).toBe(true);
+  });
 
-  test("what the engine does instead with a single friendly unit: the victim dies, nobody is asked for a recipient, and the unlinked Draw 1 still happens", async () => {
+  test("with a single friendly unit: the victim dies, nobody is asked for a recipient, and the unlinked Draw 1 still happens", async () => {
     const game = await board(1).build();
     const hand0 = game.p1.hand().length;
     await game.p1.cast("grip", { targets: "victim" });

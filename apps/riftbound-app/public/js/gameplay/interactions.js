@@ -493,6 +493,36 @@ function enterAwaitTargetMode(pendingMoves, sourceCardId, extraMoves) {
 }
 
 /**
+ * rule 809.1.c / 809.1.c.1 — [Deflect N] on a chosen object is an additional cost
+ * the CHOOSER pays, once per time the spell chooses that object, in power of any
+ * Domain ([rainbow]). The surcharge is summed over the whole chosen set, so the
+ * banner has to quote a running total or the player cannot see what the set costs.
+ * Only objects the viewer does not control charge it (809.1.c).
+ */
+function deflectSurchargeFor(ids) {
+  let total = 0;
+  for (const id of ids || []) {
+    const card = findCard(id);
+    if (!card) continue;
+    if ((card.controller ?? card.owner) === viewingPlayer) continue;
+    for (const line of String(card.rulesText || "").split("\n")) {
+      const run = line.match(/^(?:\[(?:[A-Za-z]+)(?:\s+\d+)?\][\s,]*)+/);
+      if (!run) continue;
+      const re = /\[Deflect(?:\s+(\d+))?\]/gi;
+      let m;
+      while ((m = re.exec(run[0])) !== null) total += m[1] ? parseInt(m[1]) : 1;
+    }
+  }
+  return total;
+}
+
+/** "no [Deflect] surcharge" / "[Deflect] surcharge [rainbow][rainbow]" (809.1.c). */
+function deflectSurchargeText(ids) {
+  const n = deflectSurchargeFor(ids);
+  return n === 0 ? "no [Deflect] surcharge" : `[Deflect] surcharge ${"[rainbow]".repeat(n)}`;
+}
+
+/**
  * rule-id: sfd-080-221 (rule 355.13) — banner reflects multi-pick progress and
  * offers "No target" (zero-target variant) / "Done" (confirm current subset).
  */
@@ -556,13 +586,15 @@ function updateTargetBanner() {
   }
 
   const chosenNames = chosen.map(id => (findCard(id)?.name || id).replace(/^player-[12]-/, ""));
+  // rule 809.1.c — quote the running [Deflect] total for the set chosen so far.
+  const tax = chosen.length === 0 ? "" : ` · ${deflectSurchargeText(chosen)}`;
   const text = chosen.length === 0
     ? `Choose a target for ${name} — Esc to cancel`
     : repeats.length > 0
-      ? `${name}: ${chosenNames.join(", ")} — Play, or pay Repeat · Esc to cancel`
+      ? `${name}: ${chosenNames.join(", ")}${tax} — Play, or pay Repeat · Esc to cancel`
       : paid.length > 0
-        ? `${name}: ${chosenNames.join(", ")} — Play, or pay the additional cost · Esc to cancel`
-        : `${name}: ${chosenNames.join(", ")} — pick another or Done · Esc to cancel`;
+        ? `${name}: ${chosenNames.join(", ")}${tax} — Play, or pay the additional cost · Esc to cancel`
+        : `${name}: ${chosenNames.join(", ")}${tax} — pick another or Done · Esc to cancel`;
   showTargetBanner(text, buttons);
 }
 
