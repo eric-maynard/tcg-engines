@@ -9,6 +9,10 @@
  *    466.7.a only removes the Attacker Designation at step 7 — so Assault is still live when the conquer trigger looks for
  *    Mighty units. See the RULING-CONFLICT note on the last facet; the engine implements the CR reading.
  * Rules: 807.1.c–d (Assault only while an attacker), 466.5/466.5.d (conquer) vs 466.7.a (designation removed), 776 (Mighty).
+ * SETTLED — do not re-litigate: DESIGN.md § "Combat Resolution Step (466) — two settled adjudications".
+ *     This ruling, 42b466db3f308240, c1e05840717871da and 7412ece9e8248139 all strip the designation before
+ *     the Conquer and all describe the PRE-Unleashed rules (f04d5265ef4cdef8 states the change); riftfaq
+ *     8bf06d3d8b09e32c cites 466.5.d vs 466.7.a. All four tests assert the CR reading, annotated RULING-CONFLICT.
  */
 import { describe, expect, test } from "bun:test";
 import type { Game } from "../../../harness";

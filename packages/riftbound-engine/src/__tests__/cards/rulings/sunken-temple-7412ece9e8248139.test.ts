@@ -11,6 +11,11 @@
  *    conquer. See the RULING-CONFLICT note on the test below.
  * Rules: 466.5 / 466.5.d (Establish Control, Conquer), 466.7.a (designations removed when combat ends),
  *        140 ([Mighty] = 5+ Might), 807.1.d.1 ([Assault] lasts as long as the Attacker designation).
+ * SETTLED — do not re-litigate: DESIGN.md § "Combat Resolution Step (466) — two settled adjudications".
+ *        Four riftjudge answers strip the designation before the Conquer (this one, 42b466db3f308240,
+ *        c1e05840717871da, c1edab45ab8d7f0f) and all describe the pre-Unleashed rules; riftfaq
+ *        8bf06d3d8b09e32c (citing 466.5.d vs 466.7.a), f04d5265ef4cdef8 and 211635a4cca0ac5a state the
+ *        current one. Every one of those tests now asserts the CR reading.
  */
 import { describe, expect, test } from "bun:test";
 import { P1, P2, scenario } from "../../../harness";
