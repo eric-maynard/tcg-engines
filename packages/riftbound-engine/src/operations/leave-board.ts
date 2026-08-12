@@ -34,6 +34,7 @@ import type { RiftboundCardMeta, RiftboundGameState } from "../types";
 import type { DelayedTrigger } from "../types/game-state";
 import { getGlobalCardRegistry } from "./card-lookup";
 import { clearDamage, getDamage } from "./damage-store";
+import { forgetObjectScopedMemory, resetObjectIdentity } from "./object-identity";
 import { recordPublicReveal } from "./public-reveal";
 
 // ---------------------------------------------------------------------------
@@ -527,10 +528,13 @@ export function clearLKI(draft: RiftboundGameState, cardIds?: readonly string[])
  */
 export function resetObjectState(ctx: LeaveBoardContext, cardId: string): void {
   const id = cardId as CoreCardId;
-  // rule 124.1 — "nothing about the old object is tracked in any capacity":
-  // its per-turn trigger tallies ("the first time I conquer each turn") go too,
-  // so a card replayed out of banishment/trash/deck starts them fresh.
-  forgetPerCardTallies(ctx.draft, [cardId]);
+  // rule 124 / 124.1 — "nothing about the old object is tracked in any
+  // capacity". `resetObjectIdentity` is the ONE place that knows every
+  // object-scoped ledger (per-turn trigger tallies, the "use only once each
+  // turn" activation allowance, spent once-each-turn replacement allowances,
+  // delayed replacements bound to this object) and mints the instance id the
+  // card's next incarnation will carry; the meta wipe below covers the rest.
+  resetObjectIdentity(ctx.draft, cardId);
   const counters = ctx.counters;
   counters?.setFlag?.(id, "exhausted", false);
   counters?.setFlag?.(id, "stunned", false);
@@ -562,6 +566,7 @@ export function resetObjectState(ctx: LeaveBoardContext, cardId: string): void {
     lastDamagedBy: undefined,
     mightModifier: 0,
     modesChosenThisTurn: undefined,
+    modesChosenThisTurnByInstance: undefined,
     staticMightBonus: undefined,
     stunned: false,
   });
@@ -607,9 +612,19 @@ export function detachOnLeave(ctx: LeaveBoardContext, cardId: string): void {
     getGlobalCardRegistry().revertCopy(holder, cardId);
   }
   const worn = [...((meta.equippedWith ?? []) as string[])];
+  // rule 435.4.b — a detached card's location is the LAST LOCATION its host
+  // occupied, so Equipment whose host is banished/killed/bounced off a
+  // battlefield is present AT that battlefield, not teleported to base. It is
+  // loose Gear there and the next Cleanup recalls it (435.4.a / 149.3 / 323.7,
+  // `cleanup/state-based-checks.ts` step 5). `detachOnLeave` runs before the
+  // host moves, so the host's zone is still the location in question.
+  const hostZone = worn.length > 0 ? zoneOfCard(ctx, cardId) : undefined;
+  const lastLocation = isBoardZone(hostZone) ? (hostZone as string) : "base";
   for (const equipId of worn) {
     update(equipId as CoreCardId, { attachedTo: undefined, copiedFromCardId: undefined });
-    ctx.zones.moveCard({ cardId: equipId as CoreCardId, targetZoneId: "base" as CoreZoneId });
+    if (zoneOfCard(ctx, equipId) !== lastLocation) {
+      ctx.zones.moveCard({ cardId: equipId as CoreCardId, targetZoneId: lastLocation as CoreZoneId });
+    }
   }
   if (worn.length > 0) {
     // rule 477.1.b: the holder leaving the board detaches everything, so any
@@ -953,31 +968,6 @@ export function orderBatchTriggersByTurnOrder(
   collapseTriggerBatch(draft.interaction, chainLenBefore);
 }
 
-/**
- * rule 124 / 124.1 (rule-id: ven-002-166 Blade Twirler) — a card bounced or
- * recycled off the board becomes a NEW OBJECT with no memory of what the old one
- * did: drop its per-card `turnEventCounts` tallies so a re-played copy's first
- * move this turn is again "the first time I move each turn". Player- and
- * type-scoped tallies belong to the player, not the object, and stay; a card in
- * the trash or banishment keeps its tallies, since abilities that function from
- * there (and the death batch itself) still read them.
- */
-function forgetPerCardTallies(draftLike: unknown, cardIds: readonly string[]): void {
-  const counts = (draftLike as { turnEventCounts?: Record<string, number> }).turnEventCounts;
-  if (!counts) {
-    return;
-  }
-  for (const cardId of cardIds) {
-    const marker = `|c:${cardId}`;
-    for (const key of Object.keys(counts)) {
-      const at = key.indexOf(marker);
-      if (at >= 0 && (key.length === at + marker.length || key[at + marker.length] === "|")) {
-        delete counts[key];
-      }
-    }
-  }
-}
-
 export function emitLeaveEvents(
   ctx: LeaveBoardContext,
   results: readonly LeaveResult[],
@@ -1036,7 +1026,10 @@ export function emitLeaveEvents(
       ctx.draft,
       gone.map((r) => r.cardId),
     );
-    forgetPerCardTallies(
+    // rule 124.1 — the departure's own events may have re-tallied the object
+    // that just left ("when I die"), so a card that went back to a PRIVATE zone
+    // sheds those too: what returns from hand or the deck has no history at all.
+    forgetObjectScopedMemory(
       ctx.draft,
       gone.filter((r) => r.to === "hand" || r.to === "deck-top" || r.to === "deck-bottom").map((r) => r.cardId),
     );

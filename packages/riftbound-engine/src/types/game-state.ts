@@ -1839,6 +1839,16 @@ export interface RiftboundGameState {
   turnEventCounts?: Record<string, number>;
 
   /**
+   * rule 124 / 124.1 — which incarnation of each card is current. A card that
+   * changes zones to or from a non-board zone becomes a NEW game object, so
+   * `operations/object-identity.ts resetObjectIdentity` bumps its entry and
+   * tears down every object-scoped ledger keyed by the card id. Board-to-board
+   * relocation (a Move, a Recall, 446.1) is not that boundary and never bumps
+   * it. Game-long: it is an identity counter, not turn-scoped state.
+   */
+  objectInstances?: Record<string, number>;
+
+  /**
    * rule-id: ogn-026-298 — players who can't play cards for the rest of this
    * turn ("opponents can't play cards this turn"). Cleared at end of turn.
    */
