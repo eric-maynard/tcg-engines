@@ -6,6 +6,11 @@
  * Rules: 359.3.e.14 (linked instructions — "its controller" is the killed gear's controller,
  * whichever player that is), 355 (target = any gear on the board, friendly or enemy),
  * 159.2.a.1 (no [Action]/[Reaction] → standard timing: your turn, open state only).
+ *
+ * This is Hidden Blade's shape on a gear, so it obeys the same linked-instruction rule and the same
+ * product-owner adjudication (2026-08-13): a REPLACED death still draws (359.3.e.14.b), a target that has
+ * left the board does not (359.3.e.14.a). Both branches are pinned for the whole family in
+ * `core-rules/linked-instructions.test.ts` — keep this file and that one in agreement.
  */
 
 import { describe, expect, test } from "bun:test";

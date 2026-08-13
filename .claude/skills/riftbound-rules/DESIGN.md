@@ -421,13 +421,19 @@ FIXER-PRIMER § BATTLEFIELD CONTROL TIMING). Two deliberate points:
   lapses at the first Open-State Cleanup like any other; durable control needs a unit or token there.
 - Community rulings that predate the "1.1"/Unleashed control rules (control lost mid-combat, or mid-chain for Baited
   Hook / Cruel Patron / Arcane Shift, or "hidden card lost before a lone Deathknell resolves") are NOT followed; their
-  test facets carry `// RULING-CONFLICT` and assert the CR behaviour.
+  test facets carry `// RULING-CONFLICT` and assert the CR behaviour. These ~15 ids were settled BEFORE the
+  2026-08-13 ruling-first policy (§ "Community rulings vs the CR") and have not been re-audited under it; if they
+  are pre-Unleashed they are tiebreak 3 and need Eric's confirmation, so leave them alone and ask main.
 
-## Combat Resolution Step (466) — two settled adjudications (2026-08-12; do not re-litigate)
+## Combat Resolution Step (466) — two adjudications (2026-08-12; RE-AUDITED 2026-08-13 under the ruling-first policy)
 The Resolution Step is an ORDERED sequence and the engine follows its numbering literally: 466.1 Combat Cleanup
 (which inserts only "3c. Heal all Units" and "3d. Recall Attackers …", 466.1.a.1-2) → 466.2 resolve the chain from
 the damage step and the Cleanup → 466.3 Determine Combat Result → 466.4 resolve the result's own triggers → 466.5
-Establish Control / Conquer → 466.7 Combat ends. Two questions keep coming back; both are closed:
+Establish Control / Conquer → 466.7 Combat ends. Three combat-timing questions keep coming back. Under the
+2026-08-13 policy (§ "Community rulings vs the CR" below) a judge answer normally WINS over our own CR reading;
+all three are held at the CR reading only because they are the policy's named exception (a demonstrably superseded
+ruling) or because the flip contradicts a rule the ruling never addresses. None is closed by us any more — all
+three are PARKED FOR ERIC'S CONFIRMATION and none may be re-litigated by a lane in the meantime:
 - **Designations (and [Assault]) are STILL LIVE at the Conquer.** 466.5.d Conquers at step 5; only 466.7.a — two
   steps later — removes the Attacker/Defender designation, and 807.1.d.1 keeps [Assault] in effect for exactly as
   long as the designation lasts. So a unit that is [Mighty] (708/710) only via [Assault] does satisfy a conquer
@@ -439,6 +445,20 @@ Establish Control / Conquer → 466.7 Combat ends. Two questions keep coming bac
   resolved"); `211635a4cca0ac5a` agrees. All three stripping tests carry `// RULING-CONFLICT` and assert the CR.
   (Unchanged and correct: a unit walking onto an EMPTY battlefield never gains the designation at all — 464.2.c.3 —
   so it gets no [Assault] bonus there. That half of `42b466db3f308240` is right.)
+  **Policy verdict 2026-08-13: STALE-PRE-UNLEASHED — parked, awaiting Eric.** This is the exception the policy
+  names. `f04d5265ef4cdef8` says the change happened in as many words ("Previously, Assault would have deactivated
+  before conquer effects resolved"), `7412ece9e8248139` argues from "Rule 444.1.a.3", an id that exists in NEITHER
+  shipped Core Rules version (2025-06-02 or 2026-07-24), and two later answers plus riftfaq agree with the CR. The
+  engine is NOT flipped and the four rulings stay annotated until Eric confirms.
+
+- **A staged combat stamps designations as soon as the running showdown becomes a Combat Showdown.** 323.14
+  (checklist step 10a, in a SHOWDOWN Open State) converts the ongoing Non-Combat Showdown; 464.2 calls that combat
+  opening and 464.2.c.3 stamps Attacker/Defender "now". `33552d2333fd187b` (Ride the Wind) says designations wait
+  until the open showdown closes. **Policy verdict 2026-08-13: LIVE DISAGREEMENT — not flipped, awaiting Eric.**
+  No second ruling speaks and the answer is not stale (it argues against current patch notes, calling them
+  "misleading"), so the policy says flip it — but the flip is a combat-machinery change (deferring every
+  designation stamp, hence every "when I attack/defend" trigger and every [Assault] window) against explicit
+  current CR text the ruling never cites. It is not a card fix and should not be made by a lane on its own.
 - **A delayed "kill it" resolves BEFORE the combat result is read.** Imperial Decree ("when any unit takes damage
   this turn, kill it") is a delayed TRIGGER (390.2), not a delayed replacement (390.3): the damage is dealt and the
   kill is a separate chain item produced by dealing combat damage. 465.3 ends the damage step by skipping FEPR, so
@@ -449,37 +469,85 @@ Establish Control / Conquer → 466.7 Combat ends. Two questions keep coming bac
   Pending, draw stacked on top, LIFO); it is annotated `// RULING-CONFLICT` and NOT implemented, because reading the
   result while the damage-step chain is live contradicts 466.2 generally — the same window is what lets a Deathknell
   change who is standing here at 466.3 (`kogmaw-dk-spares-3d-recalled-attackers`).
+  **Policy verdict 2026-08-13: LIVE DISAGREEMENT — not flipped, awaiting Eric.** The ruling cites no rule
+  (`ruleRefs: []`) and no second answer speaks, so the policy says flip it; but implementing it means reading the
+  combat result while an item from the damage step is still on the chain, which is a general rewrite of 466.2 and
+  takes a landed ruling (`kogmaw-dk-spares-3d-recalled-attackers`) with it. Flag, don't freelance.
 
-## Community rulings settled against the CR (2026-08-12; do not re-litigate)
-A rules-adjudication pass took the 17 parked ruling-vs-CR items out of the fix queue
-(`.claude/skills/engine-playtest-observer/CONFLICTS-ADJUDICATED-2026-08-12.md` has the full table). Ten were
-riftjudge answers the current Comprehensive Rules supersede; their facets are now PASSING tests that assert the
-engine, each carrying a `// RULING-CONFLICT` note and a "previously asserted the opposite, do not flip back" line.
-The recurring shape is the one already seen for `fiora-peerless` and the 466 pair: the community answer describes
-pre-Unleashed text, or it is contradicted by a *second* riftjudge answer, and the CR names the discriminator.
+## Community rulings vs the CR — POLICY (product owner, 2026-08-13) and the re-audit
+**THE POLICY, in the product owner's words: "yeah follow the judge rulings."** A community/judge ruling WINS over
+our own reading of the Comprehensive Rules when the two conflict. The CR is the tiebreak in exactly three cases:
+1. **No ruling speaks** to the question — then the CR is all we have.
+2. **Rulings disagree with each other** (including an official answer contradicting a community one) — there is no
+   single judge answer to follow, so the CR breaks the tie. Cite BOTH ruling ids when you do this.
+3. **The ruling is demonstrably pre-Unleashed / pre-errata AND Eric has confirmed it.** "Demonstrably" means
+   evidence, not a rules argument: the ruling describes card or rule text that no longer exists, it cites a rule id
+   that is in no shipped Core Rules version, or a later answer states the change. Until Eric confirms, such an item
+   is PARKED (annotated, engine unchanged, listed for him) — a lane may not settle it on its own.
+
+This replaces the 2026-08-12 rule ("keep the Core Rule behaviour, rewrite the ruling test's facet") wherever the two
+disagree. The 2026-08-12 pass and its table
+(`.claude/skills/engine-playtest-observer/CONFLICTS-ADJUDICATED-2026-08-12.md`) are still the record of WHAT was
+decided and why; the verdict column below supersedes its verdicts. `// RULING-CONFLICT` still marks a facet that
+does not follow its ruling — but it must now also say WHICH of the three tiebreaks applies.
+
+### Re-audit of the 2026-08-12 settlements (2026-08-13)
+
+| item | ruling(s) | what the judge says | what the CR says | stale? | verdict |
+|---|---|---|---|---|---|
+| Hidden Blade's linked draw | `719c8ada539c1401` | a unit SAVED by the legend ability (Sett/The Boss) still draws 2 | 359.3.e.14.b: a replaced action does not stop the linked instruction — same answer | no | **NOT A CONFLICT — annotation removed.** The 08-12 pass read 359.3.e.5 without 359.3.e.14.b and swapped Flash (a real move to base) in for the legend ability. Engine already agreed with the judge; the facet now says so |
+| Sun Disc's own play satisfies its [Legion] | `4bd896c444b3c607` (nuance) vs `2d3df5615bb09954` | own play counts / own play never counts | 812.1.b.1, 812.1.c: "another card" (unchanged since the 2025-06-02 CR, 724.1.c) | n/a | **CR — tiebreak 2.** The two rulings disagree and `2d3df5615bb09954` calls the self-counting idea "legacy FAQ content". Engine unchanged |
+| Sun Disc tapped "for no effect" with no [Legion] | `4bd896c444b3c607` (same answer) vs `2d3df5615bb09954` | tapping does nothing but is allowed | 812.1.c leaves the Dependent Ability Inactive | n/a | **CR — tiebreak 2** (same pair of rulings). Engine unchanged |
+| Stalking Wolf into the battlefield its own cost emptied | `7c7de024a0a95e9c` vs `57b3e2849ef0109a` | play it anyway / "not legal on the battlefield you are attacking" | 813.4.b + 822.3: the conditional [Ambush] Reaction fails Check Legality | n/a | **CR — tiebreak 2.** Engine unchanged |
+| A card played mid-resolution: counterable? | `95688f6f6f4b0da4` vs `22ed336a9af8edc9` | cannot be reacted to / it is Pending, then "now reactions can happen" | 354.3 + 337.1/337.1.b + 337.4 | n/a | **CR — tiebreak 2.** `22ed336a9af8edc9` names Promising Future explicitly. Engine unchanged |
+| …and the ORDER of its play trigger | `95688f6f6f4b0da4` | PF finishes everything first | 337.1.b append order + 340.1 | n/a | **CR — tiebreak 2 (derived).** The ordering claim rests on the same "nothing goes on the chain" premise the sibling ruling refutes. Engine unchanged |
+| Designations during a still-open showdown | `33552d2333fd187b` | not designated until the showdown closes | 323.14 (step 10a, Showdown Open) + 464.2.c.3 stamp them at conversion | no | **LIVE DISAGREEMENT — parked for Eric.** The flip is combat machinery, not a card fix (see § Combat Resolution Step) |
+| Imperial Decree's kill vs the combat result | `5140bd0235c38037` | result read first, draw resolves LIFO above the kill | 465.3 + 466.2 drain the damage-step chain before 466.3 | no | **LIVE DISAGREEMENT — parked for Eric** (see § Combat Resolution Step) |
+| [Assault] still live at the Conquer | `42b466db3f308240`, `c1e05840717871da`, `c1edab45ab8d7f0f`, `7412ece9e8248139` vs `f04d5265ef4cdef8`, `8bf06d3d8b09e32c`, `211635a4cca0ac5a` | designation (and [Assault]) falls off before the Conquer | 466.5.d Conquers two steps before 466.7.a removes designations | **YES** | **STALE-PRE-UNLEASHED — parked for Eric.** `f04d5265ef4cdef8` states the change; `7412ece9e8248139` cites a rule id in no shipped version |
+| Salvage must target a gear | `eea5054e0caa29a0` | a gear must be targeted | 355.13: "up to one gear" is satisfied by zero | **YES** | **STALE-PRE-ERRATA — parked for Eric.** The ruling quotes the pre-errata "you may kill a gear" wording |
+| Elder Dragon's lethal-damage alteration | `4085408cc733a662`, `d0b7f94188fac000`, `e936e0fd5ae150ce` | (three answers) | 142.4.c keys on who marked the damage | n/a | **NOT A CONFLICT.** All three hold at once; the old repro seeded damage with no attributor |
+| Buccaneer's unpayable opt-in prompt | (queue item `d3db201455ae`; no ruling id) | it should be silent | the CR says nothing about showing a prompt | n/a | **NOT A RULING CONFLICT** — engine convention (§ Paying costs), unchanged |
+
+Nothing in the audit produced an engine flip: the one item where the judge and the engine turned out to disagree
+was the Hidden Blade annotation, and removing it made the engine and the judge agree. Everything the policy would
+otherwise flip is either tiebreak 2 or parked for Eric.
+
+### The settled points themselves (still current)
 - **[Legion] never fires off its own card.** 812.1.c: the Dependent Ability is Active only while "a card DIFFERENT
   than the one with the Legion ability has been Finalized by you on the same turn" (812.1.b.1 "another card"). So
   Sun Disc's own play never satisfies it, and with no other play the ability is not on the card at all — it cannot
-  be tapped "for no effect". `4bd896c444b3c607` says both of those things and is wrong on both.
-- **No kill ⇒ no draw.** "Kill a unit at a battlefield. Its controller draws 2" is the CR's *own* example twice
-  over: 355.10.d ("targets the unit, but not its controller") and the Hidden Blade example under 359.3.e.5 ("any
-  instructions related to that unit are ignored"), with 359.3.e.12 making "its controller" read null. Contrast
-  Void Seeker's "Draw 1", which names no referent back to the target and still happens. `719c8ada539c1401` is wrong.
+  be tapped "for no effect". `4bd896c444b3c607`'s nuance says both of those things; riftjudge `2d3df5615bb09954`
+  says the opposite and cites 812.1.b.1/812.1.c itself, calling the self-counting idea "legacy FAQ content", so
+  tiebreak 2 applies and the CR breaks the tie.
+- **A LINKED rider follows the attempt, not the survival** (Hidden Blade and its family; product-owner
+  adjudication 2026-08-13, spec `core-rules/linked-instructions.test.ts`). "Kill a unit at a battlefield. Its
+  controller draws 2" is the CR's own worked example of a LINKED instruction (359.3.e.14). Two branches:
+  **death REPLACED** (Zhonya's Hourglass, Guardian Angel, The Boss — any 371/390.3 replacement) ⇒ the kill was
+  attempted against a still-legal target, so the rider STILL RUNS (359.3.e.14.b, whose example is this card);
+  **target GONE** (bounced, banished, moved off the battlefield — no legal target at resolution) ⇒ the first
+  instruction is ignored and the rider is ignored with it (359.3.e.14.a, whose example is this card being moved to
+  base). A rider that names the ACTION rather than the object ("If you do", "If this kills it" — Deathgrip,
+  Disintegrate, Baited Hook's "the killed unit") does NOT run on a replaced kill; an unlinked instruction (Void
+  Seeker's "Draw 1", Deathgrip's trailing "Draw 1") always runs. The engine has implemented exactly this all
+  along; what changed on 2026-08-13 is the bookkeeping — this bullet used to read "No kill ⇒ no draw" and
+  `719c8ada539c1401` used to be filed as wrong. It is not: its fact pattern is the replacement branch.
 - **A card played mid-resolution is Pending, not inlined.** 354.3 stops its further steps until the current
   resolution ends; 337.1/337.1.b then finalize the pending items in append order and 337.4 gives the next item's
   controller Priority — so it *is* counterable, and a play trigger appended later is newer and resolves first
-  (340.1). `95688f6f6f4b0da4` denies both; riftjudge `22ed336a9af8edc9` agrees with the CR.
+  (340.1). `95688f6f6f4b0da4` denies both; riftjudge `22ed336a9af8edc9` — which names Promising Future — agrees
+  with the CR, so tiebreak 2 applies to both halves.
 - **Designations are stamped when the showdown BECOMES a Combat Showdown, not when it closes.** 323.14 converts the
   running Non-Combat Showdown; 464.2 defines that conversion as combat opening; 464.2.c.3 stamps
   Attacker/Defender "now"; 464.2.c.1.b explicitly contemplates combat opening into a showdown already running.
-  `33552d2333fd187b` is right that the showdown does not end early and wrong that nobody is designated yet.
+  `33552d2333fd187b` is right that the showdown does not end early and disagrees on the designation half — that
+  half is a LIVE DISAGREEMENT parked for Eric (see § Combat Resolution Step), not a settled point.
 - **[Ambush] grants LOCATION validity separately from TIMING.** A card's own "you may play me to its battlefield"
   clause is a location permission (822.3.a); the Reaction speed comes from Ambush and is conditional (813.4), so if
   the play's additional cost empties the destination the condition fails at step 5 Check Legality and the play is
-  undone (813.4.b, 822.3). `7c7de024a0a95e9c` wants the Wolf in anyway; official ruling `57b3e2849ef0109a` and the
-  CR agree it cannot be.
+  undone (813.4.b, 822.3). `7c7de024a0a95e9c` wants the Wolf in anyway; official ruling `57b3e2849ef0109a` ("not
+  legal on the battlefield you are attacking") and the CR agree it cannot be — tiebreak 2.
 - **"Up to one X" is satisfied by zero** (355.13) — post-errata Salvage keeps the empty target set on the menu;
-  `eea5054e0caa29a0` describes the pre-errata "you may kill a gear" wording.
+  `eea5054e0caa29a0` describes the pre-errata "you may kill a gear" wording. STALE-PRE-ERRATA, parked for Eric.
 - **Not every ruling clash is a clash.** Elder Dragon's three answers all hold at once: 142.4.c alters lethal damage
   only "for enemy units that have damage marked BY YOU", so who marked the pre-existing damage decides it. A repro
   that seeds damage with no attributor is testing neither case.
@@ -487,10 +555,9 @@ pre-Unleashed text, or it is contradicted by a *second* riftjudge answer, and th
 ## Open rules questions (need a human or an official ruling)
 The tree is self-consistent without answers to these — each is already implemented one way and pinned by tests. They
 are listed because an official answer would *change* something, and because re-deriving them has cost real cycles.
-1. **Hidden Blade's linked draw.** "Kill a unit at a battlefield. Its controller draws 2" — when the unit is saved,
-   is the draw an *independent* instruction (like Void Seeker's "Draw 1", so it still happens) or an instruction
-   *related to the illegal target* (so it is ignored)? Engine + 33 facets say ignored, on 359.3.e.5's own Hidden
-   Blade example; riftjudge `719c8ada539c1401` says it still draws. This is the single closest call in the set.
+1. ~~**Hidden Blade's linked draw.**~~ **ANSWERED 2026-08-13 by the product owner** — "you still draw if the death
+   is replaced but not if the unit is like bounced". That is 359.3.e.14.a/b and it is what the engine does; see
+   § "Community rulings vs the CR" and `core-rules/linked-instructions.test.ts`. Not open, do not re-derive.
 2. **Deceiver's "another".** "Play a ready Reflection unit token there. It becomes a copy of ANOTHER unit there."
    The copy source is a target chosen at finalization (§ Choices and when they are made), but "another" is relative
    to a token that does not exist until resolution. Does that make the source choosable at finalization anyway

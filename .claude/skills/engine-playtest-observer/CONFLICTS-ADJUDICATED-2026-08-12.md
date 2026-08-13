@@ -1,5 +1,15 @@
 # Ruling-vs-CR conflicts — adjudicated 2026-08-12
 
+> **SUPERSEDED IN PART — re-audited 2026-08-13 under a new product-owner policy: JUDGE RULINGS WIN over our own
+> CR reading; the CR is the tiebreak only when no ruling speaks, when rulings disagree with each other, or when a
+> ruling demonstrably describes superseded text AND Eric has confirmed it.** This file stays as the record of what
+> was decided on 08-12 and why. For the CURRENT verdict on each item — and for the four items now parked for Eric
+> ([Assault] before the Conquer, Salvage's pre-errata target, Ride the Wind's designations, Imperial Decree vs the
+> combat result) — read DESIGN.md § "Community rulings vs the CR". One row below is simply wrong: item
+> `99cac87aa3a4` (Hidden Blade's linked draw) was never a conflict — 359.3.e.14.b makes a REPLACED kill keep its
+> linked draw, which is what the ruling says and what the engine has always done; only a target that has LEFT the
+> board loses it (359.3.e.14.a). Family spec: `core-rules/linked-instructions.test.ts`.
+
 The 17 items TRIAGE-2026-08-12.md §3 flagged as "no engine lane can move these". Each had burned ~4
 `requeue-failed` rounds: a fixer claims one, re-derives the same conflict, fails it again. This pass settles each
 on the Comprehensive Rules instead of trying to fix it.
@@ -24,7 +34,7 @@ asserted the opposite, do not flip back" line. Items moved to `done/`.
 |---|---|---|---|---|
 | `2688d35630c1` | Does Sun Disc's own play satisfy its `[Legion]` on the turn it is played? | yes — the ability is separate from the card and sees that a card was played | **no** — 812.1.c needs "a card DIFFERENT than the one with the Legion ability … Finalized by you on the same turn" (812.1.b.1 "another card") | ruling wrong · `rulings/baited-hook-4bd896c444b3c607.test.ts` |
 | `cf3ad3938e34` | With no `[Legion]`, may Sun Disc be tapped "for no effect"? | yes, the cost is paid and nothing happens | **no** — 812.1.b.1/812.1.c leave the Dependent Ability Inactive, so the activated ability is not on the card to activate | ruling wrong · same file |
-| `99cac87aa3a4` | Hidden Blade's target is saved from the kill — does its controller still draw 2? | yes | **no** — 355.10.d uses this exact sentence ("targets the unit, but not its controller") and 359.3.e.5's own Hidden Blade example ignores "any instructions related to that unit"; 359.3.e.7/.e.12 make "its controller" null | ruling wrong · `rulings/hidden-blade-719c8ada539c1401.test.ts` (see Open question 1) |
+| `99cac87aa3a4` **(WRONG — corrected 2026-08-13)** | Hidden Blade's target is saved from the kill — does its controller still draw 2? | yes | **no** — 355.10.d uses this exact sentence ("targets the unit, but not its controller") and 359.3.e.5's own Hidden Blade example ignores "any instructions related to that unit"; 359.3.e.7/.e.12 make "its controller" null | **superseded**: 359.3.e.14.b says a REPLACED kill keeps its linked draw (Hidden Blade is the rule's own example) and the ruling's fact pattern is a replacement, so ruling = CR = engine. Only 359.3.e.14.a (target off the board) drops the draw. Annotation removed · `rulings/hidden-blade-719c8ada539c1401.test.ts`, family spec `core-rules/linked-instructions.test.ts` |
 | `f52b2c46ed62` | May Stalking Wolf be played, at Reaction speed, to the battlefield its own additional cost just emptied? | yes — "you may play me to its battlefield (even if you don't have other units there)" | **no** — that clause grants LOCATION validity (822.3.a); the Reaction comes from conditional `[Ambush]` (813.4/813.4.a) and fails step 5 Check Legality once the destination is empty (813.4.b, 822.3) | ruling wrong; official `57b3e2849ef0109a` agrees with the CR · `rulings/stalking-wolf-7c7de024a0a95e9c.test.ts` (all 3 facets) |
 | `17d8f4d9a8f8` | Does a play trigger of a unit Promising Future played resolve before or after the other card PF played? | after — PF finishes everything first | **before** — the queued spell keeps its older append slot (337.1.b), so the later-appended trigger is newest and 340.1 resolves it first | ruling wrong · `rulings/promising-future-95688f6f6f4b0da4.test.ts` |
 | `555a85d71eb8` | Can a card played by Promising Future be countered? | no — it resolves inside PF's resolution | **yes** — 354.3 leaves it Pending, 337.1/337.1.b finalize after PF, 337.4 then gives priority | ruling wrong; riftjudge `22ed336a9af8edc9` agrees with the CR · same file |
