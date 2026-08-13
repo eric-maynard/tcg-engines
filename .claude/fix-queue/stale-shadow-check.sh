@@ -36,5 +36,12 @@ while read -r f; do
     git checkout HEAD -- "$f" && echo "  restored from HEAD"
   fi
 done < <(git status --porcelain -- packages/ apps/ | sed -n 's/^ M //p')
-[ "$found" = 0 ] && echo "no stale shadows — every modified working copy carries real local work"
+# Deleted-but-tracked files: same hazard, and restoring one cannot lose work.
+while read -r f; do
+  [ -n "$f" ] || continue
+  found=$((found+1))
+  echo "DELETED-BUT-TRACKED $f  (present at HEAD; a deletion here breaks every import of it)"
+  if [ "$FIX" = 1 ]; then git checkout HEAD -- "$f" && echo "  restored from HEAD"; fi
+done < <(git status --porcelain -- packages/ apps/ | sed -n 's/^ D //p')
+[ "$found" = 0 ] && echo "no stale shadows — every modified working copy carries real local work, and no tracked file is missing"
 exit 0
