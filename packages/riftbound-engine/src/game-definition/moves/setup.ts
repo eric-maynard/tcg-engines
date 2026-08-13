@@ -14,6 +14,7 @@ import type {
 import type { PlayerId, RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../types";
 import { applyBattlefieldPermanentEffects } from "../../operations/battlefield-setup-effects";
 import { GAME_MODES } from "../../modes/game-modes";
+import type { GameMode } from "../../modes/game-modes";
 
 /**
  * Put a setup card into a deck zone AND record its owner (rule 100.4: every
@@ -100,6 +101,57 @@ export const setupMoves: Partial<
    * Each player rolls once. After all players roll, the step advances to
    * "chooseFirst" and the roll winner is recorded in setup state.
    */
+  /**
+   * rule 489.3 / 489.5.a / 642.3 — declare the Mode of Play (rule 640-648).
+   *
+   * Nothing else in the pregame can express one, so without this move every
+   * game is a solo mode at victory score 8 — a 2v2 Magma Chamber would score
+   * at 8 with no teams. The mode fixes the victory score and, when it is team
+   * based, seats the players into teams in turn order (489.5.a: two teams of
+   * two share their points). Legal only while nobody has rolled yet, so the
+   * mode is settled before any mode-dependent step (488.4.b, 487.7) runs.
+   */
+  selectGameMode: {
+    condition: (state, context) => {
+      if (state.status !== "setup" || !state.setup) {
+        return false;
+      }
+      if (state.setup.step !== "rollForFirst" || Object.keys(state.setup.rolls).length > 0) {
+        return false;
+      }
+      const config = GAME_MODES[context.params.mode as GameMode];
+      if (!config) {
+        return false;
+      }
+      const count = Object.keys(state.players).length;
+      const { playerCount } = config;
+      return Array.isArray(playerCount)
+        ? count >= playerCount[0] && count <= playerCount[1]
+        : count === playerCount;
+    },
+
+    reducer: (draft, context) => {
+      const config = GAME_MODES[context.params.mode as GameMode];
+      if (!config) {
+        return;
+      }
+      draft.victoryScore = config.victoryScore;
+      if (!config.teamBased) {
+        delete (draft as { teams?: unknown }).teams;
+        return;
+      }
+      // rule 489.5.a — seats alternate between the two teams, so the two
+      // members of a team never sit next to each other in turn order.
+      const supplied = context.params.teams as Record<string, number> | undefined;
+      const ids = Object.keys(draft.players);
+      const teams: Record<string, number> = {};
+      for (const [i, id] of ids.entries()) {
+        teams[id] = supplied?.[id] ?? i % 2;
+      }
+      draft.teams = teams as never;
+    },
+  },
+
   rollForFirst: {
     condition: (state, context) => {
       const { playerId } = context.params;

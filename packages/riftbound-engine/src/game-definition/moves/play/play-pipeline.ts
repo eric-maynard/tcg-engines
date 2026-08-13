@@ -47,7 +47,7 @@ import {
 import {
   addToChain,
   createInteractionState,
-  getActiveShowdown,
+  eligibleSeats,
   removeChainItem,
 } from "../../../chain";
 import { executeEffect } from "../../../abilities/effect-executor";
@@ -1012,7 +1012,11 @@ function appendPendingPlayItem(draft: RiftboundGameState, spec: EffectPlaySpec, 
     type: isSpell ? "spell" : "permanent",
   };
   const existing = state.chain?.items ?? [];
-  const activeShowdown = getActiveShowdown(state);
+  // rules 336-340: priority on a chain is the full turn-order rotation, never
+  // the showdown's participant list (rule 462) — a chain opened by an effect
+  // that plays a card is no exception. rule 651.3: a player removed from the
+  // game is never seated again.
+  const seats = eligibleSeats(state, Object.keys(draft.players));
   (draft as { interaction?: RiftboundGameState["interaction"] }).interaction = {
     ...state,
     chain: {
@@ -1021,8 +1025,8 @@ function appendPendingPlayItem(draft: RiftboundGameState, spec: EffectPlaySpec, 
       items: [...existing, item as never],
       openedByTrigger: state.chain ? state.chain.openedByTrigger : true,
       passedPlayers: [],
-      relevantPlayers: state.chain?.relevantPlayers ?? activeShowdown?.relevantPlayers ?? Object.keys(draft.players),
-      turnOrder: state.chain?.turnOrder ?? Object.keys(draft.players),
+      relevantPlayers: state.chain?.relevantPlayers ?? seats,
+      turnOrder: state.chain?.turnOrder ?? seats,
     },
     nextChainItemId: state.nextChainItemId + 1,
   } as RiftboundGameState["interaction"];

@@ -7,6 +7,7 @@
  */
 
 import type { PlayCostSelection } from "@tcg/riftbound-types";
+import type { GameMode } from "../modes/game-modes";
 
 /**
  * Player identifier type
@@ -62,6 +63,14 @@ export interface RiftboundMoves {
   // ============================================
   // Setup Moves (Pregame Sequence)
   // ============================================
+
+  /**
+   * rule 489.3 / 489.5.a / 642 — declare the Mode of Play for this game.
+   * The mode fixes the victory score and, in 2v2 Magma Chamber, the teams;
+   * without it a game is a solo mode at 8. Legal only during setup, before
+   * anything has been placed.
+   */
+  selectGameMode: { playerId: PlayerId; mode: GameMode; teams?: Record<string, number> };
 
   /** Roll d20 for turn order determination (rule 115) */
   rollForFirst: { playerId: PlayerId };

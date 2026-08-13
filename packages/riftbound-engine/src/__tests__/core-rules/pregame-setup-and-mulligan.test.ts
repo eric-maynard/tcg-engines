@@ -39,6 +39,7 @@ import type { CardDefLike, HarnessEngine, InlineCardDef } from "../../harness";
 import { Game, P1, P2, P3, P4, getInternalState, loadDefaultCardPool, scenario, toLookupPayload } from "../../harness";
 import type { InternalView } from "../../harness/internal";
 import { GAME_MODES } from "../../modes/game-modes";
+import type { GameMode } from "../../modes/game-modes";
 import { CardDefinitionRegistry, getGlobalCardRegistry, setGlobalCardRegistry } from "../../operations/card-lookup";
 import { isTeamGame } from "../../operations/teams";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../types";
@@ -188,9 +189,13 @@ function mulliganKeepAll(pg: Pregame, first: string) {
 }
 
 /** Everything up to and including the opening draw; no mulligans yet. */
-function pregameThroughDraw(opts: { players?: string[]; seed?: string; first?: string; mainCount?: number; keep?: number } = {}) {
+function pregameThroughDraw(opts: { players?: string[]; seed?: string; first?: string; mainCount?: number; keep?: number; mode?: GameMode } = {}) {
   const pg = newPregame(opts);
   const first = opts.first ?? (pg.players[0] as string);
+  // rule 489.3 — the Mode of Play is declared before anything else happens.
+  if (opts.mode) {
+    expect(mv(pg.engine, "selectGameMode", first, { mode: opts.mode }).success).toBe(true);
+  }
   rollAndChoose(pg, first);
   placeLegendsAndChampions(pg);
   selectBattlefields(pg, opts.keep ?? 0);
@@ -210,7 +215,7 @@ function startPlay(pg: Pregame, first: string): Game {
   return Game.attach(pg.engine, { players: turnOrder(pg, first) });
 }
 
-function fullPregame(opts: { players?: string[]; seed?: string; first?: string } = {}) {
+function fullPregame(opts: { players?: string[]; seed?: string; first?: string; mode?: GameMode } = {}) {
   const { first, pg } = pregameThroughDraw(opts);
   mulliganKeepAll(pg, first);
   const game = startPlay(pg, first);
@@ -1004,11 +1009,10 @@ describe("15. Cross-mode guard: the FFA3 / FFA4 / 2v2 first-turn process differs
     expect(row).not.toContain(pg.kit[P1]?.bfs[0] as string);
   });
 
-  test.failing("BUG: 489.3 / 489.5.a — a 2v2 Magma Chamber game uses team victory score 11 with points shared by the team; no Mode of Play reaches the engine, so a 4-player setup is always a solo game at 8", async () => {
-    // Expected: a four-player pregame that is a Magma Chamber has teams configured and victoryScore 11.
-    // Actual: RiftboundGameState.victoryScore is fixed at 8 by the engine's initial state and
-    // `teams` is never populated by any setup move, so isTeamGame(state) is false.
-    const { game } = fullPregame({ players: [P1, P2, P3, P4], seed: "magma-chamber" });
+  test("489.3 / 489.5.a — a 2v2 Magma Chamber game uses team victory score 11 with points shared by the team", async () => {
+    // rule 489.3 / 489.5.a — the Mode of Play is declared by `selectGameMode`; it fixes the
+    // victory score at 11 and seats the four players into two alternating teams.
+    const { game } = fullPregame({ mode: "magmaChamber", players: [P1, P2, P3, P4], seed: "magma-chamber" });
     expect(isTeamGame(game.gameState)).toBe(true);
     expect(game.gameState.victoryScore).toBe(11);
   });
