@@ -213,6 +213,9 @@ describe("action decisions: grouping and the play bundle", () => {
       name: "targets",
       options: [["bf1"]],
       required: true,
+      // rule 355.10.d.2 — one legal battlefield is still a CHOICE, flagged so a
+      // client can render a confirm.
+      soleOption: true,
     });
     // An X pledged up front may never exceed the Power on hand — Energy cannot buy it.
     const tooMuch = await game.p1.try((s) => s.cast("bt", { x: 4 }));

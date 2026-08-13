@@ -32,7 +32,7 @@ describe("Ruling e53d4511cf55fc0a — Bellows Breath hits up to three DIFFERENT 
   // Expected (355.10.a / 355.12): one object cannot fill two slots of the same "up to three units" set, so
   // naming Grunt A twice is not a legal play. Actual: playSpell enumerates duplicate sets (["a","a"], even
   // ["a","b","c","a","b","c"]), the cast is accepted and Grunt A takes 2 from a single, un-repeated Bellows.
-  test.failing("BUG: ruling e53d4511cf55fc0a — the engine accepts the same unit twice in one Bellows Breath set and deals it 2", async () => {
+  test("ruling e53d4511cf55fc0a — the same unit cannot be named twice in one Bellows Breath set", async () => {
     const game = await board().build();
     const attempt = await game.p1.try((p) => p.cast("bellows", { targets: ["a", "a"] }));
     expect(attempt.ok).toBe(false);

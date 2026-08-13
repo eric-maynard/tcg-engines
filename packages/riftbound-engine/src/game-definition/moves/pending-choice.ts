@@ -91,8 +91,10 @@ import {
   canPerformEffectPlay,
   continueRepeatSpellSlots,
   type EffectPlaySpec,
+  instructionCost,
   recordEffectPlayAnswer,
 } from "./play/play-pipeline";
+import { getPlayCostModel } from "./play/cost-model";
 import {
   type CostExtras,
   canPayResourceCost,
@@ -1524,22 +1526,76 @@ export function isAffordablePlayPick(
   if (choice.type !== "reveal-and-pick" || choice.onPicked !== "play") {
     return true;
   }
-  // rule 356.4 / 359.3.e.6 (ogn-242-298 Baited Hook) — "you may BANISH a unit
-  // from among them AND play it": the banish is its own instruction and lands
-  // on selection, so an unplayable card is still a legal pick (it just stays
-  // banished when the play cannot be performed). Only a pick whose ONLY
-  // consequence is the play is filtered by playability.
-  if ((choice as { playBanishFirst?: boolean }).playBanishFirst === true) {
-    return true;
-  }
   // Minimal unit-test contexts (no board accessors) cannot price anything.
   const zones = context?.zones as { getCardsInZone?: unknown; getCardZone?: unknown } | undefined;
   if (typeof zones?.getCardsInZone !== "function" || typeof zones?.getCardZone !== "function") {
     return true;
   }
-  return canPerformEffectPlay(
-    { cards: context?.cards, counters: undefined, draft: state, zones: context?.zones } as never,
-    playSpecFromChoice(state, choice, cardId, context as { cards: { getCardOwner?: (id: CoreCardId) => unknown } }),
+  const spec = playSpecFromChoice(
+    state,
+    choice,
+    cardId,
+    context as { cards: { getCardOwner?: (id: CoreCardId) => unknown } },
+  );
+  if (
+    canPerformEffectPlay(
+      { cards: context?.cards, counters: undefined, draft: state, zones: context?.zones } as never,
+      spec,
+    )
+  ) {
+    return true;
+  }
+  // rule 356.4 / 359.3.e.6 (ogn-242-298 Baited Hook, ogn-062-298 Reinforce) —
+  // "you may BANISH one from among them AND play it" where the prompt is also
+  // the play's Pay step: recyclable runes and every other price are still to
+  // come, so the pick is never filtered by playability.
+  if ((choice as { playBanishFirst?: boolean }).playBanishFirst === true) {
+    return true;
+  }
+  // rule 356.2.a.1 / 358.2 / 358.5 (sfd-188-221 Void Rush × ogn-208-298 Cruel
+  // Patron; riftjudge 1bf52a7cfc76b405) — a play that fails ONLY on a MANDATORY
+  // additional OBJECT cost with nothing to pay it is still a legal pick: the
+  // banish already happened, the play is undone at Pay Costs, and the card stays
+  // banished. A pick the pool cannot fund, or one with no legal target, stays
+  // filtered (419.2.a / 355.16).
+  return blockedOnlyByMandatoryObjectCost(state, cardId, spec, context);
+}
+
+/**
+ * rule 356.2.a.1 / 357 / 358.2 — true when the card's cost model carries a
+ * MANDATORY additional OBJECT cost (kill / discard / exhaust / spend-buff /
+ * return-to-hand) and the RESOURCE half of the play is affordable: the play
+ * fails at Pay Costs rather than being illegal or unfunded.
+ */
+function blockedOnlyByMandatoryObjectCost(
+  state: RiftboundGameState,
+  cardId: string,
+  spec: EffectPlaySpec,
+  context?: { cards: unknown; zones: unknown },
+): boolean {
+  const cards = context?.cards as { getCardMeta?: (id: CoreCardId) => unknown } | undefined;
+  const meta = typeof cards?.getCardMeta === "function" ? createMetaAccessor(cards as never) : undefined;
+  const model = getPlayCostModel(state, spec.playerId, cardId, {
+    ...(meta ? { getCardMeta: meta } : {}),
+  } as never);
+  const isObjectCost = (c: Record<string, unknown>): boolean =>
+    c.kill !== undefined ||
+    c.discard !== undefined ||
+    c.exhaust !== undefined ||
+    c.spendBuff !== undefined ||
+    c.returnToHand !== undefined;
+  if (!model.additional.some((a) => a.mandatory === true && isObjectCost(a.cost as Record<string, unknown>))) {
+    return false;
+  }
+  const { extras, free } = instructionCost(spec);
+  if (free || state.runePools[spec.playerId] === undefined) {
+    return true;
+  }
+  return canPayResourceCost(
+    state,
+    spec.playerId,
+    cardId,
+    computePlayResourceCost(state, spec.playerId, cardId, extras as CostExtras, meta, false),
   );
 }
 

@@ -853,6 +853,13 @@ function buildFields(ctx: DecisionContext, moveId: string, variants: FlatMove[],
       name,
       options,
       required: presentInAll,
+      // rule 355.10.d.2 — a card pick whose legal answer set has exactly one
+      // member is still CHOSEN, not programmatically selected; mark it so a
+      // client renders a confirm. This holds for a MULTI-pick answer (a forced
+      // pair) exactly as for a single one.
+      ...(options.length === 1 && (meta.kind === "cards" || meta.kind === "card")
+        ? { soleOption: true as const }
+        : {}),
     });
   }
   // rule 429.1 (sfd-083-221): an activated "Pay any amount of …" ability
@@ -2273,9 +2280,19 @@ function constraintsFrom(option: ActionOption, args: PlayArgs): Constraint[] {
     const units = args.units;
     cs.push({ describe: units, param: "unitIds", test: (v) => Array.isArray(v) && sameSet(v, units) });
   }
-  if (args.repeat !== undefined) {
-    const n = args.repeat;
+  const repeatArg =
+    args.repeat ?? ((args.params as { repeatCount?: number } | undefined)?.repeatCount);
+  if (repeatArg !== undefined) {
+    const n = repeatArg;
     cs.push({ describe: n, param: "repeatCount", test: (v) => (Number(v ?? 0) || 0) === n });
+  } else {
+    // rule 820.1 — [Repeat] is an OPTIONAL additional cost, so a play that
+    // names no `repeat` is the single-execution play. This is a HARD filter,
+    // not a DEFAULT_PREFS preference: a preference is dropped when it would
+    // empty the variant list, which silently bought a [Repeat] to make an
+    // otherwise ILLEGAL choice legal (a Bellows Breath target set spanning two
+    // locations is legal only as two executions — ruling 4cdede4e3549fa7a).
+    cs.push({ describe: 0, param: "repeatCount", test: (v) => !(Number(v ?? 0) || 0) });
   }
   if (args.mode !== undefined) {
     const m = args.mode;

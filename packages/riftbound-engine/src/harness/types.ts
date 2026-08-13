@@ -262,6 +262,12 @@ export interface ActionField {
     readonly power?: Readonly<Record<string, number>>;
     readonly reason: string;
   };
+  /**
+   * rule 355.10.d.2 — exactly one legal answer, asked anyway. Stamped for a
+   * MULTI-pick answer set (a forced pair) exactly as for a single one, so a
+   * client can render "only one legal choice — confirm it" either way.
+   */
+  readonly soleOption?: true;
   /** true when every variant sets this param (agent must supply or accept a follow-up). */
   readonly required: boolean;
 }

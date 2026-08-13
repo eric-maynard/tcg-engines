@@ -70,7 +70,7 @@ describe("Ruling 4cdede4e3549fa7a — a Repeat-paid Bellows Breath may aim each 
 
   // The engine accepts a single (un-repeated) execution whose targets sit at two different battlefields and
   // deals damage to both; the ruling requires every target of ONE execution to share a location.
-  test.failing("BUG: ruling 4cdede4e3549fa7a — without Repeat, the engine lets one execution hit units at two different battlefields", async () => {
+  test("ruling 4cdede4e3549fa7a — without Repeat, the engine lets one execution hit units at two different battlefields", async () => {
     const game = await board().build();
     const mixed = await game.p1.try((p) => p.cast("bellows", { targets: ["a", "c"] }));
     expect(mixed.ok).toBe(false);
