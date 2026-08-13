@@ -1397,6 +1397,19 @@ export type PendingResume =
       readonly sourceCardId?: CardId;
       readonly boundTargets?: readonly string[];
     }
+  /**
+   * rule 372 / 372.1 — the answer orders the `score` replacements that apply to
+   * the point `playerId` would gain by `method`; the order is recorded on
+   * `draft.scoreReplacementOrder` and the award is then re-run, so exactly the
+   * chosen one applies (370.2).
+   */
+  | {
+      readonly kind: "score-order";
+      readonly playerId: PlayerId;
+      readonly method: "conquer" | "hold";
+      readonly amount: number;
+      readonly cause: unknown;
+    }
   /** No follow-up (tests / producers that read the answer off `lastPendingAnswer`). */
   | { readonly kind: "none"; readonly tag?: string };
 
@@ -2054,6 +2067,16 @@ export interface RiftboundGameState {
    * by unit id; consumed by `operations/deal-damage.ts` when that damage lands.
    */
   damageReplacementOrder?: Record<string, string[]>;
+
+  /**
+   * rule 372 / 372.1 — the SCORING player's chosen order of the `score`
+   * replacements that apply to a point they would gain, keyed by
+   * `<playerId>|<method>`; consumed by `operations/scoring-rules.ts` the next
+   * time that player would gain a point that way. A player being acted on
+   * decides for themselves (372.1), which is why the key is the scorer and not
+   * the replacements' controller.
+   */
+  scoreReplacementOrder?: Record<string, string[]>;
 
   /** rule 417 — recent dealt-damage records (`operations/deal-damage.ts`), newest last, capped. */
   damageLog?: import("../operations/deal-damage").DamageRecord[];

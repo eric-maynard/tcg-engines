@@ -302,13 +302,31 @@ instance boundary and nowhere else. Do not sprinkle `recalculateStaticEffects` i
 - **Every other mid-item park** — modes, destinations, `reveal-and-pick`, counter ransoms, effect-instructed plays,
   Predict chains. They keep resolving inline in the answering reducer. They are not resume points because nothing about
   the position between them is observable in the rules; gating them would only add clicks.
-- **`awardPoints` / `scoreBattlefield`.** Scoring is still a synchronous choke point (`operations/points.ts`): it cannot
-  park a prompt part-way, so rule 372.1's "which replacement applies first" is still resolved in board order
-  (queue item `3948e2aa07ac`). Extending the pause to it means giving the score path the same gate, not a second
-  mechanism.
-- **Flow steps.** A Draw-Phase Burn Out (431.2) cannot pause either, so 431.2.c's "the burning player chooses which
-  opponent gains the point" is still awarded without a choice (queue item `b639ddae9a1e`). Same note: one gate, not a
-  second mechanism.
+- **`awardPoints` / `scoreBattlefield`.** Scoring never becomes a resume point — it uses the second shape below
+  instead, because awarding a point is a single idempotent step with nothing partially applied to preserve.
+- **Flow steps.** A Draw-Phase Burn Out (431.2) cannot pause: the Draw Phase is `endIf: () => true`, so it performs
+  the whole 431.2.a–d sequence inside one hook and there is nowhere for an answer to come back to. `burnOut` already
+  takes the recipient as a parameter (`opts.opponentId`, threaded from the `discard` move) and otherwise takes the next
+  opponent in seat order, so 431.2.c's "chooses an opponent" is only unasked when the burn-out happens inside the flow
+  and the burner has two or more opponents. Closing that needs the Draw Phase to be re-enterable after a prompt, not a
+  second pause mechanism (queue item `b639ddae9a1e`).
+
+### A second shape: record the answer, run the step again (372)
+
+Not every mid-action question needs a continuation. Where the interrupted step is a single idempotent computation with
+nothing partially applied, the engine RECORDS the answer and runs the step again from the top:
+
+- **damage** — `draft.damageReplacementOrder`, resume `damage-order` (`operations/deal-damage.ts`): the damaged unit's
+  controller orders Double / Prevent, and the Deal instruction re-executes.
+- **scoring** — `draft.scoreReplacementOrder`, resume `score-order` (`operations/scoring-rules.ts`): when two `score`
+  replacements qualify for one point, `awardPoints` awards nothing and returns `asked`, and rule 372.1's chooser — the
+  player being ACTED ON, i.e. the scoring player, not the replacements' controller — is asked which applies first (an
+  RPL `pick`, semantics `replacement-order`). The answer is recorded and `awardPoints` re-runs, applying exactly one
+  (370.2) and leaving the other unconsumed for the next Score. The Score itself is unaffected: `markScored` ran before
+  the question, so `scoredThisTurn` and the Conquer/Hold triggers are the same either way (471.2.c).
+
+Prefer this shape whenever the step can be re-run cheaply. Reach for `suspendedResolution` only when a partially
+applied item has to stay partially applied across the answer.
 
 ## Interactions
 - Hover on any card (hand, board, battlefield, legend/champion, runes, prompt tiles, trash top) → floating preview with the enlarged art PLUS name/type and full rules text (+ state chips); position:fixed, pointer-events:none, never shifts layout, auto-hides on mouseout/detach/modal (user request 2026-08-10: 'mouse over battlefield to see more clearly should work')

@@ -1218,7 +1218,10 @@ export function deriveFromPendingChoice(ctx: DecisionContext, pc: PendingChoice)
     resumeKind === "die-order" ||
     resumeKind === "die-batch-order" ||
     resumeKind === "die-assign" ||
-    resumeKind === "damage-order"
+    resumeKind === "damage-order" ||
+    // rule 372.1 — "which replacement applies to this point first" is the same
+    // class of question as the damage one, asked of the SCORING player.
+    resumeKind === "score-order"
       ? ("RPL" as const)
       : resumeKind === "trigger-batch" || resumeKind === "trigger-cost" || resumeKind === "target-slot"
         ? ("FIN" as const)
@@ -1237,7 +1240,7 @@ export function deriveFromPendingChoice(ctx: DecisionContext, pc: PendingChoice)
       // rule 372 — "which replacement applies first" reads best as a pick
       // (1..n keys = the front of the order; the rest keep the listed order).
       // `seat.order([...])` is accepted for it as well.
-      if (resumeKind === "die-order" || resumeKind === "damage-order") {
+      if (resumeKind === "die-order" || resumeKind === "damage-order" || resumeKind === "score-order") {
         const d: PickDecision = {
           ...base,
           allowDecline: false,

@@ -20,6 +20,8 @@ import { enumerateDamageAssignments, isLegalDamageAssignment } from "../../comba
 import type { DamageAssignmentPlan } from "../../combat";
 import { continueKillBatch, recordDieBatchAnswer } from "../../abilities/die-replacement-batch";
 import { recordDamageReplacementOrder } from "../../operations/deal-damage";
+import { awardPoints, checkVictory } from "../../operations/points";
+import { scoreOrderKey } from "../../operations/scoring-rules";
 import { executeEffect } from "../../abilities/effect-executor";
 import type { EffectContext, ExecutableEffect } from "../../abilities/effect-executor";
 import {
@@ -1424,6 +1426,36 @@ function resumePending(
           );
         }
       }
+      if (!draft.pendingChoice) {
+        postChoiceCleanup(draft, context);
+      }
+      return;
+    }
+    // rule 372 / 372.1 — the SCORING player ordered the `score` replacements
+    // that apply to the point they would gain: record it and re-run the award,
+    // which now applies exactly the chosen one (370.2). Nothing was awarded or
+    // replaced before the question, so this is the whole of the point gain.
+    case "score-order": {
+      const keys =
+        answer.orderedKeys && answer.orderedKeys.length > 0
+          ? answer.orderedKeys
+          : choice.type === "order"
+            ? choice.items.map((i) => i.key)
+            : [];
+      draft.scoreReplacementOrder = {
+        ...(draft.scoreReplacementOrder ?? {}),
+        [scoreOrderKey(resume.playerId, resume.method)]: [...keys],
+      };
+      awardPoints(
+        draft,
+        resume.playerId,
+        resume.amount,
+        resume.cause as Parameters<typeof awardPoints>[3],
+        context as Parameters<typeof awardPoints>[4],
+      );
+      // rule 194.2 / 323.1 — the point may be the winning one; the Cleanup that
+      // would have checked it ran before the question was answered.
+      checkVictory(draft, { io: context as Parameters<typeof checkVictory>[1]["io"] });
       if (!draft.pendingChoice) {
         postChoiceCleanup(draft, context);
       }

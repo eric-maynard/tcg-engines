@@ -91,6 +91,15 @@ export interface AwardResult {
   readonly denied: boolean;
   /** rule 443 / 367 — a `score` replacement effect replaced the point. */
   readonly replaced: boolean;
+  /**
+   * rule 372.1 — several `score` replacements qualified, so the scoring player
+   * was asked which applies first (a `pendingChoice`). NOTHING has happened
+   * yet: no point, no replacement. The answer re-runs this same award
+   * (`pending-choice.ts resumePending` case "score-order"), so a caller must
+   * not treat it as "the point was denied" — the Score itself still happened
+   * (471.2.c: the battlefield is Scored either way).
+   */
+  readonly asked?: boolean;
 }
 
 const NO_GAIN: AwardResult = { denied: false, drewInstead: false, gained: 0, replaced: false };
@@ -506,8 +515,14 @@ export function awardPoints(
     return { ...NO_GAIN, denied: true };
   }
 
-  if (!unpreventable && applyScoreReplacement(draft, playerId, io, cause.method)) {
-    return { ...NO_GAIN, replaced: true };
+  if (!unpreventable) {
+    const outcome = applyScoreReplacement(draft, playerId, io, cause.method, { amount: n, cause });
+    if (outcome === "asked") {
+      return { ...NO_GAIN, asked: true };
+    }
+    if (outcome === "replaced") {
+      return { ...NO_GAIN, replaced: true };
+    }
   }
 
   if (

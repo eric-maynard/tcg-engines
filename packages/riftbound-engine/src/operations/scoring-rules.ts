@@ -66,12 +66,39 @@ function scoreReplacementConditionMet(
   return true;
 }
 
+/** rule 372 — a stable key for one matched `score` replacement. */
+const scoreMatchKey = (m: { sourceCardId: string; abilityIndex: number }): string =>
+  `${m.sourceCardId}#${m.abilityIndex}`;
+
+/** rule 372.1 — the order slot is the SCORING player's, per gain method. */
+export const scoreOrderKey = (playerId: PlayerId, method: "conquer" | "hold"): string =>
+  `${playerId}|${method}`;
+
 /**
- * Rule 571.4: before a player scores a point from conquering/holding, consult
- * board `replaces: "score"` replacement abilities (e.g. Otterpus — "they draw
- * 1 instead"). Returns `true` when the point was replaced and must NOT be
- * awarded; the replacement effect has already been applied. Called only from
- * `operations/points.ts awardPoints` — the single point-gain choke point.
+ * What `applyScoreReplacement` did:
+ *  - `"none"`     — no replacement applied; the point is gained as normal.
+ *  - `"replaced"` — one replacement applied (370.2 — exactly one per event);
+ *                   the point must NOT be awarded.
+ *  - `"asked"`    — rule 372.1: several replacements qualified and the scoring
+ *                   player has been asked which applies first. Nothing has been
+ *                   applied and NO point is awarded yet; the answer records the
+ *                   order and re-runs the award (`pending-choice.ts`
+ *                   `resumePending` case "score-order").
+ */
+export type ScoreReplacementOutcome = "none" | "replaced" | "asked";
+
+/**
+ * Rule 443.1.a / 571.4: before a player scores a point from conquering/holding,
+ * consult board `replaces: "score"` replacement abilities (e.g. Otterpus —
+ * "they draw 1 instead"). Called only from `operations/points.ts awardPoints` —
+ * the single point-gain choke point.
+ *
+ * rule 372 / 372.1 — when MORE THAN ONE qualifies for the same point, the
+ * player being acted on (the SCORING player, not the replacements' controller)
+ * decides which applies first. That is a real decision, so it is a
+ * `pendingChoice` like every other: the award suspends, the answer is recorded
+ * on `draft.scoreReplacementOrder` and the award re-runs. Exactly one of them
+ * then applies (370.2), and the loser stays unconsumed for the next point.
  */
 export function applyScoreReplacement(
   state: RiftboundGameState,
@@ -84,9 +111,11 @@ export function applyScoreReplacement(
    * never touched by a "would score" replacement.
    */
   method: "conquer" | "hold" | "effect" | "burn-out",
-): boolean {
+  /** rule 372.1 — what to re-run once the order is answered. */
+  resume?: { readonly amount: number; readonly cause: unknown },
+): ScoreReplacementOutcome {
   if (method !== "conquer" && method !== "hold") {
-    return false;
+    return "none";
   }
   const ctx: ReplacementContext = {
     cards: {
@@ -101,14 +130,55 @@ export function applyScoreReplacement(
     { amount: 1, method, owner: playerId, playerId, type: "score" },
     ctx,
   );
-  for (const match of matches) {
-    if (!scoreReplacementConditionMet(match.condition, state, playerId)) {
-      continue;
+  // Only the ones that could actually apply are candidates: a condition that
+  // fails, or a shape this engine cannot execute, is not "a replacement that
+  // applies to the event" and so is not part of the 372.1 question either.
+  const eligible = matches.filter((m) => {
+    if (!scoreReplacementConditionMet(m.condition, state, playerId)) {
+      return false;
     }
+    const r = m.replacement as { type?: string } | "prevent";
+    return r === "prevent" || r?.type === "draw";
+  });
+  if (eligible.length === 0) {
+    return "none";
+  }
+  const key = scoreOrderKey(playerId, method);
+  const recorded = state.scoreReplacementOrder?.[key];
+  if (eligible.length > 1 && recorded === undefined) {
+    // rule 372.1 — ask, unless we cannot: another prompt already owns the one
+    // pendingChoice slot, or the caller gave us nothing to re-run (a unit-test
+    // stub). Then fall through to board order, which is what the engine did
+    // before this question existed.
+    if (state.pendingChoice === undefined && resume !== undefined) {
+      (state as { pendingChoice?: unknown }).pendingChoice = {
+        items: eligible.map((m) => ({ cardId: m.sourceCardId, key: scoreMatchKey(m) })),
+        playerId,
+        prompt: "Order the replacement effects that apply to this point (first = applied first)",
+        resume: { amount: resume.amount, cause: resume.cause, kind: "score-order", method, playerId },
+        type: "order",
+      };
+      return "asked";
+    }
+  }
+  const ordered =
+    recorded === undefined
+      ? eligible
+      : [...eligible].sort((a, b) => {
+          const ia = recorded.indexOf(scoreMatchKey(a));
+          const ib = recorded.indexOf(scoreMatchKey(b));
+          return (ia < 0 ? Number.MAX_SAFE_INTEGER : ia) - (ib < 0 ? Number.MAX_SAFE_INTEGER : ib);
+        });
+  // rule 370.2 — exactly ONE replacement applies to the event; the rest are not
+  // consumed and remain available for a later point.
+  if (recorded !== undefined && state.scoreReplacementOrder !== undefined) {
+    delete state.scoreReplacementOrder[key];
+  }
+  for (const match of ordered) {
     const replacement = match.replacement as { type?: string; amount?: number } | "prevent";
     if (replacement === "prevent") {
       markReplacementConsumed(state, match);
-      return true;
+      return "replaced";
     }
     if (replacement?.type === "draw") {
       io.zones.drawCards({
@@ -118,11 +188,10 @@ export function applyScoreReplacement(
         to: "hand" as CoreZoneId,
       });
       markReplacementConsumed(state, match);
-      return true;
+      return "replaced";
     }
-    // Unknown replacement shape: don't silently eat the point.
   }
-  return false;
+  return "none";
 }
 
 /**

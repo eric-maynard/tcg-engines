@@ -574,6 +574,14 @@ Recipe — wrong total: assert `computeTotalCost(...).resources` in a unit test 
   modifier + battlefield `increase-victory-score` + board `modify-victory-score` statics), `checkVictory(draft, {io, immediate})` =
   the ONLY writer of `status="finished"/winner` for a points win — called at the end of `performCleanup` (no-op while a chain item
   resolves, rule 321), after the flow Hold step, after burn-outs, and by directed score moves. NEVER write `victoryPoints` directly.
+- rule 372.1 TWO SCORE REPLACEMENTS on one point: `scoring-rules.ts applyScoreReplacement` returns `"none" |
+  "replaced" | "asked"`. With ≥2 eligible `replaces:"score"` matches and no recorded order it raises an RPL `pick`
+  (semantics `replacement-order`, resume `score-order`) to the SCORING player — 372.1: the player being acted on, not
+  the replacements' controller — awards NOTHING, and `awardPoints` returns `{asked:true}`. The answer lands in
+  `draft.scoreReplacementOrder["<player>|<method>"]` and `pending-choice.ts` re-runs the SAME award, which applies
+  exactly one (370.2) and leaves the other for the next Score. `markScored` runs BEFORE the question, so the Score
+  itself (scoredThisTurn, Conquer/Hold triggers, 471.2.c) is unaffected. Spec: `core-rules/score-denial-and-
+  modification.test.ts` "372 / 372.1 / 370.2". DESIGN.md §Pausing inside a resolving item, "A second shape".
 - Hold scoring: flow `runHoldScoringStep` (after start-of-turn triggers resolve — deferred to `beginning.onEnd` when they open a
   chain; `scoreBattlefield(…,"hold")`, `hold`+`score` events, `checkVictory`, static recalc). Manual/sandbox: `moves/combat/score-point.ts`
   (never enumerated), `conquer-battlefield.ts`. `win-conditions/victory.ts` = read-only predicates delegating to points.ts.

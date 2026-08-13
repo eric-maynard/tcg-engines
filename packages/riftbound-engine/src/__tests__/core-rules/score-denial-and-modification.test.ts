@@ -919,6 +919,110 @@ describe("194.2(.a/.b) / 323.1 / 472 — both players at the Victory Score is a 
 });
 
 // ---------------------------------------------------------------------------
+// 372 / 372.1 — two replacements on the same point: the SCORING player orders them
+// ---------------------------------------------------------------------------
+
+describe("372 / 372.1 / 370.2 — two `score` replacements qualify for one point: the player being acted on (the scorer) chooses which applies first, and exactly one applies", () => {
+  /** "The next point an opponent would score becomes a draw instead." */
+  const DRAW_INSTEAD_ENEMY = {
+    duration: "next",
+    name: "The next point an opponent would score becomes a draw",
+    replacement: { amount: 1, type: "draw" },
+    replaces: "score",
+    target: { controller: "enemy", type: "player" },
+    type: "replacement",
+  } as const;
+  /** "Skip the next point an opponent would gain." */
+  const SKIP_ENEMY = {
+    duration: "next",
+    name: "Skip the next point an opponent would gain",
+    replacement: "prevent",
+    replaces: "score",
+    target: { controller: "enemy", type: "player" },
+    type: "replacement",
+  } as const;
+
+  /** P1 has two movers and P2 two one-shot replacements — both qualify for P1's first Conquer point. */
+  function twoReplacements() {
+    return scenario()
+      .points(P1, 4)
+      .battlefield("A")
+      .battlefield("B")
+      .gear(P2, { abilities: [DRAW_INSTEAD_ENEMY], name: "Filler Charm R1" }, "r1")
+      .gear(P2, { abilities: [SKIP_ENEMY], name: "Filler Charm R2" }, "r2")
+      .unit(P1, "base", { abilities: [CONQUER_DRAW], might: 2, name: "Filler S1" }, "s1")
+      .unit(P1, "base", { abilities: [CONQUER_DRAW], might: 2, name: "Filler S2" }, "s2")
+      .build();
+  }
+
+  test("372.1 — the SCORING player (not the replacements' controller) is asked, as an RPL prompt naming both sources; nothing has been applied and no point gained while it is open", async () => {
+    const game = await twoReplacements();
+    const hand0 = game.p1.hand().length;
+    await game.p1.move("s1", "A");
+    const s = await game.settle();
+    expect(s.reason).toBe("unanswered");
+    const d = game.decision();
+    expect(d).toMatchObject({ kind: "pick", seat: P1, timing: "RPL" });
+    expect(d?.kind === "pick" ? d.semantics : undefined).toBe("replacement-order");
+    expect(d?.kind === "pick" ? [...d.options.map((o) => o.card)].sort() : []).toEqual(["r1", "r2"]);
+    // Neither has been applied yet: no replacement draw, no point.
+    expect(game.p1.points()).toBe(4);
+    expect(game.p1.hand()).toHaveLength(hand0);
+    // The Score itself still happened (471.2.c) — the question is only about the POINT.
+    expect(game.gameState.scoredThisTurn[P1]).toEqual(["A"]);
+  });
+
+  test("372.1 / 370.2 — naming the draw-instead one applies exactly that: P1 draws 1 (plus the Conquer trigger), gains no point, and the SKIP survives for the next Score", async () => {
+    const game = await twoReplacements();
+    const hand0 = game.p1.hand().length;
+    await game.p1.move("s1", "A");
+    await game.settle();
+    await game.p1.pick("r1");
+    await game.settle();
+    expect(game.p1.points()).toBe(4);
+    expect(game.p1.hand()).toHaveLength(hand0 + 2); // replacement draw + the Conquer trigger's draw
+
+    // Second Score: only the skip is left, so no question is asked and no point is gained.
+    await game.p1.move("s2", "B");
+    const s2 = await game.settle();
+    expect(s2.reason).toBe("open");
+    expect(game.p1.points()).toBe(4);
+    expect(game.p1.hand()).toHaveLength(hand0 + 3); // just the second Conquer trigger's draw
+    expect(game.gameState.scoredThisTurn[P1]).toEqual(["A", "B"]);
+  });
+
+  test("372.1 / 370.2 — naming the skip applies exactly that instead: no draw beyond the Conquer trigger, and the draw-instead one is still there for the next Score", async () => {
+    const game = await twoReplacements();
+    const hand0 = game.p1.hand().length;
+    await game.p1.move("s1", "A");
+    await game.settle();
+    await game.p1.pick("r2");
+    await game.settle();
+    expect(game.p1.points()).toBe(4);
+    expect(game.p1.hand()).toHaveLength(hand0 + 1); // Conquer trigger only — the point was skipped
+
+    await game.p1.move("s2", "B");
+    await game.settle();
+    expect(game.p1.points()).toBe(4);
+    expect(game.p1.hand()).toHaveLength(hand0 + 3); // replacement draw + the second Conquer trigger
+  });
+
+  test("372 — with only ONE qualifying replacement there is nothing to order: no prompt, it simply applies", async () => {
+    const game = await scenario()
+      .points(P1, 4)
+      .battlefield("A")
+      .gear(P2, { abilities: [SKIP_ENEMY], name: "Filler Charm R2" }, "r2")
+      .unit(P1, "base", { might: 2, name: "Filler S1" }, "s1")
+      .build();
+    await game.p1.move("s1", "A");
+    const s = await game.settle();
+    expect(s.reason).toBe("open");
+    expect(game.p1.points()).toBe(4);
+    expect(game.gameState.scoredThisTurn[P1]).toEqual(["A"]);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // LIFO decides simultaneous point triggers
 // ---------------------------------------------------------------------------
 
