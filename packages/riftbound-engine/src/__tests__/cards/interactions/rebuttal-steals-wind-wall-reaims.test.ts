@@ -153,12 +153,12 @@ describe("Rebuttal steals Wind Wall off a four-deep counter ladder", () => {
     expect(game.actingSeat()).toBe(P2); // controller of the newest item, which is now the stolen Wind Wall
   });
 
-  // BUG — rules 751–755 / 753.2: "you may make new choices for it" must offer the stolen Wind Wall's
-  // counter target again, with the spells still on the chain as candidates (Void Seeker and Defy; the
-  // resolving Rebuttal itself is not offered). Actual: no dialog is raised at all — Wind Wall's parsed
-  // effect is a bare `{type:"counter"}` with no target descriptor, so `abilities/new-choices.ts`
-  // `spellTargetSlots` finds no slot and the item keeps P1's original choice (Defy).
-  test.failing("(d) BUG: the stolen Wind Wall's counter target is re-offered — Void Seeker and Defy, not Rebuttal (751–755)", async () => {
+  // rules 751–755 / 753.2: "you may make new choices for it" offers the stolen Wind Wall's counter
+  // target again, with the spells still on the chain as candidates (Void Seeker and Defy; the
+  // resolving Rebuttal itself is not offered). Wind Wall's parsed effect is a bare
+  // `{type:"counter"}` with no target descriptor, so `abilities/new-choices.ts` reads the chain
+  // through `chain/counter-target.ts isLegalCounterTarget` rather than the board target resolver.
+  test("(d) the stolen Wind Wall's counter target is re-offered — Void Seeker and Defy, not Rebuttal (751–755)", async () => {
     const game = await ladder();
     await game.p2.yes();
     const d = game.decision();
@@ -169,11 +169,10 @@ describe("Rebuttal steals Wind Wall off a four-deep counter ladder", () => {
     expect(keys).not.toContain("rebuttal"); // the resolving item is not on offer
   });
 
-  // BUG — the whole point of the steal: re-aimed at Void Seeker, Wind Wall counters it (425.1.a — no
-  // damage, no draw), and Defy then finds its chosen spell gone from the chain, so it does nothing and
-  // is NOT itself countered (359.3.e.5). Actual: no re-choice is offered (see above), so Wind Wall
-  // still counters Defy and Void Seeker resolves — X takes 4 and P1 draws.
-  test.failing("(e) BUG: steal + re-aim at Void Seeker — X survives undamaged, P1 draws nothing, Defy fizzles UNcountered", async () => {
+  // The whole point of the steal: re-aimed at Void Seeker, Wind Wall counters it (425.1.a — no
+  // damage, no draw), and Defy then finds its chosen spell gone from the chain, so it does nothing
+  // and is NOT itself countered (359.3.e.5).
+  test("(e) steal + re-aim at Void Seeker — X survives undamaged, P1 draws nothing, Defy fizzles UNcountered", async () => {
     const game = await ladder();
     await game.p2.yes();
     await game.p2.pick("seeker"); // re-aim the stolen Wind Wall

@@ -281,7 +281,17 @@ function renderCardElement(card, isFacedown = false, zone = "") {
           return cost != null ? esc(cost) : "&mdash;";
         })()}</div>
         <div class="fallback-name">${esc(card.name || "")}</div>
-        <div class="fallback-type">${esc(card.cardType || "")}</div>
+        ${/* rule 701.1: Might is printed on the object. The .card-might badge only
+              appears when Might is MODIFIED and .card-might-chip is hidden outside a
+              crowded/spread battlefield, so an unmodified token (Bird, 1 Might) showed
+              no Might anywhere — the fallback face is the only surface it ever draws. */ ""}
+        <div class="fallback-type">${esc(card.cardType || "")}${effMight != null ? ` &middot; ${esc(effMight)} Might` : ""}</div>
+        ${/* rule 302.2: a printed keyword is part of the object the player reads, and
+              rule 809.1.c.1 charges the opponent for it — [Deflect] must be legible
+              here or the player is taxed for a keyword the board never displayed. */ ""}
+        ${Array.isArray(card.keywords) && card.keywords.length
+          ? `<div class="fallback-keywords" title="${esc(card.keywords.join(", "))}">${card.keywords.map((k) => `[${esc(k)}]`).join(" ")}</div>`
+          : ""}
       </div>
       ${card.meta?.damage > 0 ? `<div class="card-damage">${card.meta.damage}</div>` : ""}
       ${mightBadge}

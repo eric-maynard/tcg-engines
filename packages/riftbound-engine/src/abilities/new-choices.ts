@@ -41,6 +41,7 @@
  */
 import type { CardId as CoreCardId } from "@tcg/core";
 import type { ChainItem, ChainTargetSlot } from "../chain/chain-state";
+import { isLegalCounterTarget } from "../chain/counter-target";
 import { getGlobalCardRegistry } from "../operations/card-lookup";
 import { getCardEffectiveMight, getDeflectSurcharge } from "../game-definition/moves/play/cost";
 import { collectDestinationNodes, moverForNode } from "../game-definition/moves/play/play-time-destinations";
@@ -392,12 +393,81 @@ function modeSlots(d: Discovery, effect: AnyEffect, out: LiveSlot[]): boolean {
 }
 
 /**
+ * rule 355.8 / 355.9.a.2 (ogn-064-298 Wind Wall, ogn-045-298 Defy, ven-152-166
+ * Rebuttal) — the chain item a counter (or a "gain control of a spell", or the
+ * "pay … gain control of it, otherwise counter it" conditional) names. It is
+ * NOT a board descriptor, so the board resolver below never sees it; a bare
+ * `{type:"counter"}` carries no `target` at all. Mirrors
+ * `moves/play/play-spell.ts counterChainTarget`, which locked this choice at
+ * play time.
+ */
+function chainCounterSpec(effect: AnyEffect): { target?: unknown } | undefined {
+  const e = effect as { type?: string; effects?: unknown[]; then?: unknown; else?: unknown };
+  if (e.type === "counter" || e.type === "gain-control-of-spell") {
+    return e as { target?: unknown };
+  }
+  if (e.type === "sequence" && Array.isArray(e.effects)) {
+    const first = e.effects[0] as { type?: string } | undefined;
+    if (first?.type === "counter" || first?.type === "gain-control-of-spell") {
+      // A later step with a board target of its own owns the play-time pick instead.
+      return findSequenceLeadTarget(effect as SpellEffectTargetShape) === undefined
+        ? (first as { target?: unknown })
+        : undefined;
+    }
+    return undefined;
+  }
+  if (e.type === "conditional") {
+    const branches = [e.then, e.else] as ({ type?: string } | undefined)[];
+    const counterBranch = branches.find((b) => b?.type === "counter");
+    const stealBranch = branches.find((b) => b?.type === "gain-control-of-spell");
+    if (counterBranch !== undefined && stealBranch !== undefined) {
+      return counterBranch as { target?: unknown };
+    }
+  }
+  return undefined;
+}
+
+/** Chain items this counter/steal spec may legally name from the CHOOSER's seat (753.1). */
+function chainCounterOptions(d: Discovery, spec: { target?: unknown }): SlotOption[] {
+  const items = d.draft.interaction?.chain?.items ?? [];
+  return items
+    .filter(
+      (it) =>
+        it !== undefined &&
+        it.id !== d.item.id &&
+        isLegalCounterTarget(spec, it, d.item.cardId as string, {
+          controllerOf: (id) =>
+            d.ctx.cards.getCardController?.(id as CoreCardId) ?? d.ctx.cards.getCardOwner(id as CoreCardId),
+          playerId: d.chooser,
+          zoneOf: (id) => d.ctx.zones.getCardZone?.(id as CoreCardId) as string | undefined,
+        }),
+    )
+    .map((it) => cardOption(d.ctx, it.cardId as string));
+}
+
+/**
  * Positional target slots of a SPELL item, mirroring the play-time layout of
  * `moves/play/play-spell.ts` (which wrote `item.targets`).
  */
 function spellTargetSlots(d: Discovery, effect: AnyEffect, out: LiveSlot[]): void {
   const shape = effect as SpellEffectTargetShape;
   const targets = targetsOf(d);
+  const counterSpec = chainCounterSpec(effect);
+  if (counterSpec !== undefined) {
+    out.push({
+      apply: (values) => setPositional(d, 0, values[0]),
+      get current(): readonly string[] {
+        const v = targetsOf(d)[0];
+        return v === undefined ? [] : [v];
+      },
+      key: "target:0",
+      kind: "target",
+      label: "Target",
+      options: () => chainCounterOptions(d, counterSpec),
+      targetsObjects: true,
+    });
+    return;
+  }
   const single = (index: number, desc: Descriptor, key: string, label: string, kind: SlotKind = "target", extra?: Partial<LiveSlot>): LiveSlot => ({
     apply: (values) => setPositional(d, index, values[0]),
     get current(): readonly string[] {
