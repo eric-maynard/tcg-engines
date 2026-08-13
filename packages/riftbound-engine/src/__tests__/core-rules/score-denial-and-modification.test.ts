@@ -35,7 +35,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { FILLER_UNIT_DEF, Game, P1, P2, basicRuneDef, loadDefaultCardPool, scenario } from "../../harness";
+import { FILLER_UNIT_DEF, Game, P1, P2, P3, basicRuneDef, loadDefaultCardPool, scenario } from "../../harness";
 
 // ---------------------------------------------------------------------------
 // Inline filler definitions
@@ -1147,6 +1147,79 @@ describe("485.7 / 315.3.b / 315.2.a — the second player's first turn: 3 runes 
 // ---------------------------------------------------------------------------
 // Burn Out overrides denial after the first point in a sequence
 // ---------------------------------------------------------------------------
+
+describe("431.2.b / 431.2.c / 431.2.d — with two or more opponents the BURNING player chooses which one gains the Burn Out point, and the draw that caused it still happens", () => {
+  /** Three seats; P1's deck is empty and its trash holds 2, so P1's Draw Phase burns out exactly once. */
+  function threeSeats() {
+    return scenario({ players: 3 })
+      .turn(4)
+      .active(P3)
+      .points(P2, 5)
+      .points(P3, 1)
+      .fillDecks(false)
+      .deck(P3, [{ might: 1 }, { might: 1 }])
+      .deck(P2, [{ might: 1 }, { might: 1 }])
+      .trash(P1, { might: 1 }, "t1")
+      .trash(P1, { might: 1 }, "t2")
+      .build();
+  }
+
+  test("431.2.b then 431.2.c — the trash is recycled FIRST and then the burning player is asked, naming both opponents and neither teammate-less seat's total moved yet", async () => {
+    const game = await threeSeats();
+    expect(game.p1.deck()).toHaveLength(0);
+    await game.seat(P3).endTurn();
+    // 431.2.b — the recycle happens before the point.
+    expect(game.p1.trash()).toHaveLength(0);
+    expect(game.p1.deck()).toHaveLength(2);
+    const d = game.decision();
+    expect(d).toMatchObject({ kind: "pick", seat: P1 });
+    expect(d?.kind === "pick" ? [...d.options.map((o) => o.seatRef)].sort() : []).toEqual([P2, P3]);
+    // Nothing has been gained yet — the two opponents still total 6, and the burning player never takes it.
+    expect(game.p2.points() + game.seat(P3).points()).toBe(6);
+    expect(game.p1.points()).toBe(0);
+    // 431.2.d — the draw that caused the Burn Out has not happened either.
+    expect(game.p1.hand()).toHaveLength(0);
+  });
+
+  test("431.2.c / 431.2.d — the named opponent (NOT the seat-order default) gains exactly 1 point, and the Draw Phase's draw is then completed", async () => {
+    const game = await threeSeats();
+    await game.seat(P3).endTurn();
+    await game.p1.pick(P3); // the further-behind opponent, not the next seat in order
+    expect(game.seat(P3).points()).toBe(2);
+    expect(game.p2.points()).toBe(5); // untouched — only ONE opponent gains (431.2.c)
+    expect(game.p1.points()).toBe(0);
+    expect(game.p1.hand()).toHaveLength(1); // 431.2.d — the interrupted draw completed
+    expect(game.p1.deck()).toHaveLength(1);
+    const s = await game.settle();
+    expect(s.reason).toBe("open");
+    expect(game.violations()).toEqual([]);
+  });
+
+  test("431.2.c — naming the other opponent gives the point to them instead", async () => {
+    const game = await threeSeats();
+    await game.seat(P3).endTurn();
+    await game.p1.pick(P2);
+    expect(game.p2.points()).toBe(6);
+    expect(game.seat(P3).points()).toBe(1);
+    expect(game.p1.hand()).toHaveLength(1);
+  });
+
+  test("431.2.c — with only ONE opponent there is nothing to choose: the two-player Burn Out is not prompted and resolves inline", async () => {
+    const game = await scenario()
+      .turn(4)
+      .active(P2)
+      .points(P2, 3)
+      .fillDecks(false)
+      .deck(P2, [{ might: 1 }, { might: 1 }])
+      .trash(P1, { might: 1 }, "t1")
+      .build();
+    await game.p2.endTurn();
+    const s = await game.settle();
+    expect(s.reason).toBe("open");
+    expect(game.p2.points()).toBe(4);
+    expect(game.p1.hand()).toHaveLength(1);
+  });
+});
 
 describe("315.4.b.1 / 431 — Burn Out with an empty deck AND trash: the first point is an ordinary (deniable) gain, every later one in the sequence cannot be prevented and wins immediately", () => {
   // Expected: P2 (deck+trash empty, denier in play) reaches its Draw Phase → burn out #1: P1's gain is DENIED (6);

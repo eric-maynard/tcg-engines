@@ -667,8 +667,26 @@ export function burnOut(
   draft: RiftboundGameState,
   playerId: PlayerId,
   io: BurnOutIO,
-  opts: { readonly sequenceIndex?: number; readonly opponentId?: PlayerId } = {},
-): { gameEnded: boolean } {
+  opts: {
+    readonly sequenceIndex?: number;
+    readonly opponentId?: PlayerId;
+    /**
+     * rule 431.2.c — the burning player CHOOSES which opponent gains the point.
+     * With two or more opponents that is a real decision, so a caller that can
+     * come back to the rest of the action (the Draw Phase hook, which holds
+     * while a prompt is open) sets this and the choice is asked as a
+     * `choose-player` prompt. Callers that cannot (unit-test stubs, a caller
+     * already inside another prompt) keep the seat-order default.
+     */
+    readonly canPrompt?: boolean;
+    /**
+     * rule 431.2.d — "Completes the remainder of the action that caused them to
+     * burn out": when the question is asked from the Draw Phase the owed draw
+     * rides on it, because that phase is over by the time the answer arrives.
+     */
+    readonly thenDraw?: boolean;
+  } = {},
+): { gameEnded: boolean; asked?: boolean } {
   const trashCards = io.zones.getCardsInZone("trash" as CoreZoneId, playerId as CorePlayerId);
   for (const cardId of trashCards) {
     io.zones.moveCard({ cardId, targetZoneId: "mainDeck" as CoreZoneId });
@@ -691,10 +709,27 @@ export function burnOut(
   const fallback = Array.from({ length: seats.length }, (_, i) => seats[(from + 1 + i) % seats.length]).find(
     (pid) => pid !== undefined && candidates.includes(pid),
   );
-  const chosen =
-    opts.opponentId !== undefined && candidates.includes(opts.opponentId)
-      ? opts.opponentId
-      : fallback;
+  const named =
+    opts.opponentId !== undefined && candidates.includes(opts.opponentId) ? opts.opponentId : undefined;
+  // rule 431.2.c — ask when there is a genuine choice to make. The trash was
+  // already recycled (431.2.b happens before the point), so the deck the answer
+  // returns to is the refilled one and the caller simply completes 431.2.d.
+  if (named === undefined && candidates.length > 1 && opts.canPrompt === true && draft.pendingChoice === undefined) {
+    (draft as { pendingChoice?: unknown }).pendingChoice = {
+      effect: {
+        burnerId: playerId,
+        sequenceIndex,
+        ...(opts.thenDraw === true ? { thenDraw: true } : {}),
+        type: "award-burn-out-point",
+      },
+      options: [...candidates],
+      playerId,
+      prompt: "Burn Out: choose an opponent to gain 1 point",
+      type: "choose-player",
+    };
+    return { asked: true, gameEnded: false };
+  }
+  const chosen = named ?? fallback;
   if (chosen !== undefined) {
     awardPoints(draft, chosen, 1, { method: "burn-out", sequenceIndex }, io);
   }
@@ -716,6 +751,8 @@ export function refillDeckOrBurnOut(
   draft: RiftboundGameState,
   playerId: PlayerId,
   io: BurnOutIO,
+  /** rule 431.2.c — see `burnOut`; only a caller that can be re-entered asks. */
+  opts: { readonly canPrompt?: boolean; readonly thenDraw?: boolean } = {},
 ): boolean {
   const cap = 4 * (draft.victoryScore || 8) + 8;
   for (let i = 0; i < cap; i++) {
@@ -728,7 +765,17 @@ export function refillDeckOrBurnOut(
     if (i > 0 && !Object.keys(draft.players).some((pid) => pid !== playerId)) {
       return false;
     }
-    if (burnOut(draft, playerId, io, { sequenceIndex: i }).gameEnded) {
+    const burn = burnOut(draft, playerId, io, {
+      sequenceIndex: i,
+      ...(opts.canPrompt === true ? { canPrompt: true } : {}),
+      ...(opts.thenDraw === true ? { thenDraw: true } : {}),
+    });
+    // rule 431.2.c — the recipient question is open: nothing more happens until
+    // it is answered, and the caller re-enters to finish 431.2.d.
+    if (burn.asked === true) {
+      return false;
+    }
+    if (burn.gameEnded) {
       // rule 315.4.b.2 / 431.2.d — a Burn Out INTERRUPTS the draw, it does not
       // cancel it: the recycled deck is drawn from even when that Burn Out's
       // point was the winning one (431.3.c: only a repeat Burn Out of the same

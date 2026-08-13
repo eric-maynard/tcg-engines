@@ -747,7 +747,17 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
               // trash empty too it repeats until an opponent wins (431.3.c.1,
               // immediately) or the no-progress guard gives up. rule 323.1: if
               // the game ended, or the deck is still empty, no card is drawn.
-              if (!refillDeckOrBurnOut(context.state, playerId as PlayerId, context)) {
+              // rule 431.2.c / 431.2.d — a Burn Out here may have to ASK the
+              // burning player which opponent gains the point. The Draw Phase
+              // ends as soon as its hook returns (315.4), so the remainder of
+              // the action — this very draw — rides on the question and is
+              // completed by the answer (`effects/award-burn-out-point.ts`).
+              if (
+                !refillDeckOrBurnOut(context.state, playerId as PlayerId, context, {
+                  canPrompt: true,
+                  thenDraw: true,
+                })
+              ) {
                 return;
               }
 

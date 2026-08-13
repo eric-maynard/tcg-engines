@@ -304,12 +304,10 @@ instance boundary and nowhere else. Do not sprinkle `recalculateStaticEffects` i
   the position between them is observable in the rules; gating them would only add clicks.
 - **`awardPoints` / `scoreBattlefield`.** Scoring never becomes a resume point — it uses the second shape below
   instead, because awarding a point is a single idempotent step with nothing partially applied to preserve.
-- **Flow steps.** A Draw-Phase Burn Out (431.2) cannot pause: the Draw Phase is `endIf: () => true`, so it performs
-  the whole 431.2.a–d sequence inside one hook and there is nowhere for an answer to come back to. `burnOut` already
-  takes the recipient as a parameter (`opts.opponentId`, threaded from the `discard` move) and otherwise takes the next
-  opponent in seat order, so 431.2.c's "chooses an opponent" is only unasked when the burn-out happens inside the flow
-  and the burner has two or more opponents. Closing that needs the Draw Phase to be re-enterable after a prompt, not a
-  second pause mechanism (queue item `b639ddae9a1e`).
+- **Flow steps.** A phase hook is not re-enterable: the Draw Phase is `endIf: () => true`, so it performs the whole
+  431.2.a–d Burn Out sequence inside one hook and there is nowhere for an answer to come back to. That is why 431.2.c
+  ("chooses an opponent to gain 1 point") does not suspend the phase but CARRIES THE REMAINDER on the question — see
+  "the remainder rides on the question" below. Do not make phase hooks resumable to solve this class.
 
 ### A second shape: record the answer, run the step again (372)
 
@@ -327,6 +325,20 @@ nothing partially applied, the engine RECORDS the answer and runs the step again
 
 Prefer this shape whenever the step can be re-run cheaply. Reach for `suspendedResolution` only when a partially
 applied item has to stay partially applied across the answer.
+
+### A third shape: the remainder rides on the question (431.2)
+
+Where the interrupted step lives in a FLOW hook there is nothing to come back to — the phase is over the moment the
+hook returns. So the rest of the action travels ON the prompt and the answer performs it.
+
+- **Burn Out** (431.2.a–d) — `operations/points.ts burnOut` recycles the trash (431.2.b) and, when the burning player
+  has two or more opponents, raises a `choose-player` prompt (431.2.c) whose effect is
+  `effects/award-burn-out-point.ts` carrying `burnerId` and, from the Draw Phase, `thenDraw`. Answering awards the
+  point to the NAMED seat through `awardPoints` (so 054.1 denial, 443.1.a replacements and 431.3.b's unpreventable
+  repeats are unchanged) and then completes 431.2.d — the draw that caused the Burn Out, including any further Burn
+  Out an still-empty deck causes, which asks again and carries the same remainder. With one opponent there is no
+  choice (355.10.d — a description, not a selection), so the two-player Burn Out is never prompted; a caller that
+  cannot be re-entered passes no `canPrompt` and keeps the seat-order default.
 
 ## Interactions
 - Hover on any card (hand, board, battlefield, legend/champion, runes, prompt tiles, trash top) → floating preview with the enlarged art PLUS name/type and full rules text (+ state chips); position:fixed, pointer-events:none, never shifts layout, auto-hides on mouseout/detach/modal (user request 2026-08-10: 'mouse over battlefield to see more clearly should work')

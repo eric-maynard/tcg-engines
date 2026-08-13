@@ -1,4 +1,5 @@
 import type { EffectHandler } from "./_helpers";
+import { handle_awardBurnOutPoint } from "./award-burn-out-point";
 import { handle_delayedLoseControl } from "./delayed-lose-control";
 import { handle_draw } from "./draw";
 import { handle_damage } from "./damage";
@@ -96,6 +97,8 @@ export const EFFECT_HANDLERS: Record<string, EffectHandler> = {
   // rule 317.1 / 455 — sfd-202-221 "…at end of turn" control expiry + recall
   "delayed-lose-control": handle_delayedLoseControl,
   "draw": handle_draw,
+  // rule 431.2.c — the seat the burning player named gains the Burn Out point.
+  "award-burn-out-point": handle_awardBurnOutPoint,
   "damage": handle_damage,
   "kill": handle_kill,
   // rule 816.1 — the [Temporary] chain item pushed by the Beginning Phase

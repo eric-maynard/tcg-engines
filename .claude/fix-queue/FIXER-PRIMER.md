@@ -582,6 +582,13 @@ Recipe — wrong total: assert `computeTotalCost(...).resources` in a unit test 
   exactly one (370.2) and leaves the other for the next Score. `markScored` runs BEFORE the question, so the Score
   itself (scoredThisTurn, Conquer/Hold triggers, 471.2.c) is unaffected. Spec: `core-rules/score-denial-and-
   modification.test.ts` "372 / 372.1 / 370.2". DESIGN.md §Pausing inside a resolving item, "A second shape".
+- rule 431.2.c BURN OUT RECIPIENT: `points.ts burnOut(draft, player, io, {sequenceIndex, opponentId?, canPrompt?,
+  thenDraw?})` recycles the trash (431.2.b) and then, with ≥2 opponents and `canPrompt`, raises a `choose-player`
+  prompt to the BURNING player instead of awarding to the next seat in order; it returns `{asked:true}` and
+  `refillDeckOrBurnOut` stops. The answer runs `effects/award-burn-out-point.ts`, which awards through `awardPoints`
+  and then finishes 431.2.d — the owed draw rides on the prompt as `thenDraw` because the Draw Phase hook is over by
+  then (phase hooks are NOT re-enterable; do not try to make them so). One opponent ⇒ no prompt. Spec:
+  `core-rules/score-denial-and-modification.test.ts` "431.2.b / 431.2.c / 431.2.d". DESIGN.md "A third shape".
 - Hold scoring: flow `runHoldScoringStep` (after start-of-turn triggers resolve — deferred to `beginning.onEnd` when they open a
   chain; `scoreBattlefield(…,"hold")`, `hold`+`score` events, `checkVictory`, static recalc). Manual/sandbox: `moves/combat/score-point.ts`
   (never enumerated), `conquer-battlefield.ts`. `win-conditions/victory.ts` = read-only predicates delegating to points.ts.
