@@ -1452,6 +1452,19 @@ export function recalculateStaticEffects(ctx: StaticAbilityContext): boolean {
           continue;
         }
         const abilityKey = `${card.id}#${abilityIndex}`;
+        // rule 724 / 136.2.b — an Equipment's Effect Text is Inactive while the
+        // card is unattached, so a loose gear in base grants nothing; only its
+        // Rules Text box (723) stays active there.
+        if (
+          (ability as unknown as { effectText?: boolean }).effectText === true &&
+          (
+            ctx.cards.getCardMeta?.(card.id as CoreCardId) as
+              | { attachedTo?: string }
+              | undefined
+          )?.attachedTo === undefined
+        ) {
+          continue;
+        }
 
         const effect = ability.effect as Record<string, unknown> | undefined;
         if (!effect) {

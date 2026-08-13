@@ -101,7 +101,7 @@ describe("(b) before any Equip the Effect Text is Inactive (724): nobody has Gan
   // Expected (724 / 136.2.b): an UNATTACHED Equipment's Effect Text is Inactive, so "Your units here have
   // [Ganking]" grants nothing to anyone while the Requiem lies loose in base. Actual: the engine evaluates the
   // aura off the loose gear with "here" = P1's base, so B (in base) shows a static Ganking grant.
-  test.failing("BUG: unattached Requiem in base must not give B (a base unit) Ganking — Effect Text is Inactive unless Attached (724)", async () => {
+  test("unattached Requiem in base must not give B (a base unit) Ganking — Effect Text is Inactive unless Attached (724)", async () => {
     const game = await played();
     expect(game.state("sr").attachedTo).toBeUndefined();
     expect(hasGanking(game, "B")).toBe(false);
