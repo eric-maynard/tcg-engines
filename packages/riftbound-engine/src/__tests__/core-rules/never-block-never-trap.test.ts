@@ -259,12 +259,10 @@ describe("never trap: rule 650 — concede is accepted from inside every prompt 
     test(`${name}: the seat HOLDING the prompt may concede — the answer is not filtered by the question`, async () => {
       const game = await position();
       const asked = game.decision()?.seat as typeof P1 | typeof P2;
-      // Where the Decision carries a free-action list it names `concede`; where
-      // it does not, 650 still holds — the seat's own `concede()` is accepted.
+      // rule 650 — every Decision advertises the free actions that stay legal
+      // while it is open, `concede` above all.
       const d = game.decision() as { actions?: readonly { moveId: string }[] };
-      if (d.actions !== undefined) {
-        expect(d.actions.map((a) => a.moveId)).toContain("concede");
-      }
+      expect(d.actions?.map((a) => a.moveId)).toContain("concede");
       await expectConcedeWorks(game, asked);
     });
 

@@ -1025,9 +1025,15 @@ export class SeatHandle {
     // pay …" — still offers the [Add] activations. rule 383.3.d: so does the
     // soft trigger-order offer (acting instead accepts the listed order).
     // rule 419.2.a: so does a pick whose acceptance pays the picked card's cost.
-    return d && (d.kind === "integer" || d.kind === "yes-no" || d.kind === "order" || d.kind === "pick")
-      ? (d.actions ?? [])
-      : [];
+    const acts =
+      d && (d.kind === "integer" || d.kind === "yes-no" || d.kind === "order" || d.kind === "pick")
+        ? (d.actions ?? [])
+        : [];
+    // rule 650 / 312.1.b — every Decision advertises `concede`, but a
+    // concede-only list is not an action menu: a prompt that offers nothing
+    // else freezes both seats. `deriveActionDecision` hides a concede-only free
+    // menu the same way.
+    return acts.some((o) => o.moveId !== "concede") ? acts : [];
   }
 
   /** Find an option by verb/moveId (+ card). */

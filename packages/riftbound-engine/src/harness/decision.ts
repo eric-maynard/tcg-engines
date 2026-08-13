@@ -1178,7 +1178,30 @@ function modeLabel(effect: unknown, idx: number): string {
   return modeOptionLabel(effect, idx);
 }
 
+/**
+ * rule 650 — the free actions that stay legal WHILE a prompt is open belong on
+ * the prompt, not only on the branches that happen to price a surcharge:
+ * `concede` is legal at any time, so a pick / distribute / order Decision that
+ * advertised nothing left an agent or UI reading the decision surface unable to
+ * see it. The per-branch lists (a Pay step's rune Adds, a soft order's own
+ * menu) stay as they are; this only fills in a branch that named none.
+ */
 export function deriveFromPendingChoice(ctx: DecisionContext, pc: PendingChoice): Decision {
+  const d = pendingChoiceDecision(ctx, pc);
+  if ((d as { actions?: readonly ActionOption[] }).actions !== undefined) {
+    return d;
+  }
+  // Only the unconditionally-free ones: a rune [Add] is legal during a Pay step
+  // and NOT during an ordinary prompt (312.1.b), and the branches that own that
+  // question already list them.
+  const free = groupActions(
+    ctx,
+    ctx.legal(getPendingChoiceChooser(pc)).filter((m) => m.moveId === "concede"),
+  ).options;
+  return free.length > 0 ? ({ ...d, actions: free } as Decision) : d;
+}
+
+function pendingChoiceDecision(ctx: DecisionContext, pc: PendingChoice): Decision {
   const seat = getPendingChoiceChooser(pc);
   const flat = ctx.legal(seat, ["resolvePendingChoice"]);
   // rule 402 — a prompt bound to a still-pending chain item (leading "you may",

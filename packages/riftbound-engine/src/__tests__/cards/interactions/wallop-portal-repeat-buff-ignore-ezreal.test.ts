@@ -251,10 +251,9 @@ describe("Wallop × Temporal Portal × Ezreal, Prodigy — Repeat 'equal to its 
     expect(game.p1.energy()).toBe(1);
   });
 
-  // Expected: buff+Repeat with Ezreal costs 0 + (2−1) = 1 ⇒ affordable from {1 energy} and offered, and
-  // casting it empties the pool. Actual: the engine gates the buff+Repeat election on the UN-ignored
-  // price (2 + 1 = 3) — it is absent at 1 energy (while at ≥3 energy it is offered and then charged 0).
-  test.failing("BUG: parity {1 energy} with Ezreal: buff+Repeat (price 1) should be offered and leave 0 energy (356.1.b, 356.4.c, 357.3)", async () => {
+  // buff+Repeat with Ezreal costs 0 + (2−1) = 1 ⇒ affordable from {1 energy}, offered, and casting it
+  // empties the pool: the election is priced with the base cost already ignored (356.1.b).
+  test("parity {1 energy} with Ezreal: buff+Repeat (price 1) is offered and leaves 0 energy (356.1.b, 356.4.c, 357.3)", async () => {
     const game = await portalOn({ ezreal: true, energy: 1 });
     expect(electionsOffered(game)).toEqual(["buff", "buff+repeat"]);
     await game.p1.cast("wallop", { payOptional: true, repeat: 1, targets: ["u1"] });

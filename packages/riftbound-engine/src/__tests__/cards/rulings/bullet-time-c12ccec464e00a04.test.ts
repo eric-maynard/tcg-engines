@@ -19,8 +19,12 @@ import { P1, P2, scenario } from "../../../harness";
 const BULLET_TIME = "ogn-268-298";
 const MISS_FORTUNE = "ogn-162-298";
 
+// rule 650 — `concede` rides on every Decision, so it is not one of the free
+// ACTIVATIONS this ruling is about.
 const addVerbs = (d: Decision | null): string[] =>
-  d && "actions" in d ? ((d as { actions?: { verb: string }[] }).actions ?? []).map((a) => a.verb) : [];
+  d && "actions" in d
+    ? ((d as { actions?: { verb: string }[] }).actions ?? []).map((a) => a.verb).filter((v) => v !== "concede")
+    : [];
 
 /** P1: exactly [1] energy and NO floating power, two ready Fury runes; P2 holds bf1 with two 2-Might Grunts. */
 function bulletBoard() {

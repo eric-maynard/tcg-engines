@@ -56,7 +56,8 @@ describe("Ruling 84945d26b8504aa1 — a card being discarded to Bewitching Spiri
     expect(d?.kind).not.toBe("action"); // no priority / no "cast" offered at this point
     if (d?.kind === "pick") {
       expect(d.options.map((o) => o.card ?? o.key).sort()).toEqual(["grunt", "moon"]);
-      expect(d.actions ?? []).toEqual([]);
+      // rule 650 — `concede` is advertised on every Decision; nothing else is offered here.
+      expect((d.actions ?? []).filter((a) => a.moveId !== "concede")).toEqual([]);
     }
     await game.p2.pick("moon");
     expect(game.zoneOf("moon")).toBe("trash");

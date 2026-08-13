@@ -997,6 +997,26 @@ export function spellEffectHasLegalTargets(
   if (costRiderTargetIsClassFilter(effect)) {
     return true;
   }
+  // rule 355.8 (ruling e47841ec3bc6e355, ogn-183-298 Stacked Deck) — "Look at
+  // the top N cards of your Main Deck. Put 1 into your hand …" looks at as many
+  // as are there, so a short deck is fine; an EMPTY one leaves the MANDATORY
+  // pick nothing to choose from, so there is no legal play at all. A look whose
+  // pick is optional ("you may banish one" — ogn-062-298 Reinforce) keeps its
+  // play: rule 431.1.c, it looks at zero cards and proceeds.
+  if (
+    effect.type === "look" &&
+    (effect as { optional?: boolean }).optional !== true &&
+    ((effect as { from?: string }).from ?? "deck") === "deck" &&
+    typeof ctx.zones?.getCardsInZone === "function"
+  ) {
+    const deck = ctx.zones.getCardsInZone(
+      "mainDeck" as Parameters<typeof ctx.zones.getCardsInZone>[0],
+      ctx.playerId as Parameters<typeof ctx.zones.getCardsInZone>[1],
+    ) as readonly string[];
+    if (deck.length === 0) {
+      return false;
+    }
+  }
   // rule-id: ogn-198-298 (rule 355.10.a) — an off-board play ("play a unit
   // from your trash") is gated on that zone, not on the board.
   const offBoardZone = offBoardPlayZone(effect);

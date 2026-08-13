@@ -144,7 +144,8 @@ describe("809.1.c.1 / 429.3 — a [Deflect]-taxed target pick is a Pay step, gat
     // rule 444.2 — nothing to add, so no rune window is claimed either: the
     // taxed unit is dropped outright rather than dressed up as reachable.
     expect(d.options.every((o) => o.needsAdd === undefined)).toBe(true);
-    expect(d.actions ?? []).toEqual([]);
+    // rule 650 — `concede` rides on every Decision; no rune ability does.
+    expect((d.actions ?? []).filter((a) => a.moveId !== "concede")).toEqual([]);
 
     await game.p1.pick("a");
     await game.settle();
@@ -224,7 +225,8 @@ describe("809.1.c.1 / 429.3 — a [Deflect]-taxed target pick is a Pay step, gat
     const d = pick(game.decision());
     expect(d.options.map((o) => o.card).sort()).toEqual(["a", "b"]);
     expect(d.options.every((o) => o.surcharge === undefined && o.needsAdd === undefined)).toBe(true);
-    expect(d.actions ?? []).toEqual([]);
+    // rule 650 — `concede` rides on every Decision; no rune ability does.
+    expect((d.actions ?? []).filter((a) => a.moveId !== "concede")).toEqual([]);
     expect(game.p1.can("recycleRune", "r1")).toBe(false);
     expect(game.p1.can("tapRune", "r1")).toBe(false);
 

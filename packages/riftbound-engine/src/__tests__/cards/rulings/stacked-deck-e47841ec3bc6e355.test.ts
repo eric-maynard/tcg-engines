@@ -58,8 +58,7 @@ describe("Ruling e47841ec3bc6e355 — Stacked Deck needs cards, not three of the
     expect(game.zoneOf("stacked")).toBe("trash");
   });
 
-  // The engine's 355.8 gate does not look at the Main Deck's size, so the play is offered and simply does nothing.
-  test.failing("BUG: ruling e47841ec3bc6e355 — with an EMPTY Main Deck the play should be illegal, but the engine offers and resolves it", async () => {
+  test("ruling e47841ec3bc6e355 — with an EMPTY Main Deck the play is illegal (355.8: nothing to look at)", async () => {
     const game = await board(0).build();
     expect(game.p1.deck()).toEqual([]);
     expect(game.p1.can("cast", "stacked")).toBe(false);

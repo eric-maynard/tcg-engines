@@ -2526,7 +2526,19 @@ export const playSpell: Defs["playSpell"] = {
                 state,
                 context.playerId as string,
                 cardId as string,
-                { board, repeatCount: n, targets: base.targets },
+                {
+                  board,
+                  // rule 356.1.b / 356.1.b.3 (ogn-146-298 Wallop × sfd-078-221)
+                  // — a paid line whose optional additional cost says "ignore
+                  // this spell's cost" is quoted with the base at [0]; only the
+                  // [Repeat] tiers stay due, so the election must be offered at
+                  // that price, not at the un-ignored one.
+                  ...(base.paidAdditionalCost === true && optionalPay?.ignoresBaseCost === true
+                    ? { ignoreBaseCost: true }
+                    : {}),
+                  repeatCount: n,
+                  targets: base.targets,
+                },
                 meta,
                 potential,
               )
