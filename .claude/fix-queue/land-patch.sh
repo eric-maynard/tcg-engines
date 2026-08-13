@@ -42,7 +42,7 @@ for _m in "$FASTQ".*; do
   fi
 done
 case "$LABEL" in fast-*|coordinator*) touch "$FASTQ.$$";; esac  # announce a fast/coordinator land is waiting → others yield
-for _ in $(seq 1 60); do mine=1; case "$LABEL" in fast-*|coordinator*) mine=0;; esac; othersfast=""; for m in "$FASTQ".*; do [ -e "$m" ] || continue; mpid=${m##*.}; case "$m" in *".$$") continue;; esac; if kill -0 "$mpid" 2>/dev/null; then othersfast="$m"; break; else rm -f "$m" 2>/dev/null; fi; done; if [ $mine = 1 ] && [ -n "$othersfast" ]; then sleep 15; continue; fi; [ -s "$PRIO" ] || break; grep -q . "$PRIO" || break; y=1; while read -r pfx; do [ -n "$pfx" ] && case "$LABEL" in "$pfx"*) y=0;; esac; done < "$PRIO"; [ $y = 0 ] && break; sleep 20; done
+for _ in $(seq 1 60); do mine=1; case "$LABEL" in fast-*|coordinator*) mine=0;; esac; othersfast=""; for m in "$FASTQ".*; do [ -e "$m" ] || continue; mpid=${m##*.}; case "$m" in *".$$") continue;; esac; if kill -0 "$mpid" 2>/dev/null; then othersfast="$m"; break; else rm -f "$m" 2>/dev/null; fi; done; if [ $mine = 1 ] && [ -n "$othersfast" ]; then sleep 15; continue; fi; if [ -s "$PRIO" ] && [ $(( $(date +%s) - $(stat -c %Y "$PRIO" 2>/dev/null || echo 0) )) -gt ${LAND_PRIORITY_TTL:-3600} ]; then : > "$PRIO"; out reaped_stale_priority "cleared a priority list older than ${LAND_PRIORITY_TTL:-3600}s"; fi; [ -s "$PRIO" ] || break; grep -q . "$PRIO" || break; y=1; while read -r pfx; do [ -n "$pfx" ] && case "$LABEL" in "$pfx"*) y=0;; esac; done < "$PRIO"; [ $y = 0 ] && break; sleep 20; done
 trap 'rm -f "$FASTQ.$$" 2>/dev/null' EXIT
 # tmp hygiene (cheap, once per land): prune day-old playtest traces and 12h-stale worker scratch dirs so /tmp (tmpfs) never fills
 ( find /tmp/playtest-traces -mindepth 1 -maxdepth 1 -mmin +1440 -exec rm -rf {} + ; for d in /tmp/w[0-9]i[0-9]* /tmp/w[0-9][0-9]i[0-9]* /tmp/rb-land-baseline-*; do [ -e "$d" ] && [ -n "$(find "$d" -maxdepth 0 -mmin +720)" ] && rm -rf "$d"; done ) >/dev/null 2>&1 || true
@@ -57,6 +57,10 @@ if [ -w "$(dirname "$TKQ")" ] 2>/dev/null; then
     _head=$(awk -F'\t' 'NR==1{print $1}' "$TKQ" 2>/dev/null)
     [ -z "$_head" ] && break                      # queue unreadable/empty → fall through
     [ "$_head" = "$$" ] && break                  # our turn
+    # Say we are alive and where we stand. A land that waits silently is
+    # indistinguishable from one that was reaped, and the wait can now exceed
+    # the ~10 minutes an agent's Bash call survives.
+    [ "$_t" = 1 ] && out queued "position=$(grep -n "^$$	" "$TKQ" 2>/dev/null | cut -d: -f1) depth=$(wc -l < "$TKQ" 2>/dev/null) — waiting for the land lock; if this call is reaped, re-run and check git log first"
     kill -0 "$_head" 2>/dev/null || { ( flock 7; grep -v "^$_head	" "$TKQ" > "$TKQ.tmp" 2>/dev/null; mv -f "$TKQ.tmp" "$TKQ" 2>/dev/null ) 7>"$TKL" 2>/dev/null; continue; }
     sleep 10
   done
