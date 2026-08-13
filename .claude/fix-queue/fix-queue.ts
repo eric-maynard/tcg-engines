@@ -81,7 +81,11 @@ switch (cmd) {
       const src = readFileSync(file, "utf8");
       const rel = relative(REPO, file);
       const cardId = /([a-z]{3}-\d{3}-\d{3})\.test\.ts$/.exec(file)?.[1];
-      for (const m of src.matchAll(/test\.failing\(\s*(["'`])((?:BUG|GAP)[^]*?)\1/g)) {
+      // A marker whose name does not START with BUG/GAP is still a bug: facet-numbered
+      // names ("(c) BUG: …") and qualified ones ("PREGAME BUG: …") were invisible to this
+      // scan, so four live markers sat with no queue item for days. Allow a short prefix,
+      // and accept `it.failing` as well as `test.failing`.
+      for (const m of src.matchAll(/(?:test|it)\.failing\(\s*(["'`])([^"'`\n]{0,30}?(?:BUG|GAP)\b[^]*?)\1/g)) {
         const testName = m[2];
         const r = enqueue({ key: `bug:${rel}:${testName}`, source: rel.includes("/interactions/") ? "interaction-bug" : rel.includes("/rulings/") ? "ruling-bug" : rel.includes("/core-rules/") ? "core-rule-bug" : "unit-bug", cardId, title: testName, layer: "engine", repro: { testFile: rel, testName } });
         r === "new" ? n++ : d++;
