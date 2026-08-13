@@ -75,25 +75,36 @@ describe("Ruling 613d2810b62f43ff — killing a unit at the Dreaming Tree for Cr
     expect(game.p1.hand().toSorted()).toEqual(["d1", "d2"]);
   });
 
-  // Expected (ruling nuance + CR example): killing your ONLY unit at the Tree as Patron's cost means you no longer control
-  // the Tree when the play destination is checked, so "to the Tree" is not a legal play. Actual: the engine enumerates and
-  // accepts playUnit(patron → battlefield-tree, kill dreamer) and Patron lands on the Tree (P1 is even still listed as the
-  // Tree's controller after its last unit there died for a Patron played to base).
-  test.failing("BUG: ruling 613d2810b62f43ff — engine lets Cruel Patron be played TO the Tree while killing my only unit there as his cost", async () => {
+  // RULING-CONFLICT: riftjudge 613d2810b62f43ff (nuance, and 81bdefc55681da4a) says killing your ONLY unit at the Tree as
+  // Cruel Patron's cost costs you control of the Tree before the destination is checked, so "to the Tree" would be illegal;
+  // CR 190.4 / 323.6 (+ the official clarification 9a32c2cc829f221a) say control is only re-examined at a Cleanup run in an
+  // OPEN State, and the play sitting on the Chain is a Closed State — engine follows CR (see
+  // core-rules/battlefield-control-timing.test.ts). The just-emptied Tree is therefore still "a battlefield you control"
+  // and a legal destination; control lapses only at the first Open Cleanup after the chain empties — which never comes
+  // here, because Patron himself arrives at the Tree.
+  test("613d2810b62f43ff (per CR) — Cruel Patron MAY be played to the Tree while killing my only unit there: control persists across the play, and the Tree still draws nothing", async () => {
+    const game = await board(true).build();
+    const variants = game.p1.option("play", "patron")?.variants ?? [];
+    const toTreeKillingDreamer = variants.filter(
+      (v) => String(v.params.location ?? "").includes("tree") && v.params.sacrificeId === "dreamer",
+    );
+    expect(toTreeKillingDreamer.length).toBe(1);
+    await game.p1.play("patron", { sacrifice: "dreamer", to: "tree" });
+    await game.settle();
+    expect(game.zoneOf("dreamer")).toBe("trash");
+    expect(game.zoneOf("patron")).toBe("battlefield-tree");
+    expect(game.gameState.battlefields.tree?.controller).toBe(P1);
+    expect(game.chain()).toEqual([]);
+    expect(game.p1.hand()).toEqual(["disc"]); // the cost-kill is not a spell choosing: no Tree draw
+    expect(game.violations()).toEqual([]);
+  });
+
+  // The other half of the ruling's nuance IS the CR: once the chain empties with nobody there, the Tree does lapse.
+  test("323.6 — but with the Dreamer killed for a Patron played to BASE, the first Open Cleanup does drop P1's control of the Tree", async () => {
     const toBase = await board(true).build();
     await toBase.p1.play("patron", { sacrifice: "dreamer", to: "base" });
     await toBase.settle();
-    expect(toBase.gameState.battlefields.tree?.controller ?? null).toBeNull(); // 323.6: no units there any more
-
-    const game = await board(true).build();
-    const variants = game.p1.option("play", "patron")?.variants ?? [];
-    const toTreeKillingDreamer = variants.filter((v) => String(v.params.location ?? "").includes("tree") && v.params.sacrificeId === "dreamer");
-    expect(toTreeKillingDreamer).toEqual([]);
-    const forced = await game.p1.try((p) => p.play("patron", { sacrifice: "dreamer", to: "tree" }));
-    if (forced.ok) {
-      await game.settle();
-    }
-    expect(forced.ok && game.zoneOf("patron") === "battlefield-tree").toBe(false);
+    expect(toBase.gameState.battlefields.tree?.controller ?? null).toBeNull();
   });
 
   test("nuance (legal line): with the Dreamer alone at the Tree, Patron is played to BASE killing the Dreamer — P1 has nothing left at the Tree and, again, nothing is drawn", async () => {

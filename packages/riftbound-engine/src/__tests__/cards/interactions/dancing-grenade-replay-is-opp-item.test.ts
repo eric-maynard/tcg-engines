@@ -211,17 +211,29 @@ describe("Dancing Grenade replayed by the opponent: whose chain item is it?", ()
     expect(game.violations()).toEqual([]);
   });
 
-  test.failing("(c) BUG: a REPLAY that resolves is still a Play (419.3.b), so completing it must fire P2's 'when you play a spell' Cask (419.4.a) — the engine emits no play event for the Limited Play, so the Cask never triggers", async () => {
+  test("(c) a REPLAY that resolves is still a Play (419.3.b), so P2's 'when you play a spell' Cask fires for it — at the END of that resolution (419.4.a), i.e. once the replay's own 'play me again' offer has been answered", async () => {
     const game = await board({ cask: true }).build();
     await toReplayOffer(game);
     await game.p2.yes();
     await game.p2.pick("bruiser");
     await game.p2.passPriority();
     await game.p1.passPriority();
-    // Expected: the replay resolved, so P2's Cask trigger is on the chain awaiting its "you may
-    // exhaust me". Actual: the only pending decision is P1's third-replay offer; the Cask is silent.
     expect(game.state("bruiser").damage).toBe(3);
+    // rule 419.4.a — the act of playing is completed BY the resolution, and this resolution is not
+    // over: its last instruction ("its controller may play this spell again") is still asking P1.
+    // Exactly like the first cast, whose Cask-visible play event also lands only once the offer it
+    // raised is answered, so the two plays are treated identically.
+    expect(game.decision()).toMatchObject({ kind: "yes-no", seat: P1 });
+    expect(game.chain().some((i) => i.cardId === "cask")).toBe(false);
+
+    await game.p1.no(); // the resolution ends here — and with it P2's play of the Grenade
     expect(game.chain().some((i) => i.cardId === "cask")).toBe(true);
+    expect(game.decision()).toMatchObject({ kind: "yes-no", seat: P2 }); // "you may exhaust me"
+    await game.p2.yes();
+    await game.settle();
+    expect(game.state("cask").isExhausted).toBe(true);
+    expect(game.p2.gear().length).toBe(2); // the Gold gear token
+    expect(game.violations()).toEqual([]);
   });
 
   // ---- (d) the ping-pong ------------------------------------------------------------------------

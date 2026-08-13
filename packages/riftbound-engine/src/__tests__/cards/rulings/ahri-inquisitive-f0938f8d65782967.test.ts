@@ -79,16 +79,34 @@ describe("Ruling f0938f8d65782967 — Ahri's trigger owes [Deflect] for the unit
     expect(game.p1.power("rainbow")).toBe(0);
   });
 
-  // The engine treats a trigger's target choice as mandatory (402.2): the pick has `allowDecline: false`, so a
-  // player who CAN pay the Deflect surcharge has no way to refuse it and shed the trigger.
-  test.failing("BUG: ruling f0938f8d65782967 — P1 should be able to decline the [Deflect] cost and have Ahri's trigger removed from the chain; the engine's target pick is not declinable", async () => {
+  // ruling f0938f8d65782967 — "you may refuse to pay, and the ability then ceases to exist". When Galio is the
+  // ONLY candidate the refusal is not a target choice at all but the payment question itself (DESIGN.md
+  // §Paying costs = manual pay): the surcharge is surfaced as the FIN opt-in on Ahri's own item, so answering
+  // 'no' pays nothing and drops the trigger. A declinable *pick* would be the wrong surface — 402.2 keeps a
+  // trigger's target choice mandatory once a payable candidate has been named.
+  test("ruling f0938f8d65782967 — with Galio the only candidate P1 is asked to pay the [Deflect], and refusing removes Ahri's trigger from the chain, unpaid", async () => {
     const game = await board(1, false).build();
     await game.p1.move("ahri", "bf1");
-    const d = game.decision() as Extract<Decision, { kind: "pick" }>;
-    expect(d.allowDecline).toBe(true);
-    await game.p1.decline();
+    const d = game.decision();
+    expect(d).toMatchObject({ kind: "yes-no", seat: P1, timing: "FIN", canAccept: true });
+    expect(d?.prompt).toContain("Deflect");
+    expect(game.chain().map((i) => i.cardId)).toEqual(["ahri"]);
+
+    await game.p1.no();
     expect(game.chain()).toEqual([]);
     expect(game.p1.power("rainbow")).toBe(1);
     expect(game.state("galio").might).toBe(6);
+    await game.settle();
+    expect(game.state("galio")).toMatchObject({ might: 6, mightModifier: 0 });
+    expect(game.violations()).toEqual([]);
+  });
+
+  test("…and accepting that same offer pays the [rainbow] and lands the -2 (the refusal is a real fork, not a no-op prompt)", async () => {
+    const game = await board(1, false).build();
+    await game.p1.move("ahri", "bf1");
+    await game.p1.yes();
+    await game.settle();
+    expect(game.p1.power("rainbow")).toBe(0);
+    expect(game.state("galio").might).toBe(4);
   });
 });
