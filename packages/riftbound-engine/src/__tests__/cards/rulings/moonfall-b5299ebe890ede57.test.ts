@@ -37,6 +37,17 @@ async function moonfallTheCrab(): Promise<Game> {
   const game = await board().build();
   expect(game.state("crab")).toMatchObject({ baseMight: 0, might: 0, zone: "battlefield-bf2" });
   await game.p1.cast("moonfall");
+  {
+      // rule 355.10.b (unl-198-219) — the anchor battlefield is a target of the
+      // spell, chosen as it is played: answer it before the pull is offered.
+      const anchor = game.decision();
+      if (
+        anchor?.kind === "pick" &&
+        anchor.options.every((o) => game.gameState.battlefields[o.key] !== undefined)
+      ) {
+        await game.p1.pick(anchor.options[0]?.key as string);
+      }
+    }
   for (let i = 0; i < 4 && game.chain().some((c) => c.cardId === "moonfall") && game.decision()?.kind === "action"; i++) {
     await game.acting().passPriority();
   }

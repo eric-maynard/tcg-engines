@@ -167,7 +167,7 @@ describe("Sandswept Tomb (fixed) × Irelia, Graceful (elective) on one Punch Fir
   // with no decline branch, and electing [rainbow] must leave 0 energy and both pips. Actual: no choice
   // exists anywhere — neither as a field of the cast option (its only field is `targets`) nor as a Decision;
   // the engine silently applies the pool heuristic and here picks the [1] half.
-  test.failing("BUG: Irelia's elective half is never offered — casting Punch First on her must raise a 2-option, non-declinable cost-election Decision for P1", async () => {
+  test("Irelia's elective half is offered — casting Punch First on her raises a 2-option, non-declinable cost-election Decision for P1", async () => {
     const game = await board({ energy: 1, power: { body: 2 } }).build();
     expect(game.p1.option("cast", "pf")?.fields.map((f) => f.name)).toContain("cost-election");
     await game.p1.cast("pf", { targets: "irelia" });

@@ -60,6 +60,15 @@ async function attackAndCast(): Promise<Game> {
 
 /** Push Moonfall to the point where its own choice is on the table, and return that decision. */
 async function moonfallChoice(game: Game): Promise<Decision> {
+  // rule 355.10.b — the anchor battlefield is Moonfall's own target, answered as
+  // the spell is played; the facets below are about the pull that follows it.
+  const anchor = game.decision();
+  if (
+    anchor?.kind === "pick" &&
+    anchor.options.every((o) => game.gameState.battlefields[o.key] !== undefined)
+  ) {
+    await game.p1.pick(anchor.options[0]?.key as string);
+  }
   if (game.decision()?.kind === "action") {
     await game.p1.passPriority();
     await game.p2.passPriority();
@@ -92,7 +101,7 @@ describe("Moonfall — the anchor, the 'up to one' pull, and the -2 that follows
   // played (355.5) — P1 must be asked, and the only legal answer is bfA (P1 has no unit at bfB). Even a
   // single legal target is still chosen rather than silently applied (355.10.d.2).
   // Actual: no anchor decision is ever surfaced; the engine binds the battlefield implicitly.
-  test.failing("BUG: the anchor battlefield is never offered — Moonfall must surface a target decision listing exactly bfA (355.10.b, 355.5, 355.10.d.2)", async () => {
+  test("the anchor battlefield is offered — Moonfall surfaces a target decision listing exactly bfA (355.10.b, 355.5, 355.10.d.2)", async () => {
     const game = await attackAndCast();
     const d = game.decision();
     expect(d).toMatchObject({ kind: "pick", seat: P1 });

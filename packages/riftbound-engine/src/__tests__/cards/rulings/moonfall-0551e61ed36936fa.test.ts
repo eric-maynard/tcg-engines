@@ -50,6 +50,17 @@ describe("Ruling 0551e61ed36936fa — Moonfall debuffs the enemy units there whe
   test("Moonfall resolves: P1 picks Foe A to be moved to bf1 and it gets -2 (4 → 2); Foe B in base is untouched", async () => {
     const game = await board().build();
     await game.p1.cast("moonfall");
+    {
+        // rule 355.10.b (unl-198-219) — the anchor battlefield is a target of the
+        // spell, chosen as it is played: answer it before the pull is offered.
+        const anchor = game.decision();
+        if (
+          anchor?.kind === "pick" &&
+          anchor.options.every((o) => game.gameState.battlefields[o.key] !== undefined)
+        ) {
+          await game.p1.pick(anchor.options[0]?.key as string);
+        }
+      }
     expect(game.p1.resources()).toEqual({ energy: 0, power: { mind: 0 } });
     await passWhileOnChain(game, "moonfall");
     // "You may move up to one enemy unit" — P1 chooses which (a real decision for P1).
@@ -68,6 +79,17 @@ describe("Ruling 0551e61ed36936fa — Moonfall debuffs the enemy units there whe
   test("ruling 0551e61ed36936fa — Foe B moved to bf1 AFTER Moonfall resolved (P2's Ride the Wind in the ensuing showdown) keeps its full 4 Might; Foe A stays at 2", async () => {
     const game = await board().build();
     await game.p1.cast("moonfall");
+    {
+        // rule 355.10.b (unl-198-219) — the anchor battlefield is a target of the
+        // spell, chosen as it is played: answer it before the pull is offered.
+        const anchor = game.decision();
+        if (
+          anchor?.kind === "pick" &&
+          anchor.options.every((o) => game.gameState.battlefields[o.key] !== undefined)
+        ) {
+          await game.p1.pick(anchor.options[0]?.key as string);
+        }
+      }
     await passWhileOnChain(game, "moonfall");
     await game.p1.pick("foeA");
     expect(game.state("foeA")).toMatchObject({ location: "bf1", might: 2 });

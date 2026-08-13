@@ -1461,6 +1461,28 @@ function resumePending(
       }
       return;
     }
+    // rule 356.4.b / 356.4.c.1 (rule-id: sfd-141-221) — the caster's "[N] or
+    // [rainbow] less" election. The engine paid the half listed first; naming
+    // the other one restores the pre-payment pool and pays that half instead.
+    case "cost-election": {
+      const picked = (answer.pickedKeys ?? [])[0];
+      const electedKey = choice.type === "pick-many" ? choice.options[0]?.key : undefined;
+      if (picked !== undefined && electedKey !== undefined && picked !== electedKey) {
+        draft.runePools[resume.playerId] = JSON.parse(
+          JSON.stringify(resume.pool),
+        ) as (typeof draft.runePools)[string];
+        payResourceCost(
+          draft,
+          resume.playerId,
+          resume.cardId,
+          resume.alternative as Parameters<typeof payResourceCost>[3],
+        );
+      }
+      if (!draft.pendingChoice) {
+        postChoiceCleanup(draft, context);
+      }
+      return;
+    }
     case "none": {
       (draft as { lastPendingAnswer?: unknown }).lastPendingAnswer = { ...answer, tag: resume.tag };
       return;

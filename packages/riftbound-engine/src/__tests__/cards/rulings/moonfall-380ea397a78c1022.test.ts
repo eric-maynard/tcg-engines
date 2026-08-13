@@ -31,6 +31,17 @@ function board() {
 async function moonfallResolved(): Promise<Game> {
   const game = await board().build();
   await game.p1.cast("moonfall");
+  {
+      // rule 355.10.b (unl-198-219) — the anchor battlefield is a target of the
+      // spell, chosen as it is played: answer it before the pull is offered.
+      const anchor = game.decision();
+      if (
+        anchor?.kind === "pick" &&
+        anchor.options.every((o) => game.gameState.battlefields[o.key] !== undefined)
+      ) {
+        await game.p1.pick(anchor.options[0]?.key as string);
+      }
+    }
   expect(game.chain().map((c) => c.cardId)).toEqual(["moonfall"]);
   await game.acting().passPriority();
   await game.acting().passPriority();

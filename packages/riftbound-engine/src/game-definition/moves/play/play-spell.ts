@@ -47,6 +47,7 @@ import {
   getCardEffectiveMight,
   reachableRuneAdds,
   canAffordCard,
+  costElectionHalves,
   deductCost,
   getEffectiveSpellRepeatCost,
   getFlowCostForPlay,
@@ -3154,12 +3155,41 @@ export const playSpell: Defs["playSpell"] = {
     // pool, so credit them back.
     const energyBeforePay = draft.runePools[playerId]?.energy ?? 0;
     const readyRunesBeforePay = countReadyRunes(context, playerId);
+    // rule 356.4.b / 356.4.c.1 (rule-id: sfd-141-221) — "[1] or [rainbow] less"
+    // is ONE discount whose half the CASTER elects. The engine pays a half now;
+    // when the other one is genuinely payable and differs, the election is a
+    // real choice and is surfaced after the play (the answer re-pays from the
+    // snapshot below). An explicit `costElection` param answers it up front.
+    const electionParam = context.params.costElection as "energy" | "power" | undefined;
+    const poolBeforePay = JSON.parse(JSON.stringify(draft.runePools[playerId] ?? {}));
+    const costElectionExtras: CostExtras = {
+      additionalCost: spellAdditionalCost,
+      board: { cards: context.cards, zones: context.zones },
+      ignoreBaseCost,
+      flowIndex: context.params.flowIndex as number | undefined,
+      repeatCount: repeatN,
+      targets,
+      viaFlow: viaFlow === true,
+      xAmount: xCostIsPower(cardId) ? undefined : xAmount,
+    } as CostExtras;
+    const costElection =
+      electionParam === undefined
+        ? costElectionHalves(
+            draft,
+            playerId,
+            cardId,
+            costElectionExtras,
+            createMetaAccessor(context.cards),
+          )
+        : undefined;
     deductCost(
       draft,
       playerId,
       cardId,
       {
         additionalCost: spellAdditionalCost,
+        // rule 356.4.c.1 — an up-front election names the half to apply.
+        ...(electionParam !== undefined ? { preferPowerWaiver: electionParam === "power" } : {}),
         // rule-id: ven-055-166 — friendly "your spells cost less" statics.
         board: { cards: context.cards, zones: context.zones },
         ignoreBaseCost,
@@ -3684,6 +3714,80 @@ export const playSpell: Defs["playSpell"] = {
           } as any,
         );
       }
+    }
+
+    // rule 355.10.b / 355.10.d.2 (rule-id: unl-198-219) — "Choose a battlefield
+    // where you have units" is a TARGET of the spell, not a mere restriction:
+    // the caster names it as the spell is played and it is locked there
+    // (355.15). A lone qualifying battlefield is still chosen, not bound behind
+    // the caster's back.
+    if (!draft.pendingChoice) {
+      const seqAnchor = (
+        effectToStore as { type?: string; target?: { type?: string } } | undefined
+      );
+      if (seqAnchor?.type === "sequence" && seqAnchor.target?.type === "battlefield") {
+        const items = draft.interaction?.chain?.items ?? [];
+        const item = [...items].reverse().find((it) => it?.cardId === cardId);
+        const alreadyBound = (item?.targets ?? []).some(
+          (t) => draft.battlefields?.[t as string] !== undefined,
+        );
+        const needsFriendly =
+          (seqAnchor.target as { filter?: { hasFriendlyUnits?: boolean } }).filter
+            ?.hasFriendlyUnits === true;
+        const candidates = Object.keys(draft.battlefields ?? {}).filter(
+          (bf) =>
+            !needsFriendly ||
+            zones
+              .getCardsInZone(`battlefield-${bf}` as CoreZoneId)
+              .some(
+                (id) =>
+                  (context.cards.getCardController?.(id as CoreCardId) ??
+                    context.cards.getCardOwner(id as CoreCardId)) === playerId,
+              ),
+        );
+        if (item?.id !== undefined && !alreadyBound && candidates.length > 0) {
+          (draft as { pendingChoice?: unknown }).pendingChoice = {
+            bindToChainItemId: item.id as string,
+            effect: item.effect,
+            options: candidates,
+            playerId,
+            remaining: 1,
+            sourceCardId: cardId,
+            type: "choose-target",
+          };
+        }
+      }
+    }
+
+    // rule 356.4.b / 356.4.c.1 (rule-id: sfd-141-221) — the caster elects which
+    // half of an "[N] or [rainbow] less" discount applies. The engine already
+    // paid one half; naming the other restores the pre-payment pool and pays it
+    // instead. The elected half is listed first, so leaving the prompt alone
+    // keeps what was paid.
+    if (costElection !== undefined && !draft.pendingChoice) {
+      const electedKey = costElection.electedIsPower ? "power" : "energy";
+      const otherKey = costElection.electedIsPower ? "energy" : "power";
+      const label = (key: string) => (key === "power" ? "Reduce by [rainbow]" : "Reduce by [1]");
+      (draft as { pendingChoice?: unknown }).pendingChoice = {
+        max: 1,
+        min: 1,
+        options: [
+          { key: electedKey, label: label(electedKey) },
+          { key: otherKey, label: label(otherKey) },
+        ],
+        playerId,
+        prompt: "Elect which half of the discount to apply",
+        resume: {
+          alternative: costElection.alternative,
+          cardId,
+          kind: "cost-election",
+          playerId,
+          pool: poolBeforePay,
+        },
+        semantics: "target",
+        sourceCardId: cardId,
+        type: "pick-many",
+      };
     }
 
     // rule 319.8 / 322 / 323 (ruling 95293baff70ed4c7) — the spell is on the

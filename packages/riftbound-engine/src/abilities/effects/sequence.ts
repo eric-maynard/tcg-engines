@@ -208,8 +208,11 @@ function chooseSequenceBattlefield(
   target: TargetDescriptor,
   ctx: EffectContext,
   resolverCtx: Parameters<typeof resolveTarget>[1],
+  /** rule 355.15 — the anchor the caster chose as the spell was played. */
+  anchorId?: string,
 ): string | undefined {
-  const bound = ctx.boundTargets?.find((id) => ctx.draft.battlefields?.[id] !== undefined);
+  const bound =
+    anchorId ?? ctx.boundTargets?.find((id) => ctx.draft.battlefields?.[id] !== undefined);
   const ids =
     bound !== undefined
       ? [bound]
@@ -247,6 +250,21 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
   if (seq.independentExecution === true && ctx.boundTargets !== undefined) {
     const { boundTargets: _priorPick, ...rest } = ctx;
     ctx = rest as EffectContext;
+  }
+  // rule 355.10.b (rule-id: unl-198-219) — the sequence's OWN battlefield
+  // target is the ANCHOR every step reads ("…to that battlefield… units
+  // there…"), never one step's object: hold it aside so the positional slot
+  // distribution below hands it to no step.
+  let seqAnchorId: string | undefined;
+  {
+    const seqTgt = (effect as { target?: { type?: string } }).target;
+    if (seqTgt?.type === "battlefield" && ctx.boundTargets !== undefined) {
+      seqAnchorId = ctx.boundTargets.find((id) => ctx.draft.battlefields?.[id] !== undefined);
+      if (seqAnchorId !== undefined) {
+        const rest = ctx.boundTargets.filter((id) => id !== seqAnchorId);
+        ctx = { ...ctx, boundTargets: rest.length > 0 ? rest : undefined } as EffectContext;
+      }
+    }
   }
   if (seq.effects) {
     // rule-id: sfd-206-221 (rule 355.8) — "Choose a friendly unit and a
@@ -458,7 +476,7 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
       typeof seqBattlefield === "object" &&
       seqBattlefield.type === "battlefield"
     ) {
-      const chosen = chooseSequenceBattlefield(seqBattlefield, ctx, resolverCtx);
+      const chosen = chooseSequenceBattlefield(seqBattlefield, ctx, resolverCtx, seqAnchorId);
       if (chosen !== undefined) {
         boundBattlefieldZone = chosen;
         ctx = { ...ctx, sourceZone: chosen } as EffectContext;
