@@ -52,15 +52,25 @@ describe("Ruling e53d4511cf55fc0a — Bellows Breath hits up to three DIFFERENT 
     expect(game.violations()).toEqual([]);
   });
 
-  // Expected: "at the same location" restricts the whole set to ONE location, so bf1's Grunt A and bf2's
-  // Faraway cannot be chosen together. Actual: the enumerator offers mixed-location sets (["a","far"]) and
-  // both units take 1.
-  test.failing("BUG: ruling e53d4511cf55fc0a — the engine allows one Bellows Breath set to span two locations", async () => {
+  // rule 355.11.b — "at the same location" restricts ONE execution's set to one location, so bf1's Grunt A
+  // and bf2's Faraway cannot be named together by a single (un-Repeated) Bellows Breath.
+  // RULING-CONFLICT: riftjudge e53d4511cf55fc0a reads as if the mixed set were never OFFERED; CR 820 — and
+  // the green rulings 4cdede4e3549fa7a / b103ef9e7b619ede — let a [Repeat]-paid cast aim each execution at a
+  // different location, so ["a","far"] IS a legal flat list once the Repeat is elected and the play's
+  // flattened `targets` field lists the union over every repeat count. The engine follows the CR; what the
+  // ruling governs is the CAST, asserted here: without electing the Repeat the mixed set is refused.
+  test("ruling e53d4511cf55fc0a — one Bellows Breath set cannot span two locations", async () => {
     const game = await board().build();
     const attempt = await game.p1.try((p) => p.cast("bellows", { targets: ["a", "far"] }));
     expect(attempt.ok).toBe(false);
-    const sets = (game.p1.option("cast", "bellows")?.fields.find((f) => f.arg === "targets")?.options ?? []) as string[][];
-    expect(sets.every((s) => !(s.includes("far") && s.some((x) => ["a", "b", "c"].includes(x))))).toBe(true);
+    expect(game.zoneOf("bellows")).toBe("hand");
+    expect(game.state("a").damage).toBe(0);
+    expect(game.state("far").damage).toBe(0);
+    expect(game.p1.resources()).toEqual({ energy: 2, power: { mind: 2 } }); // nothing paid, no Repeat bought
+    await game.p1.cast("bellows", { repeat: 1, targets: ["a", "far"] }); // rule 820 — with the Repeat it is legal
+    await game.settle();
+    expect(game.state("a").damage).toBe(1);
+    expect(game.state("far").damage).toBe(1);
   });
 
   test("fewer than three is fine: naming one unit deals 1 to it and nothing to the rest", async () => {
