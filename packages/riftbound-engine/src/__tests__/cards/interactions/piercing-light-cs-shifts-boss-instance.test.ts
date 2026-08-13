@@ -101,6 +101,13 @@ async function drain(game: Game, boss?: boolean): Promise<Decision[]> {
     if (!d || (d.kind === "action" && d.context === "main")) {
       break;
     }
+    // DESIGN.md §Pausing inside a resolving item — a Chain Item stopped at a
+    // resume point shows as an `action` decision with `context: "procedure"`
+    // where passing is illegal; continue it instead.
+    if (d.kind === "action" && d.context === "procedure") {
+      await game.resume();
+      continue;
+    }
     if (d.kind === "action") {
       await game.seat(d.seat).pass();
       continue;

@@ -47,6 +47,46 @@ import { xpMoves } from "./xp";
  * Staged (401.1); the "attack" / "defend" / "showdown-begin" triggers a begun
  * Showdown queues are finalized here in turn (337.1), before anyone gets Focus.
  */
+/**
+ * rule 321 / 340 (DESIGN.md §Pausing inside a resolving item) — while a Chain
+ * Item's resolution is SUSPENDED nobody may do anything but resume it. This is
+ * the same shape as `pendingChoice` ("only `resolvePendingChoice` is legal"),
+ * expressed once here instead of as a guard in every move: an unfinished
+ * resolution is not a priority window, so no play, no pass, no procedure. Only
+ * `concede` survives (rule 196 — a player may always leave).
+ */
+function withSuspendedResolutionGate<
+  TMoves extends Record<
+    string,
+    // biome-ignore lint/suspicious/noExplicitAny: structural pass-through wrapper
+    { condition?: (state: any, context: any) => boolean; enumerator?: (state: any, context: any) => unknown[] } | undefined
+  >,
+>(moves: TMoves): TMoves {
+  const ALWAYS_LEGAL = new Set(["resumeResolution", "concede"]);
+  const wrapped = {} as Record<string, unknown>;
+  for (const [name, move] of Object.entries(moves)) {
+    if (!move || ALWAYS_LEGAL.has(name)) {
+      wrapped[name] = move;
+      continue;
+    }
+    const { condition, enumerator } = move;
+    wrapped[name] = {
+      ...move,
+      // biome-ignore lint/suspicious/noExplicitAny: structural pass-through wrapper
+      condition: (state: any, context: any) =>
+        state?.suspendedResolution === undefined && (condition ? condition(state, context) : true),
+      ...(enumerator
+        ? {
+            // biome-ignore lint/suspicious/noExplicitAny: structural pass-through wrapper
+            enumerator: (state: any, context: any) =>
+              state?.suspendedResolution === undefined ? enumerator(state, context) : [],
+          }
+        : {}),
+    };
+  }
+  return wrapped as TMoves;
+}
+
 function withStagedShowdownOpening<
   // biome-ignore lint/suspicious/noExplicitAny: structural pass-through wrapper
   TMoves extends Record<string, { reducer: (draft: any, context: any) => void } | undefined>,
@@ -74,9 +114,15 @@ function withStagedShowdownOpening<
         // interrupted instruction keeps resolving before anyone gets priority.
         if (!draft.pendingChoice && draft.deferredSequenceRest?.length) {
           flushDeferredSequenceRest(draft, context);
-          if (!draft.pendingChoice) {
+          if (!draft.pendingChoice && !draft.suspendedResolution) {
             finalizePendingItems(draft, context);
           }
+        }
+        // rule 321 / 337.1 (DESIGN.md §Pausing inside a resolving item) — the
+        // item has not left the Chain, so nothing is finalized, no staged
+        // Showdown opens and the reveal window stays open until it does.
+        if (draft.suspendedResolution) {
+          return;
         }
         const began = withinMoveReducer(() =>
           openPendingContestedShowdown(draft, context as Omit<ArrivalIO, "draft">),
@@ -105,7 +151,7 @@ export const riftboundMoves: GameMoveDefinitions<
   RiftboundMoves,
   RiftboundCardMeta,
   unknown
-> = withStagedShowdownOpening(withDeferredSpellSettle(
+> = withSuspendedResolutionGate(withStagedShowdownOpening(withDeferredSpellSettle(
   withTriggerFinalization({
   // Setup moves
   ...setupMoves,
@@ -150,7 +196,7 @@ export const riftboundMoves: GameMoveDefinitions<
   // W12 deck-peek moves
   ...deckActionMoves,
   } as GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>),
-));
+)));
 
 export { cardActionMoves } from "./card-actions";
 export { cardPlayMoves } from "./cards";

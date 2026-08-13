@@ -1580,6 +1580,21 @@ export type PendingChoice =
   | WeaponmasterEquipChoice;
 
 /**
+ * WHERE a resolution may stop part-way (DESIGN.md §Pausing inside a resolving
+ * item). Deliberately an enumerated list rather than a boolean: a new resume
+ * point is a rules decision about a specific step of a specific instruction,
+ * never something a handler may invent on the way past.
+ *
+ * - `damage-instance` — rule 321 / 323.5 / 703: between two damage instances of
+ *   ONE resolving item, after a costed "you may pay … instead" die shield
+ *   (371.2, ogn-269-298 The Boss) was answered. The payment can change what a
+ *   static ability counts (703), and the instances still to come are dealt
+ *   against the recounted board, so that board is a position players and tests
+ *   can read.
+ */
+export type SuspendedResolutionReason = "damage-instance";
+
+/**
  * Complete Riftbound game state
  *
  * This is the game-specific state that moves operate on.
@@ -2105,7 +2120,35 @@ export interface RiftboundGameState {
     effect: unknown;
     playerId: string;
     sourceCardId?: string;
+    /**
+     * rule 321 (DESIGN.md §Pausing inside a resolving item) — this remainder
+     * belongs to a Chain Item that is still RESOLVING, so it must not be run
+     * inside the reducer that answered the prompt: the board between the answer
+     * and the next instruction is a real position (a static recount, rule 703,
+     * happens there). `resumeResolution` clears the gate and runs it.
+     */
+    gate?: SuspendedResolutionReason;
   }[];
+
+  /**
+   * rule 321 / 321.1 (DESIGN.md §Pausing inside a resolving item) — a Chain
+   * Item whose resolution stopped part-way and is waiting for an explicit
+   * `resumeResolution` step. Set only when a resume point (see
+   * `SuspendedResolutionReason`) was reached; while it is set every move except
+   * `resumeResolution` and `concede` is illegal, exactly as `pendingChoice`
+   * blocks everything but `resolvePendingChoice`, and NO Cleanup may run — the
+   * item has not left the Chain (321).
+   *
+   * Pure data on the game state, so it round-trips through the undo/redo
+   * `EngineCheckpoint` like any other field (see FIXER-PRIMER §14).
+   */
+  suspendedResolution?: {
+    /** rule 359.1 — the player resolving the item resumes it. */
+    playerId: string;
+    /** The card whose resolution is suspended (prompt/UI label). */
+    sourceCardId?: string;
+    reason: SuspendedResolutionReason;
+  };
 
   /**
    * rule 359.3.d — a resolving spell card is placed in the trash only AFTER its

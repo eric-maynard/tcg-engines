@@ -36,6 +36,13 @@ export function getActingSeat(state: RiftboundGameState): PlayerId | undefined {
   if (state.pendingChoice) {
     return getPendingChoiceChooser(state.pendingChoice);
   }
+  // rule 321 / 359.1 (DESIGN.md §Pausing inside a resolving item) — a Chain
+  // Item stopped at a resume point is nobody's priority window: the player
+  // RESOLVING it is the only one who may act, and the only thing they may do is
+  // continue it.
+  if (state.suspendedResolution) {
+    return state.suspendedResolution.playerId;
+  }
   const chain = state.interaction?.chain;
   if (chain?.active && chain.activePlayer) {
     return chain.activePlayer;

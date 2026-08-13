@@ -115,12 +115,36 @@ export interface ProcedureRun {
  * Fire enumerated procedure moves until none remain (bounded). Executed on
  * behalf of the turn player (they carry no meaningful chooser).
  */
-export function runProcedures(engine: HarnessEngine, maxSteps = 16): ProcedureRun[] {
+export function runProcedures(
+  engine: HarnessEngine,
+  maxSteps = 16,
+  opts: { readonly resumeSuspended?: boolean } = {},
+): ProcedureRun[] {
   const runs: ProcedureRun[] = [];
   for (let i = 0; i < maxSteps; i++) {
     const state = engine.getState();
     if (state.status !== "playing" || state.pendingChoice) {
       break;
+    }
+    // DESIGN.md §Pausing inside a resolving item — a suspended resolution is a
+    // real engine position (the board a static just recounted, with the item's
+    // remaining instructions still owed), so `resumeResolution` is NOT one of
+    // PROCEDURE_MOVES: firing it here by default would collapse the pause into
+    // the very move that produced it. A driver whose surface cannot show a
+    // half-resolved item — the app, whose client renders prompts and plays, not
+    // procedures — opts in, and because this runs inside `applyMove`'s undo
+    // group the resume is taken back with the action that caused it.
+    if (state.suspendedResolution !== undefined) {
+      if (opts.resumeSuspended !== true) {
+        break;
+      }
+      const resumer = state.suspendedResolution.playerId;
+      const r = engine.executeMove("resumeResolution", { params: {}, playerId: resumer as PlayerId });
+      runs.push({ error: r.success ? undefined : r.error, moveId: "resumeResolution", params: {}, seat: resumer, success: r.success });
+      if (!r.success) {
+        break;
+      }
+      continue;
     }
     const seat = state.turn.activePlayer;
     const legal = engine.enumerateMoves(seat as PlayerId, {
@@ -165,6 +189,12 @@ export function runProcedures(engine: HarnessEngine, maxSteps = 16): ProcedureRu
 export interface ApplyMoveOptions {
   /** Fire PROCEDURE_MOVES after a successful move (default true). */
   readonly autoProcedures?: boolean;
+  /**
+   * DESIGN.md §Pausing inside a resolving item — also continue a resolution
+   * suspended by this move, inside the same undo group (default false). Set by
+   * drivers whose surface has no way to show a half-resolved item.
+   */
+  readonly resumeSuspended?: boolean;
 }
 
 export interface ApplyMoveResult {
@@ -209,7 +239,10 @@ export function applyMove(
         return { error: r.error, errorCode: r.errorCode, procedures: [], success: false };
       }
     }
-    const procedures = opts.autoProcedures === false ? [] : runProcedures(engine);
+    const procedures =
+      opts.autoProcedures === false
+        ? []
+        : runProcedures(engine, 16, { resumeSuspended: opts.resumeSuspended === true });
     return { next, procedures, success: true };
   });
 }

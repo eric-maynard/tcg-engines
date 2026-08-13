@@ -550,8 +550,13 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
       (seq as { _repeatExecutions?: boolean })._repeatExecutions === true
         ? (ctx.eventBatch ?? {})
         : ctx.eventBatch;
+    // DESIGN.md §Pausing inside a resolving item — set when THIS step's
+    // between-instances shield pass (below) raised the prompt, so the deferred
+    // remainder can be gated behind an explicit resume.
+    let gatedByInstanceShield = false;
     for (let i = 0; i < seq.effects.length; i++) {
       stepSlotIdx = -1;
+      gatedByInstanceShield = false;
       // rule 820.1.d.1 / 356.2 (ruling e2e43318d1e95c3b) — [Repeat] executes the
       // spell's INSTRUCTIONS one more time; its additional costs were paid ONCE,
       // while the spell was played. So "if you paid the additional cost" reads
@@ -1057,6 +1062,13 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
         ctx.zones !== undefined
       ) {
         performCleanup(ctx as unknown as CleanupContext, { shieldsOnly: true });
+        // DESIGN.md §Pausing inside a resolving item — the shield question this
+        // pass raised is the ONE resume point inside a multi-instance item: the
+        // answer can spend a buff and so change what a static counts (703), and
+        // the instances still to come must be dealt against the recounted
+        // board. Mark the remainder so the answer does not run it in its own
+        // reducer; `resumeResolution` does.
+        gatedByInstanceShield = ctx.draft.pendingChoice !== undefined;
       }
       // rule 355.8 / 820.2 (unl-182-219) — a step that parked a modal prompt
       // suspends the rest of the sequence: the later Repeat executions must
@@ -1334,6 +1346,11 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
             ...(ctx.draft.deferredSequenceRest ?? []),
             {
               effect: restSeq,
+              // DESIGN.md §Pausing inside a resolving item — only the shield
+              // the BETWEEN-INSTANCES pass raised gates the remainder; a shield
+              // an ordinary kill step raised keeps resolving inline, because
+              // nothing observes the board between "kill it" and "draw 2".
+              ...(gatedByInstanceShield ? { gate: "damage-instance" as const } : {}),
               playerId: ctx.playerId,
               ...(ctx.sourceCardId !== undefined ? { sourceCardId: ctx.sourceCardId } : {}),
             },

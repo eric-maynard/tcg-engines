@@ -119,6 +119,13 @@ export interface RiftboundMoves {
   /** Resolve the top item on the chain (rule 543) */
   resolveChain: Record<string, never>;
 
+  /**
+   * rule 321 / 321.1 — continue a Chain Item whose resolution stopped at a
+   * resume point (DESIGN.md §Pausing inside a resolving item). Legal only while
+   * `state.suspendedResolution` is set, and only for the player resolving it.
+   */
+  resumeResolution: Record<string, never>;
+
   /** Pass focus during a showdown (rule 553.4) */
   passShowdownFocus: { playerId: PlayerId };
 

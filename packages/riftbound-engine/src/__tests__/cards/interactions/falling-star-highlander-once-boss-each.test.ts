@@ -79,6 +79,13 @@ async function declineBossPreferHighlander(game: Game): Promise<{ bossOffers: nu
   let bossOffers = 0;
   for (let i = 0; i < 8; i++) {
     const d = game.decision();
+    // DESIGN.md §Pausing inside a resolving item — declining The Boss now
+    // SUSPENDS Falling Star between its two instances; continue it so the
+    // second instance lands and the Cleanup can consult Highlander.
+    if (d?.kind === "action" && d.context === "procedure") {
+      await game.resume();
+      continue;
+    }
     if (!d || d.seat !== P2 || d.kind === "action") {
       break;
     }

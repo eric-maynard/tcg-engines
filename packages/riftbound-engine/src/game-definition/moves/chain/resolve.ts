@@ -1966,7 +1966,13 @@ export function flushDeferredSpellSettle(
   const parked = draft.deferredSpellSettle;
   // rule 752.1 (ven-152-166) — a stolen item's re-choice prompt is not part of
   // the parked spell's own resolution, so it does not hold that card on the chain.
-  if (!parked || (draft.pendingChoice && (draft.pendingChoice as { reChoose?: boolean }).reChoose !== true)) {
+  // rule 359.3.d — but a SUSPENDED resolution (DESIGN.md §Pausing inside a
+  // resolving item) IS the spell's own resolution, still unfinished.
+  if (
+    !parked ||
+    draft.suspendedResolution !== undefined ||
+    (draft.pendingChoice && (draft.pendingChoice as { reChoose?: boolean }).reChoose !== true)
+  ) {
     return;
   }
   draft.deferredSpellSettle = undefined;
@@ -2014,7 +2020,14 @@ export function withDeferredSpellSettle<
       // biome-ignore lint/suspicious/noExplicitAny: structural pass-through wrapper
       reducer: (draft: any, context: any) => {
         originalReducer(draft, context);
-        if (draft?.deferredSpellSettle && typeof context?.zones?.getCardZone === "function") {
+        // rule 359.3.d / 321 (DESIGN.md §Pausing inside a resolving item) — a
+        // spell whose resolution is SUSPENDED has not finished executing top to
+        // bottom, so it stays in the chain zone until the resume completes it.
+        if (
+          draft?.deferredSpellSettle &&
+          !draft?.suspendedResolution &&
+          typeof context?.zones?.getCardZone === "function"
+        ) {
           flushDeferredSpellSettle(draft as RiftboundGameState, context);
           // rule 319.5 / 323.1 — the item has only NOW left the Chain, so the
           // Cleanup it makes outstanding (and its victory check) happens here:

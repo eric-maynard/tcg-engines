@@ -75,8 +75,12 @@ export const passivePolicy: Policy = (d) => {
     if ((d.context === "chain" || d.context === "showdown") && d.passKey) {
       return { key: d.passKey, kind: "action" };
     }
-    if (d.context === "procedure" && d.options[0]) {
-      return { key: d.options[0].key, kind: "action" };
+    if (d.context === "procedure") {
+      // rule 196 — `concede` is legal in every state, so it is offered here
+      // too; an automatic policy must never take it. The procedure itself is
+      // the only other option (DESIGN.md §Pausing inside a resolving item).
+      const proceed = d.options.find((o) => o.moveId !== "concede");
+      return proceed ? { key: proceed.key, kind: "action" } : undefined;
     }
     return undefined;
   }
@@ -743,6 +747,30 @@ export class Game {
 
   transcript(): Transcript {
     return this.backend.transcript();
+  }
+
+  /**
+   * DESIGN.md §Pausing inside a resolving item — continue a Chain Item that
+   * stopped at a resume point (rule 321). Returns false when nothing is
+   * suspended. `settle()` does this for you; a hand-rolled drive loop that
+   * switches on `game.decision().kind` needs it, because the paused position is
+   * an `action` decision with `context: "procedure"` where `pass()` is illegal.
+   */
+  async resume(): Promise<boolean> {
+    if (this.gameState.suspendedResolution === undefined) {
+      return false;
+    }
+    const d = this.decision();
+    const option =
+      d?.kind === "action" ? d.options.find((o) => o.moveId === "resumeResolution") : undefined;
+    if (!d || !option) {
+      return false;
+    }
+    const r = await this.act(d.seat, { key: option.key, kind: "action" });
+    if (!r.ok) {
+      throw new HarnessError(r.error);
+    }
+    return true;
   }
 
   /**

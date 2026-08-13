@@ -243,6 +243,73 @@ time, and where the choice is declinable the player may still decline it.
   the same — the same answer Confirm gives. Build a scenario with `.interactive()` to see the prompt instead. The
   gate is that flag, never the option count.
 
+## Pausing inside a resolving item (321 / 321.1)
+
+Rule 321 says a Cleanup cannot occur while a Chain Item is Resolving, and 321.1 says the Cleanup it deferred is
+performed the moment that resolution ENDS. The engine models a resolution as one synchronous walk of the item's
+instructions (`chain/resolve.ts executeResolvedItem` inside `withChainItemResolution`), so anything that has to ask a
+question part-way parks a `pendingChoice` and leaves the remaining instructions in `draft.deferredSequenceRest`.
+Historically that remainder was always run again inside the very reducer that ANSWERED the question — which means the
+board between the answer and the next instruction never existed as a position anyone could read.
+
+For most parks that is exactly right: nothing observes the gap between "kill it" and "then draw 2". It is wrong for a
+MULTI-INSTANCE item, because paying a costed die shield can change what a static counts and the instances still to come
+are dealt against the recounted board (703 — a static ability counts continuously; it is not evaluated once per item).
+
+### Where the resume points are
+There is ONE, enumerated in `types/game-state.ts SuspendedResolutionReason`:
+
+- **`damage-instance`** — between two damage instances of one resolving item, after the costed "you may pay … instead"
+  die shield (371.2, ogn-269-298 The Boss) raised by the between-instances pass was answered. That pass is
+  `effects/sequence.ts` calling `performCleanup(…, { shieldsOnly: true })` after a `damage` step whose successor is also
+  a `damage` step. It is deliberately NOT a Cleanup (see `CleanupOptions.shieldsOnly`): it consults damage-time shields
+  and nothing else.
+
+A new resume point is a rules decision about a specific step of a specific instruction. Add a member to that union with
+the rule that justifies it — never a boolean, and never an ad-hoc park in a handler.
+
+### What is captured
+`draft.deferredSequenceRest[i].gate` marks the remainder that must not run inline, and `draft.suspendedResolution
+{ playerId, sourceCardId?, reason }` records that the item is parked. Both are plain fields on the game state, so they
+round-trip through the undo/redo `EngineCheckpoint` (`currentState`) with no `historyExtension` work — see
+FIXER-PRIMER §14: a pause held in a module-level `let` or a closure would break "undo ⇒ identical position".
+`core-rules/undo-redo.test.ts` hashes the state around every move, and `interactions/boss-buff-spend-kingpin-recount`
+pins the suspended position itself through a Rewind→Redo round trip.
+
+### Where the recount happens
+At that same `shieldsOnly` pass — its step 0c is `recalculateStaticEffects` (rule 522: continuous effects are ALWAYS
+applied). Answering the shield runs the pass once more (`postChoiceCleanup`), so the recount happens exactly twice per
+instance boundary and nowhere else. Do not sprinkle `recalculateStaticEffects` into damage handlers.
+
+### What resuming is NOT
+- **Not a Cleanup point.** While `suspendedResolution` is set, `postChoiceCleanup` runs only the `shieldsOnly` pass:
+  no death check, no battlefield-control lapse, no staged showdown opens, no spell settles into the trash (359.3.d),
+  nothing is Finalized (337.1). The item has not left the Chain. This is the rule the mid-resolution shield offer
+  already relies on (55d953b) and it stays true across the pause.
+- **Not a priority window.** Rule 340 gives nobody priority inside a resolution. `moves/index.ts
+  withSuspendedResolutionGate` makes every move illegal except `resumeResolution` and `concede`, the same shape as
+  "while `pendingChoice` is set only `resolvePendingChoice` is legal".
+- **Not a decision.** Continuing is a procedure, not a choice: the acting seat's `ActionDecision` carries
+  `context: "procedure"` and `passivePolicy` takes it, so `settle()` drives straight through. It is deliberately NOT in
+  `turn-driver.ts PROCEDURE_MOVES` — those fire inside the same `applyMove` as the move that produced them, which would
+  collapse the pause again.
+
+### Deliberately NOT resumable
+- **Deaths between instances.** No death check runs between two instances of one item, so no `if this would die`
+  replacement (Zhonya's Hourglass, Guardian Angel, Highlander) is consulted there — those belong to the single Cleanup
+  after the item leaves the Chain (321 / 323.5, rulings 3afdd260 / 501859c8 / 87d4521a / 6482271b). The pause makes the
+  half-resolved board readable; it does not turn the boundary into a Cleanup.
+- **Every other mid-item park** — modes, destinations, `reveal-and-pick`, counter ransoms, effect-instructed plays,
+  Predict chains. They keep resolving inline in the answering reducer. They are not resume points because nothing about
+  the position between them is observable in the rules; gating them would only add clicks.
+- **`awardPoints` / `scoreBattlefield`.** Scoring is still a synchronous choke point (`operations/points.ts`): it cannot
+  park a prompt part-way, so rule 372.1's "which replacement applies first" is still resolved in board order
+  (queue item `3948e2aa07ac`). Extending the pause to it means giving the score path the same gate, not a second
+  mechanism.
+- **Flow steps.** A Draw-Phase Burn Out (431.2) cannot pause either, so 431.2.c's "the burning player chooses which
+  opponent gains the point" is still awarded without a choice (queue item `b639ddae9a1e`). Same note: one gate, not a
+  second mechanism.
+
 ## Interactions
 - Hover on any card (hand, board, battlefield, legend/champion, runes, prompt tiles, trash top) → floating preview with the enlarged art PLUS name/type and full rules text (+ state chips); position:fixed, pointer-events:none, never shifts layout, auto-hides on mouseout/detach/modal (user request 2026-08-10: 'mouse over battlefield to see more clearly should work')
 - No fly-animation on zone change — cards appear at destination immediately

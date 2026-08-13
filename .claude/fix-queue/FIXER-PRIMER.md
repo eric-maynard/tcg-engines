@@ -820,6 +820,16 @@ prompt — reuse the `opt-in` pattern (`die-replacement-batch.ts offerOptionalSh
 - Read: `game.state(id)` → `might, baseMight, damage, isExhausted, isStunned, isBuffed, isToken, keywords, grantedKeywords,
   controller, owner, meta`; `game.zoneOf / locationOf`; `p1.hand() / units("bf1") / energy() / power("fury") / points()`;
   `game.chain()`; `game.gameState.battlefields.bf1.{controller,contested}`; `game.violations()`.
+- MID-RESOLUTION PAUSE (rule 321, DESIGN.md §Pausing inside a resolving item): answering the costed die shield
+  (The Boss) raised BETWEEN two damage instances of one item does NOT finish the item in that reducer any more — the
+  remainder waits on `draft.deferredSequenceRest[i].gate` with `draft.suspendedResolution {playerId, sourceCardId,
+  reason:"damage-instance"}` set, so the board the payment left (a spent buff, a recounted static — 703) is a real
+  position tests can read. While it is set EVERY move but `resumeResolution`/`concede` is illegal, no Cleanup runs
+  (nothing dies, no spell settles, nothing is Finalized) and nobody has priority. `settle()` continues it by itself
+  (the decision is `kind:"action", context:"procedure"`, taken by `passivePolicy`); a hand-rolled drive loop that
+  switches on `game.decision().kind` must call `await game.resume()` on that decision instead of `pass()` — passing is
+  illegal there. The app collapses the pause (`applySessionMove` passes `resumeSuspended:true`, inside the same undo
+  group). Spec: `interactions/boss-buff-spend-kingpin-recount.test.ts`.
 - BUG flip: failing clauses are `test.failing("BUG: …")`. When your fix makes one pass bun prints
   `this test is marked as failing but it passed` → change to `test(` (keep assertions, drop the expected/actual comment).
 - Queue CLI: `bun .claude/fix-queue/fix-queue.ts done <id> --note "…" --files a,b` · `fail <id> --note "…"` ·
@@ -859,6 +869,10 @@ prompt — reuse the `opt-in` pattern (`die-replacement-batch.ts offerOptionalSh
   machine (`FlowManager.serializeFlowState/restoreFlowState`), the RNG cursor (`SeededRNG.getState/setState`), the
   `TrackerSystem`, `gameEnded/gameEndResult`, and `GameDefinition.historyExtension` (Riftbound: the global
   `CardDefinitionRegistry.snapshotRuntime/restoreRuntime` — instance registrations + copy layers).
+- A mid-resolution PAUSE is state, not a closure: `suspendedResolution` + the gated `deferredSequenceRest` entry are
+  plain fields on `draft`, so they ride in `currentState` and a Rewind→Redo at the pause lands on the same
+  `snapshotHash()` (pinned by `interactions/boss-buff-spend-kingpin-recount.test.ts`). A pause held in a module-level
+  `let` would break exactly this.
 - THEREFORE: any NEW mutable engine state MUST live in one of those places — `draft` (game state), `internalState`
   (via ctx.zones/cards/counters), card meta, the flow, the rng, trackers, or the registry runtime layer. A module-level
   `let`, a WeakMap keyed by engine, a field on a move/effect module, `Math.random`, `Date.now()`-derived ids: all break

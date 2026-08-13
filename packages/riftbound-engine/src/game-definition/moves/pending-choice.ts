@@ -55,6 +55,7 @@ import {
 } from "../../chain";
 import { cleanupAndFireDeaths } from "../../cleanup/post-move-cleanup";
 import type { PostMoveCleanupContext } from "../../cleanup/post-move-cleanup";
+import { type CleanupContext, performCleanup } from "../../cleanup/state-based-checks";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import { matchesRevealPickFilter } from "../../operations/reveal-pick-filter";
 import { recordPublicReveal } from "../../operations/public-reveal";
@@ -405,12 +406,31 @@ function splitBoundsOf(choice: { minPer?: number; maxPer?: number; exactTargets?
  * the whole prompt chain has been answered, so the draw takes whatever the
  * player chose to leave on top. A remainder that parks a prompt of its own is
  * re-deferred together with the entries behind it.
+ *
+ * DESIGN.md §Pausing inside a resolving item — a remainder carrying a `gate`
+ * is NOT run here: it belongs to an item that is still resolving, so the flush
+ * records `suspendedResolution` and stops. The `resumeResolution` move (which
+ * passes `resumed`) is the only caller that runs past the gate.
  */
-export function flushDeferredSequenceRest(draft: RiftboundGameState, context: unknown): void {
+export function flushDeferredSequenceRest(
+  draft: RiftboundGameState,
+  context: unknown,
+  opts: { readonly resumed?: boolean } = {},
+): void {
   const queue = draft.deferredSequenceRest;
   if (!queue || queue.length === 0 || draft.pendingChoice) {
     return;
   }
+  const head = queue[0];
+  if (head?.gate !== undefined && opts.resumed !== true) {
+    draft.suspendedResolution = {
+      playerId: head.playerId,
+      reason: head.gate,
+      ...(head.sourceCardId !== undefined ? { sourceCardId: head.sourceCardId } : {}),
+    };
+    return;
+  }
+  draft.suspendedResolution = undefined;
   draft.deferredSequenceRest = undefined;
   for (let i = 0; i < queue.length; i++) {
     const entry = queue[i] as NonNullable<RiftboundGameState["deferredSequenceRest"]>[number];
@@ -434,9 +454,29 @@ export function flushDeferredSequenceRest(draft: RiftboundGameState, context: un
  * static recalc + SBA must run after it executes, same as after a chain
  * resolve. Guarded so unit-test stubs without full context bags don't crash.
  */
-function postChoiceCleanup(draft: RiftboundGameState, context: unknown): void {
-  flushDeferredSequenceRest(draft, context);
+export function postChoiceCleanup(
+  draft: RiftboundGameState,
+  context: unknown,
+  opts: { readonly resumed?: boolean } = {},
+): void {
+  flushDeferredSequenceRest(draft, context, opts);
   const ctx = context as Partial<PostMoveCleanupContext> | undefined;
+  // rule 321 (DESIGN.md §Pausing inside a resolving item) — the item is still
+  // resolving, so NO Cleanup may occur here: nothing dies, no spell settles into
+  // the trash, no staged showdown opens and nobody is re-seated with priority.
+  // What DOES run is the damage-time pass owed between two instances — rule 522
+  // / 703's continuous recount plus any shield the payment just made relevant —
+  // which is `performCleanup(…, { shieldsOnly: true })`, the same choke point
+  // `effects/sequence.ts` uses between instances.
+  if (draft.suspendedResolution !== undefined) {
+    if (ctx?.cards && ctx?.counters && ctx?.zones && typeof ctx.zones.getCardsInZone === "function") {
+      performCleanup(
+        { cards: ctx.cards, counters: ctx.counters, draft, zones: ctx.zones } as unknown as CleanupContext,
+        { shieldsOnly: true },
+      );
+    }
+    return;
+  }
   if (ctx?.cards && ctx?.counters && ctx?.zones && typeof ctx.zones.getCardsInZone === "function") {
     // rule 357.2.a — a play suspended while its cost-kill waited on an optional
     // die replacement completes now that the payment has settled.

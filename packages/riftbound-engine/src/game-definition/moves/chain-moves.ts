@@ -11,6 +11,7 @@ import { activateAbility } from "./chain/activate-ability";
 import { counterSpell } from "./chain/counter";
 import { invitePlayer } from "./chain/invite-player";
 import { passChainPriority, resolveChain } from "./chain/resolve";
+import { resumeResolution } from "./chain/resume-resolution";
 import { endShowdown, passShowdownFocus, startShowdown } from "./chain/showdown";
 
 export { buildEffectContext } from "./chain/effect-context";
@@ -21,6 +22,7 @@ export const chainMoves: Partial<
 > = {
   passChainPriority,
   resolveChain,
+  resumeResolution,
   activateAbility,
   passShowdownFocus,
   startShowdown,

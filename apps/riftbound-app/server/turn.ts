@@ -68,7 +68,14 @@ export function applySessionMove(
       recordedParams = { ...params, privateChoice: true };
     }
   }
-  const result = applyMove(session.engine, session.players, playerId, moveId, recordedParams);
+  // DESIGN.md §Pausing inside a resolving item — the engine can stop part-way
+  // through a resolving item (a costed die shield answered between two damage
+  // instances). The browser client renders prompts and plays, not procedures,
+  // so the server continues the item inside the same undo group: the human sees
+  // the completed resolution, and one Rewind still takes back the whole action.
+  const result = applyMove(session.engine, session.players, playerId, moveId, recordedParams, {
+    resumeSuspended: true,
+  });
   if (!result.success) {
     return result;
   }

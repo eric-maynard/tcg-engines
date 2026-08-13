@@ -92,6 +92,12 @@ describe("Ruling 8877e1a8101664c9 — The Boss saves Smoke-Screened Karma from F
         break;
       }
       expect(d.kind === "pick" && d.seat === P2).toBe(false); // never asked to pick a new unit for the second 3
+      // DESIGN.md §Pausing inside a resolving item — declining the shield leaves
+      // Falling Star suspended at the instance boundary; continue it.
+      if (d.kind === "action" && d.context === "procedure") {
+        await game.resume();
+        continue;
+      }
       if (d.kind === "action" && d.passKey) {
         await game.seat(d.seat).pass();
       } else {

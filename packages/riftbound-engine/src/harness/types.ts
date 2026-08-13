@@ -217,6 +217,7 @@ export type ActionVerb =
   | "startShowdown"
   | "endShowdown"
   | "resolveChain"
+  | "resumeResolution"
   | "invite"
   | "score"
   | "other";

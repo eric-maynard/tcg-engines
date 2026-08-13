@@ -43,6 +43,13 @@ async function resolveSayingYes(game: Game): Promise<number> {
     if (!d || (d.kind === "action" && d.context === "main")) {
       break;
     }
+    // DESIGN.md §Pausing inside a resolving item — answering the Boss shield
+    // suspends the Rain at that instance boundary; continue it so the remaining
+    // instances land on the (recounted) board.
+    if (d.kind === "action" && d.context === "procedure") {
+      await game.resume();
+      continue;
+    }
     if (d.kind === "yes-no" && d.seat === P1) {
       bossAsked += d.source?.cardId === "boss" ? 1 : 0;
       await game.p1.yes();

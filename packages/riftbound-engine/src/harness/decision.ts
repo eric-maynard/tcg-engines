@@ -639,6 +639,7 @@ const VERBS: Record<string, ActionVerb> = {
   recycleRune: "recycleRune",
   resolveChain: "resolveChain",
   resolveFullCombat: "resolveCombat",
+  resumeResolution: "resumeResolution",
   revealHidden: "reveal",
   scorePoint: "score",
   standardMove: "move",
@@ -1101,6 +1102,14 @@ export function decisionId(seq: number, seat: Seat, kind: string, suffix?: strin
 }
 
 export function actionContextOf(state: RiftboundGameState, seat: Seat): ActionContext {
+  // rule 321 (DESIGN.md §Pausing inside a resolving item) — a suspended
+  // resolution offers exactly one move, `resumeResolution`, and it is a
+  // PROCEDURE rather than a decision: `passivePolicy` takes it, so `settle()`
+  // drives straight through while a caller that stops before settling can read
+  // the half-resolved board.
+  if (state.suspendedResolution !== undefined) {
+    return "procedure";
+  }
   const chain = state.interaction?.chain;
   if (chain?.active) {
     return "chain";
@@ -1129,7 +1138,13 @@ export function deriveActionDecision(ctx: DecisionContext, seat: Seat, cursor: b
         ? "Focus: act in the showdown or pass"
         : context === "main"
           ? "Main phase: take an action or end the turn"
-          : "Free actions available";
+          : context === "procedure"
+            ? `Resolution paused: continue resolving ${
+                ctx.state.suspendedResolution?.sourceCardId
+                  ? ctx.label(ctx.state.suspendedResolution.sourceCardId)
+                  : "the item"
+              }`
+            : "Free actions available";
   // rule 357.1.a / 429.3 — the cards the seat is one Add away from playing.
   // Every panel the seat actually HOLDS is a place a card gets paid for: a
   // [Reaction] lives on the chain panel (159.2.b.2) and a showdown's Focus

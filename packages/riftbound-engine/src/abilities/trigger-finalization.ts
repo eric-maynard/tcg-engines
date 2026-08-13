@@ -1526,7 +1526,10 @@ export function withTriggerFinalization<
         } finally {
           moveDepth = Math.max(0, moveDepth - 1);
         }
-        if (context?.cards && context?.zones && !draft?.pendingChoice) {
+        // rule 321 / 337.1 (DESIGN.md §Pausing inside a resolving item) — a
+        // SUSPENDED resolution has not left the Chain: nothing is Finalized and
+        // no Cleanup runs until `resumeResolution` finishes the item.
+        if (context?.cards && context?.zones && !draft?.pendingChoice && !draft?.suspendedResolution) {
           const chainBefore = draft?.interaction?.chain != null;
           finalizePendingItems(draft, context as FinalizationContext);
           // rule 319.5 — a Cleanup happens whenever the chain empties. Finalization

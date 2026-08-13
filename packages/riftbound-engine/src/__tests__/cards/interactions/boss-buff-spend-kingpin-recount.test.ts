@@ -92,18 +92,42 @@ describe("Icathian Rain × The Boss × Sett, Kingpin — spending the buff recou
     expect(game.state("kingpin")).toMatchObject({ damage: 0, might: 6 });
   });
 
-  // Expected (702.2.b / 745.1 / 703): accepting SPENDS B's buff mid-resolution, so before instances 4-6 are dealt B
-  // is a 4-Might unit in base and Kingpin's "+1 for each buffed friendly unit at my battlefield" recounts 6 → 5 on
-  // the spot. Actual: the offer now comes at instance 3, but ANSWERING it resolves the rest of the item inside the
-  // same move (instances 4-6 land and the post-item Cleanup kills Kingpin), so the 5-Might/0-damage reading between
-  // the save and instance 4 is never observable — the engine has no resume step between the answer and the remainder.
-  test.failing("BUG: (a) spending B's buff recounts Kingpin's static immediately (6 → 5) with instances 4-6 still to come — a static ability counts continuously (703)", async () => {
+  // rule 702.2.b / 745.1 / 703 (DESIGN.md §Pausing inside a resolving item): accepting SPENDS B's buff
+  // mid-resolution, so before instances 4-6 are dealt B is a 4-Might unit in base and Kingpin's "+1 for each buffed
+  // friendly unit at my battlefield" recounts 6 → 5 on the spot — a static ability counts continuously, it is not
+  // evaluated once at the end of the item. Answering the shield SUSPENDS the item at the instance boundary
+  // (`suspendedResolution`, reason `damage-instance`) instead of finishing it in the same reducer, which is what
+  // makes this half-resolved board a position at all; `settle()` takes the `resumeResolution` procedure and
+  // instances 4-6 land against the recounted board.
+  test("(a) spending B's buff recounts Kingpin's static immediately (6 → 5) with instances 4-6 still to come — a static ability counts continuously (703)", async () => {
     const game = await board().build();
     await rain(game);
     await game.p2.yes();
     expect(game.state("b")).toMatchObject({ isBuffed: false, might: 4 });
     expect(game.locationOf("kingpin")).toBe("bf1");
     expect(game.state("kingpin")).toMatchObject({ damage: 0, might: 5 });
+  });
+
+  // DESIGN.md §Pausing inside a resolving item — the pause is plain state
+  // (`suspendedResolution` + the gated `deferredSequenceRest` entry), so the
+  // half-resolved position has to survive the undo/redo `EngineCheckpoint`
+  // byte-for-byte. Proven, not assumed: a Rewind→Redo round trip taken AT the
+  // pause must land on the same hash and the item must still finish correctly.
+  test("(a) the paused position round-trips through Rewind → Redo and still resolves the remaining instances", async () => {
+    const game = await board().build();
+    await rain(game);
+    await game.p2.yes();
+    const paused = game.snapshotHash();
+    expect(game.canUndo()).toBe(true);
+    expect(game.undo()).toBe(true);
+    expect(game.snapshotHash()).not.toBe(paused);
+    expect(game.redo()).toBe(true);
+    expect(game.snapshotHash()).toBe(paused);
+    expect(game.state("kingpin")).toMatchObject({ damage: 0, might: 5 });
+    await game.settle();
+    expect(game.zoneOf("kingpin")).toBe("trash");
+    expect(game.zoneOf("b")).toBe("base");
+    expect(game.violations()).toEqual([]);
   });
 
   test("(a) accept — end state: Kingpin dies (6 marks ≥ 5 Might after the recount), B survives in base at 4 Might, 0 damage, exhausted and unbuffed; The Boss is exhausted and the Power spent", async () => {
