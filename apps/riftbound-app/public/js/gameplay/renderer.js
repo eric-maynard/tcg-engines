@@ -38,6 +38,8 @@ function render() {
   // rule 383.3.d — soft trigger-order stack popup (non-blocking; gone when the offer is).
   if (typeof renderTriggerOrderPopup === "function") renderTriggerOrderPopup();
   renderGameOver();
+  // A queued pass fires as soon as priority reaches this seat.
+  if (typeof maybeFirePrepass === "function") maybeFirePrepass();
 
   // Re-apply valid target highlights after DOM rebuild
   if (interaction.mode !== "idle") {

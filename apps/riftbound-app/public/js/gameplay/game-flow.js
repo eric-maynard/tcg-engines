@@ -1,6 +1,9 @@
 // game-flow.js — Game flow and turn management: move execution, phase bar, end turn, game over
 
 function executeMove(moveId, params, playerId) {
+  // A queued pre-pass means "I have nothing to do here"; taking any other
+  // action contradicts that, so drop it rather than firing it later.
+  if (typeof prepassOnPlayerAction === "function") prepassOnPlayerAction(moveId);
   if (!ws || ws.readyState !== WebSocket.OPEN) {
     addLogEntry("Not connected — retrying...");
     connectWs();

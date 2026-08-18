@@ -609,6 +609,15 @@ function renderActions() {
   // Pending choice (discard / pick-from-revealed / choose-target) — the engine
   // blocks every other move until this is answered, so surface it as a modal
   // panel at the top of the action list rather than burying it under "Other".
+  // [rule:ui-prepass-single-shot] A queued pass must be visible and cancellable
+  // — an invisible automation that acts on your behalf is how a player loses a
+  // window they meant to use.
+  if (typeof isPrepassArmed === "function" && isPrepassArmed()) {
+    html += `<div class="action-section-title" data-prepass style="background:#2a3a4a;color:#a0e0ff;padding:6px;border-radius:3px;">
+      ⏳ Pass queued <span style="opacity:.7;font-weight:400">— fires when priority reaches you; cancels if the chain changes</span>
+    </div>`;
+    html += `<button class="action-btn" data-prepass-cancel onclick="disarmPrepass('Pre-pass cancelled')">Cancel queued pass</button>`;
+  }
   const pending = gameState?.pendingChoice;
   // rule 383.3.d — simultaneous triggers you control may be re-ordered, but the
   // offer is soft: every other move stays legal and taking one keeps the listed

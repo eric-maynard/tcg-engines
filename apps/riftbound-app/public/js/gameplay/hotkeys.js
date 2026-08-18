@@ -300,6 +300,10 @@ function hotkeyApproveChain() {
   );
   if (passMove) {
     executeMove(passMove.moveId, passMove.params, passMove.playerId);
+  } else if (typeof togglePrepass === "function") {
+    // No priority yet: queue the pass instead of refusing. Pressing again
+    // cancels it.
+    togglePrepass();
   } else if (typeof showToast === "function") {
     showToast("No chain effect to approve");
   }
