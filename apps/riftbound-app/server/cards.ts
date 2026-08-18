@@ -85,6 +85,32 @@ for (const setJson of Object.values(
     }
   }
 }
+/**
+ * Token art the official set data does not carry.
+ *
+ * Spiritforged introduced Mech and Sand Soldier tokens — Ferrous Forerunner,
+ * Guards!, Arise!, Assembly Rig, Royal Guard, Azir and the Rumble legends all
+ * play them — but Riot's card gallery publishes only SFD-T03 (Gold) of that
+ * set's tokens, so `token-def-mech` and `token-def-sand-soldier` had no image
+ * and rendered blank. The community archive hosts both, addressed by the same
+ * public card code, and its alt text is what identifies which is which
+ * (SFD-T01 = Mech, SFD-T02 = Sand Soldier).
+ *
+ * Keyed by token slug so it survives a set-data refresh: when Riot publishes
+ * these, the loop above will set the official URL first and these entries are
+ * skipped rather than overriding it.
+ */
+const COMMUNITY_TOKEN_IMAGES: Record<string, string> = {
+  mech: "https://cdn.piltoverarchive.com/cards/SFD-T01.webp",
+  "sand-soldier": "https://cdn.piltoverarchive.com/cards/SFD-T02.webp",
+};
+for (const [slug, url] of Object.entries(COMMUNITY_TOKEN_IMAGES)) {
+  // Official art wins wherever it exists.
+  if (!cardImageUrls.has(`token-def-${slug}`)) {
+    cardImageUrls.set(`token-def-${slug}`, url);
+  }
+}
+
 console.log(`Card image CDN fallback: ${cardImageUrls.size} URLs loaded`);
 
 // Patch legends with championTag at runtime
