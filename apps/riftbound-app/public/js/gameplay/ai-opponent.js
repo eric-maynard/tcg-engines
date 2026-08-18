@@ -73,6 +73,12 @@ function _aiInjectStyles() {
     .ai-key-field { width:100%; padding:9px 12px; font-size:13px; background:#1e1b30; border:2px solid #3a3560; border-radius:8px; color:#e0dced; margin:6px 0 4px; box-sizing:border-box; }
     .ai-key-saved { color:#8a82a6; font-size:12px; margin-bottom:12px; font-variant-numeric:tabular-nums; }
     .ai-thinking-pill { display:inline-flex; align-items:center; gap:6px; margin-left:6px; padding:2px 8px; border-radius:10px; background:rgba(140,110,220,0.18); border:1px solid #5a3a9a; color:#d4c0ff; font-size:11px; white-space:nowrap; }
+    /* [rule:ui-opponent-strip-stable] Idle HIDES the pill without giving up its
+       layout box. #opponentInfo is flex-shrink:0 next to a flex:1,
+       centre-justified #opponent-hand, so a pill that leaves the flow widens
+       the hand and slides every opponent card sideways — twice per AI turn. */
+    .ai-thinking-pill.is-idle { visibility:hidden; }
+    .ai-thinking-pill.is-idle .dot { animation:none; }
     .ai-thinking-pill .dot { width:6px; height:6px; border-radius:50%; background:#c4a0ff; animation:aiPulse 1s ease-in-out infinite; }
     @keyframes aiPulse { 0%,100% { opacity:.25 } 50% { opacity:1 } }
     .log-entry.log-ai .log-text { color:#c9b8f5; }
@@ -344,7 +350,13 @@ function renderAiThinking() {
   const host = document.getElementById("opponentInfo");
   if (host) {
     let pill = document.getElementById("aiThinkingPill");
-    if (isVsAiGame() && aiThinking) {
+    if (isVsAiGame()) {
+      // [rule:ui-opponent-strip-stable] Mounted for the WHOLE vs-AI game and
+      // hidden with visibility, never removed: the pill sits in
+      // #opponentInfo (flex-shrink:0) beside the flex:1, centre-justified
+      // #opponent-hand, so adding and removing it re-flows the row and the
+      // opponent's hand visibly jumps every time Claude starts or stops
+      // thinking.
       if (!pill) {
         pill = document.createElement("span");
         pill.id = "aiThinkingPill";
@@ -357,9 +369,15 @@ function renderAiThinking() {
         pill.appendChild(txt);
         host.appendChild(pill);
       }
+      // Text is set whether or not it is showing, so the reserved width is the
+      // real width — a label applied only while thinking would still resize the
+      // strip the first time it appeared.
       const short = (aiOpponentInfo && aiOpponentInfo.label || "Claude").replace(/^Claude /, "").replace(/ [\d.]+$/, "");
       pill.querySelector(".txt").textContent = `${short === "Claude" ? "Claude" : "Claude " + short} is thinking…`;
+      pill.classList.toggle("is-idle", !aiThinking);
     } else if (pill) {
+      // Not an AI game: no reason to reserve the space. Game mode cannot change
+      // mid-match, so this removal can never cause a shift a player sees.
       pill.remove();
     }
   }
