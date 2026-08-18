@@ -557,9 +557,16 @@ function openZoneViewer(zoneName, pid) {
     ? '<div style="color:#8a80a8; font-size:13px;">Empty</div>'
     : cards.map(c => {
         const defId = String(c.definitionId || "").replace(/^player-[12]-/, "");
-        return `<div class="zone-viewer-card" data-card-id="${esc(c.id || "")}" data-def-id="${esc(defId)}" data-zone="${esc(zoneName)}" style="width:96px; text-align:center;">
-          <img src="/card-image/${esc(defId)}" alt="${esc(c.name || "")}" style="width:96px; border-radius:6px;">
-          <div style="font-size:11px; color:#cfc6e8;">${esc(c.name || "")}</div>
+        // The card image carries the name already, so a label under every tile
+        // is duplicate text over the art — the same reason `.card-name` is
+        // display:none on the board ("Card image is authoritative"). The name
+        // is kept as a title (hover) and revealed ONLY if the art fails to
+        // load, which is the one case where the tile would otherwise be an
+        // unidentifiable rectangle.
+        return `<div class="zone-viewer-card" data-card-id="${esc(c.id || "")}" data-def-id="${esc(defId)}" data-zone="${esc(zoneName)}" style="width:96px; text-align:center;" title="${esc(c.name || "")}">
+          <img src="/card-image/${esc(defId)}" alt="${esc(c.name || "")}" style="width:96px; border-radius:6px;"
+               onerror="this.style.display='none'; if (this.nextElementSibling) this.nextElementSibling.style.display='block';">
+          <div style="display:none; font-size:11px; color:#cfc6e8;">${esc(c.name || "")}</div>
         </div>`;
       }).join("");
   overlay.innerHTML = `
