@@ -4734,3 +4734,26 @@
       font-style: italic;
       padding: 30px 10px;
     }
+
+/* [rule:ui-staged-movement] A declared mover is visibly held, not yet moved. */
+.card.move-staged, .move-staged {
+  outline: 2px solid #ffd070;
+  outline-offset: -2px;
+  box-shadow: 0 0 10px rgba(255, 208, 112, 0.45);
+}
+.staged-move-bar {
+  position: fixed;
+  bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: #241f38;
+  border: 1px solid #5a3a9a;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.5);
+  z-index: 60;
+}
+.staged-move-bar .staged-move-text { color: #ffd070; font-size: 12px; white-space: nowrap; }

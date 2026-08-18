@@ -62,6 +62,33 @@ function preferSoloUnitMoves(moves, cardId) {
   return [...moves].sort((a, b) => Number(solo(b)) - Number(solo(a)));
 }
 
+/**
+ * Why a movement drop was refused, in words a player can act on.
+ *
+ * [rule:ui-explain-refused-move] The generic "No legal move to that zone" is
+ * exactly wrong for the commonest case: you moved one unit into an uncontrolled
+ * battlefield, that single move applied Contested and OPENED the showdown
+ * (190.3.a.1), and now the second unit cannot follow. The game is behaving
+ * correctly and the player has no way to know it — rule 144.3 wanted both units
+ * declared as ONE action ("Move as a group…"), because moving them one at a
+ * time hands the opponent a window in between.
+ */
+function moveRefusalReason(dropZone, cardId) {
+  if (dropZone === "player-base") {
+    return "Can't play that there right now";
+  }
+  const bf = typeof gameState !== "undefined" ? gameState?.battlefields?.[dropZone] : null;
+  const showdownOpen = Boolean(bf && bf.contested && !bf.showdownComplete);
+  if (showdownOpen) {
+    // rule 144.3 — the group move had to be declared before the first mover left.
+    return "A showdown is already open here — units had to move together as ONE action (\u201cMove as a group\u2026\u201d) to arrive at the same time";
+  }
+  if (typeof GroupMove !== "undefined" && GroupMove.canGroup?.(availableMoves, cardId)) {
+    return "No legal move to that zone on its own — try \u201cMove as a group\u2026\u201d";
+  }
+  return "No legal move to that zone";
+}
+
 /** Drop-zone id for a movement destination ("base" is the #player-base row). */
 function moveDropZoneId(m) {
   const d = m.params?.destination || m.params?.toBattlefield || m.params?.battlefieldId;
@@ -448,14 +475,21 @@ document.addEventListener("pointerup", (e) => {
       if (move) {
         // Animate card flying to destination
         const destEl = document.querySelector(`[data-drop-zone="${CSS.escape(dropZone)}"]`);
+        // [rule:ui-staged-movement] A movement drag DECLARES a mover; it does
+        // not take the action. Committing each drag separately makes the first
+        // one a finished move — the showdown opens and the second unit can
+        // never join it (rule 144.3).
+        const stages = typeof stageMovementDrop === "function"
+          && (move.moveId === "standardMove" || move.moveId === "gankingMove");
         animateCardFly(dragState.sourceEl, destEl, () => {
+          if (stages && stageMovementDrop(cardId, dropZone)) return;
           executeMove(move.moveId, move.params, move.playerId);
         });
       } else if (!deferredToUi && !targetingMoves && !hideOnlyAfterDrop && typeof showToast === "function") {
         // Dead-end drop: the zone was highlighted-legal for the action but no move
         // matched this destination. Never end a gesture in silence — DESIGN.md
         // §Paying costs wants the shortfall said out loud.
-        showToast(dropZone === "player-base" ? "Can't play that there right now" : "No legal move to that zone");
+        showToast(moveRefusalReason(dropZone, cardId));
       }
     } else if (unitDrop && dragState.action === "equip") {
       // rule 476.1: board Equipment dropped on a unit → [Equip] it there.

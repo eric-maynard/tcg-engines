@@ -40,6 +40,9 @@ function render() {
   renderGameOver();
   // A queued pass fires as soon as priority reaches this seat.
   if (typeof maybeFirePrepass === "function") maybeFirePrepass();
+  // A staged bundle belongs to the menu it was assembled from; keep the bar
+  // in sync and drop it when those moves are gone.
+  if (typeof renderStagedMoveBar === "function") renderStagedMoveBar();
 
   // Re-apply valid target highlights after DOM rebuild
   if (interaction.mode !== "idle") {
