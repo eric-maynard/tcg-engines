@@ -54,26 +54,95 @@ import { applySessionMove, sandboxAutoPlay } from "./turn";
 // Models, keys, redaction
 // ---------------------------------------------------------------------------
 
-export const AI_MODELS = {
+export interface ModelEntry {
+  readonly id: string;
+  readonly label: string;
+  readonly short: string;
+}
+
+/**
+ * The models this repo knows by name. Public Claude models only.
+ *
+ * **Do not add internal or unreleased model names here.** This repository is
+ * outside the Anthropic monorepo, so a codename committed to it has left the
+ * boundary that is supposed to contain it. Anything beyond these three is
+ * supplied at run time by the host through `RB_AI_EXTRA_MODELS`, which keeps
+ * the name in the host's configuration where it belongs.
+ */
+const BUILTIN_MODELS: Readonly<Record<string, ModelEntry>> = {
   haiku: { id: "claude-haiku-4-5-20251001", label: "Claude Haiku 4.5", short: "Haiku" },
   opus: { id: "claude-opus-5", label: "Claude Opus 5", short: "Opus" },
   sonnet: { id: "claude-sonnet-5", label: "Claude Sonnet 5", short: "Sonnet" },
-} as const;
+};
 
-export type ModelKey = keyof typeof AI_MODELS;
+const BUILTIN_ORDER = ["haiku", "sonnet", "opus"];
 
-export function resolveModel(key: unknown): ({ key: ModelKey } & (typeof AI_MODELS)[ModelKey]) | undefined {
+/**
+ * Extra models the host offers, as JSON:
+ *
+ *   RB_AI_EXTRA_MODELS='[{"key":"x","id":"…","label":"X","short":"X"}]'
+ *
+ * A seam rather than a constant, per the hosting contract: the host adds
+ * models without patching this file, and this file names none of them. A
+ * malformed entry is dropped with a warning instead of taking the server down
+ * — a bad env var should cost you one menu row, not the app.
+ */
+function parseExtraModels(raw: string | undefined): Record<string, ModelEntry> {
+  if (raw === undefined || raw.trim() === "") {
+    return {};
+  }
+  const out: Record<string, ModelEntry> = {};
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      throw new TypeError("RB_AI_EXTRA_MODELS must be a JSON array");
+    }
+    for (const item of parsed) {
+      const e = item as Partial<ModelEntry> & { key?: unknown };
+      const key = typeof e.key === "string" ? e.key : undefined;
+      if (key === undefined || typeof e.id !== "string" || typeof e.label !== "string") {
+        console.warn("[ai] RB_AI_EXTRA_MODELS: skipping entry missing key/id/label");
+        continue;
+      }
+      if (Object.prototype.hasOwnProperty.call(BUILTIN_MODELS, key)) {
+        // Shadowing a built-in would silently repoint "opus" at something else.
+        console.warn(`[ai] RB_AI_EXTRA_MODELS: refusing to override built-in ${key}`);
+        continue;
+      }
+      out[key] = { id: e.id, label: e.label, short: typeof e.short === "string" ? e.short : e.label };
+    }
+  } catch (err) {
+    console.warn(`[ai] RB_AI_EXTRA_MODELS ignored: ${(err as Error).message}`);
+    return {};
+  }
+  return out;
+}
+
+export const AI_MODELS: Readonly<Record<string, ModelEntry>> = {
+  ...BUILTIN_MODELS,
+  ...parseExtraModels(process.env.RB_AI_EXTRA_MODELS),
+};
+
+/** A key into `AI_MODELS`. Open, because the host may add entries. */
+export type ModelKey = string;
+
+export function resolveModel(key: unknown): ({ key: ModelKey } & ModelEntry) | undefined {
   if (typeof key !== "string" || !Object.prototype.hasOwnProperty.call(AI_MODELS, key)) {
     return undefined;
   }
-  const k = key as ModelKey;
-  return { key: k, ...AI_MODELS[k] };
+  return { key, ...(AI_MODELS[key] as ModelEntry) };
 }
 
 export function listModels(): { key: ModelKey; label: string }[] {
-  return (Object.keys(AI_MODELS) as ModelKey[])
-    .map((key) => ({ key, label: AI_MODELS[key].label }))
-    .sort((a, b) => ["haiku", "sonnet", "opus"].indexOf(a.key) - ["haiku", "sonnet", "opus"].indexOf(b.key));
+  // Built-ins keep their curated order; host-supplied models follow, so a
+  // configuration change never reshuffles the menu a player is used to.
+  const rank = (k: string) => {
+    const i = BUILTIN_ORDER.indexOf(k);
+    return i === -1 ? BUILTIN_ORDER.length : i;
+  };
+  return Object.keys(AI_MODELS)
+    .map((key) => ({ key, label: (AI_MODELS[key] as ModelEntry).label }))
+    .sort((a, b) => rank(a.key) - rank(b.key) || a.key.localeCompare(b.key));
 }
 
 /**
