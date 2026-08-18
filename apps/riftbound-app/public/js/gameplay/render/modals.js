@@ -919,7 +919,9 @@ function renderCompositeChoice(pending, box) {
   const picks = availableMoves.filter(m => m.moveId === "resolvePendingChoice");
   const me = picks[0]?.playerId ?? viewingPlayer;
   const key = JSON.stringify([pending.type, pending.sourceCardId, pending.items ?? pending.options ?? pending.cards ?? null, pending.cursor ?? null, picks.length]);
-  if (_compose.key !== key) _compose = { key, seq: [], set: [], x: null, seeded: false };
+  // showForeign resets with the prompt: revealing the opponent's cards once
+  // must not leave them revealed for the next, unrelated choice.
+  if (_compose.key !== key) _compose = { key, seq: [], set: [], x: null, seeded: false, showForeign: false };
   const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
   const send = (params) => {
     const exact = picks.find(m => Object.keys(params).every(k => same(m.params?.[k], params[k])));
@@ -966,14 +968,33 @@ function renderCompositeChoice(pending, box) {
     const set = _compose.set.filter(k => opts.some(o => o.key === k));
     const min = pending.min ?? 0, max = pending.max ?? opts.length;
     const ok = set.length >= min && set.length <= max;
+    // [rule:ui-own-cards-first] Some effects are written without a friendly
+    // qualifier, so EVERY matching card on the board is a legal target — rule
+    // 355.7, e.g. Targon's Peak "ready up to 2 runes" (contrast Sona's "up to 4
+    // FRIENDLY runes"). Legal is not the same as wanted: readying the
+    // opponent's runes hands them resources, so listing both seats' runes
+    // together makes the player pick their own out of a mixed list every time.
+    // Theirs are collapsed behind a disclosure — still reachable, because the
+    // play IS legal and this is a rules engine, just not in the way.
+    const ownerOf = (o) => (typeof findCard === "function" && o.cardId ? findCard(o.cardId)?.owner : undefined);
+    const foreign = opts.filter(o => { const w = ownerOf(o); return w !== undefined && w !== viewingPlayer; });
+    const own = opts.filter(o => !foreign.includes(o));
+    // Anything already ticked stays visible, so a chosen enemy rune never
+    // disappears from the list it was chosen in.
+    const showForeign = _compose.showForeign || foreign.some(o => set.includes(o.key));
+    const listed = showForeign ? [...own, ...foreign] : own;
     html += `<div class="chain-subtitle">Tick ${min === max ? min : `${min} to ${max}`} — ${set.length} chosen</div>`;
     html += `<div class="choice-modal-btns choice-compose" data-compose="pick-many">`;
-    for (const o of opts) {
+    for (const o of listed) {
       const on = set.includes(o.key);
       const full = !on && set.length >= max;
       html += `<button class="choice-modal-btn choice-check-item${on ? " chosen" : ""}" data-check-key="${esc(o.key)}" ${full ? 'disabled style="opacity:.4"' : ""}>${on ? "☑" : "☐"} ${esc(o.label)}</button>`;
     }
-    html += `</div><div class="choice-modal-btns">`;
+    html += `</div>`;
+    if (foreign.length && !showForeign) {
+      html += `<div class="choice-modal-btns"><button class="choice-modal-btn" data-compose-foreign style="opacity:.75">Show opponent's ${foreign.length === 1 ? "card" : `${foreign.length} cards`} too</button></div>`;
+    }
+    html += `<div class="choice-modal-btns">`;
     html += `<button class="choice-modal-btn choice-compose-confirm" data-compose-confirm ${ok ? "" : 'disabled style="opacity:.5"'}>Done (${set.length})</button>`;
     if (min === 0) html += `<button class="choice-modal-btn" data-compose-none>None</button>`;
     // rule 753 — a keepable new-choices slot may be left as it is (this one, or everything still open).
@@ -989,6 +1010,10 @@ function renderCompositeChoice(pending, box) {
       _compose.seeded = true;
       renderCompositeChoice(pending, box);
     }));
+    box.querySelector("[data-compose-foreign]")?.addEventListener("click", () => {
+      _compose.showForeign = true;
+      renderCompositeChoice(pending, box);
+    });
     box.querySelector("[data-compose-none]")?.addEventListener("click", () => send({ pickedKeys: [] }));
     box.querySelector("[data-compose-keep]")?.addEventListener("click", () => send({ keep: true }));
     box.querySelector("[data-compose-keep-all]")?.addEventListener("click", () => send({ keepAll: true }));
