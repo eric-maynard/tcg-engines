@@ -114,3 +114,109 @@ function prepassOnPlayerAction(moveId) {
   if (moveId === "passChainPriority" || moveId === "passShowdownFocus") return;
   disarmPrepass("Pre-pass cancelled — you acted");
 }
+
+
+// ---------------------------------------------------------------------------
+// Auto-pass on a window with nothing real to do
+// ---------------------------------------------------------------------------
+//
+// [rule:ui-autopass-no-real-action] Priority comes to you constantly — every
+// trigger, every chain item, every showdown step — and most of those windows
+// offer nothing but "pass". Clicking through them is the single most repetitive
+// thing in a game against the AI or a goldfish, and it teaches nothing.
+//
+// "Nothing real" is deliberately NOT "no legal moves". Tapping a rune is legal
+// at almost every window and is never, on its own, a reason to hold priority:
+// it produces energy for a play you have not got. So resource plumbing does not
+// count as a real action, and neither does the pass itself, conceding, or
+// re-ordering what you already hold.
+//
+// Anything that changes the game — a card, an ability, a move, a combat step, a
+// choice — DOES count, and the moment one is available this stops firing and
+// hands the window back.
+
+/** Moves that are never, by themselves, a reason to keep priority. */
+const AUTOPASS_TRIVIAL_MOVES = new Set([
+  // Resource plumbing: energy you have not spent on anything yet.
+  "exhaustRune",
+  "recycleRune",
+  "addResources",
+  "spendResources",
+  "channelRunes",
+  "emptyRunePool",
+  // The pass itself, and the ways out of the game.
+  "pass",
+  "passChainPriority",
+  "passShowdownFocus",
+  "concede",
+]);
+
+/**
+ * Is there a move here worth stopping for?
+ *
+ * Pure so the classification is testable without a board — the whole risk of
+ * this feature is passing through a window the player wanted.
+ */
+function hasRealAction(moves) {
+  return (moves || []).some((m) => !AUTOPASS_TRIVIAL_MOVES.has(m && m.moveId));
+}
+
+/**
+ * Should this window be passed automatically?
+ *
+ *   enabled     — the player's toggle
+ *   hasPass     — a pass is legal right now (otherwise there is nothing to do)
+ *   moves       — the enumerated menu
+ *   pendingChoice — a prompt the engine is blocking on: NEVER auto-answered,
+ *                   even when the only listed move is the pass, because a
+ *                   prompt is a question addressed to the player.
+ */
+function autopassDecide({ enabled, hasPass, moves, pendingChoice }) {
+  if (!enabled || !hasPass) return false;
+  if (pendingChoice) return false;
+  return !hasRealAction(moves);
+}
+
+/** Default ON against Claude and the goldfish, OFF against a person. */
+function autopassDefaultForOpponent(opponentKind) {
+  return opponentKind === "claude" || opponentKind === "goldfish";
+}
+
+let _autopass = { enabled: null };
+
+function autopassEnabled() {
+  if (_autopass.enabled !== null) return _autopass.enabled;
+  const kind =
+    typeof aiOpponentInfo !== "undefined" && aiOpponentInfo
+      ? aiOpponentInfo.kind
+      : typeof gameState !== "undefined" && gameState?.ai
+        ? gameState.ai.kind
+        : null;
+  return autopassDefaultForOpponent(kind);
+}
+
+/** The settings toggle flips this; null means "follow the opponent default". */
+function setAutopassEnabled(on) {
+  _autopass.enabled = on;
+  if (typeof renderActions === "function") renderActions();
+}
+
+/**
+ * Called after every state frame, after the pre-pass hook. Passes a window that
+ * offers nothing real.
+ */
+function maybeAutopass() {
+  if (typeof availableMoves === "undefined") return;
+  const passMove = (availableMoves || []).find(
+    (m) => m.moveId === "passChainPriority" || m.moveId === "passShowdownFocus",
+  );
+  const decision = autopassDecide({
+    enabled: autopassEnabled(),
+    hasPass: Boolean(passMove),
+    moves: availableMoves,
+    pendingChoice:
+      typeof gameState !== "undefined" ? Boolean(gameState?.pendingChoice) : false,
+  });
+  if (!decision || !passMove) return;
+  executeMove(passMove.moveId, passMove.params, passMove.playerId);
+}

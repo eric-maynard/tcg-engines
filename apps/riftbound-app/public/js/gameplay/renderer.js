@@ -40,6 +40,9 @@ function render() {
   renderGameOver();
   // A queued pass fires as soon as priority reaches this seat.
   if (typeof maybeFirePrepass === "function") maybeFirePrepass();
+  // ...then auto-pass a window that offers nothing real. Order matters: an
+  // explicitly queued pass is the player's instruction and fires first.
+  if (typeof maybeAutopass === "function") maybeAutopass();
   // A staged bundle belongs to the menu it was assembled from; keep the bar
   // in sync and drop it when those moves are gone.
   if (typeof renderStagedMoveBar === "function") renderStagedMoveBar();
